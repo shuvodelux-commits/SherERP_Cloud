@@ -1,0 +1,9 @@
+# Generated and local files
+dist/
+node_modules/
+.wrangler/
+.superpowers/
+.env
+.env.*
+!.env.example
+source-audit.json
