@@ -27,6 +27,7 @@ function literalBlock(source, name) {
   for(let i=start;i<source.length;i++) {
     const c=source[i];
     if(quote){if(escaped)escaped=false;else if(c==='\\')escaped=true;else if(c===quote)quote='';continue;}
+    if(c==='"'||c==="'"){quote=c;continue;}
     if(c==='{')depth++;
     if(c==='}')depth--;
     if(depth===0)return source.slice(start,i);
