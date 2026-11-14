@@ -42,3 +42,7 @@ The adapter maps reviewed D1 fields to original headers, converts absent optiona
 ## Next gates
 
 After real-D1 CI and code review, extend source-shaped adapters only to reviewed master tables, plan authenticated M04 interfaces, then implement narrow D1 writers with DB-enforced CAS/idempotency. Do **not** emulate the original GAS `LockService` using a non-atomic JS read/write cycle; finance and inventory remain disabled.
+
+## Automatic PR Preview smoke test
+
+This documentation-only commit is intended to exercise Cloudflare Workers Builds for PR #17. A healthy native GitHub integration should post a branch Preview URL automatically. The Preview must remain an inert, DB-free Worker; this change adds no runtime code, secrets or bindings.
