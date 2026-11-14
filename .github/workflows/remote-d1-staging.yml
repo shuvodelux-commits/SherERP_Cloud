@@ -1,0 +1,74 @@
+name: SherERP staging D1 — manual inspect or apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'inspect (read-only) or apply (migrate empty staging D1)'
+        required: true
+        type: choice
+        options:
+          - inspect
+          - apply
+      confirmation:
+        description: 'For apply only, type APPLY_STAGING_D1_SCHEMA_ONLY'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  staging-d1:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+          (inputs.operation == 'inspect' ||
+           (inputs.operation == 'apply' && inputs.confirmation == 'APPLY_STAGING_D1_SCHEMA_ONLY')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: cloudflare-staging-db
+    concurrency:
+      group: shererp-staging-d1-migrations
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_STAGING_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require environment-scoped D1 credentials
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Set CLOUDFLARE_D1_STAGING_TOKEN and CLOUDFLARE_ACCOUNT_ID as environment secrets.'
+            exit 1
+          fi
+      - name: Run source tests and verify isolated staging binding
+        run: |
+          npm test
+          node scripts/check-staging-d1.mjs wrangler.staging.jsonc wrangler.preview.jsonc
+      - name: Verify remote database name and exact UUID before any SQL
+        run: |
+          npx --yes wrangler@4.161.0 d1 list --json --config wrangler.staging.jsonc > "$RUNNER_TEMP/staging-db-list.json"
+          node scripts/guard-remote-staging.mjs verify-identity "$RUNNER_TEMP/staging-db-list.json"
+      - name: Inspect remote staging schema (SELECT only)
+        run: |
+          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --remote --config wrangler.staging.jsonc --json --command "SELECT COUNT(*) AS existing_user_tables FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*';" > "$RUNNER_TEMP/staging-before.json"
+          node scripts/guard-remote-staging.mjs inspect "$RUNNER_TEMP/staging-before.json"
+      - name: Refuse migration unless remote staging has zero user tables
+        if: inputs.operation == 'apply'
+        run: node scripts/guard-remote-staging.mjs assert-empty "$RUNNER_TEMP/staging-before.json"
+      - name: Record recovery point before any remote write
+        if: inputs.operation == 'apply'
+        run: |
+          npx --yes wrangler@4.161.0 d1 time-travel info shererp-staging-db --json --config wrangler.staging.jsonc > "$RUNNER_TEMP/staging-before-bookmark.json"
+          node scripts/guard-remote-staging.mjs bookmark "$RUNNER_TEMP/staging-before-bookmark.json"
+      - name: Apply two approved migrations to remote staging D1 only
+        if: inputs.operation == 'apply'
+        run: npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --remote --config wrangler.staging.jsonc
+      - name: Verify remote staging schema after apply (SELECT only)
+        if: inputs.operation == 'apply'
+        run: |
+          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --remote --config wrangler.staging.jsonc --json --command "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review')) AS app_tables, (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('trg_party_role_delete_forbidden','trg_party_cross_source_verification','trg_party_legacy_identity_immutable','trg_party_legacy_link_delete_forbidden')) AS history_triggers;" > "$RUNNER_TEMP/staging-after.json"
+          node scripts/guard-remote-staging.mjs verify-schema "$RUNNER_TEMP/staging-after.json"
