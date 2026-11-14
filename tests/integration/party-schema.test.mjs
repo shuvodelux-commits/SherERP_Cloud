@@ -79,4 +79,5 @@ test('review queue can store ambiguous names and missing historical source IDs w
   assert.equal(db.prepare("SELECT status FROM party_identity_review WHERE review_id='REV-1'").get().status,'OPEN');
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM party_legacy_links').get().n,0);
   assert.throws(()=>db.prepare(`INSERT INTO party_identity_review (review_id,source_group,reason,status) VALUES ('REV-2','CUSTOMERS','SHARED_PHONE','AUTO_APPROVED')`).run(),/CHECK/);
+  db.close();
 });
