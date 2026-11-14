@@ -20,6 +20,11 @@ jobs:
         run: npm test
       - name: Verify source byte-for-byte against pinned manifest
         run: npm run verify:source
+      - name: Verify source-faithful schema inventory
+        run: |
+          npm run inventory:schema --silent > /tmp/m02-schema.json
+          cmp -s docs/baseline/schema-inventory.json /tmp/m02-schema.json
+          node -e "const s=require('/tmp/m02-schema.json'); const n=s.tables.reduce((a,t)=>a+t.columns.length,0); if(s.tables.length!==49 || n!==659) process.exit(1); console.log('M02 groups and columns:',s.tables.length,n)"
       - name: Run deterministic source audit
         run: |
           npm run audit --silent > /tmp/m00-audit.json
