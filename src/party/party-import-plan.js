@@ -36,7 +36,7 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
       const legacySheetRow=source._rowIndex===undefined?null:source._rowIndex;
       if(legacySheetRow!==null&&(!Number.isInteger(legacySheetRow)||legacySheetRow<2))throw new Error('Invalid legacy row position in '+group);
       if(!id.trim()){
-        const key=sourceKey(group,'missing:'+sourceCount);
+        const key=sourceKey(group,'missing:'+(legacySheetRow??hash(JSON.stringify(source))));
         reviews.push({reviewId:reviewId('MISSING_ID',key),sourceGroup:group,sourceId:null,legacySheetRow,reason:'MISSING_ID',status:'OPEN'});
         continue;
       }
