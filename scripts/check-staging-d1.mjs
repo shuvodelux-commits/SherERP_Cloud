@@ -26,7 +26,8 @@ export function validateStagingConfig(staging, preview) {
   if(db.binding !== 'DB' || db.database_name !== 'shererp-staging-db' ||
      db.database_id !== 'aa04618e-1639-4cb9-bdf5-7b967d8b968b') throw new Error('Unexpected staging database binding/name/id');
   if(db.migrations_dir !== 'migrations') throw new Error('Unexpected migration directory');
-  exactKeys(preview,['name','main','compatibility_date','workers_dev','assets'],'preview config');
+  exactKeys(preview,['name','main','compatibility_date','workers_dev','assets','previews'],'preview config');
+  exactKeys(preview.previews, [], 'DB-free Worker Previews configuration');
   if(preview.name !== 'shererp-cloud-preview' || preview.name === staging.name) throw new Error('Preview and staging Workers must stay separate');
   return true;
 }

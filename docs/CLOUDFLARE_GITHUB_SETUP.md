@@ -1,103 +1,61 @@
-# SherERP Cloud — Connect Cloudflare through GitHub Actions
+# SherERP Cloud — Automatic PR previews and main branch deployments
 
-**Status:** Configuration PR only; **Cloudflare account not connected and no deployment has occurred**. This guide configures a **manual preview** Worker, not production and not a functioning ERP backend.
+**Deployment owner: Cloudflare Workers Builds native GitHub integration (not GitHub Actions).**
 
-## Chosen deployment model: GitHub Actions (one deploy owner)
+Connected repository: `shuvodelux-commits/SherERP_Cloud`. Worker: `shererp-cloud-preview`. A successful deployment of the original frontend/Worker shell has been reported at [the Worker URL](https://shererp-cloud-preview.agnishuvo.workers.dev/). This is **not a production-ready ERP**: authentication and business RPCs remain deliberately unavailable and the Worker has no D1 binding.
 
-Use **GitHub Actions** to compile, test and deploy the Worker. Do **not** simultaneously enable Cloudflare's native Workers Builds Git integration to deploy the same Worker: two independent deployment systems can overwrite each other.
+## Desired automatic flow
 
-| Environment | Name | Deployment | D1 database | Trigger |
-| --- | --- | --- | --- | --- |
-| Test/build CI | No Worker | No deploy; Wrangler bundling dry-run | None | Pull requests |
-| **Preview** | `shererp-cloud-preview` | Cloudflare Workers `workers.dev` | **None** | Manual GitHub Actions run, `main` only, confirmation + GitHub Environment |
-| Production | `shererp-cloud` | **Disabled** by this setup | **Not configured** | Future owner-approved release process |
+1. Developer pushes to a feature branch or updates a GitHub PR. Cloudflare Workers Builds automatically runs the configured Build and Preview commands, creating or updating an isolated branch Preview.
+2. Cloudflare posts its Preview URL to the GitHub PR where the integration supports it. Reviewers test the Preview and GitHub CI results.
+3. Merge an approved PR into `main`. Cloudflare automatically builds that commit and runs the Deploy command, replacing the active Worker deployment.
+4. No manual GitHub Actions release, Cloudflare dashboard deploy button, API token shared in GitHub, or duplicate deployment pipeline is required for ordinary frontend/Worker deployments.
 
-The original `wrangler.jsonc` is **not** used by this deployment workflow. The new `wrangler.preview.jsonc` is checked by `scripts/check-cloudflare-preview.mjs`, which rejects unexpected settings, production Worker name, D1 bindings, custom routes, unsafe external resources, and missing API-first routing.
+**Important naming distinction:** `main` is the production *branch* for the currently named `shererp-cloud-preview` Worker. This does **not** deploy `shererp-cloud` or authorize real store transactions. A functioning ERP production release remains gated on M03–M11 testing, auth, accounting, reconciliation and cutover approval.
 
-## Prerequisite: merge the deployment workflow into main
+## Configure Cloudflare Workers Builds
 
-At authoring time, GitHub `main` contains only the bootstrap README; the existing planning, source, M01 Worker and M02 Party PRs are in **draft** state. The manual `workflow_dispatch` button is available only when the workflow file exists on the repository's **default branch**.
+1. Open [Cloudflare Dashboard](https://dash.cloudflare.com/) → Workers & Pages → `shererp-cloud-preview` → **Settings → Builds**.
+2. Verify Git repository `shuvodelux-commits/SherERP_Cloud` is connected. Under **Branch control**, set **Production branch: `main`**, and turn **Enable Preview Builds** **ON**. This triggers a Preview for pushes to non-production branches.
+3. Set the **Build command** to `npm run build:frontend`.
+4. Set the **Deploy command** (for `main`) to `npx wrangler@4.161.0 deploy --config wrangler.preview.jsonc`.
+5. Set the **Preview command** (non-main branches) to `npx wrangler@4.161.0 preview --config wrangler.preview.jsonc`.
+6. Save. Ensure a Preview host is enabled in **Worker → Settings/Domains** (Workers.dev Preview URLs and/or a preview custom domain). The existing main Worker has Workers.dev enabled.
+7. New Workers normally use **Worker Previews**. If this existing connected Worker instead displays a **Set up Worker Previews** banner under Settings → Builds, follow the one-time **Switch to Worker Previews** wizard and select the `wrangler preview` command. This switch cannot be reversed.
+8. In the **Previews Base** bindings/secrets settings, do not import D1, cash, stock, production secrets, or other mutable resources. In this repository, `wrangler.preview.jsonc` deliberately contains `"previews": {}` and has no D1 binding.
+9. Recommended GitHub repository Rulesets/Branch protection on `main`: require passing source/Worker tests and PR review before merge. Restrict direct pushes. Cloudflare still deploys a newly merged `main` commit automatically.
 
-1. Review/merge prerequisite PRs in their dependency order: foundation documentation **#1**, source snapshot **#2**, frontend static build **#3**, Worker RPC shell **#5**.
-2. Review/merge the Cloudflare GitHub preview PR stacked on #5, retargeting to `main` after its parent merges. Keep the Worker API fail-closed until auth/D1 work is verified.
-3. **You do not need to merge the Party/finance PRs to test an inert Worker preview.** Never activate unreviewed finance handlers just to deploy this shell.
+| Setting | Value |
+| --- | --- |
+| Cloudflare Worker | `shererp-cloud-preview` |
+| GitHub repository | `shuvodelux-commits/SherERP_Cloud` |
+| Production branch | `main` |
+| Root directory | `/` |
+| Build command | `npm run build:frontend` |
+| Deploy command | `npx wrangler@4.161.0 deploy --config wrangler.preview.jsonc` |
+| Preview command | `npx wrangler@4.161.0 preview --config wrangler.preview.jsonc` |
+| Enable Preview Builds | **ON** |
+| PR preview D1 bindings | **None** |
 
-These review/merge steps are user-authorized GitHub repository actions; this document does not merge anything automatically.
+## Verify end-to-end with one harmless pull request
 
-## 1. Create a least-privilege Cloudflare API token
+1. Create a small documentation-only branch and open a GitHub PR against `main`.
+2. In Cloudflare → `shererp-cloud-preview` → **Builds**, check that the branch built and produced a Preview. Locate its Preview URL in Worker → **Previews** and in the GitHub PR comment.
+3. Open the Preview URL, then `/api/health`: it should return `"status":"foundation"` and `"database":"not-connected"`.
+4. Merge the reviewed PR. Verify Cloudflare creates a successful production-branch build for the new `main` commit and the existing `shererp-cloud-preview.agnishuvo.workers.dev` serves that active version.
+5. If the PR comment says **No Preview URL**, ensure the Preview host is enabled and the Preview command uses `wrangler preview` (not `wrangler versions upload`); the latter uses production resources and is not recommended for PR branch isolation.
 
-1. Visit <https://dash.cloudflare.com/>, select your Cloudflare account.
-2. Open **Account API tokens → Create Token**; choose a custom scope / template labeled **Edit Cloudflare Workers** (wording may change).
-3. Restrict the token to **only the Cloudflare account** hosting `shererp-cloud-preview`. Avoid broad zone/domain/D1 edit permissions. Worker deploy scopes must permit script and static asset deployment.
-4. Copy the token securely *once*; **never commit it, paste it in chat, or add it to a code file**. Rotate if exposed.
-5. Copy the **Cloudflare Account ID** from account settings/dashboard. It is an identifier, not an API token.
+## GitHub Actions and D1 safeguards
 
-Official reference: <https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/>.
+`.github/workflows/cloudflare-preview.yml` runs **PR checks only**, with no credentials and **no deploy job**. Cloudflare's connected GitHub integration owns the Preview/deploy operations; do not configure a second GitHub Actions deploy to the same Worker.
 
-## 2. Configure GitHub Actions Environment
+The separate `.github/workflows/remote-d1-staging.yml` requires explicit authorization for **staging D1 database inspection or migration**; database schema writes should **not** run automatically on every application merge. Staging D1 is `shererp-staging-db` and belongs to separately reserved `shererp-cloud-staging`, not the publicly deployed Worker.
 
-1. In <https://github.com/shuvodelux-commits/SherERP_Cloud/settings/environments> create the environment named **`cloudflare-preview`** (exact name).
-2. In that environment add the two *environment secrets*:
-   - `CLOUDFLARE_API_TOKEN` = the narrowly scoped token from Step 1.
-   - `CLOUDFLARE_ACCOUNT_ID` = your Cloudflare account ID.
-3. Configure **required reviewer / deployment protection** if available on your repo/plan. Optionally restrict deployments to the **`main`** branch.
-4. Under repository Settings → Actions → General, ensure standard GitHub Actions and the trusted `cloudflare/wrangler-action@v4` can run. The workflow grants only `contents: read` GitHub permissions.
+No GitHub commit alone can turn on Cloudflare dashboard's **Enable Preview Builds** control; the Cloudflare account owner must make this one-time dashboard change and verify the first real Preview URL.
 
-**Never store either secret in a GitHub PR comment, `wrangler.jsonc`, .env file committed to GitHub, or repository log.**
+## Cloudflare references
 
-## 3. CI verification (safe without Cloudflare credentials)
-
-Every PR runs `.github/workflows/cloudflare-preview.yml` validation, which:
-
-1. Runs the existing Node tests and the 84-file source hash verification.
-2. Assembles the unchanged legacy HTML partials and replaces only the central `google.script.run` transport in the **generated** output.
-3. Rejects preview configuration with production Worker name, D1 or unsafe bindings.
-4. Runs `wrangler@4.161.0 deploy --dry-run --config wrangler.preview.jsonc` to **bundle without publishing**.
-
-Example local commands, from the repository root:
-
-```bash
-npm test
-npm run verify:source
-npm run build:frontend
-node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
-npx --yes wrangler@4.161.0 deploy --dry-run --config wrangler.preview.jsonc
-```
-
-No Cloudflare account authentication is needed for the local preview-config check or bundling dry-run. A local Wrangler runtime/browser smoke test is separate and still pending.
-
-## 4. Manually deploy the preview (only after merged + secrets)
-
-1. Open <https://github.com/shuvodelux-commits/SherERP_Cloud/actions>.
-2. Select **Cloudflare Preview (manual deploy only)**.
-3. Select **Run workflow**, choose branch **main**.
-4. Enter the exact confirmation string **`DEPLOY_PREVIEW_ONLY`**.
-5. Approve the protected `cloudflare-preview` environment if prompted.
-6. Inspect the job results. It runs validation first, builds from the exact checkout, deploys **only `shererp-cloud-preview`**, then verifies the deployment URL's `/api/health` endpoint.
-
-Expected health payload:
-
-```json
-{"status":"foundation","service":"shererp-cloud","database":"not-connected"}
-```
-
-The page may show the original ERP interface, but **login, sales, purchases, balances and all other business RPCs are intentionally unavailable (501)**. It must not be advertised or used as a production ERP.
-
-If the workflow does not appear, it has **not yet been merged to main**. If authentication fails, check environment secret names and token account scope. If no deployment URL is available, verify the Cloudflare account has an enabled `workers.dev` subdomain.
-
-## 5. D1 staging and production are separately gated
-
-- This workflow does **not** create a database, bind D1, run `wrangler d1 migrations apply --remote`, import Sheets or deploy `shererp-cloud` production.
-- M02's SQLite schemas, approved Unified Party mapping, M04 authentication, finance postings, backups and reconciliation remain separate prerequisites for staging database setup.
-- Never reuse a production D1 database ID in the preview Worker. Later staging D1 needs a distinct approved binding, database, secrets and real Wrangler/D1 tests.
-- Production deployment needs a **separate reviewed release workflow**, protected environment, restore plan, transaction-parity tests and explicit owner approval.
-
-## Alternative: Cloudflare's native GitHub integration
-
-Cloudflare Workers **Builds** can connect directly to a GitHub repo via Cloudflare Dashboard → Workers & Pages → Create application → GitHub and automatically build/preview on pushes. It is a valid alternative to the workflow above; it does **not** use the GitHub Actions environment secrets described here. If you choose that method later, disable this GitHub Actions deploy path to prevent conflicting deploys. Native Builds allows build, deploy and preview commands in its dashboard. See:
-
-- <https://developers.cloudflare.com/workers/ci-cd/builds/>
-- <https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/>
-- <https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/>
-
-**No claim of connection:** Until a real Cloudflare-authenticated deploy completes and a preview URL/health check is verified, the GitHub-to-Cloudflare connection is not established.
+- [Build branches — enable Preview Builds and select `main`](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/)
+- [Workers Builds configuration — Build/Deploy/Preview commands](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
+- [Worker Previews — isolated PR environments](https://developers.cloudflare.com/workers/previews/get-started/)
+- [Troubleshooting missing Preview URL comments](https://developers.cloudflare.com/workers/ci-cd/builds/troubleshoot/)
