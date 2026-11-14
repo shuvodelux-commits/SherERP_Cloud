@@ -2,13 +2,14 @@
 
 Migration workspace for the existing [Mohim_ERP](https://github.com/shuvodelux-commits/Mohim_ERP), preserving the HTML/CSS/vanilla JavaScript frontend and original ERP business/accounting rules while moving from Google Apps Script + Google Sheets to **Cloudflare Workers + Cloudflare D1 (SQLite)**.
 
-> **Current status: Planning only.** The application has not yet been ported, deployed or cut over. The original repository and Google Sheets remain untouched.
+> **Current status: Partial foundation and preview setup only.** The Worker/RPC shell is intentionally non-transactional; no real ERP deployment, D1 integration or cutover has occurred. The original repository and Google Sheets remain untouched.
 
 ## Read first
 
 - **[Master migration plan](docs/MIGRATION_PLAN.md)** — architecture, source inventory, phased implementation (M00–M11), acceptance tests, security, reconciliation and rollback.
 - **[Workstream register](docs/WORKSTREAMS.md)** — specific deliverables, dependency graph, high-risk spikes and PR acceptance matrix.
 - **[AGENTS.md](AGENTS.md)** — instructions for coding agents: preserve existing UI/business logic, forbid unsafe financial transactions, require real D1 integration tests.
+- **[GitHub → Cloudflare preview setup](docs/CLOUDFLARE_GITHUB_SETUP.md)** — manual, protected Workers preview deploy, separate from production, with no D1 binding.
 - **[Approved unified Party architecture](docs/architecture/ADR-007-unified-party-relationships.md)** — one identity, Customer/Supplier/Vendor/Owner/Lender/Borrower/Payee roles, separate accounts and opt-in authorized manual offsets.
 - **[Party design](docs/superpowers/specs/2026-11-14-unified-party-design.md)** and **[test-first implementation roadmap](docs/superpowers/plans/2026-11-14-unified-party-migration.md)** — dependencies and release blockers before Party/finance D1 implementation.
 

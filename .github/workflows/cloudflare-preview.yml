@@ -1,0 +1,88 @@
+name: Cloudflare Preview (manual deploy only)
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type DEPLOY_PREVIEW_ONLY (inert Worker, no D1, not production)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Test & dry-run preview Worker (no secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test original source and Worker contracts
+        run: |
+          npm test
+          npm run verify:source
+      - name: Build unchanged HTML with HTTP RPC adapter
+        run: npm run build:frontend
+      - name: Fail closed on unsafe preview configuration
+        run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
+      - name: Bundle with Wrangler (no publish, no secrets)
+        run: npx --yes wrangler@4.161.0 deploy --dry-run --config wrangler.preview.jsonc
+
+  deploy-preview:
+    name: Deploy inert preview Worker
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY_PREVIEW_ONLY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cloudflare-preview
+    concurrency:
+      group: shererp-cloudflare-preview
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify authenticated preview environment exists
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo '::error::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the cloudflare-preview GitHub Environment.'
+            exit 1
+          fi
+      - name: Build and enforce preview-only configuration
+        run: |
+          npm run build:frontend
+          node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
+      - name: Publish only shererp-cloud-preview (never production)
+        id: publish
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.161.0'
+          command: deploy --config wrangler.preview.jsonc
+      - name: Verify preview reports no database connection
+        env:
+          DEPLOY_URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          if [ -z "$DEPLOY_URL" ]; then
+            echo '::error::Cloudflare action returned no deployment URL.'
+            exit 1
+          fi
+          node --input-type=module -e '
+            const u = process.env.DEPLOY_URL.replace(/\/$/, "") + "/api/health";
+            const response = await fetch(u);
+            const body = await response.json();
+            if (!response.ok || body.status !== "foundation" || body.database !== "not-connected") {
+              throw new Error("Unexpected preview health response");
+            }
+            console.log("Preview health confirmed: foundation with no database binding");
+          '
