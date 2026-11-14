@@ -10,6 +10,7 @@
     "audit": "node scripts/audit-source.mjs legacy/source",
     "verify:source": "node scripts/verify-source.mjs legacy/source docs/baseline/source-manifest.json",
     "build:frontend:raw": "node scripts/build-frontend.mjs legacy/source dist",
-    "build:frontend": "npm run build:frontend:raw && node scripts/patch-rpc.mjs dist/index.html"
+    "build:frontend": "npm run build:frontend:raw && node scripts/patch-rpc.mjs dist/index.html",
+    "inventory:schema": "node scripts/inventory-schema.mjs legacy/source/Config.gs"
   }
 }
