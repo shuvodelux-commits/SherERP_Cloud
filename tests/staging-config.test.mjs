@@ -28,3 +28,7 @@ test('preview must stay DB-free and separately named',()=>{
   assert.throws(()=>validateStagingConfig(staging,{...preview,d1_databases:[{binding:'DB'}]}),/preview.*binding|preview.*D1/i);
   assert.throws(()=>validateStagingConfig(staging,{...preview,name:'shererp-cloud-staging'}),/separate|preview/);
 });
+
+test('staging guard refuses nested preview database bindings',()=>{
+  assert.throws(()=>validateStagingConfig(staging,{...preview,previews:{d1_databases:[{binding:'DB'}]}}),/preview|unexpected|binding/i);
+});

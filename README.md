@@ -9,7 +9,7 @@ Migration workspace for the existing [Mohim_ERP](https://github.com/shuvodelux-c
 - **[Master migration plan](docs/MIGRATION_PLAN.md)** — architecture, source inventory, phased implementation (M00–M11), acceptance tests, security, reconciliation and rollback.
 - **[Workstream register](docs/WORKSTREAMS.md)** — specific deliverables, dependency graph, high-risk spikes and PR acceptance matrix.
 - **[AGENTS.md](AGENTS.md)** — instructions for coding agents: preserve existing UI/business logic, forbid unsafe financial transactions, require real D1 integration tests.
-- **[GitHub → Cloudflare preview setup](docs/CLOUDFLARE_GITHUB_SETUP.md)** — manual, protected Workers preview deploy, separate from production, with no D1 binding.
+- **[Automatic Cloudflare Builds and PR previews](docs/CLOUDFLARE_GITHUB_SETUP.md)** — `main` auto-deploys the DB-free shell; non-main branches receive isolated Preview URLs. No GitHub Actions deploy job.
 - **[Approved unified Party architecture](docs/architecture/ADR-007-unified-party-relationships.md)** — one identity, Customer/Supplier/Vendor/Owner/Lender/Borrower/Payee roles, separate accounts and opt-in authorized manual offsets.
 - **[Party design](docs/superpowers/specs/2026-11-14-unified-party-design.md)** and **[test-first implementation roadmap](docs/superpowers/plans/2026-11-14-unified-party-migration.md)** — dependencies and release blockers before Party/finance D1 implementation.
 

@@ -7,6 +7,7 @@ const base = () => ({
   main: 'src/index.js',
   compatibility_date: '2026-11-14',
   workers_dev: true,
+  previews: {},
   assets: {
     directory: './dist',
     binding: 'ASSETS',
@@ -46,4 +47,12 @@ test('fails closed for malformed input or unexpected asset settings', () => {
   assert.throws(() => validateCloudflarePreviewConfig(x), /api|run_worker_first/i);
   const y=base();y.assets.upload='everything';
   assert.throws(() => validateCloudflarePreviewConfig(y), /unexpected/i);
+});
+
+test('Worker Previews must explicitly declare no D1 or other bindings', () => {
+  assert.equal(validateCloudflarePreviewConfig(base()), true);
+  const noPreviews = base(); delete noPreviews.previews;
+  assert.throws(() => validateCloudflarePreviewConfig(noPreviews), /previews/i);
+  assert.throws(() => validateCloudflarePreviewConfig({...base(),previews:{d1_databases:[{binding:'DB'}]}}), /previews/i);
+  assert.throws(() => validateCloudflarePreviewConfig({...base(),previews:{vars:{SECRET:'x'}}}), /previews/i);
 });

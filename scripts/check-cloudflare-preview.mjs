@@ -8,7 +8,7 @@ export function validateCloudflarePreviewConfig(config) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new Error('Invalid preview config');
   }
-  const allowed = new Set(['name','main','compatibility_date','workers_dev','assets']);
+  const allowed = new Set(['name','main','compatibility_date','workers_dev','assets','previews']);
   for (const key of Object.keys(config)) {
     if (!allowed.has(key)) throw new Error('Unexpected preview config field: '+key);
   }
@@ -18,6 +18,9 @@ export function validateCloudflarePreviewConfig(config) {
     throw new Error('Invalid compatibility date');
   }
   if (config.workers_dev !== true) throw new Error('Preview workers_dev must be true');
+  if (!config.previews || typeof config.previews !== 'object' || Array.isArray(config.previews) || Object.keys(config.previews).length !== 0) {
+    throw new Error('Worker Previews must have an empty, DB-free previews configuration');
+  }
   const assets = config.assets;
   if (!assets || typeof assets !== 'object' || Array.isArray(assets)) {
     throw new Error('Missing preview assets config');
