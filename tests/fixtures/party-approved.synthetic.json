@@ -1,0 +1,11 @@
+[
+  {
+    "members": [
+      {"sourceGroup":"SUPPLIERS","sourceId":"SUP-001"},
+      {"sourceGroup":"CUSTOMERS","sourceId":"CUS-001"}
+    ],
+    "reviewedBy":"admin-01",
+    "reviewedAt":"2026-11-14T12:00:00Z",
+    "approvalRef":"REVIEW-001"
+  }
+]
