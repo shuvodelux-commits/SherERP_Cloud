@@ -21,6 +21,8 @@ This repository is the **target migration workspace** for https://github.com/shu
 - For each financial operation define a **DB-enforced** guard and idempotent operation ID; stale preflight reads, zero-row CAS updates, duplicate submits and partial failures must never commit inconsistent stock/ledger writes.
 - No hidden module-level request caches for auth, stock, cash or balances. Any future caching must have measured invalidation safety.
 - No import or SQL migration against production D1 without owner-approved backup/cutover procedure.
+- Cloudflare GitHub Actions deploy setup must remain **manual and preview-only** until an approved production release gate. Use `wrangler.preview.jsonc` (distinct `shererp-cloud-preview` Worker, no D1), `cloudflare-preview` protected GitHub Environment, and the preflight config guard. Do not let PR/push workflows read Cloudflare secrets or auto-deploy production.
+- Do not enable Cloudflare native Workers Builds deployment of the same preview Worker concurrently with the GitHub Actions deploy workflow; one system must own deployment.
 
 ## Business rules copied from original AGENTS.md
 
