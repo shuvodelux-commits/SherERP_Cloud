@@ -20,6 +20,25 @@ jobs:
         run: npm test
       - name: Verify source byte-for-byte against pinned manifest
         run: npm run verify:source
+      - name: Build unchanged HTML includes to dist
+        run: npm run build:frontend
+      - name: Verify built page has no GAS template instructions
+        run: |
+          node -e "const fs=require('node:fs'); const s=fs.readFileSync('dist/index.html','utf8'); if(s.includes('<?!=') || !s.includes('id=\"app\"')) process.exit(1); console.log('M01 static page bytes:', Buffer.byteLength(s))"
+      - name: Validate Worker module syntax and routing config
+        run: |
+          node --check src/index.js
+          node --check src/rpc/handler.js
+          node --check src/rpc/registry.js
+          node --check scripts/patch-rpc.mjs
+          node -e "const fs=require('node:fs'); const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8')); if(c.main!=='src/index.js' || c.assets.binding!=='ASSETS' || !c.assets.run_worker_first.includes('/api/*')) process.exit(1)"
+      - name: Verify original RPC wrapper was replaced in built HTML
+        run: |
+          grep -Fq "fetch('/api/rpc'" dist/index.html
+          if grep -Fq "runner[fnName].apply" dist/index.html; then
+            echo "Unsafe legacy google.script.run transport remains in built output"
+            exit 1
+          fi
       - name: Verify source-faithful schema inventory
         run: |
           npm run inventory:schema --silent > /tmp/m02-schema.json
