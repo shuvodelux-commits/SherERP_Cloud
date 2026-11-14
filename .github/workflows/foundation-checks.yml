@@ -1,0 +1,26 @@
+name: Foundation source checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  m00-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test audit and verification logic
+        run: npm test
+      - name: Verify source byte-for-byte against pinned manifest
+        run: npm run verify:source
+      - name: Run deterministic source audit
+        run: |
+          npm run audit --silent > /tmp/m00-audit.json
+          node -e "const f=require('/tmp/m00-audit.json'); if(f.totals.backendFiles!==47 || f.totals.frontendFiles!==37 || f.totals.files!==84) process.exit(1); console.log('M00 audit:', f.totals)"
