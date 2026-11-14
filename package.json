@@ -9,6 +9,7 @@
     "test": "node --test",
     "audit": "node scripts/audit-source.mjs legacy/source",
     "verify:source": "node scripts/verify-source.mjs legacy/source docs/baseline/source-manifest.json",
-    "inventory:schema": "node scripts/inventory-schema.mjs legacy/source/Config.gs"
+    "inventory:schema": "node scripts/inventory-schema.mjs legacy/source/Config.gs",
+    "catalog:dry-run": "node scripts/dry-run-catalog.mjs"
   }
 }
