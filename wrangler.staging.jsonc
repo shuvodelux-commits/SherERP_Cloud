@@ -1,0 +1,20 @@
+{
+  "name": "shererp-cloud-staging",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shererp-staging-db",
+      "database_id": "aa04618e-1639-4cb9-bdf5-7b967d8b968b",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

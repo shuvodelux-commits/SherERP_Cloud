@@ -1,0 +1,33 @@
+name: M02 Staging D1 local verification (no cloud writes)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-d1:
+    name: Validate staging configuration and migrate local D1 only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify staging binding safety and source-code tests
+        run: |
+          npm test
+          node scripts/check-staging-d1.mjs wrangler.staging.jsonc wrangler.preview.jsonc
+      - name: Build existing frontend for isolated staging dry-run
+        run: npm run build:frontend
+      - name: Verify staging Worker build without deployment
+        run: npx --yes wrangler@4.161.0 deploy --dry-run --config wrangler.staging.jsonc
+      - name: Apply catalog and Party identity migrations to local D1 only
+        run: npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --local --config wrangler.staging.jsonc --persist-to "$RUNNER_TEMP/shererp-d1-local"
+      - name: Inspect migrated local D1 schema without remote access
+        run: |
+          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --local --config wrangler.staging.jsonc --persist-to "$RUNNER_TEMP/shererp-d1-local" --command "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review')) AS app_tables, (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('trg_party_role_delete_forbidden','trg_party_cross_source_verification','trg_party_legacy_identity_immutable','trg_party_legacy_link_delete_forbidden')) AS history_triggers;" --json > "$RUNNER_TEMP/d1-local-schema.json"
+          node scripts/local-d1-schema-check.mjs "$RUNNER_TEMP/d1-local-schema.json"
