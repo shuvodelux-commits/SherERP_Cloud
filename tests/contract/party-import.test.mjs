@@ -72,3 +72,11 @@ test('plan IDs and output are deterministic across input source row order and gr
   const b=structuredClone(a);b.CUSTOMERS.reverse();
   assert.deepEqual(planPartyImport(a),planPartyImport(b));
 });
+
+test('missing-ID review identities are stable when exported source row order changes',()=>{
+  const a=snapshot();
+  a.CUSTOMERS.push({'Customer ID':'','Customer Name':'Unknown','Phone':'01777777777','_rowIndex':3});
+  const b=structuredClone(a);b.CUSTOMERS.reverse();
+  const onlyMissing=(plan)=>plan.reviewItems.filter(x=>x.reason==='MISSING_ID');
+  assert.deepEqual(onlyMissing(planPartyImport(a)),onlyMissing(planPartyImport(b)));
+});
