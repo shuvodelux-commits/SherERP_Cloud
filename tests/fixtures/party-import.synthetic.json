@@ -1,0 +1,17 @@
+{
+  "CUSTOMERS": [
+    {"Customer ID":"CUS-001","Customer Name":"Rahim Enterprise","Phone":"01700000000","Status":"Active","_rowIndex":2}
+  ],
+  "SUPPLIERS": [
+    {"Supplier ID":"SUP-001","Supplier Name":"Rahim Enterprise","Phone":"01700000000","Status":"Active","_rowIndex":2}
+  ],
+  "VENDORS": [
+    {"Vendor ID":"VEN-001","Vendor Name":"Vendor A","Phone":"01800000000","Status":"Active","Current Due":300,"Current Receivable":150,"_rowIndex":2}
+  ],
+  "FINANCE_PERSONS": [
+    {"Person ID":"FIN-001","Person Name":"Finance Person A","Phone":"01900000000","Roles":"Owner,Lender,Borrower","Person Type":"Owner","Status":"Active","_rowIndex":2}
+  ],
+  "EXPENSE_PAYEES": [
+    {"Payee ID":"PAY-001","Payee Name":"Expense Payee A","Phone":"01600000000","Status":"Inactive","_rowIndex":2}
+  ]
+}

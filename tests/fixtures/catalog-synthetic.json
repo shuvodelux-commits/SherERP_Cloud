@@ -1,0 +1,12 @@
+{
+  "SETTINGS": [
+    {"Key":"Phone 1", "Value":"01700000000", "_rowIndex":2},
+    {"Key":"Invoice Show Signature", "Value":"true", "_rowIndex":3}
+  ],
+  "PRODUCT_CATEGORIES": [
+    {"Category ID":"CAT-000001", "Category Name":"Lighting", "Status":"Active", "Created At":"2026-11-14T00:00:00.000Z", "_rowIndex":2}
+  ],
+  "PRODUCT_UNITS": [
+    {"Unit ID":"UNT-000001", "Unit Name":"Pcs", "Status":"Active", "Created At":"2026-11-14T00:00:00.000Z", "_rowIndex":2}
+  ]
+}

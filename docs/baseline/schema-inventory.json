@@ -1,0 +1,958 @@
+{
+  "formatVersion": 1,
+  "tables": [
+    {
+      "sheetKey": "PRODUCTS",
+      "sheetName": "Products",
+      "columns": [
+        "Product ID",
+        "Product Name",
+        "Brand",
+        "Category",
+        "Unit",
+        "Barcode",
+        "Purchase Price",
+        "Selling Price",
+        "Current Stock",
+        "Minimum Stock",
+        "Status",
+        "Created At",
+        "Updated At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Product Type",
+        "Bundle Revision"
+      ]
+    },
+    {
+      "sheetKey": "BUNDLE_COMPONENTS",
+      "sheetName": "Bundle Components",
+      "columns": [
+        "Bundle Product ID",
+        "Component Product ID",
+        "Quantity Per Set",
+        "Unit",
+        "Revision",
+        "Status",
+        "Updated At"
+      ]
+    },
+    {
+      "sheetKey": "SALE_BUNDLE_COMPONENTS",
+      "sheetName": "Sale Bundle Components",
+      "columns": [
+        "Invoice ID",
+        "Bundle Product ID",
+        "Bundle Revision",
+        "Component Product ID",
+        "Quantity Per Set",
+        "Sets Sold",
+        "Component Quantity Sold",
+        "Unit",
+        "Created At"
+      ]
+    },
+    {
+      "sheetKey": "SUPPLIERS",
+      "sheetName": "Suppliers",
+      "columns": [
+        "Supplier ID",
+        "Supplier Name",
+        "Phone",
+        "Address",
+        "Opening Balance",
+        "Current Due",
+        "Notes",
+        "Status",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "SUPPLIER_LEDGER",
+      "sheetName": "Supplier Ledger",
+      "columns": [
+        "Ledger ID",
+        "Date",
+        "Supplier ID",
+        "Supplier Name",
+        "Type",
+        "Reference",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Payment Method",
+        "Payment Amount",
+        "Discount Amount",
+        "Discount Reason",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "STOCK_LOTS",
+      "sheetName": "Stock Lots",
+      "columns": [
+        "Lot ID",
+        "Product ID",
+        "Product Name",
+        "Purchase ID",
+        "Purchase Date",
+        "Purchase Price",
+        "Sell Price",
+        "Original Quantity",
+        "Remaining Quantity",
+        "Status",
+        "Created At",
+        "Supplier ID",
+        "Supplier Name"
+      ]
+    },
+    {
+      "sheetKey": "SALE_ITEM_LOTS",
+      "sheetName": "Sale Item Lots",
+      "columns": [
+        "Invoice ID",
+        "Product ID",
+        "Lot ID",
+        "Quantity",
+        "Unit Cost",
+        "Unit Sell Price",
+        "Created At",
+        "Supplier ID",
+        "Source Sale Product ID",
+        "Return Consumption Link ID"
+      ]
+    },
+    {
+      "sheetKey": "STOCK_LOT_COST_CORRECTIONS",
+      "sheetName": "Stock Lot Cost Corrections",
+      "columns": [
+        "Correction ID",
+        "Date",
+        "Lot ID",
+        "Product ID",
+        "Product Name",
+        "Source",
+        "Old Purchase Price",
+        "New Purchase Price",
+        "Original Quantity",
+        "Remaining Quantity",
+        "Matched Historical Quantity",
+        "Affected Invoice Count",
+        "Historical COGS Delta",
+        "Reason",
+        "Corrected By",
+        "Created At"
+      ]
+    },
+    {
+      "sheetKey": "PURCHASES",
+      "sheetName": "Purchases",
+      "columns": [
+        "Purchase ID",
+        "Date",
+        "Supplier ID",
+        "Supplier Name",
+        "Subtotal",
+        "Discount",
+        "Grand Total",
+        "Paid Amount",
+        "Due Amount",
+        "Payment Status",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Payment Method",
+        "Bank Account ID",
+        "Bank Account Name"
+      ]
+    },
+    {
+      "sheetKey": "PURCHASE_ITEMS",
+      "sheetName": "Purchase Items",
+      "columns": [
+        "Purchase ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Price",
+        "Sell Price",
+        "Line Total"
+      ]
+    },
+    {
+      "sheetKey": "SALES",
+      "sheetName": "Sales",
+      "columns": [
+        "Invoice ID",
+        "Date",
+        "Time",
+        "Customer ID",
+        "Customer Name",
+        "Customer Phone",
+        "Customer Address",
+        "Subtotal",
+        "Discount",
+        "Grand Total",
+        "Paid Amount",
+        "Due Amount",
+        "Payment Type",
+        "Payment Status",
+        "Created By",
+        "Created At",
+        "Payment Method",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Source Draft ID",
+        "Payment Detail Version",
+        "Customer Relation Name",
+        "Customer Relation Type",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "SALE_PAYMENTS",
+      "sheetName": "Sale Payments",
+      "columns": [
+        "Payment ID",
+        "Invoice ID",
+        "Revision",
+        "Row Order",
+        "Method",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Tendered Amount",
+        "Applied Amount",
+        "Change Amount",
+        "Transaction Date",
+        "Created At",
+        "Created By",
+        "Operation ID",
+        "Status",
+        "Reversed At",
+        "Reversed By",
+        "Reversal Operation ID"
+      ]
+    },
+    {
+      "sheetKey": "SALE_POSTING_JOURNAL",
+      "sheetName": "Sale Posting Journal",
+      "columns": [
+        "Operation ID",
+        "Operation Type",
+        "Payload Hash",
+        "Invoice ID",
+        "Return ID",
+        "State",
+        "Last Completed Stage",
+        "Actor",
+        "Created At",
+        "Updated At",
+        "Error"
+      ]
+    },
+    {
+      "sheetKey": "SALES_DRAFTS",
+      "sheetName": "Draft Invoices",
+      "columns": [
+        "Draft ID",
+        "Draft No",
+        "Draft Date",
+        "Customer ID",
+        "Customer Name",
+        "Customer Phone",
+        "Customer Father Name",
+        "Customer Address",
+        "Items JSON",
+        "Payment JSON",
+        "Notes",
+        "Subtotal",
+        "Discount",
+        "Grand Total",
+        "Created By ID",
+        "Created By Name",
+        "Created At",
+        "Updated By ID",
+        "Updated By Name",
+        "Updated At",
+        "Version",
+        "Customer Relation Type"
+      ]
+    },
+    {
+      "sheetKey": "SALES_DRAFT_AUDIT",
+      "sheetName": "Draft Invoice Audit",
+      "columns": [
+        "Audit ID",
+        "Timestamp",
+        "Action",
+        "Draft ID",
+        "Draft No",
+        "Version",
+        "Actor ID",
+        "Actor Name",
+        "Source Owner ID",
+        "Invoice ID",
+        "Note"
+      ]
+    },
+    {
+      "sheetKey": "SALE_ITEMS",
+      "sheetName": "Sale Items",
+      "columns": [
+        "Invoice ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Price",
+        "Line Total",
+        "Sold Product Type"
+      ]
+    },
+    {
+      "sheetKey": "CUSTOMERS",
+      "sheetName": "Customers",
+      "columns": [
+        "Customer ID",
+        "Customer Name",
+        "Father Name",
+        "Phone",
+        "Address",
+        "Opening Balance",
+        "Current Due",
+        "Status",
+        "Notes",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Relation Type"
+      ]
+    },
+    {
+      "sheetKey": "CUSTOMER_LEDGER",
+      "sheetName": "Customer Ledger",
+      "columns": [
+        "Ledger ID",
+        "Date",
+        "Customer ID",
+        "Customer Name",
+        "Type",
+        "Reference",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Payment Method",
+        "Payment Amount",
+        "Discount Amount",
+        "Discount Reason",
+        "Allocated Invoice ID",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "EXPENSES",
+      "sheetName": "Expenses",
+      "columns": [
+        "Expense ID",
+        "Date",
+        "Category ID",
+        "Category Name",
+        "Ledger ID",
+        "Ledger Name",
+        "Amount",
+        "Payment Method",
+        "Description",
+        "Reference No",
+        "Notes",
+        "Status",
+        "Created By",
+        "Created At",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "EXPENSE_CATEGORIES",
+      "sheetName": "Expense Categories",
+      "columns": [
+        "Category ID",
+        "Category Name",
+        "Description",
+        "Status",
+        "Created At"
+      ]
+    },
+    {
+      "sheetKey": "EXPENSE_PAYEES",
+      "sheetName": "Expense Payees",
+      "columns": [
+        "Payee ID",
+        "Payee Name",
+        "Phone",
+        "Notes",
+        "Status",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "CASH_BOOK",
+      "sheetName": "Cash Book",
+      "columns": [
+        "Entry ID",
+        "Date",
+        "Type",
+        "Reference",
+        "Description",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Payment Method",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "STOCK_MOVEMENT",
+      "sheetName": "Stock Movement",
+      "columns": [
+        "Movement ID",
+        "Date",
+        "Product ID",
+        "Product Name",
+        "Type",
+        "Reference",
+        "Quantity In",
+        "Quantity Out",
+        "Balance Stock",
+        "Notes",
+        "Lot ID",
+        "Source Sale Product ID",
+        "Source Consumption Link ID",
+        "Reversed By",
+        "Reversed At"
+      ]
+    },
+    {
+      "sheetKey": "SETTINGS",
+      "sheetName": "Settings",
+      "columns": [
+        "Key",
+        "Value"
+      ]
+    },
+    {
+      "sheetKey": "SALES_RETURN",
+      "sheetName": "Sales Return",
+      "columns": [
+        "Return ID",
+        "Date",
+        "Invoice ID",
+        "Customer ID",
+        "Customer Name",
+        "Customer Phone",
+        "Refund Method",
+        "Total Return Amount",
+        "Reason",
+        "Notes",
+        "Processed By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Batch ID",
+        "Return Operation ID",
+        "Edit Version",
+        "Updated At",
+        "Updated By",
+        "Edit Reason"
+      ]
+    },
+    {
+      "sheetKey": "SALES_RETURN_ITEMS",
+      "sheetName": "Sales Return Items",
+      "columns": [
+        "Return ID",
+        "Invoice ID",
+        "Product ID",
+        "Product Name",
+        "Return Quantity",
+        "Return Price",
+        "Line Total",
+        "Supplier ID",
+        "Pricing Basis",
+        "Sold Product Type",
+        "Is Deleted",
+        "Deleted At"
+      ]
+    },
+    {
+      "sheetKey": "PURCHASE_RETURN",
+      "sheetName": "Purchase Return",
+      "columns": [
+        "Return ID",
+        "Date",
+        "Purchase ID",
+        "Supplier ID",
+        "Supplier Name",
+        "Refund Method",
+        "Total Return Amount",
+        "Reason",
+        "Notes",
+        "Processed By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "PURCHASE_RETURN_ITEMS",
+      "sheetName": "Purchase Return Items",
+      "columns": [
+        "Return ID",
+        "Purchase ID",
+        "Product ID",
+        "Product Name",
+        "Return Quantity",
+        "Return Price",
+        "Line Total",
+        "Pricing Basis"
+      ]
+    },
+    {
+      "sheetKey": "CASH_SESSIONS",
+      "sheetName": "Cash Sessions",
+      "columns": [
+        "Session ID",
+        "Date",
+        "Opened At",
+        "Opening Cash",
+        "Closed At",
+        "Expected Cash",
+        "Counted Cash",
+        "Variance",
+        "Status",
+        "Notes",
+        "Opening Explanation Entry IDs",
+        "Closing Explanation Entry IDs"
+      ]
+    },
+    {
+      "sheetKey": "INVOICE_EDIT_LOG",
+      "sheetName": "Invoice Edit Log",
+      "columns": [
+        "Log ID",
+        "Invoice ID",
+        "Edit Date",
+        "Reason",
+        "Before Grand Total",
+        "After Grand Total",
+        "Return ID",
+        "Before Return Amount",
+        "After Return Amount",
+        "Before Return Items JSON",
+        "After Return Items JSON",
+        "Edited By"
+      ]
+    },
+    {
+      "sheetKey": "USERS",
+      "sheetName": "Users",
+      "columns": [
+        "User ID",
+        "Full Name",
+        "Mobile Number",
+        "Password Hash",
+        "Password Salt",
+        "Role",
+        "Status",
+        "Created By",
+        "Created At",
+        "Last Login"
+      ]
+    },
+    {
+      "sheetKey": "ROLES",
+      "sheetName": "Roles",
+      "columns": [
+        "Role ID",
+        "Role Name",
+        "Allowed Modules",
+        "Permissions",
+        "Status",
+        "Created At"
+      ]
+    },
+    {
+      "sheetKey": "SESSIONS",
+      "sheetName": "Sessions",
+      "columns": [
+        "Token",
+        "User ID",
+        "Mobile Number",
+        "Created At",
+        "Expires At",
+        "Last Activity"
+      ]
+    },
+    {
+      "sheetKey": "LOGS",
+      "sheetName": "Logs",
+      "columns": [
+        "Timestamp",
+        "Context",
+        "Message"
+      ]
+    },
+    {
+      "sheetKey": "DELETE_LOG",
+      "sheetName": "Delete Log",
+      "columns": [
+        "Log ID",
+        "Date",
+        "Time",
+        "Module",
+        "Record ID",
+        "Invoice No",
+        "Reason",
+        "Deleted By",
+        "Deleted By Mobile"
+      ]
+    },
+    {
+      "sheetKey": "OPENING_BALANCE_EDIT_LOG",
+      "sheetName": "Opening Balance Edit Log",
+      "columns": [
+        "Audit ID",
+        "Changed At",
+        "Entity Type",
+        "Entity ID",
+        "Entity Name",
+        "Old Opening Balance",
+        "New Opening Balance",
+        "Delta",
+        "Current Due Before",
+        "Current Due After",
+        "Reason",
+        "Changed By"
+      ]
+    },
+    {
+      "sheetKey": "BANK_ACCOUNTS",
+      "sheetName": "Bank Accounts",
+      "columns": [
+        "Bank Account ID",
+        "Account Name",
+        "Bank Name",
+        "Account Number",
+        "Opening Balance",
+        "Current Balance",
+        "Notes",
+        "Status",
+        "Created At",
+        "Account Type"
+      ]
+    },
+    {
+      "sheetKey": "BANK_BOOK",
+      "sheetName": "Bank Book",
+      "columns": [
+        "Entry ID",
+        "Date",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Type",
+        "Reference",
+        "Description",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Status",
+        "Reversal Of",
+        "Created By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason"
+      ]
+    },
+    {
+      "sheetKey": "BANK_TRANSFERS",
+      "sheetName": "Bank Transfers",
+      "columns": [
+        "Transfer ID",
+        "Date",
+        "From Account ID",
+        "From Account Name",
+        "To Account ID",
+        "To Account Name",
+        "Amount",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "FINANCE_TRANSACTIONS",
+      "sheetName": "Finance Transactions",
+      "columns": [
+        "Finance ID",
+        "Date",
+        "Transaction Type",
+        "Person",
+        "Payment Method",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Amount",
+        "Reference No",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Person ID"
+      ]
+    },
+    {
+      "sheetKey": "FINANCE_PERSONS",
+      "sheetName": "Finance Persons",
+      "columns": [
+        "Person ID",
+        "Person Name",
+        "Person Type",
+        "Roles",
+        "Phone",
+        "Description",
+        "Notes",
+        "Status",
+        "Created At"
+      ]
+    },
+    {
+      "sheetKey": "PRODUCT_CATEGORIES",
+      "sheetName": "Product Categories",
+      "columns": [
+        "Category ID",
+        "Category Name",
+        "Status",
+        "Created At"
+      ]
+    },
+    {
+      "sheetKey": "PRODUCT_UNITS",
+      "sheetName": "Product Units",
+      "columns": [
+        "Unit ID",
+        "Unit Name",
+        "Status",
+        "Created At"
+      ]
+    },
+    {
+      "sheetKey": "VENDORS",
+      "sheetName": "Vendors",
+      "columns": [
+        "Vendor ID",
+        "Vendor Name",
+        "Phone",
+        "Address",
+        "Current Due",
+        "Status",
+        "Created At",
+        "Current Receivable",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "VENDOR_SOURCING",
+      "sheetName": "Vendor Sourcing",
+      "columns": [
+        "Sourcing ID",
+        "Date",
+        "Invoice ID",
+        "Product ID",
+        "Product Name",
+        "Vendor ID",
+        "Vendor Name",
+        "Quantity",
+        "Unit Cost",
+        "Total Cost",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "VENDOR_LEDGER",
+      "sheetName": "Vendor Ledger",
+      "columns": [
+        "Ledger ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Type",
+        "Reference",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Payment Method",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Balance Type"
+      ]
+    },
+    {
+      "sheetKey": "VENDOR_RETURNS",
+      "sheetName": "Vendor Returns",
+      "columns": [
+        "Return ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Sourcing ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Cost",
+        "Total Value",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "VENDOR_ISSUES",
+      "sheetName": "Vendor Issues",
+      "columns": [
+        "Issue ID",
+        "Memo ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Value",
+        "Total Value",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    },
+    {
+      "sheetKey": "VENDOR_RETURNS_RECEIVED",
+      "sheetName": "Vendor Returns Received",
+      "columns": [
+        "Return ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Issue ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Value",
+        "Total Value",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ]
+    }
+  ]
+}
