@@ -1,0 +1,14 @@
+{
+  "tables": [
+    {"sheetKey":"CUSTOMERS","columns":["Customer ID","Customer Name","Phone","Opening Balance","Current Due"]},
+    {"sheetKey":"SUPPLIERS","columns":["Supplier ID","Supplier Name","Phone","Opening Balance","Current Due"]},
+    {"sheetKey":"VENDORS","columns":["Vendor ID","Vendor Name","Phone","Current Due","Current Receivable"]},
+    {"sheetKey":"FINANCE_PERSONS","columns":["Person ID","Person Name","Person Type","Roles","Phone"]},
+    {"sheetKey":"EXPENSE_PAYEES","columns":["Payee ID","Payee Name","Phone"]},
+    {"sheetKey":"CUSTOMER_LEDGER","columns":[]},
+    {"sheetKey":"SUPPLIER_LEDGER","columns":[]},
+    {"sheetKey":"VENDOR_LEDGER","columns":[]},
+    {"sheetKey":"FINANCE_TRANSACTIONS","columns":[]},
+    {"sheetKey":"EXPENSES","columns":[]}
+  ]
+}
