@@ -18,7 +18,7 @@ before(async()=>{
     .bind('CAT-2','দড়ি','Inactive',3).run();
   await db.prepare('INSERT INTO product_units (unit_id,unit_name,status,legacy_sheet_row) VALUES (?,?,?,?)')
     .bind('UNIT-1','Pcs','Active',2).run();
-  await db.prepare('INSERT INTO product_units (unit_id,unit_name,status) VALUES (?,?,?)')
+  await db.prepare('INSERT INTO product_units (unit_id,unit_name,status,legacy_sheet_row) VALUES (?,?,?,?)')
     .bind('UNIT-2','Feet','Active',3).run();
   await db.prepare('INSERT INTO parties (party_id,display_name,created_at) VALUES (?,?,?)')
     .bind('PARTY-1','Rahim','2026-11-15T00:00:00Z').run();
