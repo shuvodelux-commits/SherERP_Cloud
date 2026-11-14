@@ -50,6 +50,11 @@ jobs:
       - name: Verify Party legacy mapping against the full frozen source inventory
         run: |
           node --input-type=module -e "import {readFileSync} from 'node:fs'; import {validatePartyContracts} from './src/party/legacy-contracts.js'; const source=JSON.parse(readFileSync('docs/baseline/schema-inventory.json','utf8')); validatePartyContracts(source); console.log('Party source masters and related groups verified')"
+      - name: Test source-safe Party identity import proposals (no database writes)
+        run: |
+          npm run party:dry-run --silent -- tests/fixtures/party-import.synthetic.json > /tmp/party-proposal.json
+          npm run party:dry-run --silent -- tests/fixtures/party-import.synthetic.json tests/fixtures/party-approved.synthetic.json > /tmp/party-reviewed.json
+          node -e "const fs=require('node:fs'); const a=fs.readFileSync('/tmp/party-proposal.json','utf8'); const b=JSON.parse(fs.readFileSync('/tmp/party-reviewed.json','utf8')); const p=JSON.parse(a); if(p.proposedParties!==5 || p.pendingIdentityReviews!==2 || b.proposedParties!==4 || b.reviewedGroups!==1 || a.includes('01700000000') || a.includes('Rahim')) process.exit(1); console.log('Party dry-run guarded proposals:',p.proposedParties,b.proposedParties)"
       - name: Run synthetic catalog import dry-run (no database writes)
         run: |
           npm run catalog:dry-run --silent -- tests/fixtures/catalog-synthetic.json > /tmp/m02-catalog-dryrun.json
