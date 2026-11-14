@@ -5,7 +5,8 @@
 **Target:** https://github.com/shuvodelux-commits/SherERP_Cloud.  
 **Technology decision:** Cloudflare Workers + Workers Static Assets + **Cloudflare D1 SQLite**.  
 **Scope:** Port the existing Google Apps Script (GAS) + Google Sheets application, preserve business behavior and visual frontend, retire GAS/Sheets from the *new* runtime only after acceptance.  
-**Source protection:** The original repository and production spreadsheet are read-only migration references. Do not alter/delete them.
+**Source protection:** The original repository and production spreadsheet are read-only migration references. Do not alter/delete them.  
+**Approved Party amendment (2026-11-14):** One Party, seven combinable roles, separately reconciled financial accounts and optional explicitly authorized manual noncash cross-role settlement. See [ADR-007](architecture/ADR-007-unified-party-relationships.md), [design](superpowers/specs/2026-11-14-unified-party-design.md), and [Superpowers implementation plan](superpowers/plans/2026-11-14-unified-party-migration.md). No Party production implementation is authorized by this planning amendment.
 
 ## 1. Goals, invariants, and non-goals
 
@@ -18,10 +19,11 @@
 5. Data migration is deterministic, repeatable and fully reconciled before production cutover.
 6. Every financial posting is atomic and idempotent; no duplicate invoice, lot movement, cash/bank posting or reversal on retry.
 7. CI tests, verified Cloudflare preview, operational monitoring, backup/recovery, and a rehearsed rollback plan are required.
+8. A verified Party may simultaneously be Customer, Supplier, Vendor, Owner, Lender, Borrower and Payee; its accounts must remain financially distinct, with opt-in manual settlements only.
 
 ### Non-goals
 
-- Redesigning modules, introducing a new ERP/accounting engine, changing economic semantics or adding new SaaS billing features.
+- Unrequested module redesign, introduction of a **second authoritative** accounting engine, changes to existing posting semantics or SaaS billing features. The owner-approved unified Party identity and optional explicit manual settlement are an **in-scope, gated architectural addition**, not permission to rewrite legacy postings.
 - Running the old GAS app and Workers as simultaneous independent writers to the same business state.
 - Replacing D1 with Durable Objects or a non-Cloudflare DB without a separate architecture decision approved by the owner.
 - Copying secrets, production credentials, private staff/customer information or live spreadsheet exports into GitHub.
@@ -39,6 +41,9 @@
 - Preserve native module edit/delete workflows; do not introduce a generic second accounting state or correction engine.
 - Audits use the authenticated application user, not Google session identity.
 - Existing permission module separation and existing invoice layout/print rules remain intact.
+- Party relationship roles are not staff authorization roles. The Party identity is not a single current-due account: Customer AR/advance, Supplier AP/advance, Vendor payable/receivable, Owner capital/drawings, Lender payable, Borrower receivable and Payee identity remain distinct.
+- Never merge original customers, suppliers, vendors, finance persons or expense payees by name/phone alone; keep verified legacy IDs, references, deletion history and review ambiguous identities.
+- No automatic netting of receivable against payable, loan or equity balances; an explicit approved noncash offset is a separate exactly-once posting with no Cash/Bank/active Cash Session movement.
 
 ## 2. Verified source inventory and preliminary mapping
 
@@ -96,6 +101,25 @@ Suggested structure:
       wrangler.jsonc
 
 Use pnpm, a pinned Wrangler version, ESLint/static checking as appropriate, and GitHub Actions. Avoid hidden globals: explicitly export/import or use a controlled bundling transformation; no eval, dynamic invocation of untrusted function names, or uncontrolled global state.
+
+### Unified Party identity and manual settlement — binding M02 architecture gate
+
+The project owner approved **one Party identity with any combination of Customer, Supplier, Vendor, Owner, Lender, Borrower and Payee roles**, with **financial accounts kept separate**. The authoritative detail is [ADR-007](architecture/ADR-007-unified-party-relationships.md); see the [design spec](superpowers/specs/2026-11-14-unified-party-design.md) and [implementation tasks](superpowers/plans/2026-11-14-unified-party-migration.md).
+
+| Proposed object | Required behavior |
+| --- | --- |
+| `parties`, `party_roles` | One identity, seven many-to-many roles. Descriptive Party roles do **not** convey user permissions. |
+| `party_legacy_links`, `party_identity_review` | Preserve source-group + source-ID links for Customers, Suppliers, Vendors, Finance Persons, Expense Payees. Same phone/name creates a possible **review**, never automatic merge. |
+| `party_accounts` and source-linked account entries | Individually reconcile Customer AR/advance, Supplier AP/advance, Vendor AP/AR, Owner capital/drawings, lender loan AP, borrower loan AR; payee has no balance by default. |
+| Manual settlement documents and allocations | New disabled-by-default, explicitly permitted, approved, balanced, noncash source; stale/over-balance/duplicate requests cannot commit; reversal exactly once. |
+
+**P2/M02-P:** Freeze the Party identity/role/link/account schema and import mapping **before creating remaining finance/customer/supplier/vendor/payee D1 tables**. The first three catalog tables under PR #6 are independent and do not complete this gate. Do not add a single per-Party current_due field or infer that two legacy records are the same individual.
+
+**P3–P8:** Keep original customer/supplier/vendor/finance/expense identifiers and role-specific RPC behavior behind compatibility adapters. A transaction belongs to its original role account; do not dual-write two independently authoritative journals. Historical opening entries preserve their current historical baseline behavior without becoming today's cash movements.
+
+**P8-S (optional settlement, later):** Require a reviewed allowed account-pair matrix, same verified legal Party/currency, documentary reason, dedicated server permission, approval-policy enforcement, exact available obligation allocations, atomic SQL preconditions, operation idempotency and source-linked reversal. Start with a reviewed Customer AR versus Supplier AP example; do not enable owner equity/loan or other offsets without separate legal/accounting policy review. A pure noncash offset never posts Cash/Bank or changes a Cash Session.
+
+**P9–P11:** Add a compact read-only Party workspace *in addition to* existing modules, and prove all original gross balances and source references reconcile separately before enabling settlements or cutting over.
 
 ### RPC compatibility contract
 
@@ -155,6 +179,7 @@ Create a posting service that:
 
 ### P2 — D1 schema and import tooling (30–55 hours)
 - Review all 49 CONFIG schema groups, headers, ID prefixes, relationships, soft deletes and dates. Make table/column mappings explicit and review CHECK/UNIQUE/FK/index design.
+- **Mandatory M02-P Party gate:** approve Party/role/legacy identity link/independent account mapping before migrating the remaining customer, supplier, vendor, expense-payee and finance SQL schemas. Preserve a human review queue for ambiguous identity matches; do not automatically merge on names/phones.
 - Create numbered SQL migrations, local and preview databases, reversible *deployment* workflow (prefer forward fixes over destructive down-migrations).
 - Export each Google Sheet in an approved offline process to sanitized, access-controlled files outside GitHub; retain raw snapshot and checksum.
 - Implement import dry run, transforms, deterministic IDs, data-type validation, duplicate detection, dependency ordering, resumability and error reports.
@@ -165,41 +190,49 @@ Create a posting service that:
 - Replace Database.gs primitives (getAllRows_, findRow_, appendRow_, appendRows_, updateRowFields_, deleteRow_, settings) and direct Sheet/range access.
 - Replace Utilities Date/UUID/digest/encoding, Session timezone, PropertiesService ID/config, CacheService (initially bypass nonessential caches), LockService transaction semantics and HtmlService entry.
 - Refactor all transitive async call chains and update tests/mocks; lint against forgotten await, accidental Promise serialization, raw SQL interpolation and global mutable per-request state.
+- Add source-ID to Party-ID compatibility resolution without altering legacy API data contracts or assigning new parties to anonymous cash sales. One authoritative posting path per domain.
 - **Exit:** DB helper tests plus representative feature flow pass in local Miniflare/Wrangler and preview D1; no unimplemented GAS calls on migrated paths.
 
 ### P4 — Authentication, permissions, user management (25–45 hours)
 - Port login, sessions, tokens, role/permission evaluation, password reset flows (if present), user/role CRUD and audit actor.
 - Safely verify existing salted SHA-256 legacy credentials, then upgrade password hashing at next verified login to a strong appropriate KDF (or require secure reset). Do not bulk expose or log hashes.
 - Enforce server-side authorization for all RPCs, session invalidation, login throttling, last-admin guard and explicit revoked-user handling.
+- Keep Party roles separate from application roles; design dedicated Party link/merge review and settlement proposer/approver permissions (settlement disabled until policies and tests are approved).
 - **Exit:** login/logout/revocation/role isolation/unauthorized RPC tests pass in Worker runtime.
 
 ### P5 — Inventory, procurement and suppliers/vendors (40–75 hours)
 - Port Products, product settings, purchase/create/edit/delete, purchase items, StockLots, bundles, vendor/consignment flows, supplier ledger and settlements.
 - Preserve FIFO date+lot ordering; verify no stock mutation in read-only planning. Test OVERSOLD, vendor shortages, bundled stock, adjustments, multi-unit and exact cost restoration.
 - Apply optimistic checks and atomic multi-table posting. Guard edits/deletions against stale lots and dependent returns.
+- Preserve Supplier/Vendor role-specific source references via verified Party links, without netting supplier and vendor obligations or changing purchases/FIFO.
 - **Exit:** purchase-to-lot-to-sale stock fixture parity, inventory invariants under concurrency, supplier/vendor money reconciliation.
 
 ### P6 — POS, drafts, sales, split payments (45–95 hours)
 - Port POS bootstrap, create/update/delete sale, draft conversion, invoice assembly, sale payments and posting journal.
 - Implement atomic posting and idempotency for invoice + items + FIFO lot consumption + stock movements + customer dues + cash/bank + payment allocations.
 - Verify payment split/change, active cash-session policy, discount/rounding, bank account validation, negative stock, source draft and receipt retry.
+- A preferred Customer ID remains authoritative and traceable through Party links; do not force Party creation for anonymous cash sales or automatically offset supplier balances.
 - **Exit:** exact amount/lot/balance parity; duplicate-operation and concurrency tests pass.
 
 ### P7 — Returns and correction/delete engine (35–65 hours)
 - Port SalesReturn, PurchaseReturn, DeleteEngine and related native edit/delete operations.
 - Preserve original lot-source restoration, dependent record checks, audit reasons, soft delete and exactly-once reversals.
 - Test multiple invoice returns, partial returns, sale after edited lots, duplicate return, retry and readback from ledger/Daybook.
+- Preserve exactly-once reversal of source-linked Party account effects; never erase legacy provenance or use auto-netting as correction.
 - **Exit:** stock + all parties + cash/bank return to expected baseline after reversal fixtures.
 
 ### P8 — Cash, bank, finance, people and party ledgers (40–70 hours)
 - Port CashBook, BankBook, CashSession, cash reconciliation, bank transfers, FinanceModule, finance person ledger, customers, suppliers, DayBook, opening balances and settlement discount.
 - Differentiate historical opening amounts from present cash movements; follow the **existing approved cash-session policy** instead of inventing a universal rule.
 - Enforce transaction-type dependent sign conventions, actor audit and no duplicate obligations.
+- Map existing finance-person combined Owner/Lender/Borrower roles onto one Party but separate equity/loan/receivable subaccounts. Preserve independent Vendor Due/Receivable, expense Payee identity and signed historical opening balances.
+- **M08-S:** Design (but do not enable by default) manual cross-role noncash settlements. Require eligibility/maker-checker policy, explicit actor approval, no cash/bank/session movement, D1 SQL-enforced all-or-nothing allocations, idempotency, audit and exact-once reversal; no automatic offsets.
 - **Exit:** accounting invariant tests and daybook/cash/bank/customer/supplier/vendor cross-sums exactly reconcile.
 
 ### P9 — Reports, settings, admin and browser polish (25–45 hours)
 - Port dashboard, reports, settings, users/roles and diagnostics; move any report-wide full-sheet scan to indexed SQL where needed.
 - Verify matching totals, date ranges, deleted row filters, Bangla rendering, receipt/JPG/PDF printing and responsive tables.
+- Add a non-destructive, role-aware unified Party view showing distinct accounts, historical role ledgers and informational-only net (without replacing existing screens).
 - Add bounded cache only after correctness and invalidation are measured.
 - **Exit:** report parity fixtures and cross-device E2E pass.
 
@@ -207,6 +240,7 @@ Create a posting service that:
 - Migrate a full approved snapshot into staging, reconcile every sheet/table, foreign key, ID, archived/deleted record, money ledger, quantity, lot cost and balance.
 - Exercise load/concurrency, D1 query usage, Workers memory/CPU/subrequest budgets and indexes.
 - Audit authorization, RPC injection, XSS/CSRF, sensitive data leakage, secrets, logging, failure modes and backup/recovery.
+- Reconcile every legacy Party ID/link and each separate customer, supplier, vendor AP/AR, owner equity, loan AP/AR and payee relationship. Reject unresolved posted identity mappings and unintended netting; test manual offsets with real-D1 concurrency/failure injection.
 - Test clean-state import twice for repeatability; verify backups and point-in-time recovery procedure in isolated staging.
 - **Exit:** signed discrepancy report = zero unexplained material differences; complete go/no-go checklist approved.
 
@@ -214,6 +248,7 @@ Create a posting service that:
 - Schedule a bounded write freeze on original GAS app, export final delta/full snapshot, record last writer/transaction/checkpoint, import and reconcile.
 - Switch frontend traffic only after full parity and smoke tests pass. Keep old app read-only as an audit/rollback reference.
 - Monitor error rate, D1 failures, duplicate operations, stock/ledger drift, response times and session failures.
+- Monitor Party link mismatches, account-by-account reconciliation, settlement approval/replay and rollbacks; returning to GAS requires accounting for any post-cutover Party links and approved offset entries.
 - Roll back **routing and writes**, not only frontend files, if high-severity error occurs. If D1 contains new production writes, replay/reconcile them before reverting to old backend; never switch back to stale Sheets and silently discard transactions.
 - **Exit:** owner-approved production readiness, recovery drill evidence, and handover docs.
 
@@ -225,13 +260,14 @@ Use small, gated PRs, not one mass conversion. Suggested titles/dependencies:
 
 1. M00: source audit and frozen baselines (P0).
 2. M01: Worker static frontend + RPC contract (P1), depends M00.
+   **M02-P:** Approved Party design and identity/account mapping substream starts before finance-related M02 SQL; its reviewed schema and tests are mandatory dependencies for relevant M03/M05/M08 work.
 3. M02: D1 schema and deterministic import pipeline (P2), depends M00.
 4. M03: repository/runtime replacement and async graph (P3), depends M01+M02.
 5. M04: authentication/permissions (P4), depends M03.
 6. M05: stock/procurement/supplier/vendor (P5), depends M03+M04.
 7. M06: atomic POS and sale posting (P6), depends M05.
 8. M07: returns/delete/correction (P7), depends M06.
-9. M08: finance/cash/bank/ledgers (P8), depends M06; cross-tested with M07.
+9. M08: finance/cash/bank/ledgers (P8), depends M06 + Party account mapping; cross-tested with M07. **M08-S:** optional disabled-by-default, policy-approved manual noncash Party settlement after M04–M08 accounting gates.
 10. M09: reports/settings/dashboard (P9), depends M05+M08.
 11. M10: full migration rehearsal/security/perf gate (P10), depends M07+M08+M09.
 12. M11: production cutover/runbook (P11), depends M10 and owner approval.
