@@ -47,4 +47,3 @@ test('fails closed for malformed input or unexpected asset settings', () => {
   const y=base();y.assets.upload='everything';
   assert.throws(() => validateCloudflarePreviewConfig(y), /unexpected/i);
 });
-
