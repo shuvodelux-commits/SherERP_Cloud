@@ -16,7 +16,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test audit and verification logic
+      - name: Test audit, SQL constraints and import guards
         run: npm test
       - name: Verify source byte-for-byte against pinned manifest
         run: npm run verify:source
@@ -44,6 +44,13 @@ jobs:
           npm run inventory:schema --silent > /tmp/m02-schema.json
           cmp -s docs/baseline/schema-inventory.json /tmp/m02-schema.json
           node -e "const s=require('/tmp/m02-schema.json'); const n=s.tables.reduce((a,t)=>a+t.columns.length,0); if(s.tables.length!==49 || n!==659) process.exit(1); console.log('M02 groups and columns:',s.tables.length,n)"
+      - name: Verify reviewed catalog map against frozen Config.gs
+        run: |
+          node --input-type=module -e "import {readFileSync} from 'node:fs'; import {verifyCatalogMapping} from './src/db/catalog-mapping.js'; verifyCatalogMapping(JSON.parse(readFileSync('docs/baseline/schema-inventory.json','utf8'))); console.log('Catalog column mapping matches original source')"
+      - name: Run synthetic catalog import dry-run (no database writes)
+        run: |
+          npm run catalog:dry-run --silent -- tests/fixtures/catalog-synthetic.json > /tmp/m02-catalog-dryrun.json
+          node -e "const r=require('/tmp/m02-catalog-dryrun.json'); if(r.totalRows!==4 || r.groups.length!==3) process.exit(1); console.log('Synthetic dry-run rows:',r.totalRows)"
       - name: Run deterministic source audit
         run: |
           npm run audit --silent > /tmp/m00-audit.json
