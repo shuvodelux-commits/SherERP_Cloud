@@ -28,6 +28,9 @@ jobs:
       - name: Verify reviewed catalog map against frozen Config.gs
         run: |
           node --input-type=module -e "import {readFileSync} from 'node:fs'; import {verifyCatalogMapping} from './src/db/catalog-mapping.js'; verifyCatalogMapping(JSON.parse(readFileSync('docs/baseline/schema-inventory.json','utf8'))); console.log('Catalog column mapping matches original source')"
+      - name: Verify Party legacy mapping against the full frozen source inventory
+        run: |
+          node --input-type=module -e "import {readFileSync} from 'node:fs'; import {validatePartyContracts} from './src/party/legacy-contracts.js'; const source=JSON.parse(readFileSync('docs/baseline/schema-inventory.json','utf8')); validatePartyContracts(source); console.log('Party source masters and related groups verified')"
       - name: Run synthetic catalog import dry-run (no database writes)
         run: |
           npm run catalog:dry-run --silent -- tests/fixtures/catalog-synthetic.json > /tmp/m02-catalog-dryrun.json
