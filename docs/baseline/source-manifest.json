@@ -1,0 +1,430 @@
+{
+  "formatVersion": 1,
+  "source": {
+    "repository": "shuvodelux-commits/Mohim_ERP",
+    "commit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+    "tree": "f5bc4976690ba1331d998426677dfcf017bd5127"
+  },
+  "files": [
+    {
+      "path": "Auth.gs",
+      "blobSha": "f1c0895e33eb89430337b752692d0023797b7d21",
+      "byteSize": 23362
+    },
+    {
+      "path": "BankAccounts.gs",
+      "blobSha": "c49055bbe64032aadae7ac1848682863d4f3d4b6",
+      "byteSize": 5808
+    },
+    {
+      "path": "BankBook.gs",
+      "blobSha": "a93fbdd95e836e343fcf704a499a501b1f9f2b1c",
+      "byteSize": 9605
+    },
+    {
+      "path": "BankLedger.gs",
+      "blobSha": "9445b10ec5dcaf20df157a854650c7f86ae67102",
+      "byteSize": 20181
+    },
+    {
+      "path": "Bundles.gs",
+      "blobSha": "64b13f733ea2fc857cba59816945ccb2bce7327a",
+      "byteSize": 21346
+    },
+    {
+      "path": "CashBook.gs",
+      "blobSha": "97a4629cf36d93471ee4dd81a170ee565695c6bf",
+      "byteSize": 4017
+    },
+    {
+      "path": "CashReconciliation.gs",
+      "blobSha": "0f3a39b247fb8d63906307f560c5c538bfe2e6d9",
+      "byteSize": 24668
+    },
+    {
+      "path": "CashSession.gs",
+      "blobSha": "4a3b40a475757a2faa9ea6a0b99bd9aebb2c6735",
+      "byteSize": 16933
+    },
+    {
+      "path": "Code.gs",
+      "blobSha": "f2a7f29cbb3e7efab786061bf4795482f0886e15",
+      "byteSize": 2407
+    },
+    {
+      "path": "Config.gs",
+      "blobSha": "5813354c2e3cbf4917a0012b4567d81524801087",
+      "byteSize": 38632
+    },
+    {
+      "path": "Counter.gs",
+      "blobSha": "374ca0ba5acec4b581ffd43482603d24df436fa4",
+      "byteSize": 3964
+    },
+    {
+      "path": "Customer.gs",
+      "blobSha": "f7445318f2865f54887ea320494f244b5d5c4da2",
+      "byteSize": 25106
+    },
+    {
+      "path": "CustomerSettlement.gs",
+      "blobSha": "f12a1aeff3d5941c66b12021baead5cc231d41dd",
+      "byteSize": 27836
+    },
+    {
+      "path": "Dashboard.gs",
+      "blobSha": "d1257cbbb6d355509dd00a889a3e65b4b1c70cfe",
+      "byteSize": 4722
+    },
+    {
+      "path": "Database.gs",
+      "blobSha": "cd09275de5da55fbcdb6f84a17b3a581edc9498e",
+      "byteSize": 21808
+    },
+    {
+      "path": "DayBook.gs",
+      "blobSha": "85442221cdb58073d35241a32746e991ac94089a",
+      "byteSize": 29403
+    },
+    {
+      "path": "DeleteEngine.gs",
+      "blobSha": "ae42549a2dc56a25b6b03fb60a14c20d906a3864",
+      "byteSize": 112524
+    },
+    {
+      "path": "Diagnostics.gs",
+      "blobSha": "aab20bae677ba8322b4ab9ca0dc462653d43e68a",
+      "byteSize": 10240
+    },
+    {
+      "path": "DraftSales.gs",
+      "blobSha": "e34b220f97d4995be2f851c7145737d2eae1b335",
+      "byteSize": 20333
+    },
+    {
+      "path": "Expense.gs",
+      "blobSha": "d6f1f733eef75929235efdb64bb8e9e72b2eb647",
+      "byteSize": 24049
+    },
+    {
+      "path": "ExpenseSettings.gs",
+      "blobSha": "0a6c729360737c3297fe369e5f3f299212114e6c",
+      "byteSize": 9121
+    },
+    {
+      "path": "FinanceModule.gs",
+      "blobSha": "c641eed34f2d518bb4c750491ab8ff5962ca82bd",
+      "byteSize": 24288
+    },
+    {
+      "path": "Invoice.gs",
+      "blobSha": "40f1b7749ba4015a6c3a595af840ae6a4b95b8e2",
+      "byteSize": 12441
+    },
+    {
+      "path": "OpeningBalance.gs",
+      "blobSha": "39663e65b60f268cd6c04efda5a6c075580f7cf9",
+      "byteSize": 11443
+    },
+    {
+      "path": "PartyLedger.gs",
+      "blobSha": "09aa9ce5f5de53ad456a4dfb2b0f30f5468416c1",
+      "byteSize": 33099
+    },
+    {
+      "path": "ProductSettings.gs",
+      "blobSha": "1bdb824e943a0d8b550ffd5c2170d8ce86f40f58",
+      "byteSize": 5441
+    },
+    {
+      "path": "Products.gs",
+      "blobSha": "e947959031e9369a03367f6fe2162a924bad8f51",
+      "byteSize": 17523
+    },
+    {
+      "path": "Purchase.gs",
+      "blobSha": "4fe2ec112384153a0c88a625c7f22cd11df2a758",
+      "byteSize": 13267
+    },
+    {
+      "path": "PurchaseManagement.gs",
+      "blobSha": "bb4f370835dd326c996585ba4758106e62704188",
+      "byteSize": 31414
+    },
+    {
+      "path": "PurchaseReturn.gs",
+      "blobSha": "c5d18349278afd4a57dba0eec75a680fe3da11a6",
+      "byteSize": 17241
+    },
+    {
+      "path": "Reports.gs",
+      "blobSha": "f47dd0fa49f1f5c8dc87874a14c0fab6bfc8b88a",
+      "byteSize": 36182
+    },
+    {
+      "path": "RoleManagement.gs",
+      "blobSha": "684fb3a149c3b500aa731bf2283896f2c519521e",
+      "byteSize": 8284
+    },
+    {
+      "path": "SalePayments.gs",
+      "blobSha": "dd08b0c1e27a799c9c16feda50239f172eb7eb4f",
+      "byteSize": 13733
+    },
+    {
+      "path": "Sales.gs",
+      "blobSha": "1802bc42e94fe9a24bf79d3a3f920def7b950906",
+      "byteSize": 47115
+    },
+    {
+      "path": "SalesManagement.gs",
+      "blobSha": "43afb640bfe46962c3715fa8a2ee08ab3fdda1aa",
+      "byteSize": 59807
+    },
+    {
+      "path": "SalesReturn.gs",
+      "blobSha": "a86f83d6ff1cb3559e11f5baa6bcd554973c8ae7",
+      "byteSize": 70507
+    },
+    {
+      "path": "SeedData.gs",
+      "blobSha": "8b10dac0d073b8c2b2281f40cc6e14b2314ecc82",
+      "byteSize": 9630
+    },
+    {
+      "path": "Settings.gs",
+      "blobSha": "c5c8036b8708f9e87e5d0d42e91af5605e2185a6",
+      "byteSize": 10363
+    },
+    {
+      "path": "SettlementDiscount.gs",
+      "blobSha": "93b9b5f5700c41d7f3b7f68443a8ba3dc93def35",
+      "byteSize": 5132
+    },
+    {
+      "path": "Setup.gs",
+      "blobSha": "d9517e616699bb1cf35a3b85abf9bcb74e7872f6",
+      "byteSize": 4760
+    },
+    {
+      "path": "StockLots.gs",
+      "blobSha": "90b2be03c8d6d08ebb4e444b6350011c02deaaf4",
+      "byteSize": 55170
+    },
+    {
+      "path": "SupplierSettlement.gs",
+      "blobSha": "3da07d500dceff0029f43fb77e09f07249930b0d",
+      "byteSize": 14273
+    },
+    {
+      "path": "Suppliers.gs",
+      "blobSha": "92a2d3a0d71121746984fabe2f96fee260412f2a",
+      "byteSize": 13363
+    },
+    {
+      "path": "UI.gs",
+      "blobSha": "3c357dae34ea2dd419f8da418e88de8c8d025540",
+      "byteSize": 10585
+    },
+    {
+      "path": "UserManagement.gs",
+      "blobSha": "4917cae72eec1d695367981297421d4306740bd7",
+      "byteSize": 13297
+    },
+    {
+      "path": "Utils.gs",
+      "blobSha": "dd893411263fbf72a32616a3b8434bf74fb08350",
+      "byteSize": 25234
+    },
+    {
+      "path": "Vendors.gs",
+      "blobSha": "25a1024edde45a2a8946922c8a4acaa58fd8d261",
+      "byteSize": 36840
+    },
+    {
+      "path": "bank.html",
+      "blobSha": "ed19855a96598d24d894b927a7c54b12da5ed379",
+      "byteSize": 31469
+    },
+    {
+      "path": "cashReconciliation.html",
+      "blobSha": "96717be95fad1c666fbd5e305d01877563c17d54",
+      "byteSize": 16843
+    },
+    {
+      "path": "counter.html",
+      "blobSha": "e78c8f78fa8463b862568a140367d13eaa96d67f",
+      "byteSize": 70882
+    },
+    {
+      "path": "customerLedger.html",
+      "blobSha": "747487726c4e3b6a2242dff3a0be89b7794e9a3f",
+      "byteSize": 48663
+    },
+    {
+      "path": "customers.html",
+      "blobSha": "9dd412ff136e4921232a6fce0924b6a5fefeb65c",
+      "byteSize": 32281
+    },
+    {
+      "path": "dashboard.html",
+      "blobSha": "33375dfde92c1cdfafbc593b54ae57ca18bf029e",
+      "byteSize": 3496
+    },
+    {
+      "path": "daybook.html",
+      "blobSha": "85c6a5f773a48a909929239013f7e46aef014edb",
+      "byteSize": 16367
+    },
+    {
+      "path": "draftSales.html",
+      "blobSha": "5a6aa4e862c9201b3c4aaf1a627b3e0c465ff157",
+      "byteSize": 6177
+    },
+    {
+      "path": "expense.html",
+      "blobSha": "a2a329390a749168c84bd1cd5b43fa61495b5ede",
+      "byteSize": 18355
+    },
+    {
+      "path": "expenseCategory.html",
+      "blobSha": "0454b36b4f7bae1b6876c320bf903ab87363ac9b",
+      "byteSize": 6193
+    },
+    {
+      "path": "expenseCompactStyle.html",
+      "blobSha": "471576ab9e2ca693b166d68ae806199e13779fc2",
+      "byteSize": 10918
+    },
+    {
+      "path": "expenseList.html",
+      "blobSha": "2f892a1ee06c6ad896c7d25d74bc59798127597e",
+      "byteSize": 20187
+    },
+    {
+      "path": "expensePayees.html",
+      "blobSha": "0554384984570929074e1f15c8336982e6f3aaca",
+      "byteSize": 8766
+    },
+    {
+      "path": "expenseReport.html",
+      "blobSha": "da06538ae4daf3217e23a2ea60ae3bcf84fbd121",
+      "byteSize": 22366
+    },
+    {
+      "path": "finance.html",
+      "blobSha": "63cbd03cffeafd73e8489a00471c9a263f0ed4d7",
+      "byteSize": 35030
+    },
+    {
+      "path": "financeLedger.html",
+      "blobSha": "b297f0fbd67a7ad259a83dc7f9ea0b42507db34f",
+      "byteSize": 38299
+    },
+    {
+      "path": "financePersonLedger.html",
+      "blobSha": "70f4be0e5e4eef562e8cfc0bfdd59a23076f073b",
+      "byteSize": 27701
+    },
+    {
+      "path": "index.html",
+      "blobSha": "6b0acbf70be7d72bdcc371abecbcc63422ddd523",
+      "byteSize": 22763
+    },
+    {
+      "path": "invoiceDesign.html",
+      "blobSha": "63c88dc03d5c1d5f329bf45a7ad19e02bdfccad5",
+      "byteSize": 20775
+    },
+    {
+      "path": "javascript.html",
+      "blobSha": "77023266c22ca5ef1580b1d5834a7270abc6d10e",
+      "byteSize": 209791
+    },
+    {
+      "path": "login.html",
+      "blobSha": "e6246b4b99cf1e57239e93d15b6d4a5b833e53bf",
+      "byteSize": 1245
+    },
+    {
+      "path": "pos.html",
+      "blobSha": "09c024d31fa2b18a302e21108699054b4f7858e5",
+      "byteSize": 164849
+    },
+    {
+      "path": "posv2.html",
+      "blobSha": "4a7fbdec2dc06a697384e1f35044eaf2816381f8",
+      "byteSize": 66031
+    },
+    {
+      "path": "products.html",
+      "blobSha": "5335958f81e4ea064d23cc6ae8ce03ae352b8fd5",
+      "byteSize": 72133
+    },
+    {
+      "path": "purchase.html",
+      "blobSha": "dc90cca9f651539da3dbba96983b67ac3a049259",
+      "byteSize": 80443
+    },
+    {
+      "path": "reports.html",
+      "blobSha": "d1957f631e76cbf08e1c454213bff50e1b246ec4",
+      "byteSize": 32212
+    },
+    {
+      "path": "returnHistory.html",
+      "blobSha": "fcc9ddc0740929139103c6ce270ba64c72c56a5d",
+      "byteSize": 12227
+    },
+    {
+      "path": "returns.html",
+      "blobSha": "f592b22eb4fb3fdc75e523ceca50ce8b768b42ad",
+      "byteSize": 42435
+    },
+    {
+      "path": "roles.html",
+      "blobSha": "d26198c8686322af8c85f6a400b4f7839c4a124e",
+      "byteSize": 11328
+    },
+    {
+      "path": "sales.html",
+      "blobSha": "9e1f7c5ffe883883016db35396efdf05729a8130",
+      "byteSize": 32890
+    },
+    {
+      "path": "settings.html",
+      "blobSha": "7f05e024adbbb3f46751afcb9e1a36f55d705706",
+      "byteSize": 8793
+    },
+    {
+      "path": "style.html",
+      "blobSha": "6b55d466eb92a507bddd3cac29977b3fc0a02e54",
+      "byteSize": 180946
+    },
+    {
+      "path": "supplierLedger.html",
+      "blobSha": "1f0d02a8e66457a4864bb3534b3e86d2c3e83569",
+      "byteSize": 38868
+    },
+    {
+      "path": "suppliers.html",
+      "blobSha": "24108c4d7134c450e884a80f0f4b4d781d096cc6",
+      "byteSize": 29668
+    },
+    {
+      "path": "users.html",
+      "blobSha": "6cee1b0ac349b8f0d0908dfcc3069b45994c3cb2",
+      "byteSize": 11902
+    },
+    {
+      "path": "vendorWorkspace.html",
+      "blobSha": "4835fe32b2a8a5e616c8be0d83fbb5ccce7d4578",
+      "byteSize": 10658
+    },
+    {
+      "path": "vendors.html",
+      "blobSha": "2562780963baa723946669089542c7828fe20a11",
+      "byteSize": 68200
+    }
+  ]
+}

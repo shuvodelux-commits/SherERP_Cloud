@@ -1,0 +1,31 @@
+name: Foundation source checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  m00-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test audit and verification logic
+        run: npm test
+      - name: Verify source byte-for-byte against pinned manifest
+        run: npm run verify:source
+      - name: Build unchanged HTML includes to dist
+        run: npm run build:frontend
+      - name: Verify built page has no GAS template instructions
+        run: |
+          node -e "const fs=require('node:fs'); const s=fs.readFileSync('dist/index.html','utf8'); if(s.includes('<?!=') || !s.includes('id=\"app\"')) process.exit(1); console.log('M01 static page bytes:', Buffer.byteLength(s))"
+      - name: Run deterministic source audit
+        run: |
+          npm run audit --silent > /tmp/m00-audit.json
+          node -e "const f=require('/tmp/m00-audit.json'); if(f.totals.backendFiles!==47 || f.totals.frontendFiles!==37 || f.totals.files!==84) process.exit(1); console.log('M00 audit:', f.totals)"
