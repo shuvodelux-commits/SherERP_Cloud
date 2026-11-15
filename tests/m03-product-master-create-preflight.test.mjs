@@ -183,12 +183,24 @@ test('invalid physical index and duplicate source IDs reject instead of producin
     x.db.exec("UPDATE product_categories SET legacy_sheet_row=44 WHERE category_id='CAT-C'");
     await assert.rejects(()=>x.service.checkCategoryName_('Tools'),/row|physical|provenance/i);
     x.db.exec("UPDATE product_categories SET legacy_sheet_row=4 WHERE category_id='CAT-C'");
-    const corrupt={DB:{prepare(){
-      return {bind(){return {async all(){return {success:true,results:[
-        {legacy_sheet_row:2,category_id:'CAT-DUP',category_name:'Used',status:'Inactive',created_at:null},
-        {legacy_sheet_row:3,category_id:'CAT-DUP',category_name:'Used',status:'Inactive',created_at:null}
-      ]};}};}}};
-    }}};
+    const corrupt={
+      DB:{
+        prepare(){
+          return {
+            bind(){
+              return {
+                async all(){
+                  return {success:true,results:[
+                    {legacy_sheet_row:2,category_id:'CAT-DUP',category_name:'Used',status:'Inactive',created_at:null},
+                    {legacy_sheet_row:3,category_id:'CAT-DUP',category_name:'Used',status:'Inactive',created_at:null}
+                  ]};
+                }
+              };
+            }
+          };
+        }
+      }
+    };
     await assert.rejects(()=>createProductMasterCreatePreflight(corrupt).checkCategoryName_('Used'),
       /duplicate|ID|unsafe|source/i);
   }finally{x.close();}
@@ -197,7 +209,19 @@ test('invalid physical index and duplicate source IDs reject instead of producin
 test('malformed D1 result and missing binding fail closed, no fallback to GAS or cache',async()=>{
   const x=fixture();
   try{
-    const invalid={DB:{prepare(){return {bind(){return {async all(){return {success:false,results:[]};}};}};}}};
+    const invalid={
+      DB:{
+        prepare(){
+          return {
+            bind(){
+              return {
+                async all(){return {success:false,results:[]};}
+              };
+            }
+          };
+        }
+      }
+    };
     await assert.rejects(()=>createProductMasterCreatePreflight(invalid).checkUnitName_('pcs'),
       /D1|invalid|result/i);
     assert.throws(()=>createProductMasterCreatePreflight({}),/binding|D1/i);
