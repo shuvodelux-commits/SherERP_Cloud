@@ -1,0 +1,9 @@
+# Superpowers plan — M02-P Party Export Completeness
+
+Date: 2026-11-15. Source: pinned original `Config.gs` schema in `docs/baseline/schema-inventory.json`. Design: `docs/superpowers/specs/2026-11-15-m02-party-export-coverage-design.md`.
+
+1. **RED — standalone test/doc commit.** Create this plan, design, `tests/m02-party-export-coverage.test.mjs`. Use frozen inventory and enrich the existing sparse *synthetic* Party snapshot with every known header as an explicit blank. Tests must fail on missing `src/party/export-column-coverage.js` when GitHub Foundation runs. Coverage: exact five group headers, order changes, dropped/duplicate/extra headers, missing row values including signed source balance & Finance Person Roles, unsafe number representation of original IDs/phones, non-finite and object cells, row provenance, zero-row sheets, unsupported masters, row/object reorder, immutable inputs, PII-safe reports.
+2. **GREEN — smallest pure module.** Create only `src/party/export-column-coverage.js`. Pin exact ordered original headers in module; validate full groups and arrays without I/O; aggregate fixed-code group diagnostics and count totals. No schema changes, auth, SQL, RPC, readback integration or production importer. Keep blank fields allowed, no arithmetic or inferred merges.
+3. **Verify exact-head CI.** Full Node regression and frozen 84 GAS source audit; 36 original UI includes; M02 Party actual Workerd D1, M02 staging/synthetic, M03 actual local D1, M04 auth, M01 Chromium and Cloudflare PR safety. Record RED/GREEN commit hashes and run IDs on draft PR. Verify only four new M02-P files. Remain unmerged until owner requests merge; approvalRef persistence and production cutover are separate gated work.
+
+**Rollback:** revert isolated PR; no D1 data has been migrated or mutated. `PARALLEL-MODULE-READY=false` remains.
