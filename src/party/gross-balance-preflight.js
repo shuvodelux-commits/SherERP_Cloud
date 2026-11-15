@@ -127,8 +127,15 @@ export function prepareGrossPartyBalances({sourceRows,approvedGroups=[],financeR
     if(!row || typeof row!=='object'||Array.isArray(row))
       throw new Error('Invalid finance row');
     if(deleted(row)){deletedFinanceRows++;continue;}
-    const id=string(row['Finance ID']).trim();
-    if(!id){
+    const rawId=row['Finance ID'];
+    if(typeof rawId!=='string'){
+      issue(rawId==null?'FINANCE_ID_REQUIRED':'FINANCE_ID_INVALID_TYPE',
+        'FINANCE_TRANSACTIONS');
+      continue;
+    }
+    // A Finance ID is original row provenance, never a coerced/trimmed alias.
+    const id=rawId;
+    if(!id.trim()){
       issue('FINANCE_ID_REQUIRED','FINANCE_TRANSACTIONS');
       continue;
     }
@@ -148,9 +155,14 @@ export function prepareGrossPartyBalances({sourceRows,approvedGroups=[],financeR
       continue;
     }
     const row=rows[0];
-    const personId=string(row['Person ID']);
-    // Preserve literal original identity; trim is used only for blank checking.
-    // Normalizing nonblank IDs can silently attribute finance roles across masters.
+    const rawPersonId=row['Person ID'];
+    if(typeof rawPersonId!=='string'){
+      issue(rawPersonId==null?'FINANCE_PERSON_ID_REQUIRED':
+        'FINANCE_PERSON_ID_INVALID_TYPE','FINANCE_TRANSACTIONS');
+      continue;
+    }
+    // A financial source link must use an exact original string Person ID.
+    const personId=rawPersonId;
     if(!personId.trim()){
       issue('FINANCE_PERSON_ID_REQUIRED','FINANCE_TRANSACTIONS');
       continue;
