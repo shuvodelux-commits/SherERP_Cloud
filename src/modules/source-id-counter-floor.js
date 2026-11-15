@@ -1,5 +1,5 @@
 /**
- * M03 read-only import preflight for frozen Utils.gs generateId_ high-water logic.
+ * M03 read-only high-water preflight for frozen Utils.gs generateId_ logic.
  *
  * This returns an ID PREVIEW, not a reservation or allocation. The future
  * issuer must use an approved, tenant-scoped, SQL-atomic D1 counter guard.
