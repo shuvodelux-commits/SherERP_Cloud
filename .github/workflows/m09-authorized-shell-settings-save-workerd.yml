@@ -1,0 +1,26 @@
+name: M09 single Settings save authorized local D1 (no public binding)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  source-validated-settings-cas:
+    name: Verify M09 source-validated Settings edit against isolated Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify native source and M04 authority tests
+        run: npm test
+      - name: Install pinned Wrangler inside isolated CI runner only
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Run isolated single-business Workerd D1 atomic Settings tests
+        run: node --test tests/integration/m09-authorized-shell-settings-save-workerd.spec.mjs
