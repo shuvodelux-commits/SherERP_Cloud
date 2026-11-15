@@ -128,3 +128,51 @@ test('tampered plan counts and malformed readback fail closed',()=>{
   assert.throws(()=>audit(plan,{...readback,party_roles:null}),/invalid|array|readback/i);
   assert.throws(()=>reconcilePartyImportReadback({plan:null,readback}),/invalid|plan/i);
 });
+
+
+test('self-consistent readback cannot certify two ORIGINAL_RECORD anchors on one Party',()=>{
+  const plan=planned();
+  const verified=plan.links.find(x=>x.linkBasis==='HUMAN_VERIFIED');
+  assert.ok(verified);
+  verified.linkBasis='ORIGINAL_RECORD';
+  verified.reviewedBy=null;
+  verified.reviewedAt=null;
+  verified.approvalRef=null;
+  const readback=snapshot(plan,{approvalRef:true});
+  const before=structuredClone({plan,readback});
+  const result=audit(plan,readback);
+  assert.deepEqual(result.counts.expected,result.counts.actual,
+    'plan/readback row counts are deliberately equal');
+  assert.equal(result.identityRowsMatch,false);
+  assert.equal(result.approvalEvidencePersistent,false);
+  assert.ok(result.issues.some(issue=>issue.code==='PLAN_LINKAGE_INVALID'&&issue.table==='plan'));
+  assert.doesNotMatch(JSON.stringify(result),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual({plan,readback},before,'graph audit must not mutate evidence');
+});
+
+test('readback rejects Party role and legacy link orphan references even with matching rows',()=>{
+  for(const table of ['roles','links']){
+    const plan=planned();
+    plan[table][0].partyId='PT-ORPHAN-SYNTHETIC';
+    const report=audit(plan,snapshot(plan,{approvalRef:true}));
+    assert.equal(report.identityRowsMatch,false,table+' orphan cannot be reconciled');
+    assert.equal(report.approvalEvidencePersistent,false);
+    assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+    assert.doesNotMatch(JSON.stringify(report),/PT-ORPHAN-SYNTHETIC|CUS-001|SUP-001/);
+  }
+});
+
+test('Party with only HUMAN_VERIFIED links cannot certify an absent original source anchor',()=>{
+  const plan=planned();
+  const original=plan.links.find(link=>link.linkBasis==='ORIGINAL_RECORD' &&
+    plan.links.filter(other=>other.partyId===link.partyId).length===1);
+  assert.ok(original,'fixture must contain a single-source Party');
+  original.linkBasis='HUMAN_VERIFIED';
+  original.reviewedBy='synthetic-reviewer';
+  original.reviewedAt='2026-11-15T00:00:00Z';
+  original.approvalRef='SYNTHETIC-ANCHOR-REVIEW';
+  const result=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(result.identityRowsMatch,false);
+  assert.equal(result.approvalEvidencePersistent,false);
+  assert.ok(codes(result).includes('PLAN_LINKAGE_INVALID'));
+});
