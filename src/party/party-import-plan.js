@@ -29,12 +29,17 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
   const byKey=new Map();
   for(const group of groups){
     const spec=partyLegacyContracts[group];
+    const seenSourceRows=new Set();
     for(const source of sourceRows[group]){
       sourceCount++;
       if(!source || typeof source!=='object'||Array.isArray(source))throw new Error('Invalid legacy row in '+group);
       const id=str(source[spec.idColumn]);
       const legacySheetRow=source._rowIndex===undefined?null:source._rowIndex;
-      if(legacySheetRow!==null&&(!Number.isInteger(legacySheetRow)||legacySheetRow<2))throw new Error('Invalid legacy row position in '+group);
+      if(legacySheetRow!==null){
+        if(!Number.isInteger(legacySheetRow)||legacySheetRow<2)throw new Error('Invalid legacy row position in '+group);
+        if(seenSourceRows.has(legacySheetRow))throw new Error('Duplicate source row position in '+group);
+        seenSourceRows.add(legacySheetRow);
+      }
       if(!id.trim()){
         const key=sourceKey(group,'missing:'+(legacySheetRow??hash(JSON.stringify(source))));
         reviews.push({reviewId:reviewId('MISSING_ID',key),sourceGroup:group,sourceId:null,legacySheetRow,reason:'MISSING_ID',status:'OPEN'});
@@ -137,6 +142,9 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
   roles.sort((a,b)=>a.partyId.localeCompare(b.partyId)||PARTY_ROLES.indexOf(a.role)-PARTY_ROLES.indexOf(b.role));
   links.sort((a,b)=>a.sourceGroup.localeCompare(b.sourceGroup)||a.sourceId.localeCompare(b.sourceId));
   reviews.sort((a,b)=>a.reviewId.localeCompare(b.reviewId));
+  for(let i=1;i<reviews.length;i++){
+    if(reviews[i].reviewId===reviews[i-1].reviewId)throw new Error('Duplicate review ID provenance');
+  }
   const quarantinedRows=sourceCount-valid.length;
   return {parties,roles,links,reviewItems:reviews,summary:{sourceRows:sourceCount,
     proposedParties:parties.length,legacyLinks:links.length,roleMemberships:roles.length,
