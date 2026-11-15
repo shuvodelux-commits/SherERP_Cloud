@@ -132,3 +132,32 @@ test('hostile navigation projection cannot infer rights or invoke getters and tr
   assert.deepEqual(allowedStaffModules(trap), []);
   assert.deepEqual(allowedStaffModules({sales:trap}), []);
 });
+
+
+test('source Roles bootstrap options preserve exact labeled UI module and delete-window choices', async () => {
+  const policy = await import('../src/modules/auth/permission-policy.js');
+  assert.equal(typeof policy.roleBootstrapOptions, 'function');
+  const sourceModules = sourceConstant('../legacy/source/UI.gs','PERMISSION_MODULES')
+    .map(({key,label,permissionMode})=>({key,label,permissionMode:permissionMode||''}));
+  const sourceWindows = sourceConstant('../legacy/source/Auth.gs','DELETE_WINDOW_OPTIONS')
+    .map(({key,label})=>({key,label}));
+  const output = policy.roleBootstrapOptions();
+  assert.deepEqual(Object.keys(output), ['moduleOptions','deleteWindowOptions']);
+  assert.equal(sourceModules.length,21);
+  assert.equal(sourceWindows.length,8);
+  assert.deepEqual(output.moduleOptions, sourceModules);
+  assert.deepEqual(output.deleteWindowOptions,sourceWindows);
+  assert.deepEqual(output.moduleOptions.find(m=>m.key==='returns'),
+    {key:'returns',label:'Sales Return',permissionMode:''});
+  assert.deepEqual(output.moduleOptions.find(m=>m.key==='posCost'),
+    {key:'posCost',label:'POS Purchase Price',permissionMode:''});
+  for(const name of ['openingBalance','settlementDiscount'])
+    assert.equal(output.moduleOptions.find(m=>m.key===name).permissionMode,'editOnly');
+  const second = policy.roleBootstrapOptions();
+  assert.notStrictEqual(second.moduleOptions,output.moduleOptions);
+  assert.notStrictEqual(second.deleteWindowOptions,output.deleteWindowOptions);
+  output.moduleOptions[0].label = 'not the frozen source';
+  output.deleteWindowOptions[0].label = 'not the frozen source';
+  assert.deepEqual(second.moduleOptions,sourceModules);
+  assert.deepEqual(second.deleteWindowOptions,sourceWindows);
+});
