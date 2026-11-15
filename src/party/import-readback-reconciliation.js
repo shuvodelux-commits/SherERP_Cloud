@@ -125,7 +125,7 @@ export function reconcilePartyImportReadback({plan,readback}={}){
           // A changed reviewer, timestamp or basis is also lost approval evidence.
           if(field==='approval_ref' ||
              (table==='party_legacy_links' && row.link_basis==='HUMAN_VERIFIED' &&
-              ['link_basis','reviewed_by','reviewed_at'].includes(field)))
+              ['party_id','legacy_sheet_row','link_basis','reviewed_by','reviewed_at'].includes(field)))
             approvalEvidencePersistent=false;
         }
       }
