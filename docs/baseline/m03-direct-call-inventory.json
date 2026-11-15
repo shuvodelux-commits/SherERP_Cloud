@@ -1,0 +1,657 @@
+{
+  "formatVersion": 1,
+  "scanKind": "lexical-direct-calls",
+  "sourceFiles": 47,
+  "sourceDigestSha256": "db7632129785f081578ff221fddf3a3405849c72a15a49d7a229b9cdb391b295",
+  "modulesWithCalls": 43,
+  "totals": {
+    "readCalls": 462,
+    "writeCalls": 244,
+    "directRangeCalls": 55,
+    "gasServiceCalls": 191
+  },
+  "modules": [
+    {
+      "file": "Auth.gs",
+      "readHelpers": {
+        "getAllRows_": 8,
+        "findRowIndex_": 2
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 2,
+        "deleteRow_": 1
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1,
+        "PropertiesService": 2,
+        "CacheService": 6,
+        "Utilities": 7,
+        "Session": 1
+      }
+    },
+    {
+      "file": "BankAccounts.gs",
+      "readHelpers": {
+        "getAllRows_": 3,
+        "findRowIndex_": 2
+      },
+      "writeHelpers": {
+        "appendRow_": 1,
+        "updateRowFields_": 2
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 2
+      }
+    },
+    {
+      "file": "BankBook.gs",
+      "readHelpers": {
+        "getAllRows_": 4,
+        "findRowIndex_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 1
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1
+      }
+    },
+    {
+      "file": "BankLedger.gs",
+      "readHelpers": {
+        "getAllRows_": 7,
+        "findRowIndex_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 1,
+        "updateRowFields_": 1
+      },
+      "directRange": {},
+      "gasServices": {
+        "SpreadsheetApp": 3,
+        "LockService": 3
+      }
+    },
+    {
+      "file": "Bundles.gs",
+      "readHelpers": {
+        "getAllRows_": 3
+      },
+      "writeHelpers": {
+        "appendRow_": 1,
+        "appendRows_": 5,
+        "updateRowFields_": 3
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 2
+      }
+    },
+    {
+      "file": "CashBook.gs",
+      "readHelpers": {},
+      "writeHelpers": {
+        "appendRow_": 1
+      },
+      "directRange": {},
+      "gasServices": {}
+    },
+    {
+      "file": "CashReconciliation.gs",
+      "readHelpers": {
+        "getAllRows_": 6
+      },
+      "writeHelpers": {
+        "updateRowFields_": 2
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1
+      }
+    },
+    {
+      "file": "CashSession.gs",
+      "readHelpers": {
+        "getAllRows_": 5
+      },
+      "writeHelpers": {
+        "appendRow_": 1,
+        "updateRowFields_": 3
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 2
+      }
+    },
+    {
+      "file": "Code.gs",
+      "readHelpers": {},
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {
+        "SpreadsheetApp": 2,
+        "HtmlService": 3,
+        "ScriptApp": 1
+      }
+    },
+    {
+      "file": "Counter.gs",
+      "readHelpers": {
+        "getAllRows_": 3
+      },
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {}
+    },
+    {
+      "file": "Customer.gs",
+      "readHelpers": {
+        "getAllRows_": 8,
+        "findRowIndex_": 3,
+        "findRow_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 4,
+        "updateRowFields_": 3,
+        "deleteRow_": 1
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 5
+      }
+    },
+    {
+      "file": "CustomerSettlement.gs",
+      "readHelpers": {
+        "getAllRows_": 3
+      },
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {}
+    },
+    {
+      "file": "Database.gs",
+      "readHelpers": {
+        "getAllRows_": 5,
+        "getSheetHeaders_": 6,
+        "findRowIndex_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 1,
+        "updateRowFields_": 1
+      },
+      "directRange": {
+        "getSheet_": 9,
+        "getRange": 12,
+        "getValues": 3,
+        "setValues": 4,
+        "setValue": 1,
+        "deleteRow": 1
+      },
+      "gasServices": {
+        "SpreadsheetApp": 1,
+        "PropertiesService": 1,
+        "CacheService": 9,
+        "Utilities": 7,
+        "Session": 1
+      }
+    },
+    {
+      "file": "DayBook.gs",
+      "readHelpers": {
+        "getAllRows_": 11
+      },
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {
+        "CacheService": 3
+      }
+    },
+    {
+      "file": "DeleteEngine.gs",
+      "readHelpers": {
+        "getAllRows_": 65,
+        "findRowIndex_": 5,
+        "findFirstRow_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 4,
+        "updateRowFields_": 22
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 26
+      }
+    },
+    {
+      "file": "Diagnostics.gs",
+      "readHelpers": {},
+      "writeHelpers": {},
+      "directRange": {
+        "getRange": 1,
+        "getValues": 1
+      },
+      "gasServices": {
+        "SpreadsheetApp": 2
+      }
+    },
+    {
+      "file": "DraftSales.gs",
+      "readHelpers": {
+        "getAllRows_": 5,
+        "findFirstRow_": 8
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 1,
+        "deleteRow_": 2
+      },
+      "directRange": {
+        "getSheet_": 1,
+        "getRange": 1,
+        "getValues": 1
+      },
+      "gasServices": {
+        "LockService": 3,
+        "PropertiesService": 1,
+        "Utilities": 1,
+        "Session": 1
+      }
+    },
+    {
+      "file": "Expense.gs",
+      "readHelpers": {
+        "getAllRows_": 8,
+        "findRowIndex_": 2
+      },
+      "writeHelpers": {
+        "appendRow_": 1,
+        "updateRowFields_": 2
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 3
+      }
+    },
+    {
+      "file": "ExpenseSettings.gs",
+      "readHelpers": {
+        "getAllRows_": 6,
+        "findRowIndex_": 5
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 4
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 5
+      }
+    },
+    {
+      "file": "FinanceModule.gs",
+      "readHelpers": {
+        "getAllRows_": 4,
+        "findRowIndex_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 3
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 3
+      }
+    },
+    {
+      "file": "Invoice.gs",
+      "readHelpers": {
+        "getAllRows_": 4,
+        "findRows_": 2
+      },
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {
+        "Utilities": 1
+      }
+    },
+    {
+      "file": "OpeningBalance.gs",
+      "readHelpers": {
+        "getSheetHeaders_": 2
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 1
+      },
+      "directRange": {
+        "getSheet_": 1,
+        "getRange": 1,
+        "getValues": 1,
+        "setValues": 1
+      },
+      "gasServices": {}
+    },
+    {
+      "file": "PartyLedger.gs",
+      "readHelpers": {
+        "getAllRows_": 2,
+        "getSheetHeaders_": 5
+      },
+      "writeHelpers": {},
+      "directRange": {
+        "getSheet_": 5,
+        "getValues": 6
+      },
+      "gasServices": {
+        "Utilities": 5,
+        "Session": 2
+      }
+    },
+    {
+      "file": "ProductSettings.gs",
+      "readHelpers": {
+        "getAllRows_": 2,
+        "findRowIndex_": 4
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 2,
+        "deleteRow_": 4
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 2
+      }
+    },
+    {
+      "file": "Products.gs",
+      "readHelpers": {
+        "getAllRows_": 8,
+        "findRowIndex_": 3
+      },
+      "writeHelpers": {
+        "appendRow_": 4,
+        "updateRowFields_": 3
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 4
+      }
+    },
+    {
+      "file": "Purchase.gs",
+      "readHelpers": {
+        "getAllRows_": 3,
+        "findRowIndex_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "appendRows_": 2,
+        "updateRowFields_": 2
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1
+      }
+    },
+    {
+      "file": "PurchaseManagement.gs",
+      "readHelpers": {
+        "getAllRows_": 14,
+        "findRowIndex_": 4,
+        "findFirstRow_": 3
+      },
+      "writeHelpers": {
+        "appendRow_": 5,
+        "appendRows_": 1,
+        "updateRowFields_": 10,
+        "deleteRow_": 1
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1
+      }
+    },
+    {
+      "file": "PurchaseReturn.gs",
+      "readHelpers": {
+        "getAllRows_": 10,
+        "findFirstRow_": 2
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "appendRows_": 2,
+        "updateRowFields_": 2
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1
+      }
+    },
+    {
+      "file": "Reports.gs",
+      "readHelpers": {
+        "getAllRows_": 12
+      },
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {
+        "CacheService": 5
+      }
+    },
+    {
+      "file": "RoleManagement.gs",
+      "readHelpers": {
+        "getAllRows_": 9,
+        "findRowIndex_": 3
+      },
+      "writeHelpers": {
+        "appendRow_": 1,
+        "updateRowFields_": 3,
+        "deleteRow_": 1
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 4
+      }
+    },
+    {
+      "file": "SalePayments.gs",
+      "readHelpers": {},
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {
+        "Utilities": 2
+      }
+    },
+    {
+      "file": "Sales.gs",
+      "readHelpers": {
+        "getAllRows_": 15,
+        "findRowIndex_": 2
+      },
+      "writeHelpers": {
+        "appendRow_": 3,
+        "appendRows_": 6,
+        "updateRowFields_": 5
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1,
+        "Utilities": 1,
+        "Session": 1
+      }
+    },
+    {
+      "file": "SalesManagement.gs",
+      "readHelpers": {
+        "getAllRows_": 31,
+        "findRowIndex_": 4,
+        "findRows_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 9,
+        "appendRows_": 2,
+        "updateRowFields_": 10,
+        "deleteRow_": 1
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 1
+      }
+    },
+    {
+      "file": "SalesReturn.gs",
+      "readHelpers": {
+        "getAllRows_": 34,
+        "findRowIndex_": 3
+      },
+      "writeHelpers": {
+        "appendRow_": 7,
+        "appendRows_": 4,
+        "updateRowFields_": 12
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 4
+      }
+    },
+    {
+      "file": "SeedData.gs",
+      "readHelpers": {},
+      "writeHelpers": {
+        "appendRows_": 5
+      },
+      "directRange": {
+        "getSheet_": 1
+      },
+      "gasServices": {
+        "SpreadsheetApp": 4,
+        "LockService": 2,
+        "PropertiesService": 1
+      }
+    },
+    {
+      "file": "Settings.gs",
+      "readHelpers": {
+        "getAllRows_": 2
+      },
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {
+        "LockService": 3,
+        "Utilities": 2
+      }
+    },
+    {
+      "file": "Setup.gs",
+      "readHelpers": {
+        "getAllRows_": 4
+      },
+      "writeHelpers": {
+        "appendRow_": 2
+      },
+      "directRange": {
+        "getSheet_": 1
+      },
+      "gasServices": {
+        "SpreadsheetApp": 3,
+        "LockService": 2,
+        "PropertiesService": 2
+      }
+    },
+    {
+      "file": "StockLots.gs",
+      "readHelpers": {
+        "getAllRows_": 35
+      },
+      "writeHelpers": {
+        "appendRow_": 3,
+        "updateRowFields_": 14
+      },
+      "directRange": {},
+      "gasServices": {
+        "SpreadsheetApp": 3,
+        "LockService": 3
+      }
+    },
+    {
+      "file": "SupplierSettlement.gs",
+      "readHelpers": {
+        "getAllRows_": 1,
+        "findFirstRow_": 2
+      },
+      "writeHelpers": {},
+      "directRange": {},
+      "gasServices": {}
+    },
+    {
+      "file": "Suppliers.gs",
+      "readHelpers": {
+        "getAllRows_": 4,
+        "findRowIndex_": 2,
+        "findRow_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 3,
+        "updateRowFields_": 3
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 3
+      }
+    },
+    {
+      "file": "UserManagement.gs",
+      "readHelpers": {
+        "getAllRows_": 11,
+        "findRowIndex_": 5,
+        "findFirstRow_": 1
+      },
+      "writeHelpers": {
+        "appendRow_": 2,
+        "updateRowFields_": 3,
+        "deleteRow_": 2
+      },
+      "directRange": {},
+      "gasServices": {
+        "SpreadsheetApp": 3,
+        "LockService": 6
+      }
+    },
+    {
+      "file": "Utils.gs",
+      "readHelpers": {},
+      "writeHelpers": {},
+      "directRange": {
+        "getSheet_": 1,
+        "getRange": 1,
+        "getValues": 1
+      },
+      "gasServices": {
+        "PropertiesService": 1
+      }
+    },
+    {
+      "file": "Vendors.gs",
+      "readHelpers": {
+        "getAllRows_": 13,
+        "findRowIndex_": 5
+      },
+      "writeHelpers": {
+        "appendRow_": 8,
+        "updateRowFields_": 4
+      },
+      "directRange": {},
+      "gasServices": {
+        "LockService": 8
+      }
+    }
+  ]
+}
