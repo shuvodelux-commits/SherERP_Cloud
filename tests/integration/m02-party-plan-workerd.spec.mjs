@@ -353,3 +353,25 @@ test('unsafe legacy physical row never compiles D1 Party identity inserts or mut
   assert.deepEqual(await counts(),before,'unsafe source row cannot change local D1');
   assert.deepEqual(source(),prior,'the original frozen source fixture remains unchanged');
 });
+
+
+test('trim-equivalent legacy source IDs block every prepared import statement in local D1',async()=>{
+  const original=await counts();
+  const rows=source();
+  rows.CUSTOMERS.push({
+    ...rows.CUSTOMERS[0],
+    'Customer ID':' CUS-001 ',
+    'Customer Name':'Different business',
+    'Phone':'01598765432',
+    _rowIndex:3
+  });
+  const snapshot=structuredClone(rows);
+  let prepared=0;
+  const binding={prepare(sql){prepared++;return DB.prepare(sql);}};
+  assert.throws(()=>compileSyntheticPartyImport({
+    DB:binding,sourceRows:rows,approvedGroups:reviewed(),createdAt:now
+  }),/unknown|quarantin|unresolved|review/i);
+  assert.equal(prepared,0,'an ambiguous source identity must block before any D1 statement');
+  assert.deepEqual(await counts(),original,'failed import preflight must not affect D1 rows');
+  assert.deepEqual(rows,snapshot,'original source IDs and rows must remain unchanged');
+});
