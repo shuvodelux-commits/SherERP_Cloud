@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
 import {M05_PURCHASE_DDL,M05_PURCHASE_SEED} from '../fixtures/m05-purchase-d1-schema.mjs';
 import {createSyntheticPurchasePoster} from '../fixtures/m05-purchase-d1-contract.mjs';
+import {projectPurchaseDetail} from '../../src/modules/purchase-detail-projection.js';
 
 const server=createTestHarness({workers:[{configPath:'./wrangler.m05-purchase-test.jsonc'}]});
 const worker=server.getWorker('shererp-m05-purchase-local-test');
@@ -158,6 +159,50 @@ test('uncertain response must not automatically repeat a new operation or claim 
   const beforeBatch=async()=>{throw new Error('network interrupted before commit');};
   await assert.rejects(poster({beforeBatch}).post(input('OP-UNKNOWN-01')),/network interrupted/);
   assert.equal((await one('SELECT COUNT(*) AS n FROM m05_purchases')).n,0);
+});
+
+
+test('real local D1 posted purchase can be projected as source-shaped read-only detail without ledger or lot changes',async()=>{
+  const posting=await poster().post(input('OP-DETAIL-0001'));
+  assert.equal(posting.status,'COMMITTED');
+  const beforeRead=await snapshot();
+  const receipt=await one("SELECT * FROM m05_purchases WHERE tenant_id='SHOP-A' AND operation_id='OP-DETAIL-0001'");
+  const items=await rows("SELECT * FROM m05_items WHERE tenant_id='SHOP-A' AND purchase_id='PUR-OP-DETAIL-0001'");
+  const lots=await rows("SELECT * FROM m05_lots WHERE tenant_id='SHOP-A' AND purchase_id='PUR-OP-DETAIL-0001'");
+  const detail=projectPurchaseDetail(receipt.purchase_id,{
+    purchases:[{
+      'Purchase ID':receipt.purchase_id,'Date':receipt.purchase_date,
+      'Supplier ID':receipt.supplier_id,'Supplier Name':'Synthetic Supplier',
+      'Subtotal':(receipt.grand_paisa+receipt.discount_paisa)/100,
+      'Discount':receipt.discount_paisa/100,'Grand Total':receipt.grand_paisa/100,
+      'Paid Amount':receipt.paid_paisa/100,'Due Amount':receipt.due_paisa/100,
+      'Payment Status':'Partial','Payment Method':receipt.payment_method,
+      'Bank Account Name':'','Is Deleted':'FALSE'
+    }],
+    items:items.map(i=>({
+      'Purchase ID':i.purchase_id,'Product ID':i.sku,'Product Name':'Synthetic Pipe',
+      'Quantity':i.qty,'Unit Price':i.unit_cost_paisa/100,
+      'Sell Price':'','Line Total':(i.unit_cost_paisa*i.qty)/100
+    })),
+    lots:lots.map(l=>({
+      'Lot ID':l.lot_id,'Purchase ID':l.purchase_id,'Product ID':l.sku,
+      'Sell Price':l.sell_price_paisa/100
+    })),
+    products:[{'Product ID':'PIPE','Selling Price':0}],
+    returns:[]
+  });
+  assert.deepEqual({
+    id:detail.purchaseId,supplier:detail.supplierId,date:detail.date,
+    grand:detail.grandTotal,paid:detail.paidAmount,due:detail.dueAmount,
+    item:detail.items[0],returned:detail.returnedAmount
+  },{
+    id:'PUR-OP-DETAIL-0001',supplier:'SUP-1',date:'2026-11-10',
+    grand:30,paid:10,due:20,
+    item:{productId:'PIPE',name:'Synthetic Pipe',qty:2,unitPrice:15.25,
+      sellingPrice:18,lineTotal:30.5},
+    returned:0
+  });
+  assert.deepEqual(await snapshot(),beforeRead);
 });
 
 });
