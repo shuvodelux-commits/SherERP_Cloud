@@ -125,3 +125,82 @@ test('lost result retry returns one actor-bound ID and invalid external payload 
   assert.doesNotMatch(live,/m03-m04-master-authorized-create/);
   assert.equal(JSON.parse(readFileSync(new URL('../../wrangler.m03-m04-master-authority-test.jsonc',import.meta.url),'utf8')).workers_dev,false);
 });
+
+
+async function issueCurrentStaffSession(letter){
+  const user=await DB.prepare("SELECT auth_version,credential_version FROM auth_users WHERE user_id='STAFF'").first();
+  const role=await DB.prepare("SELECT auth_version FROM auth_roles WHERE role_name='ProductClerk'").first();
+  await DB.prepare("INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,role_auth_version,credential_version,created_at_ms,last_activity_at_ms,expires_at_ms,revoked_at_ms) VALUES(?,?,?,?,?,?,?,?,NULL)")
+    .bind(hash(letter.repeat(64)),'STAFF',user.auth_version,role.auth_version,
+      user.credential_version,NOW-300_000,NOW-1_000,NOW+600_000).run();
+}
+
+test('current M04 role/user disable, malformed grant and restoration deny stale staff epochs',async()=>{
+  await issueCurrentStaffSession('2');
+  assert.deepEqual(await invoke('/__m03_m04_master__/staff-fresh'),{
+    status:200,body:{success:true,data:{id:'PUNT-000009',name:'Box'}}
+  });
+  const frozen=await state();
+  await DB.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='ProductClerk'").run();
+  assert.equal((await invoke('/__m03_m04_master__/staff-fresh')).status,403);
+  await DB.prepare("UPDATE auth_roles SET status='Active' WHERE role_name='ProductClerk'").run();
+  assert.equal((await invoke('/__m03_m04_master__/staff-fresh')).status,403,
+    'role reactivation cannot resurrect the old role epoch');
+
+  await DB.prepare("UPDATE auth_roles SET permissions_json='{' WHERE role_name='ProductClerk'").run();
+  await issueCurrentStaffSession('4');
+  assert.equal((await invoke('/__m03_m04_master__/staff-malformed')).status,403,
+    'malformed JSON permission must fail closed without SQL mutation');
+  await DB.prepare("UPDATE auth_roles SET permissions_json='{\"products\":{\"add\":true}}' WHERE role_name='ProductClerk'").run();
+
+  await DB.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='STAFF'").run();
+  assert.equal((await invoke('/__m03_m04_master__/staff-fresh')).status,403);
+  await DB.prepare("UPDATE auth_users SET status='Active' WHERE user_id='STAFF'").run();
+  assert.equal((await invoke('/__m03_m04_master__/staff-fresh')).status,403,
+    'account reactivation cannot restore the old bearer');
+  assert.deepEqual(await state(),frozen);
+});
+
+test('revocation racing actual source master INSERT permits only fully serialized outcome',async()=>{
+  await issueCurrentStaffSession('3');
+  const before=await state();
+  const [call,revoke]=await Promise.allSettled([
+    invoke('/__m03_m04_master__/staff-race'),
+    DB.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
+      .bind(NOW,hash('3'.repeat(64))).run()
+  ]);
+  assert.equal(call.status,'fulfilled');
+  assert.equal(revoke.status,'fulfilled');
+  assert.ok([200,403].includes(call.value.status));
+  const afterState=await state();
+  const newIntents=afterState.intents.filter(x=>x.operation_id==='OP-STAFF-RACE');
+  const newReceipts=afterState.receipts.filter(x=>x.operation_id==='OP-STAFF-RACE');
+  const newUnits=afterState.units.filter(x=>x.unit_name==='Meter');
+  const delta=newIntents.length;
+  assert.ok(delta===0||delta===1);
+  assert.equal(newReceipts.length,delta);
+  assert.equal(newUnits.length,delta);
+  assert.equal(afterState.counters.find(x=>x.id_key==='PRODUCT_UNITS').current_sequence,
+    before.counters.find(x=>x.id_key==='PRODUCT_UNITS').current_sequence+delta);
+  if(call.value.status===200){
+    assert.equal(delta,1);
+    assert.equal(newIntents[0].actor_id,'STAFF');
+  }
+  assert.equal((await invoke('/__m03_m04_master__/staff-race')).status,403,
+    'replayed receipt requires current nonrevoked bearer even after committed write');
+  assert.deepEqual(await state(),afterState);
+});
+
+test('credential rotation denies old Administrator receipt replay and SQL actor mutation',async()=>{
+  const before=await state();
+  await assert.rejects(()=>DB.prepare(
+    "UPDATE synthetic_m03_master_intents SET actor_id='STAFF' WHERE operation_id='OP-ADMIN'"
+  ).run(),/immutable|D1_ERROR|constraint|abort/i);
+  assert.deepEqual(await state(),before);
+
+  await DB.prepare("UPDATE auth_users SET password_hash=? WHERE user_id='ADMIN'")
+    .bind('c'.repeat(64)).run();
+  assert.equal((await invoke('/__m03_m04_master__/admin-replay')).status,403);
+  assert.equal((await invoke('/__m03_m04_master__/admin-after-password')).status,403);
+  assert.deepEqual(await state(),before);
+});
