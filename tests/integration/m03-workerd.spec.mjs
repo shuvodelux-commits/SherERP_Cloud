@@ -16,10 +16,10 @@ before(async()=>{
     .bind('CAT-1','Electrical','Active',2).run();
   await db.prepare('INSERT INTO product_categories (category_id,category_name,status,legacy_sheet_row) VALUES (?,?,?,?)')
     .bind('CAT-2','দড়ি','Inactive',3).run();
-  await db.prepare('INSERT INTO product_units (unit_id,unit_name,status) VALUES (?,?,?)')
-    .bind('UNIT-1','Pcs','Active').run();
-  await db.prepare('INSERT INTO product_units (unit_id,unit_name,status) VALUES (?,?,?)')
-    .bind('UNIT-2','Feet','Active').run();
+  await db.prepare('INSERT INTO product_units (unit_id,unit_name,status,legacy_sheet_row) VALUES (?,?,?,?)')
+    .bind('UNIT-1','Pcs','Active',2).run();
+  await db.prepare('INSERT INTO product_units (unit_id,unit_name,status,legacy_sheet_row) VALUES (?,?,?,?)')
+    .bind('UNIT-2','Feet','Active',3).run();
   await db.prepare('INSERT INTO parties (party_id,display_name,created_at) VALUES (?,?,?)')
     .bind('PARTY-1','Rahim','2026-11-15T00:00:00Z').run();
   await db.prepare('INSERT INTO parties (party_id,display_name,created_at) VALUES (?,?,?)')
@@ -77,4 +77,27 @@ test('invalid requests fail closed without leaking data, and test routes never w
   assert.equal(response.status,405);
   const counts=await db.prepare('SELECT (SELECT COUNT(*) FROM product_categories) AS categories, (SELECT COUNT(*) FROM parties) AS parties').first();
   assert.deepEqual(counts,{categories:2,parties:2});
+});
+
+test('source-shaped catalog reads execute via real local D1 and preserve physical sheet row indexes',async()=>{
+  assert.deepEqual(await query('/__m03_test__/legacy-rows?sheet=PRODUCT_CATEGORIES'),{status:200,body:{rows:[
+    {'Category ID':'CAT-1','Category Name':'Electrical',Status:'Active','Created At':'',_rowIndex:2},
+    {'Category ID':'CAT-2','Category Name':'দড়ি',Status:'Inactive','Created At':'',_rowIndex:3}
+  ]}});
+  assert.deepEqual(await query('/__m03_test__/legacy-rows?sheet=PRODUCT_UNITS'),{status:200,body:{rows:[
+    {'Unit ID':'UNIT-1','Unit Name':'Pcs',Status:'Active','Created At':'',_rowIndex:2},
+    {'Unit ID':'UNIT-2','Unit Name':'Feet',Status:'Active','Created At':'',_rowIndex:3}
+  ]}});
+  assert.deepEqual(await query('/__m03_test__/legacy-find?sheet=PRODUCT_CATEGORIES&column=Category%20ID&value=CAT-2'),{
+    status:200,body:{match:{row:{'Category ID':'CAT-2','Category Name':'দড়ি',Status:'Inactive','Created At':'',_rowIndex:3},rowIndex:3}}
+  });
+});
+
+test('source-shaped test routes refuse Settings, other sheets and arbitrary columns without writes',async()=>{
+  for(const key of ['SETTINGS','SALES','CUSTOMERS',"PRODUCT_CATEGORIES;DROP TABLE parties"]){
+    assert.equal((await query('/__m03_test__/legacy-rows?sheet='+encodeURIComponent(key))).status,400);
+  }
+  assert.equal((await query('/__m03_test__/legacy-find?sheet=PRODUCT_CATEGORIES&column=Unsafe&value=x')).status,400);
+  const count=await db.prepare('SELECT COUNT(*) AS n FROM product_categories').first();
+  assert.equal(count.n,2);
 });
