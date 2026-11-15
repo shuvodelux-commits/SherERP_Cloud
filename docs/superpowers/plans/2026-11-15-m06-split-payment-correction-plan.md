@@ -1,0 +1,17 @@
+# M06 — Split-payment correction intent, without financial writes
+
+Date: 2026-11-15. Base: current `main` after merged #218. Frozen source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, specifically `SalePayments.gs::readSalePaymentBreakdown_`, `assertSalePaymentBookEvidence_`, `normalizeSalePayments_`, `salePaymentNextRevision_`, `salePaymentAccountDeltas_`, and `SalesManagement.gs::updateSaleInternal_`.
+
+## Why / exact scope
+The source split-tender edit path first verifies immutable original tender and net Cash/Bank book evidence, blocks stale invoices with later customer settlements, computes a new split allocation, increments the immutable payment revision, reverses old active child rows and posts **only account deltas**, not tendered Cash/change. The target already ports each source pure payment function byte-for-byte in `src/modules/sale-payments.js`, but has no single read-only preflight contract for this correction path.
+
+Create one internal pure helper `planSaleSplitPaymentCorrection(snapshot)` that composes those existing functions for a **same-total** payment-method reallocation only. Input has `invoiceId, sale, paymentRows, cashBookRows, bankBookRows, newPayments, bankAccounts, currentSettlement`; all rows and settlement are trusted, tenant-filtered snapshots from future M03/M04/M08 adapters. Require exact invoice ID, active source sale, original `Payment Detail Version='1'`, and the authoritative current settled paid/due amounts (no later collections). The helper validates source payment-child integrity and signed historical book postings, then returns `nextRevision, reversedPaymentIds, allocation, accountDeltas`. It does not create new Payment IDs, audit entries, source sale records, or financial postings. Source `SalesManagement.gs` continues to own actual edit/return orchestration.
+
+## Superpowers test-first checklist
+1. Commit this plan and new `tests/m06-split-payment-correction-plan.test.mjs` first, importing a not-yet-present `src/modules/sale-payment-correction-plan.js`. Test native VM `SalePayments.gs` against a valid split Cash+Bank update and negative cases: Cash change not booked, bank/mobile reallocations, historical revision increments, mismatched signed ledger, corrupt child, later Customer settlement and missing trusted source snapshot.
+2. Observe expected `ERR_MODULE_NOT_FOUND` RED in a real GitHub Foundation workflow. No blind GREEN.
+3. Add only `src/modules/sale-payment-correction-plan.js` implementing minimal pure composition. Do **not** copy the payment engine or alter `sale-payments.js`. Verify regression tests against native GAS oracle, full `npm test`, unchanged original source manifest, frontend build and existing real Workerd/D1/Chromium/Cloudflare safety checks in GitHub CI.
+4. Open draft PR with immutable RED and GREEN commit/check links. Owner reviews before merge.
+
+## Hard boundaries
+No `src/db`, `src/auth`, `src/rpc`, `migrations`, `tests/fixtures/m06-sale-posting-*`, Worker config, frontend, original source, cloud D1/staging/production, or live data changes. No money/stock/Customer/Supplier/Party writes, no automatic cross-role offsets. The helper is **not** an edit authorization or SQL CAS. Real M03/M04/M05/M08 session/tenant/return/settlement and atomic posting checks remain mandatory. Retain the original Customer ID, never infer a Party by phone/name. Rollback: revert these three new files; no data migration.
