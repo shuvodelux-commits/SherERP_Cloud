@@ -10,6 +10,7 @@
 
 const tables=['parties','party_roles','party_legacy_links'];
 const validObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const validCount=value=>Number.isSafeInteger(value)&&value>=0;
 const rowKey=(row,columns)=>{
   const values=columns.map(column=>row[column]);
   return values.every(value=>typeof value==='string'&&value.length>0)
@@ -136,7 +137,9 @@ export function reconcilePartyImportReadback({plan,readback}={}){
     counts.actual[table]=readback[table].length;
   }
 
-  if(plan.summary.proposedParties!==counts.expected.parties||
+  if(!validCount(plan.summary.sourceRows)||
+    !validCount(plan.summary.quarantinedRows)||
+    plan.summary.proposedParties!==counts.expected.parties||
     plan.summary.roleMemberships!==counts.expected.party_roles||
     plan.summary.legacyLinks!==counts.expected.party_legacy_links||
     plan.summary.sourceRows!==plan.links.length+plan.summary.quarantinedRows||

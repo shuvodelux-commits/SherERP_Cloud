@@ -308,3 +308,53 @@ test('real UTC review millisecond evidence remains valid in future-schema readba
   assert.equal(report.approvalEvidencePersistent,true);
   assert.deepEqual(report.issues,[]);
 });
+
+
+test('negative quarantined count cannot cancel source row count in a mirrored future D1 readback',()=>{
+  const plan=planned();
+  const original=structuredClone(plan);
+  assert.equal(plan.summary.quarantinedRows,0);
+  assert.equal(plan.summary.sourceRows,plan.links.length);
+  plan.summary.quarantinedRows=-1;
+  plan.summary.sourceRows=plan.links.length-1;
+  const readback=snapshot(plan,{approvalRef:true});
+  const before=structuredClone({plan,readback});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false,'invalid summary cannot certify identity parity');
+  assert.ok(codes(report).includes('PLAN_COUNT_MISMATCH'));
+  assert.deepEqual(report.issues,[{code:'PLAN_COUNT_MISMATCH',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual({plan,readback},before,'readback must not mutate input plans or D1-shaped rows');
+  assert.equal(original.summary.quarantinedRows,0);
+});
+
+test('fractional or unsafe source/quarantined counts are rejected even when arithmetic balances',()=>{
+  const pairs=[
+    {quarantinedRows:-0.5,sourceRows:4.5},
+    {quarantinedRows:0.5,sourceRows:5.5},
+    {quarantinedRows:Number.MAX_SAFE_INTEGER+1,sourceRows:Number.MAX_SAFE_INTEGER+1+5}
+  ];
+  for(const pair of pairs){
+    const plan=planned();
+    Object.assign(plan.summary,pair);
+    const report=audit(plan,snapshot(plan,{approvalRef:true}));
+    assert.equal(report.identityRowsMatch,false,JSON.stringify(pair));
+    assert.ok(codes(report).includes('PLAN_COUNT_MISMATCH'),JSON.stringify(pair));
+    assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01/);
+  }
+});
+
+test('source count audit continues to accept zero quarantined rows and flag positive quarantines',()=>{
+  const clean=planned();
+  const good=audit(clean,snapshot(clean,{approvalRef:true}));
+  assert.equal(good.identityRowsMatch,true);
+  assert.ok(!codes(good).includes('PLAN_COUNT_MISMATCH'));
+  const rows=source();
+  rows.CUSTOMERS.push({'Customer ID':'','Customer Name':'Unknown customer','_rowIndex':3});
+  const quarantined=planPartyImport(rows,[]);
+  assert.equal(quarantined.summary.quarantinedRows,1);
+  const flagged=audit(quarantined,snapshot(quarantined));
+  assert.ok(codes(flagged).includes('QUARANTINED_SOURCE_ROWS'));
+  assert.ok(!codes(flagged).includes('PLAN_COUNT_MISMATCH'));
+});
