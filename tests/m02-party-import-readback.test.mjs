@@ -255,3 +255,56 @@ test('reviewed group summary cannot contradict the number of source-backed revie
   assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
   assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01/);
 });
+
+
+test('tampered reviewer and approval IDs cannot pass a mirrored future D1 readback',()=>{
+  const cases=[
+    {field:'reviewedBy',value:' admin-01 '},
+    {field:'reviewedBy',value:'admin\\u202E01'},
+    {field:'reviewedBy',value:'admin\\u000701'},
+    {field:'approvalRef',value:' REVIEW-001 '},
+    {field:'approvalRef',value:'REVIEW\\u200B-001'},
+    {field:'approvalRef',value:'REVIEW\\u2066-001'}
+  ];
+  for(const {field,value} of cases){
+    const plan=planned(),verified=plan.links.find(x=>x.linkBasis==='HUMAN_VERIFIED');
+    verified[field]=value;
+    const readback=snapshot(plan,{approvalRef:true});
+    const before=structuredClone({plan,readback});
+    const report=audit(plan,readback);
+    assert.deepEqual(report.counts.expected,report.counts.actual);
+    assert.equal(report.identityRowsMatch,false,field+' noncanonical evidence');
+    assert.equal(report.approvalEvidencePersistent,false,field+' must not be trusted');
+    assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'),field+' must reject');
+    assert.doesNotMatch(JSON.stringify(report),
+      /admin-01|REVIEW-001|CUS-001|SUP-001|01700000000/);
+    assert.deepEqual({plan,readback},before,'readback must never mutate evidence');
+  }
+});
+
+test('tampered impossible or non-UTC review instants fail despite matching future readback',()=>{
+  for(const reviewedAt of [
+    '2026-02-30T12:00:00Z','2026-11-14T12:00:00+06:00',
+    '2026-11-14T12:00:00','2026-11-14T12:00:00.1234Z',
+    '2026-11-14T25:00:00Z','2026-11-14T12:00:00z'
+  ]){
+    const plan=planned(),verified=plan.links.find(x=>x.linkBasis==='HUMAN_VERIFIED');
+    verified.reviewedAt=reviewedAt;
+    const report=audit(plan,snapshot(plan,{approvalRef:true}));
+    assert.equal(report.identityRowsMatch,false,reviewedAt);
+    assert.equal(report.approvalEvidencePersistent,false,reviewedAt);
+    assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'),reviewedAt);
+    assert.doesNotMatch(JSON.stringify(report),
+      /CUS-001|SUP-001|REVIEW-001|admin-01/);
+  }
+});
+
+test('real UTC review millisecond evidence remains valid in future-schema readback',()=>{
+  const plan=planned();
+  const verified=plan.links.find(x=>x.linkBasis==='HUMAN_VERIFIED');
+  verified.reviewedAt='2026-11-14T12:00:00.123Z';
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,true);
+  assert.equal(report.approvalEvidencePersistent,true);
+  assert.deepEqual(report.issues,[]);
+});
