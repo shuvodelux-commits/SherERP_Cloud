@@ -473,3 +473,25 @@ test('real D1 readback blocks forged Supplier role on original Finance-only Part
     /FIN-001|CUS-001|SUP-001|REVIEW-001|admin-01|01900000000/);
   assert.deepEqual(await counts(),before,'local Workerd/D1 reconciliation is read-only');
 });
+
+
+test('real D1 readback rejects forged ACTIVE status for original RETIRED Payee Party',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  const payee=plan.links.find(x=>x.sourceGroup==='EXPENSE_PAYEES');
+  assert.ok(payee);
+  assert.equal(payee.status,'RETIRED');
+  const party=plan.parties.find(x=>x.partyId===payee.partyId);
+  assert.equal(party.status,'INACTIVE');
+  party.status='ACTIVE';
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_LINKAGE_INVALID'&&x.table==='plan'),
+    'plan graph rejects Party status unsupported by original source status');
+  assert.ok(report.issues.some(x=>x.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'existing D1 schema still blocks authenticated approved identity merge');
+  assert.doesNotMatch(JSON.stringify(report),
+    /PAY-001|CUS-001|SUP-001|REVIEW-001|admin-01|01600000000/);
+  assert.deepEqual(await counts(),before,'local D1 readback must not write Party rows');
+});
