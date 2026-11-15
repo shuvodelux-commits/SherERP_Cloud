@@ -311,7 +311,7 @@ test('malformed D1 and illegal request descriptors cannot obtain full Settings m
   for(const result of [undefined,null,{}, {success:false,results:[]},
     {success:true,results:null}, {success:true,results:[]} ]){
     const DB={prepare(){return {bind(){return {all:async()=>result}}}}};
-    const error=Array.isArray(result?.results) && result.results.length===0?'Denied':'NEEDS_REVIEW';
+    const error=result?.success===true && Array.isArray(result.results) && result.results.length===0?'Denied':'NEEDS_REVIEW';
     await assert.rejects(()=>createM04AuthorizedShellSettingsReadAdapter({DB})
       .getSettingsMap_(req()),new RegExp(error));
   }
