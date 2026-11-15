@@ -140,3 +140,9 @@ export function createM03AtomicProductMasterCreator(env,{businessId}={}){
     createUnit_(input){return create(GROUP.unit,input);}
   });
 }
+
+// Reuse source identity, Unicode duplicate and intent semantics for the
+// separate M04 actor-authorized local proof; no new RPC or write path here.
+export const M03_MASTER_CREATION_INTERNALS=Object.freeze({
+  groups:GROUP,inputFields,intentHash,validateExisting,snapshotAndCleanup
+});
