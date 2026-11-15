@@ -371,3 +371,20 @@ test('real D1 Party identity readback never certifies two original anchors in ta
   assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
   assert.deepEqual(await counts(),before,'real D1 readback remains SELECT only');
 });
+
+
+test('real D1 identity readback flags forged reviewed-group summary without mutating Party rows',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  assert.equal(plan.summary.reviewedGroups,1);
+  plan.summary.reviewedGroups=0;
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_LINKAGE_INVALID'&&x.table==='plan'));
+  assert.ok(report.issues.some(x=>x.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'the current schema still cannot prove authenticated review persistence');
+  assert.doesNotMatch(JSON.stringify(report),
+    /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual(await counts(),before,'real local D1 readback remains SELECT-only');
+});
