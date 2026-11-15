@@ -16,6 +16,17 @@ const normPhone=(s)=>str(s).replace(/[^0-9]/g,'');
 const inactive=(row)=>String(row.Status||'').trim().toLowerCase()==='inactive'||
   String(row['Is Deleted']||'').trim().toLowerCase()==='true';
 const cite=(row)=>({sourceGroup:row.group,sourceId:row.id});
+const canonicalReviewId=value=>typeof value==='string' &&
+  value.length>0 && value.trim()===value;
+// Approval reviews are UTC instants, not locale-dependent or freeform values.
+const utcReviewTimestamp=value=>{
+  if(typeof value!=='string' ||
+     !/^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?Z$/.test(value))
+    return false;
+  const parsed=new Date(value);
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0,19)===value.slice(0,19);
+};
 
 export function planPartyImport(sourceRows,approvedGroups=[]) {
   if(!sourceRows || typeof sourceRows!=='object'||Array.isArray(sourceRows))throw new Error('Invalid legacy snapshot');
@@ -67,6 +78,7 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
   const valid=candidates.filter(row=>!duplicateKeys.has(row.key));
   const found=new Map(valid.map(row=>[row.key,row]));
   const joined=new Map();
+  const approvalRefs=new Set();
   const approved=[];
   for(const proof of approvedGroups){
     if(!proof || !Array.isArray(proof.members) || proof.members.length<2 ||
@@ -79,6 +91,16 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
       if(!found.has(key))throw new Error('Unknown or quarantined Party identity in reviewed group');
       if(joined.has(key))throw new Error('Overlapping reviewed Party groups');
     }
+    // Offline provenance only: these checks do not authenticate the reviewer.
+    if(!canonicalReviewId(proof.reviewedBy))
+      throw new Error('Reviewed Party evidence requires canonical reviewer identity');
+    if(!canonicalReviewId(proof.approvalRef))
+      throw new Error('Approval reference must be canonical, without whitespace padding');
+    if(!utcReviewTimestamp(proof.reviewedAt))
+      throw new Error('Review timestamp must be a valid UTC instant');
+    if(approvalRefs.has(proof.approvalRef))
+      throw new Error('Duplicate approval reference reused across reviewed identity groups');
+    approvalRefs.add(proof.approvalRef);
     const sorted=memberKeys.sort();
     for(const key of sorted)joined.set(key,sorted[0]);
     approved.push({anchor:sorted[0],members:sorted,proof});
