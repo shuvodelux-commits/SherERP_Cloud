@@ -104,9 +104,11 @@ END;
 -- from resurrecting sessions created before the change. Nonrecursive because
 -- the UPDATE inside each trigger touches only auth_version.
 CREATE TRIGGER trg_auth_user_version AFTER UPDATE OF
-  status,role_name,credential_state,password_algo,password_hash,password_salt,
+  full_name,phone_key,status,role_name,credential_state,password_algo,password_hash,password_salt,
   password_iterations,credential_version ON auth_users
-WHEN OLD.status IS NOT NEW.status
+WHEN OLD.full_name IS NOT NEW.full_name
+  OR OLD.phone_key IS NOT NEW.phone_key
+  OR OLD.status IS NOT NEW.status
   OR OLD.role_name IS NOT NEW.role_name
   OR OLD.credential_state IS NOT NEW.credential_state
   OR OLD.password_algo IS NOT NEW.password_algo
