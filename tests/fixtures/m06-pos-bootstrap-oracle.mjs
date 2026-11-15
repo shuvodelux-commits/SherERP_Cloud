@@ -31,7 +31,7 @@ export function originalPosBootstrap(snapshot){
     STOCK_LOTS:snapshot.stockLots,BUNDLE_COMPONENTS:[]
   };
   const vm={
-    CONFIG:{APP_NAME:'SherERP'},
+    CONFIG:{APP_NAME:'Hardware Store ERP'},
     formatDate_:dhakaDate,
     requirePermission_:(_token,section,action)=>{
       if(section!=='pos'||action!=='view'||!authorized.posView){
