@@ -86,11 +86,111 @@ test('M04 Administrator session authorizes one CAS UPDATE, no separate JS permis
   }finally{x.close();}
 });
 
-test('custom-role staff is denied even if M04 role JSON grants settings.edit',async()=>{
+test('active custom role with literal settings.edit true can CAS an existing row inside the same SQL guard',async()=>{
   const x=fixture();try{
     const before=records(x);
+    // The frozen GAS uses Permissions for authority; Allowed Modules is UI metadata.
+    x.sqlite.exec("UPDATE auth_roles SET allowed_modules='' WHERE role_name='Cashier'");
+    assert.deepEqual(await x.adapter.updateExisting_(call({
+      token:C,newValue:'  Role-authorized shop  '
+    })),{updated:true});
+    const after=records(x);
+    assert.deepEqual(after[0],{...before[0],value:'Role-authorized shop'});
+    assert.deepEqual(after.slice(1),before.slice(1));
+    assert.equal(x.sqls.length,1,'no preflight role SELECT before Settings mutation');
+    assert.match(x.sqls[0],/auth_roles/);
+    assert.match(x.sqls[0],/role_auth_version/);
+    assert.match(x.sqls[0],/json_type/);
+  }finally{x.close();}
+});
+
+test('custom role must have active status and current role auth_version',async()=>{
+  for(const change of [
+    "UPDATE auth_roles SET status='Inactive' WHERE role_name='Cashier'",
+    "UPDATE auth_roles SET permissions_json='{\"settings\":{\"edit\":false}}' WHERE role_name='Cashier'",
+    "UPDATE auth_roles SET permissions_json='{\"settings\":{\"edit\":false}}' WHERE role_name='Cashier'; UPDATE auth_roles SET permissions_json='{\"settings\":{\"edit\":true}}' WHERE role_name='Cashier'"
+  ]){
+    const x=fixture();try{
+      const before=records(x);
+      x.sqlite.exec(change);
+      await assert.rejects(()=>x.adapter.updateExisting_(call({token:C})),/Denied|stale|conflict/i);
+      assert.deepEqual(records(x),before);
+    }finally{x.close();}
+  }
+});
+
+test('role permission downgrade then restore cannot resurrect old custom-role session',async()=>{
+  const x=fixture();try{
+    x.sqlite.exec(`UPDATE auth_roles SET permissions_json='{"settings":{"edit":false}}' WHERE role_name='Cashier'`);
+    x.sqlite.exec(`UPDATE auth_roles SET permissions_json='{"settings":{"edit":true}}' WHERE role_name='Cashier'`);
     await assert.rejects(()=>x.adapter.updateExisting_(call({token:C})),/Denied|stale|conflict/i);
-    assert.deepEqual(records(x),before);
+    const newEpoch=x.sqlite.prepare("SELECT auth_version FROM auth_roles WHERE role_name='Cashier'").get().auth_version;
+    // A new M04 session with the current role epoch can now be authorized.
+    x.sqlite.prepare(`INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,
+      role_auth_version,credential_version,created_at_ms,last_activity_at_ms,
+      expires_at_ms,revoked_at_ms) VALUES (?,?,1,?,1,?,?,?,NULL)`)
+      .run(digest('e'.repeat(64)),'STAFF-C',newEpoch,NOW-1000,NOW-1000,NOW+60000);
+    assert.deepEqual(await x.adapter.updateExisting_(call({
+      token:'e'.repeat(64),newValue:'Fresh role session'
+    })),{updated:true});
+  }finally{x.close();}
+});
+
+test('malformed, absent and truthy-but-not-boolean Settings grants never authorize a role',async()=>{
+  const malformed=[
+    '{bad json',
+    '[]','null',
+    '{"settings":{"view":true}}',
+    '{"settings":{"edit":false}}',
+    '{"settings":{"edit":1}}',
+    '{"settings":{"edit":"true"}}',
+    '{"settings":{"edit":[]}}',
+    '{"settings":"true"}'
+  ];
+  for(const permissions of malformed){
+    const x=fixture();try{
+      const before=records(x);
+      x.sqlite.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='Cashier'")
+        .run(permissions);
+      const roleVersion=x.sqlite.prepare("SELECT auth_version FROM auth_roles WHERE role_name='Cashier'").get().auth_version;
+      // Deliberately simulate a fresh matching role epoch, isolating JSON validation.
+      x.sqlite.prepare("UPDATE auth_sessions SET role_auth_version=? WHERE token_hash=?")
+        .run(roleVersion,digest(C));
+      await assert.rejects(()=>x.adapter.updateExisting_(call({token:C})),/Denied|stale|conflict/i,permissions);
+      assert.deepEqual(records(x),before);
+    }finally{x.close();}
+  }
+});
+
+test('a valid custom role cannot bypass expired, revoked or stale preimage boundaries',async()=>{
+  for(const patch of [
+    {nowMs:NOW+AUTH_POLICY.sessionIdleMs-60_000},
+    {nowMs:NOW+3_600_000},
+    {expectedValue:'Different'}
+  ]){
+    const x=fixture();try{
+      const before=records(x);
+      await assert.rejects(()=>x.adapter.updateExisting_(call({token:C,...patch})),/Denied|stale|conflict/i);
+      assert.deepEqual(records(x),before);
+    }finally{x.close();}
+  }
+  const x=fixture();try{
+    x.sqlite.prepare("UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?")
+      .run(NOW-1,digest(C));
+    await assert.rejects(()=>x.adapter.updateExisting_(call({token:C})),/Denied|stale|conflict/i);
+    assert.equal(records(x)[0].value,'Original Shop');
+  }finally{x.close();}
+});
+
+test('custom-role and Administrator concurrent CAS claims cannot both replace one preimage',async()=>{
+  const x=fixture();try{
+    const result=await Promise.allSettled([
+      x.adapter.updateExisting_(call({token:C,newValue:'Staff'})),
+      x.adapter.updateExisting_(call({token:A,newValue:'Administrator'}))
+    ]);
+    assert.equal(result.filter(r=>r.status==='fulfilled').length,1);
+    assert.equal(result.filter(r=>r.status==='rejected').length,1);
+    assert.equal(records(x)[0].value,result[0].status==='fulfilled'?'Staff':'Administrator');
   }finally{x.close();}
 });
 
@@ -226,7 +326,7 @@ test('missing D1, malformed return and uncertain DB errors never report success'
 test('unauthorized and stale updates have indistinguishable refusal text',async()=>{
   const x=fixture();try{
     let unauthorized,stale;
-    try{await x.adapter.updateExisting_(call({token:C}));}catch(e){unauthorized=e.message;}
+    try{await x.adapter.updateExisting_(call({token:'f'.repeat(64)}));}catch(e){unauthorized=e.message;}
     try{await x.adapter.updateExisting_(call({expectedValue:'Wrong'}));}catch(e){stale=e.message;}
     assert.equal(unauthorized,stale);
     assert.equal(records(x)[0].value,'Original Shop');
