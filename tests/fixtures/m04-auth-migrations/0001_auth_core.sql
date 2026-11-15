@@ -192,6 +192,16 @@ BEGIN
   SELECT RAISE(ABORT,'session fingerprint replacement forbidden');
 END;
 
+-- Session fingerprints are intentionally retained in this NONDEPLOYABLE
+-- test fixture. Physical deletion followed by reinsertion can bypass the
+-- existing UPDATE seal and INSERT OR REPLACE guard and revive a revoked bearer.
+-- A real expired-session purge/tombstone policy requires owner and M03 review;
+-- the safe local default is no physical deletion.
+CREATE TRIGGER trg_auth_session_no_delete BEFORE DELETE ON auth_sessions
+BEGIN
+  SELECT RAISE(ABORT,'session deletion forbidden pending retention approval');
+END;
+
 -- Once issued, the opaque session's identity, authority snapshots and
 -- absolute lifetime are fixed. An existing revocation marker is write-once:
 -- clearing it would resurrect a logged-out bearer. The first revocation and
