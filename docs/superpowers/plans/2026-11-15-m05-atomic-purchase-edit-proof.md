@@ -1,0 +1,21 @@
+# M05 atomic two-SKU purchase edit — isolated local D1 proof (2026-11-15)
+
+**Source baseline:** pinned `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, `legacy/source/PurchaseManagement.gs::updatePurchaseInternal_`, `legacy/source/StockLots.gs`, `legacy/source/SupplierSettlement.gs`. M05 follows merged PRs #108 (atomic purchase), #118 (source inventory checks), #128 (atomic deletion proof), `AGENTS.md`, `docs/WORKSTREAMS.md`, `docs/MIGRATION_PLAN.md`, `docs/M03_PARALLEL_READINESS.md` and ADR-007.
+
+## Small isolated objective and limits
+
+Prove one **SQL-atomic, exactly-once, read-only-to-production** correction of a previously posted two-product purchase. In test-only `m05ml_*` Workerd/D1 fixture, adjust quantity and price of existing physical SKUs (not new/removed lines); retain supplier, purchase date, paid amount, original tender and discount unchanged. Recompute exact integer-paisa subtotal/grand/due; update supplier's **gross payable** by due delta, per-SKU product and lot quantities plus unit cost, and append audit movements; retain original immutable purchase, cash/bank entry and purchase items under sidecar correction evidence. A test-only effective view shows corrected amount/lines. No RPC, shared `src/db`, migrations, original source, or deployed Worker changes.
+
+This is **not production purchase edit**: source supports adding/removing lines and tender/supplier changes, which are deliberately deferred to shared M03/M07 owner. Disallow edit after any active Purchase Return, allocated Supplier settlement, or earlier synthetic deletion; disallow a second distinct edit while retaining same-intent idempotent replay. Until timeline-adjusted running-ledger reconciliation exists, disallow a newer supplier purchase ledger entry that would need historical balance restatement. Do not net one Party's Supplier due with Customer receivable. No product cost update after original lot consumption. Decrease must not exceed own lot's remaining units or take product stock below zero; adding stock is allowed even from negative balances (where supported by product schema). All guards must run inside a single local D1 statement, not rely solely on JavaScript preflight.
+
+## Superpowers TDD acceptance sequence
+
+1. **Plan** committed before code.
+2. **RED tests first:** Extend only `tests/integration/m05-purchase-multiline-workerd.spec.mjs`, importing as-yet-missing `tests/fixtures/m05-purchase-edit-d1-schema.mjs` and `tests/fixtures/m05-purchase-edit-d1-contract.mjs`; verify actual GitHub M03 Workerd CI `ERR_MODULE_NOT_FOUND` failure.
+3. **GREEN:** implement two **test-only** fixtures: synthetic strict tables/trigger/active view and a minimally validated D1 claim/lookup caller. Hash canonical operation intent; same id and payload replay, changed actor/reason/amount conflicts, second operation declined, lost response yields NEEDS_REVIEW not a speculative replay. SQL input/lot/stock/supplier/session validations inside same trigger. Inject a failure after both lot updates and payable mutation to ensure full rollback.
+4. **Cases:** two SKU quantity increase/decrease + price correction; unchanged cash/bank/Customer AR; already consumed lot cost immutable; insufficient own-lot remaining stock; product shortage; active return/settlement; deleted purchase; session closed/unreviewed supplier link; stale change between preview and D1; duplicate/concurrent edits; malformed money and IDs; injected late-audit rollback; effective corrected rows without erasing source receipt. This proof requires real local Workerd/D1.
+5. GitHub Actions authoritative. Require all 8 workflows and exact head GREEN, and make PR ready only after result. Explicitly distinguish test fixture from functioning ERP; `PARALLEL-MODULE-READY=false`.
+
+## File ownership, read/write impact, rollback
+
+Exactly four additive paths: plan; two `tests/fixtures/m05-purchase-edit-d1-*.mjs`; one extension of `tests/integration/m05-purchase-multiline-workerd.spec.mjs`. Use `m05ml_edit_*` synthetic D1 sidecars, no real migrations or network/database credentials. M03 owns shared SQL/posting, M04 staff auth, M07 reversals; cross-module production changes require their reviewed interface and real D1 parity. Rollback: revert four test/docs paths. No staging or production D1 data rollback.
