@@ -1,3 +1,5 @@
+import {partyLegacyContracts} from './legacy-contracts.js';
+
 /**
  * M02-P offline, read-only identity import readback reconciliation.
  * Compares a reviewed proposal with supplied D1-shaped table snapshots.
@@ -65,10 +67,27 @@ const utcReviewEvidence=value=>{
 function validPlanLinkage(plan){
   const ids=new Set(plan.parties.map(p=>p.partyId));
   const anchors=new Map([...ids].map(id=>[id,0]));
+  const observedRoles=new Map([...ids].map(id=>[id,new Set()]));
+  const allowedRoles=new Map([...ids].map(id=>[id,new Set()]));
+  const requiredRoles=new Map([...ids].map(id=>[id,new Set()]));
+  const financeLinked=new Set();
   const proofsByParty=new Map(),ownersByApprovalRef=new Map();
-  for(const role of plan.roles)if(!ids.has(role.partyId))return false;
+  for(const role of plan.roles){
+    if(!ids.has(role.partyId))return false;
+    observedRoles.get(role.partyId).add(role.role);
+  }
   for(const link of plan.links){
-    if(!ids.has(link.partyId))return false;
+    if(!ids.has(link.partyId) ||
+       !Object.hasOwn(partyLegacyContracts,link.sourceGroup))return false;
+    const spec=partyLegacyContracts[link.sourceGroup];
+    for(const role of spec.roles){
+      requiredRoles.get(link.partyId).add(role);
+      allowedRoles.get(link.partyId).add(role);
+    }
+    if(link.sourceGroup==='FINANCE_PERSONS'){
+      financeLinked.add(link.partyId);
+      for(const role of spec.financeRoles)allowedRoles.get(link.partyId).add(role);
+    }
     if(link.linkBasis==='ORIGINAL_RECORD'){
       if(link.reviewedBy!==null || link.reviewedAt!==null ||
          link.approvalRef!==null)return false;
@@ -91,6 +110,15 @@ function validPlanLinkage(plan){
         ownersByApprovalRef.set(link.approvalRef,link.partyId);
       }
     }else return false;
+  }
+  for(const id of ids){
+    const actual=observedRoles.get(id);
+    if(!actual.size ||
+       [...actual].some(role=>!allowedRoles.get(id).has(role)) ||
+       [...requiredRoles.get(id)].some(role=>!actual.has(role)) ||
+       (financeLinked.has(id) &&
+        !partyLegacyContracts.FINANCE_PERSONS.financeRoles.some(role=>actual.has(role))))
+      return false;
   }
   return [...anchors.values()].every(count=>count===1) &&
     plan.summary.reviewedGroups===proofsByParty.size;
