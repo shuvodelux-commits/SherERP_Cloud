@@ -86,9 +86,9 @@ const impl=await import('../src/modules/dashboard-daily-activity.js').catch(e=>{
   if(e.code==='ERR_MODULE_NOT_FOUND')return null;
   throw e;
 });
-function project(snapshot,today='2026-11-15'){
+function project(snapshot,today){
   assert.equal(typeof impl?.projectDashboardDailyActivity,'function','M09 dashboard daily adapter not implemented');
-  return impl.projectDashboardDailyActivity(snapshot,today);
+  return impl.projectDashboardDailyActivity(snapshot,arguments.length<2?'2026-11-15':today);
 }
 function matchesSource(snapshot,today='2026-11-15'){
   const expected=sourceOracle(snapshot,today);
