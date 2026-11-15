@@ -147,3 +147,85 @@ test('delete assigned role denied, including when assigned user is inactive; una
   await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES ('M04-Unused','Active','{}')").run();
   await DB.prepare("DELETE FROM auth_roles WHERE role_name='M04-Unused'").run();
 });
+
+
+test('role auth epoch cannot roll back to revive a session after permission changes',async()=>{
+  const role='M04-Role-Epoch-Monotonic',phone='01720000011';
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active','{}')")
+    .bind(role).run();
+  await seed('USR-ROLE-EPOCH-MONOTONIC',phone,role);
+  const issued=await login(phone,BASE+70_000);
+  assert.equal(issued.body.authenticated,true);
+  const previous=(await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?')
+    .bind(role).first()).auth_version;
+  await DB.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name=?")
+    .bind('{"sales":{"view":false}}',role).run();
+  const latest=(await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?')
+    .bind(role).first()).auth_version;
+  assert.ok(latest>previous);
+  assert.deepEqual(await validate(issued.body.token,BASE+71_000),deny);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_roles SET auth_version=? WHERE role_name=?')
+      .bind(previous,role).run(),/rollback|monotonic|constraint/i);
+  } finally {
+    const current=await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?').bind(role).first();
+    if(current.auth_version<latest)
+      await DB.prepare('UPDATE auth_roles SET auth_version=? WHERE role_name=?').bind(latest,role).run();
+  }
+  assert.equal((await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?')
+    .bind(role).first()).auth_version,latest);
+  assert.deepEqual(await validate(issued.body.token,BASE+72_000),deny);
+});
+
+test('user auth epoch cannot be rolled back after disabling and restoring an account',async()=>{
+  const phone='01720000012',id='USR-AUTH-EPOCH-MONOTONIC';
+  await seed(id,phone);
+  const issued=await login(phone,BASE+80_000);
+  assert.equal(issued.body.authenticated,true);
+  const previous=(await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).auth_version;
+  await DB.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id=?").bind(id).run();
+  await DB.prepare("UPDATE auth_users SET status='Active' WHERE user_id=?").bind(id).run();
+  const latest=(await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).auth_version;
+  assert.ok(latest>previous);
+  assert.deepEqual(await validate(issued.body.token,BASE+81_000),deny);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_users SET auth_version=? WHERE user_id=?')
+      .bind(previous,id).run(),/rollback|monotonic|constraint/i);
+  } finally {
+    const current=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?').bind(id).first();
+    if(current.auth_version<latest)
+      await DB.prepare('UPDATE auth_users SET auth_version=? WHERE user_id=?').bind(latest,id).run();
+  }
+  assert.equal((await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).auth_version,latest);
+  assert.deepEqual(await validate(issued.body.token,BASE+82_000),deny);
+});
+
+test('credential version cannot decrease after a credential rotation',async()=>{
+  const phone='01720000013',id='USR-CREDENTIAL-EPOCH-MONOTONIC';
+  await seed(id,phone);
+  const issued=await login(phone,BASE+90_000);
+  assert.equal(issued.body.authenticated,true);
+  const previous=(await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).credential_version;
+  await DB.prepare('UPDATE auth_users SET credential_version=credential_version+1 WHERE user_id=?')
+    .bind(id).run();
+  const latest=(await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).credential_version;
+  assert.equal(latest,previous+1);
+  assert.deepEqual(await validate(issued.body.token,BASE+91_000),deny);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_users SET credential_version=? WHERE user_id=?')
+      .bind(previous,id).run(),/rollback|monotonic|constraint/i);
+  } finally {
+    const current=await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+      .bind(id).first();
+    if(current.credential_version<latest)
+      await DB.prepare('UPDATE auth_users SET credential_version=? WHERE user_id=?').bind(latest,id).run();
+  }
+  assert.equal((await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).credential_version,latest);
+  assert.deepEqual(await validate(issued.body.token,BASE+92_000),deny);
+});
