@@ -52,6 +52,10 @@ before(async()=>{
   await seed('USR-RPC-SOURCE','01710000105','SourceRole');
   await seed('USR-RPC-BAD-MANAGEMENT','01710000106','BadManagementDelete');
   await seed('USR-RPC-BAD-BACKDATE','01710000107','BadBackdate');
+  await db.prepare(`INSERT INTO auth_roles (role_name,status,permissions_json,allowed_modules)
+    VALUES ('GuardReader','Active',?,'roles')`)
+    .bind(JSON.stringify({roles:{view:true},users:{view:false}})).run();
+  await seed('USR-RPC-GUARD','01710000108','GuardReader');
 });
 after(async()=>{await harness.close();});
 
@@ -221,4 +225,62 @@ test('changing only role allowed_modules invalidates old sessions; no-op update 
   assert.deepEqual(await rpc('validateSession',[token],NOW+82000),{
     status:200,body:{success:false,message:'Session expired. Please sign in again.'}
   });
+});
+
+
+async function authorizeRead(methodName,token,nowMs=NOW+101_000,claims={}){
+  const response=await worker.fetch('http://m04.local/__m04_test__/authorize',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({methodName,token,nowMs,...claims}),
+  });
+  return {status:response.status,body:await response.json()};
+}
+
+test('internal D1 staff read gate derives users/roles view from the session, not browser claims',async()=>{
+  const usersSource=readFileSync(new URL('../../legacy/source/UserManagement.gs',import.meta.url),'utf8');
+  const rolesSource=readFileSync(new URL('../../legacy/source/RoleManagement.gs',import.meta.url),'utf8');
+  assert.match(usersSource,/function getUsersBootstrap\(token\)[\s\S]*?requirePermission_\(token, 'users', 'view'\)/);
+  assert.match(rolesSource,/function getRolesBootstrap\(token\)[\s\S]*?requirePermission_\(token, 'roles', 'view'\)/);
+  const a=await rpc('login',['01710000101',SECRET],NOW+100_000);
+  const staff=await rpc('login',['01710000108',SECRET],NOW+100_000);
+  assert.equal(a.body.success,true);
+  assert.equal(staff.body.success,true);
+  const adminToken=a.body.data.token;
+  const readerToken=staff.body.data.token;
+  const deny={status:200,body:{authorized:false}};
+  assert.deepEqual(await authorizeRead('getRolesBootstrap',readerToken),{
+    status:200,body:{authorized:true,actor:{id:'USR-RPC-GUARD',role:'GuardReader'}},
+  });
+  assert.deepEqual(await authorizeRead('getUsersBootstrap',readerToken),deny);
+  assert.deepEqual(await authorizeRead('getUsersBootstrap',readerToken,NOW+102_000,{
+    actor:{id:'USR-RPC-ADMIN',role:'Administrator'},
+    permissions:{users:{view:true}},allowedModules:['users'],
+  }),deny,'browser claims cannot escalate staff permissions');
+  assert.deepEqual(await authorizeRead('getUsersBootstrap',adminToken),{
+    status:200,body:{authorized:true,actor:{id:'USR-RPC-ADMIN',role:'Administrator'}},
+  });
+  for(const methodName of ['deleteUser','createUser','completeSale','getAppShellData',
+    'constructor','__proto__','getUsersBootstrap ']){
+    assert.deepEqual(await authorizeRead(methodName,adminToken),deny,methodName);
+  }
+  assert.deepEqual(await authorizeRead('getRolesBootstrap','invalid'),deny);
+  await rpc('logout',[adminToken],NOW+103_000);
+  assert.deepEqual(await authorizeRead('getRolesBootstrap',adminToken,NOW+104_000),deny);
+
+  // Stored role mutation revokes the already-issued authority snapshot,
+  // including if the old permission is later restored.
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='GuardReader'")
+    .bind(JSON.stringify({roles:{view:false},users:{view:false}})).run();
+  assert.deepEqual(await authorizeRead('getRolesBootstrap',readerToken,NOW+105_000),deny);
+  const downgraded=await rpc('login',['01710000108',SECRET],NOW+106_000);
+  assert.equal(downgraded.body.success,true);
+  assert.deepEqual(await authorizeRead('getRolesBootstrap',downgraded.body.data.token,NOW+107_000),deny);
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='GuardReader'")
+    .bind(JSON.stringify({roles:{view:true},users:{view:false}})).run();
+  assert.deepEqual(await authorizeRead('getRolesBootstrap',readerToken,NOW+108_000),deny);
+  const reissued=await rpc('login',['01710000108',SECRET],NOW+109_000);
+  assert.equal(reissued.body.success,true);
+  assert.equal((await authorizeRead('getRolesBootstrap',reissued.body.data.token,NOW+110_000)).body.authorized,true);
+  await db.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='USR-RPC-GUARD'").run();
+  assert.deepEqual(await authorizeRead('getRolesBootstrap',reissued.body.data.token,NOW+111_000),deny);
 });
