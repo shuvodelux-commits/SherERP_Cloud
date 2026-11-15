@@ -50,3 +50,64 @@ test('refuses missing master tables, unknown source groups and missing identifie
   const empty=base();empty.SETTINGS[0].Key='';
   assert.throws(()=>prepareCatalogImport(inventory,empty),/required|empty/i);
 });
+
+function catalogWithSecondRow(sheetKey, secondIndex) {
+  const rows=base();
+  const second={...rows[sheetKey][0],_rowIndex:secondIndex};
+  second[sheetKey==='PRODUCT_CATEGORIES'?'Category ID':'Unit ID']='NEW-000002';
+  rows[sheetKey].push(second);
+  return rows;
+}
+
+for (const sheetKey of ['PRODUCT_CATEGORIES','PRODUCT_UNITS']) {
+  test(sheetKey+' rejects missing physical source row positions',()=>{
+    const source=base();
+    delete source[sheetKey][0]._rowIndex;
+    assert.throws(()=>prepareCatalogImport(inventory,source),/source row|physical row|row index/i);
+  });
+
+  test(sheetKey+' rejects a first row other than physical row 2',()=>{
+    const source=base();
+    source[sheetKey][0]._rowIndex=3;
+    assert.throws(()=>prepareCatalogImport(inventory,source),/source row|physical row|row index/i);
+  });
+
+  test(sheetKey+' rejects a gap in original physical row sequence',()=>{
+    const source=catalogWithSecondRow(sheetKey,4);
+    assert.throws(()=>prepareCatalogImport(inventory,source),/source row|physical row|row index/i);
+  });
+
+  test(sheetKey+' rejects reordered physical source rows',()=>{
+    const source=catalogWithSecondRow(sheetKey,3);
+    source[sheetKey].reverse();
+    assert.throws(()=>prepareCatalogImport(inventory,source),/source row|physical row|row index/i);
+  });
+
+  test(sheetKey+' rejects more than 1000 catalog rows before D1 import',()=>{
+    const source=base();
+    source[sheetKey]=Array.from({length:1001},(_,i)=>({
+      ...source[sheetKey][0],
+      [sheetKey==='PRODUCT_CATEGORIES'?'Category ID':'Unit ID']:'SYN-'+String(i).padStart(6,'0'),
+      _rowIndex:i+2
+    }));
+    assert.throws(()=>prepareCatalogImport(inventory,source),/1000|limit|bounded/i);
+  });
+
+  test(sheetKey+' accepts exactly ordered and contiguous source positions',()=>{
+    const source=catalogWithSecondRow(sheetKey,3);
+    const result=prepareCatalogImport(inventory,source);
+    assert.deepEqual(result.tables[sheetKey].map(row=>row.legacy_sheet_row),[2,3]);
+  });
+
+  test(sheetKey+' allows zero rows without fabricated physical provenance',()=>{
+    const source=base();
+    source[sheetKey]=[];
+    assert.equal(prepareCatalogImport(inventory,source).tables[sheetKey].length,0);
+  });
+}
+
+test('Settings retention does not enforce M03 catalog-only physical row contract',()=>{
+  const source=base();
+  delete source.SETTINGS[0]._rowIndex;
+  assert.equal(prepareCatalogImport(inventory,source).tables.SETTINGS[0].key,'Phone 1');
+});
