@@ -1,0 +1,123 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "methodology": "Original AST dynamic RPC session variable and GAS first-formal position only; not authentication, not authorization, not an RPC allowlist or runtime proof",
+  "counts": {
+    "dynamicCallsites": 4,
+    "checkedTargets": 16
+  },
+  "callsites": [
+    {
+      "frontendFile": "products.html",
+      "line": 997,
+      "argumentSyntax": "fn",
+      "clientFirstArgument": "authToken",
+      "targets": [
+        {
+          "name": "addProductCategory",
+          "backendFile": "ProductSettings.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "addProductUnit",
+          "backendFile": "ProductSettings.gs",
+          "firstBackendParameter": "token"
+        }
+      ]
+    },
+    {
+      "frontendFile": "products.html",
+      "line": 1030,
+      "argumentSyntax": "fn",
+      "clientFirstArgument": "authToken",
+      "targets": [
+        {
+          "name": "setProductCategoryStatus",
+          "backendFile": "ProductSettings.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "setProductUnitStatus",
+          "backendFile": "ProductSettings.gs",
+          "firstBackendParameter": "token"
+        }
+      ]
+    },
+    {
+      "frontendFile": "vendors.html",
+      "line": 1062,
+      "argumentSyntax": "handlers.get",
+      "clientFirstArgument": "authToken",
+      "targets": [
+        {
+          "name": "getVendorIssueForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "getVendorPaymentForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "getVendorReceiptForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "getVendorReturnForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "getVendorReturnReceivedForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "getVendorSourcingForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        }
+      ]
+    },
+    {
+      "frontendFile": "vendors.html",
+      "line": 1153,
+      "argumentSyntax": "handlers.update",
+      "clientFirstArgument": "authToken",
+      "targets": [
+        {
+          "name": "updateVendorIssue",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "updateVendorPayment",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "updateVendorReceipt",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "updateVendorReturn",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "updateVendorReturnReceived",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        },
+        {
+          "name": "updateVendorSourcing",
+          "backendFile": "DeleteEngine.gs",
+          "firstBackendParameter": "token"
+        }
+      ]
+    }
+  ]
+}
