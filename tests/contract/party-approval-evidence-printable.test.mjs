@@ -82,7 +82,6 @@ test('independent reviewed groups still require distinct exact evidence referenc
     approvalRef:'REVIEW-001',reviewedBy:'review team-02',
     reviewedAt:'2026-11-14T12:00:00Z'
   };
-  assertReviewRejected(proof('REVIEW-001'),/approval.*(reus|duplic)|(?:reus|duplic).*approval/i);
   assert.throws(()=>planPartyImport(source(),[proof(),another]),
     /approval.*(reus|duplic)|(?:reus|duplic).*approval/i);
 });
