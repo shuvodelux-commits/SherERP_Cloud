@@ -210,5 +210,6 @@ test('staff preflight is internal: RPC and Worker remain fail closed',async()=>{
     method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},
     body:JSON.stringify({fnName:'login',args:['synthetic','synthetic']}),
   }),{});
-  assert.equal(response.status,501);
+  // The public Worker explicitly reports unconfigured login as HTTP 503.
+  assert.equal(response.status,503);
 });
