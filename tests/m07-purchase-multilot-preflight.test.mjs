@@ -100,3 +100,21 @@ test('reject ambiguous duplicate Lot IDs and unsafe or malformed input',()=>{
   assert.throws(()=>planPurchaseReturnLots({...valid,lots:[{'Lot ID':'L',get ['Remaining Quantity'](){throw Error('getter');}}]}),/Invalid/);
   assert.throws(()=>planPurchaseReturnLots({...valid,lots:Promise.resolve([])}),/Invalid/);
 });
+
+
+test('refuse unnormalized or calendar-invalid lot dates before FIFO selection',()=>{
+  const sample={purchaseId:'P-1',productId:'PIPE',qty:1,product,
+    lots:[lot('L-1','P-1','2026-11-10',2,1)]};
+  assert.throws(()=>planPurchaseReturnLots({...sample,lots:[
+    {...sample.lots[0],'Purchase Date':new Date('2026-11-10T00:00:00Z')}]})
+    ,/Invalid/);
+  assert.throws(()=>planPurchaseReturnLots({...sample,lots:[
+    {...sample.lots[0],'Purchase Date':'10/11/2026'}]})
+    ,/Invalid/);
+  assert.throws(()=>planPurchaseReturnLots({...sample,lots:[
+    {...sample.lots[0],'Purchase Date':'2026-02-30'}]})
+    ,/Invalid/);
+  assert.throws(()=>planPurchaseReturnLots({...sample,lots:[
+    {...sample.lots[0],'Created At':new Date('2026-11-10T10:00:00Z')}]})
+    ,/Invalid/);
+});
