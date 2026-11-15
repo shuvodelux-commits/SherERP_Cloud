@@ -422,3 +422,33 @@ test('draft version update after candidate preparation is refused by SQL CAS and
   assert.equal(await count('m06_draft_audit'),0);
   assert.equal((await one("SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,2);
 });
+
+
+// RED: once a posted invoice is committed, every source-linked child row must
+// be write-once; native corrections must create separate audited reversal rows.
+test('posted sale child rows reject SQL UPDATE and DELETE without changing invoice or money',async()=>{
+  const posted=await posting().post(input('OP-CHILD-IMMUT1',{
+    customerId:'CUS-1',payments:[
+      account('B1','40','Bank'),{id:'C1',method:'Cash',amount:'10'}
+    ]
+  }));
+  assert.equal(posted.status,'COMMITTED');
+  const immutableTables=[
+    'm06_sale_items','m06_stock_movements','m06_payment_children',
+    'm06_cash_book','m06_bank_book','m06_customer_ledger'
+  ];
+  const saved=await snapshot();
+  for(const table of immutableTables){
+    const row=await one(`SELECT rowid AS id FROM ${table} LIMIT 1`);
+    assert.ok(row,`Expected posted row in ${table}`);
+    await assert.rejects(
+      ()=>DB.prepare(`UPDATE ${table} SET tenant_id=tenant_id WHERE rowid=?`).bind(row.id).run(),
+      /m06-immutable-child/,`${table}: UPDATE must fail closed`
+    );
+    await assert.rejects(
+      ()=>DB.prepare(`DELETE FROM ${table} WHERE rowid=?`).bind(row.id).run(),
+      /m06-immutable-child/,`${table}: DELETE must fail closed`
+    );
+  }
+  assert.deepEqual(await snapshot(),saved);
+});
