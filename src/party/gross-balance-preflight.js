@@ -27,7 +27,7 @@ const signedFinanceBuckets=Object.freeze({
 });
 const sourceKey=(group,id)=>JSON.stringify([group,id]);
 const string=(value)=>typeof value==='string'?value:String(value??'');
-const deleted=row=>row?.['Is Deleted']===true || string(row?.['Is Deleted']).toUpperCase()==='TRUE';
+const deleted=row=>row?.['Is Deleted']===true || string(row?.['Is Deleted']).trim().toUpperCase()==='TRUE';
 
 function toMinorUnits(value){
   if(value===undefined || value===null || value==='')return 0;
