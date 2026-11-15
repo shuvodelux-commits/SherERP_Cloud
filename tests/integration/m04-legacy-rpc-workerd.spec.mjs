@@ -356,3 +356,67 @@ test('read-only partial staff directory uses current D1 users.view and never pro
   await db.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='USR-RPC-DIRECTORY'").run();
   assert.deepEqual(await staffDirectory(restored.body.data.token,NOW+130_000),denied);
 });
+
+async function roleDirectory(token,nowMs=NOW+141_000,claims={}){
+  const response=await worker.fetch('http://m04.local/__m04_test__/role-directory',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token,nowMs,...claims}),
+  });
+  return {status:response.status,body:await response.json()};
+}
+
+test('partial roles directory honors stored D1 roles.view, revocation and exact safe projection',async()=>{
+  // Frozen original guards the full ROLES bootstrap with roles.view. Current
+  // test fixture lacks Role ID and Created At, so this read is PARTIAL only.
+  const source=readFileSync(new URL('../../legacy/source/RoleManagement.gs',import.meta.url),'utf8');
+  assert.match(source,/function getRolesBootstrap\(token\)[\s\S]*?requirePermission_\(token, 'roles', 'view'\)/);
+  const admin=await rpc('login',['01710000101',SECRET],NOW+140_000);
+  const viewer=await rpc('login',['01710000105',SECRET],NOW+140_000);
+  const cashier=await rpc('login',['01710000102',SECRET],NOW+140_000);
+  assert.equal(admin.body.success,true);
+  assert.equal(viewer.body.success,true);
+  assert.equal(cashier.body.success,true);
+  const denied={status:200,body:{authorized:false}};
+  assert.deepEqual(await roleDirectory(cashier.body.data.token),denied);
+  assert.deepEqual(await roleDirectory(cashier.body.data.token,NOW+142_000,{
+    actor:{id:'USR-RPC-ADMIN',role:'Administrator'},
+    permissions:{roles:{view:true}},allowedModules:['roles'],
+  }),denied);
+
+  await db.prepare("INSERT INTO auth_roles (role_name,status) VALUES ('InactiveListingTest','Inactive')").run();
+  const authorized=await roleDirectory(viewer.body.data.token);
+  assert.equal(authorized.status,200);
+  assert.deepEqual(Object.keys(authorized.body),['authorized','partial','roles']);
+  assert.equal(authorized.body.authorized,true);
+  assert.equal(authorized.body.partial,true,'missing source Role ID/Created At and UI options');
+  assert.deepEqual(authorized.body.roles.map(x=>x.name),
+    [...authorized.body.roles.map(x=>x.name)].sort());
+  assert.deepEqual(authorized.body.roles.find(x=>x.name==='InactiveListingTest'),
+    {name:'InactiveListingTest',status:'Inactive'});
+  assert.deepEqual(authorized.body.roles.find(x=>x.name==='Corrupt'),
+    {name:'Corrupt',status:'Active'},'listing does not reflect raw malformed Permissions JSON');
+  assert.equal(authorized.body.roles.every(x=>
+    Object.keys(x).join(',')==='name,status'),true);
+  assert.equal(authorized.body.roles.some(x=>x.name==='Administrator'),false,
+    'built-in Administrator is not an auth_roles record');
+  assert.deepEqual(await roleDirectory(admin.body.data.token),authorized);
+  const serialized=JSON.stringify(authorized.body);
+  for(const privateValue of [
+    SECRET,'permissions_json','allowed_modules','auth_version','password_hash',
+    'legacy_hash','token_hash','role_auth_version','credential_version',
+  ])assert.equal(serialized.includes(privateValue),false,privateValue);
+  assert.deepEqual(await roleDirectory('not-a-valid-session'),denied);
+  assert.deepEqual(await roleDirectory(viewer.body.data.token,NOW+140_000+31*60*1000),denied,
+    'expired idle window denies even a formerly valid role viewer');
+
+  // Disable / reactivate a role without resurrecting the old authority.
+  await db.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='SourceRole'").run();
+  assert.deepEqual(await roleDirectory(viewer.body.data.token,NOW+143_000),denied);
+  await db.prepare("UPDATE auth_roles SET status='Active' WHERE role_name='SourceRole'").run();
+  assert.deepEqual(await roleDirectory(viewer.body.data.token,NOW+144_000),denied);
+  const fresh=await rpc('login',['01710000105',SECRET],NOW+145_000);
+  assert.equal(fresh.body.success,true);
+  assert.equal((await roleDirectory(fresh.body.data.token,NOW+146_000)).body.authorized,true);
+  await rpc('logout',[fresh.body.data.token],NOW+147_000);
+  assert.deepEqual(await roleDirectory(fresh.body.data.token,NOW+148_000),denied);
+});
