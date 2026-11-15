@@ -97,3 +97,53 @@ test('role permission update after password verification but before SQL insert d
   assert.deepEqual(output,{authenticated:false});
   assert.equal((await DB.prepare("SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id='USR-VERSION-CASHIER' AND created_at_ms=?").bind(BASE+40_000).first()).n,0);
 });
+
+
+test('REPLACE may not reset a role authority epoch while its staff session is active',async()=>{
+  const role='M04-Replace',phone='01720000009';
+  const old='{"sales":{"view":true}}';
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active',?)")
+    .bind(role,old).run();
+  await seed('USR-ROLE-REPLACE',phone,role);
+  const signed=await login(phone,BASE+50_000);
+  assert.equal(signed.body.authenticated,true);
+  const before=await DB.prepare("SELECT auth_version,permissions_json FROM auth_roles WHERE role_name=?")
+    .bind(role).first();
+  try {
+    await assert.rejects(
+      ()=>DB.prepare("INSERT OR REPLACE INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active',?)")
+        .bind(role,'{"sales":{"view":false}}').run(),
+      /role.*replace|constraint|unique/i
+    );
+  } finally {
+    const current=await DB.prepare("SELECT permissions_json FROM auth_roles WHERE role_name=?").bind(role).first();
+    if(current?.permissions_json!==old)
+      await DB.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name=?").bind(old,role).run();
+  }
+  assert.deepEqual(await DB.prepare("SELECT auth_version,permissions_json FROM auth_roles WHERE role_name=?")
+    .bind(role).first(),before);
+  assert.equal((await validate(signed.body.token,BASE+51_000)).body.authenticated,true);
+});
+
+test('delete assigned role denied, including when assigned user is inactive; unassigned role can delete',async()=>{
+  const role='M04-Assigned',phone='01720000010';
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active','{}')")
+    .bind(role).run();
+  await seed('USR-ROLE-ASSIGNED',phone,role);
+  const signed=await login(phone,BASE+60_000);
+  assert.equal(signed.body.authenticated,true);
+  try {
+    await assert.rejects(()=>DB.prepare("DELETE FROM auth_roles WHERE role_name=?")
+      .bind(role).run(),/assigned|role.*delete|constraint/i);
+  } finally {
+    const exists=await DB.prepare("SELECT role_name FROM auth_roles WHERE role_name=?").bind(role).first();
+    if(!exists) await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active','{}')")
+      .bind(role).run();
+  }
+  assert.equal((await validate(signed.body.token,BASE+61_000)).body.authenticated,true);
+  await DB.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='USR-ROLE-ASSIGNED'").run();
+  await assert.rejects(()=>DB.prepare("DELETE FROM auth_roles WHERE role_name=?")
+    .bind(role).run(),/assigned|role.*delete|constraint/i);
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES ('M04-Unused','Active','{}')").run();
+  await DB.prepare("DELETE FROM auth_roles WHERE role_name='M04-Unused'").run();
+});
