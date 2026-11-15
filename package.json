@@ -17,6 +17,7 @@
     "test:m01:browser": "node --test qa/m01-browser.spec.mjs"
   },
   "devDependencies": {
+    "acorn": "8.19.0",
     "playwright": "1.65.1"
   }
 }

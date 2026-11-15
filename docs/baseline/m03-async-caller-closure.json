@@ -1,0 +1,6376 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "sourceFiles": 47,
+  "sourceDigestSha256": "db7632129785f081578ff221fddf3a3405849c72a15a49d7a229b9cdb391b295",
+  "limitations": "Top-level named GAS function call closure only; not complete async safety proof, dynamic/method dispatch, closure/callback timing, local shadowing and runtime callsites require review, and this is not a SQL transaction guarantee",
+  "seeds": {
+    "read": [
+      "findFirstRow_",
+      "findRow_",
+      "findRowIndex_",
+      "findRows_",
+      "getAllRows_",
+      "getSheetHeaders_",
+      "getSheet_"
+    ],
+    "write": [
+      "appendRow_",
+      "appendRows_",
+      "deleteRow_",
+      "updateRowFields_"
+    ]
+  },
+  "counts": {
+    "totalFunctions": 614,
+    "directReadFunctions": 242,
+    "directWriteFunctions": 125,
+    "transitiveReadFunctions": 389,
+    "transitiveWriteFunctions": 285,
+    "impactedFunctions": 394
+  },
+  "affected": [
+    {
+      "name": "activeBankEntryForReference_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "activeBankEntryForReference_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "activePurchaseReturnItems_",
+      "file": "Utils.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "activePurchaseReturnItems_",
+        "activeReturnChildRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "activeReturnChildRows_",
+      "file": "Utils.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "activeReturnChildRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "activeRows_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "activeSalesReturnItems_",
+      "file": "Utils.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "activeSalesReturnItems_",
+        "activeReturnChildRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "addAdjustmentLot_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "addAdjustmentLot_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addAdjustmentLot_",
+        "createLot_",
+        "createLotWithRow_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addBankAccount",
+      "file": "BankAccounts.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addBankAccount",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addBankAccount",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addBankBookEntry_",
+      "file": "BankBook.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "addBankBookEntry_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "addBankBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addBankManualEntry",
+      "file": "BankLedger.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "addBankManualEntry",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addBankManualEntry",
+        "addBankBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addBundleProduct",
+      "file": "Bundles.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_"
+      ],
+      "readPath": [
+        "addBundleProduct",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addBundleProduct",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addCashBookEntry_",
+      "file": "CashBook.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addCashBookEntry_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "addCashBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addCustomerChecked",
+      "file": "Customer.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "addCustomerChecked",
+        "addCustomerLocked_",
+        "addCustomer_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addCustomerChecked",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addCustomerLocked_",
+      "file": "Customer.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "addCustomerLocked_",
+        "addCustomer_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addCustomerLocked_",
+        "addCustomer_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addCustomer_",
+      "file": "Customer.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addCustomer_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addCustomer_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addExpense",
+      "file": "Expense.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addExpense",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addExpense",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addExpenseCategory",
+      "file": "ExpenseSettings.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addExpenseCategory",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addExpenseCategory",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addExpensePayee",
+      "file": "ExpenseSettings.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addExpensePayee",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addExpensePayee",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addFinancePerson",
+      "file": "FinanceModule.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addFinancePerson",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addFinancePerson",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addFinanceTransaction",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addFinanceTransaction",
+        "findFinancePerson_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addFinanceTransaction",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addProduct",
+      "file": "Products.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addProduct",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addProduct",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addProductCategory",
+      "file": "ProductSettings.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "deleteRow_"
+      ],
+      "readPath": [
+        "addProductCategory",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "addProductCategory",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addProductUnit",
+      "file": "ProductSettings.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "deleteRow_"
+      ],
+      "readPath": [
+        "addProductUnit",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "addProductUnit",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addRole",
+      "file": "RoleManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addRole",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addRole",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addSupplier",
+      "file": "Suppliers.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addSupplier",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addSupplier",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "addVendor",
+      "file": "Vendors.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "addVendor",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "addVendor",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "adjustCustomerDue_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "adjustCustomerDue_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "adjustCustomerDue_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "adjustProductStock_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "adjustProductStock_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "adjustProductStock_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "adjustStock",
+      "file": "Products.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "adjustStock",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "adjustStock",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "adjustSupplierDue_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "adjustSupplierDue_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "adjustSupplierDue_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "adjustVendorDue_",
+      "file": "Vendors.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "adjustVendorDue_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "adjustVendorDue_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "adjustVendorReceivable_",
+      "file": "Vendors.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "adjustVendorReceivable_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "adjustVendorReceivable_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "appendSalesDraftAudit_",
+      "file": "DraftSales.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "appendSalesDraftAudit_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "appendSalesDraftAudit_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "applyBundleInvoiceEdit_",
+      "file": "Bundles.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "applyBundleInvoiceEdit_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "applyBundleInvoiceEdit_",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "applyOpeningBalanceCorrectionPlan_",
+      "file": "OpeningBalance.gs",
+      "directReads": [
+        "getSheetHeaders_",
+        "getSheet_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "applyOpeningBalanceCorrectionPlan_",
+        "getSheetHeaders_"
+      ],
+      "writePath": [
+        "applyOpeningBalanceCorrectionPlan_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "applyPreparedSalesReturnStockForCorrection_",
+      "file": "SalesReturn.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "applyPreparedSalesReturnStockForCorrection_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "applyPreparedSalesReturnStockForCorrection_",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "applyPurchaseReturnLotReduction_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [],
+      "writePath": [
+        "applyPurchaseReturnLotReduction_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "applySaleReturnRestorationPlan_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "applySaleReturnRestorationPlan_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "applySaleReturnRestorationPlan_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "applySalesReturnStockUndo_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "applySalesReturnStockUndo_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "applySalesReturnStockUndo_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "applyStockConsumption_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "applyStockConsumption_",
+        "createLotWithRow_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "applyStockConsumption_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "assertCustomerSalesIntegrity_",
+      "file": "Utils.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "assertUniqueLegacyPaymentMovement_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "assertUniqueLegacyPaymentMovement_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "authorizePostedDraftRetry_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "authorizePostedDraftRetry_",
+        "findFirstRow_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "backfillBankOpeningEntries_",
+      "file": "BankLedger.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "backfillBankOpeningEntries_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "backfillBankOpeningEntries_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "buildAuthPayload_",
+      "file": "Auth.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "buildAuthPayload_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "buildInvoicePayload_",
+      "file": "Invoice.gs",
+      "directReads": [
+        "findRows_",
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "buildInvoicePayload_",
+        "findRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "buildInvoiceShopPayload_",
+      "file": "Invoice.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "buildInvoiceShopPayload_",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "buildSalesDraftPreviewPayload_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "buildSalesDraftPreviewPayload_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "buildSalesInvoiceProfitMetrics_",
+      "file": "SalesManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "buildSalesInvoiceProfitMetrics_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "bumpAuthCacheGeneration_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [],
+      "writePath": [
+        "bumpAuthCacheGeneration_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "canViewInvoiceProfit_",
+      "file": "SalesManagement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "canViewInvoiceProfit_",
+        "hasPermission_",
+        "getUserPermissions_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "cancelExpense",
+      "file": "Expense.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "cancelExpense",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "cancelExpense",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "cashReconciliationRetireLegacyAdjustment_",
+      "file": "CashReconciliation.gs",
+      "directReads": [],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [],
+      "writePath": [
+        "cashReconciliationRetireLegacyAdjustment_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "cashSessionSummaryFromRows_",
+      "file": "CashSession.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "cashSessionSummaryFromRows_",
+        "getCashMismatch_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "clearAllData_",
+      "file": "SeedData.gs",
+      "directReads": [
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "clearAllData_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "clearAllData_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "closeCashSession",
+      "file": "CashSession.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "closeCashSession",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "closeCashSession",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "commitInternalStockLotCostCorrections_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "commitInternalStockLotCostCorrections_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "commitInternalStockLotCostCorrections_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "commitPreparedSalesReturn_",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "commitPreparedSalesReturn_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "commitPreparedSalesReturn_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "completePurchaseReturn",
+      "file": "PurchaseReturn.gs",
+      "directReads": [
+        "findFirstRow_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "completePurchaseReturn",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "completePurchaseReturn",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "completeReturn",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "completeReturn",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "completeReturn",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "completeReturnBatch",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "completeReturnBatch",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "completeReturnBatch",
+        "commitPreparedSalesReturn_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "completeSale",
+      "file": "Sales.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "completeSale",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "completeSale",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "computeProfit_",
+      "file": "Reports.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "computeProfit_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "computeSettlementDiscountProfit_",
+      "file": "SettlementDiscount.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "computeSettlementDiscountProfit_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "consumeStockFIFO_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "consumeStockFIFO_",
+        "planStockConsumption_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "consumeStockFIFO_",
+        "applyStockConsumption_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "correctInternalStockLotCost",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "correctInternalStockLotCost",
+        "correctInternalStockLotCosts",
+        "loadInternalStockLotCostCorrectionContext_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "correctInternalStockLotCost",
+        "correctInternalStockLotCosts",
+        "commitInternalStockLotCostCorrections_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "correctInternalStockLotCosts",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "correctInternalStockLotCosts",
+        "loadInternalStockLotCostCorrectionContext_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "correctInternalStockLotCosts",
+        "commitInternalStockLotCostCorrections_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "countActiveAdmins_",
+      "file": "Auth.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "countActiveAdmins_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "counterCapabilities_",
+      "file": "Counter.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "counterCapabilities_",
+        "hasPermission_",
+        "getUserPermissions_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "counterCustomers_",
+      "file": "Counter.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "counterCustomers_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "counterExpenseCategories_",
+      "file": "Counter.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "counterExpenseCategories_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "counterSuppliers_",
+      "file": "Counter.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "counterSuppliers_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "createFirstAdmin_",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "createFirstAdmin_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "createFirstAdmin_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "createLotWithRow_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "createLotWithRow_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "createLotWithRow_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "createLot_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "createLot_",
+        "createLotWithRow_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "createLot_",
+        "createLotWithRow_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "createPurchase",
+      "file": "Purchase.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "createPurchase",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "createPurchase",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "createUser",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "createUser",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "createUser",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "customerCreditRefundPreview_",
+      "file": "CustomerSettlement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "customerCreditRefundPreview_",
+        "customerSettlementState_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "customerInvoiceCashCollected_",
+      "file": "CustomerSettlement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "customerInvoiceCashCollected_",
+        "customerSaleCheckoutCashCollected_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "customerInvoiceSettlementSnapshot_",
+      "file": "CustomerSettlement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "customerInvoiceSettlementSnapshot_",
+        "customerSettlementState_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "customerPaymentPreview_",
+      "file": "CustomerSettlement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "customerPaymentPreview_",
+        "customerSettlementState_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "customerSaleCheckoutCashCollected_",
+      "file": "CustomerSettlement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "customerSaleCheckoutCashCollected_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "customerSettlementState_",
+      "file": "CustomerSettlement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "customerSettlementState_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "dashboardTodayNetSales_",
+      "file": "Dashboard.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "dashboardTodayNetSales_",
+        "activeSalesReturnItems_",
+        "activeReturnChildRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "deleteBankTransaction",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "deleteBankTransaction",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteBankTransaction",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "deleteCustomer",
+      "file": "Customer.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "deleteRow_"
+      ],
+      "readPath": [
+        "deleteCustomer",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "deleteCustomer",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "deleteCustomerPayment",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteCustomerPayment",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteCustomerPayment",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteDayBookEntry",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "deleteDayBookEntry",
+        "deleteBankTransaction",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteDayBookEntry",
+        "deleteBankTransaction",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "deleteExpense",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteExpense",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteExpense",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteExpensePayee",
+      "file": "ExpenseSettings.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteExpensePayee",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "deleteExpensePayee",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteFinanceTransaction",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteFinanceTransaction",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteFinanceTransaction",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteProduct",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteProduct",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteProduct",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deletePurchase",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "findFirstRow_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "deletePurchase",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "deletePurchase",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "deleteRole",
+      "file": "RoleManagement.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "deleteRow_"
+      ],
+      "readPath": [
+        "deleteRole",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "deleteRole",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "deleteSalesDraft",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [
+        "deleteRow_"
+      ],
+      "readPath": [
+        "deleteSalesDraft",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "deleteSalesDraft",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "deleteSalesInvoice",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "deleteSalesInvoice",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "deleteSalesInvoice",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteSalesReturn",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "deleteSalesReturn",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "deleteSalesReturn",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteSupplier",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteSupplier",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteSupplier",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteSupplierPayment",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteSupplierPayment",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteSupplierPayment",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteUser",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "deleteRow_"
+      ],
+      "readPath": [
+        "deleteUser",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "deleteUser",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "deleteVendor",
+      "file": "Vendors.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendor",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "deleteVendor",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteVendorIssue",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendorIssue",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteVendorIssue",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteVendorIssueMemo",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendorIssueMemo",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteVendorIssueMemo",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteVendorPayment",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendorPayment",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteVendorPayment",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteVendorReceipt",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendorReceipt",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteVendorReceipt",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteVendorReturn",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendorReturn",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteVendorReturn",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteVendorReturnReceived",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendorReturnReceived",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteVendorReturnReceived",
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "deleteVendorSourcing",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "deleteVendorSourcing",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "deleteVendorSourcing",
+        "adjustVendorDue_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "doGet",
+      "file": "Code.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "doGet",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "estimatePosInvoiceProfit_",
+      "file": "Sales.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "estimatePosInvoiceProfit_",
+        "planSaleVendorConsumption_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "findFinancePerson_",
+      "file": "FinanceModule.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "findFinancePerson_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "findInvoice",
+      "file": "Invoice.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "findInvoice",
+        "buildInvoicePayload_",
+        "findRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "findPostedDraftAudit_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "findPostedDraftAudit_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "findPostedInvoiceByDraftId_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "findPostedInvoiceByDraftId_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "findSalesByPhone",
+      "file": "Invoice.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "findSalesByPhone",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "findSalesByPhone",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "findUniqueSalesRow_",
+      "file": "Utils.gs",
+      "directReads": [
+        "findRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "findUniqueSalesRow_",
+        "findRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "findVendor_",
+      "file": "Vendors.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "findVendor_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "generateDraftInvoiceNo_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "generateDraftInvoiceNo_",
+        "getSheet_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "generateId_",
+      "file": "Utils.gs",
+      "directReads": [
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getActiveBankAccountsForUI_",
+      "file": "Utils.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getActiveBankAccountsForUI_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getActiveCashSession_",
+      "file": "CashSession.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getActiveCashSession_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getActiveCashSession_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getActiveExpensePayeesForUI_",
+      "file": "ExpenseSettings.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getActiveExpensePayeesForUI_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getActiveFinancePersonsForUI_",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getActiveFinancePersonsForUI_",
+        "getAllFinancePersonsForUI_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getActiveVendorsForUI_",
+      "file": "Vendors.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getActiveVendorsForUI_",
+        "getAllVendorsForUI_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getAllFinancePersonsForUI_",
+      "file": "FinanceModule.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getAllFinancePersonsForUI_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getAllVendorsForUI_",
+      "file": "Vendors.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getAllVendorsForUI_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getAppShellData",
+      "file": "UI.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getAppShellData",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getAppShellData",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getBalanceSheetReport",
+      "file": "Reports.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getBalanceSheetReport",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getBalanceSheetReport",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getBankAccountsBootstrap",
+      "file": "BankAccounts.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getBankAccountsBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getBankAccountsBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getBankBalance_",
+      "file": "BankBook.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getBankBalance_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getBankLedger",
+      "file": "BankLedger.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getBankLedger",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getBankLedger",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getBankLedgerBootstrap",
+      "file": "BankLedger.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getBankLedgerBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getBankLedgerBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getBankTransferHistory",
+      "file": "BankBook.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getBankTransferHistory",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getBankTransferHistory",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCashBalance_",
+      "file": "CashBook.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCashBalance_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getCashBankReport",
+      "file": "Reports.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCashBankReport",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCashBankReport",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCashMismatch_",
+      "file": "CashSession.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCashMismatch_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getCashReconciliationCandidates",
+      "file": "CashReconciliation.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCashReconciliationCandidates",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCashReconciliationCandidates",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCashReconciliationRows",
+      "file": "CashReconciliation.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCashReconciliationRows",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCashReconciliationRows",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCashSessionSummary",
+      "file": "CashSession.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCashSessionSummary",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCashSessionSummary",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCounterBootstrap",
+      "file": "Counter.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCounterBootstrap",
+        "counterCustomers_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCounterBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCounterCustomers",
+      "file": "Counter.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCounterCustomers",
+        "counterCustomers_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCounterCustomers",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCounterSuppliers",
+      "file": "Counter.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCounterSuppliers",
+        "counterSuppliers_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCounterSuppliers",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomerDetail",
+      "file": "Customer.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCustomerDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomerDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomerInvoicesForReturn",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCustomerInvoicesForReturn",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomerInvoicesForReturn",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomerLedgerPage",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCustomerLedgerPage",
+        "getPartyLedgerPage_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomerLedgerPage",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomerLedgerStatement",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCustomerLedgerStatement",
+        "getPartyLedgerStatement_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomerLedgerStatement",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomerLedgerWorkspaceBootstrap",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCustomerLedgerWorkspaceBootstrap",
+        "getPartyLedgerWorkspaceBootstrap_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomerLedgerWorkspaceBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomerPaymentContext",
+      "file": "CustomerSettlement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCustomerPaymentContext",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomerPaymentContext",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomerPaymentForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getCustomerPaymentForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomerPaymentForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getCustomersBootstrap",
+      "file": "Customer.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getCustomersBootstrap",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getCustomersBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getDashboardStats",
+      "file": "Dashboard.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getDashboardStats",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getDashboardStats",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getDayBookBootstrap",
+      "file": "DayBook.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getDayBookBootstrap",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getDayBookBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getDayBookTransactions",
+      "file": "DayBook.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getDayBookTransactions",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getDayBookTransactions",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getDeletableModules",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getDeletableModules",
+        "requireAdmin_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getDeletableModules",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getDeletedRecords",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getDeletedRecords",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getDeletedRecords",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getExpenseBootstrap",
+      "file": "Expense.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getExpenseBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getExpenseBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getExpenseDashboardStats",
+      "file": "Expense.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getExpenseDashboardStats",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getExpenseDashboardStats",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getExpenseDetail",
+      "file": "Expense.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getExpenseDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getExpenseDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getExpenseLedger",
+      "file": "Expense.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getExpenseLedger",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getExpenseLedger",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getExpenseList",
+      "file": "Expense.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getExpenseList",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getExpenseList",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getExpensePayeesForUI_",
+      "file": "Expense.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getExpensePayeesForUI_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getExpensePayeesManagement",
+      "file": "ExpenseSettings.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getExpensePayeesManagement",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getExpensePayeesManagement",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getExpenseSettingsBootstrap",
+      "file": "ExpenseSettings.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getExpenseSettingsBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getExpenseSettingsBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getFinanceBootstrap",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getFinanceBootstrap",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getFinanceBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getFinanceLedger",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getFinanceLedger",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getFinanceLedger",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getFinanceTransactionForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getFinanceTransactionForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getFinanceTransactionForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getInventoryValueAtCost_",
+      "file": "Reports.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getInventoryValueAtCost_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getInvoiceDesignBootstrap",
+      "file": "Settings.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getInvoiceDesignBootstrap",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getInvoiceDesignBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getInvoiceForReturn",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getInvoiceForReturn",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getInvoiceForReturn",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getInvoicePaymentContext",
+      "file": "CustomerSettlement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getInvoicePaymentContext",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getInvoicePaymentContext",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getOrCreateInvoiceAssetsFolder_",
+      "file": "Settings.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getOrCreateInvoiceAssetsFolder_",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getOrCreateInvoiceAssetsFolder_",
+        "setSetting_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getOutstandingLoan_",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getOutstandingLoan_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getOwnerCapital_",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getOwnerCapital_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getPartyLedgerPage_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getPartyLedgerPage_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getPartyLedgerStatement_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getPartyLedgerStatement_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getPartyLedgerWorkspaceBootstrap_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getPartyLedgerWorkspaceBootstrap_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getPosBootstrap",
+      "file": "Sales.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPosBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getPosBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getProductLots",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getProductLots",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getProductLots",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getProductsBootstrap",
+      "file": "Products.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getProductsBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getProductsBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getProfitReport",
+      "file": "Reports.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getProfitReport",
+        "computeProfit_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getProfitReport",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseBootstrap",
+      "file": "Purchase.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getPurchaseBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseDetail",
+      "file": "PurchaseManagement.gs",
+      "directReads": [
+        "findFirstRow_",
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseDetail",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "getPurchaseDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseForReturn",
+      "file": "PurchaseReturn.gs",
+      "directReads": [
+        "findFirstRow_",
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseForReturn",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "getPurchaseForReturn",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseForUpdate",
+      "file": "PurchaseManagement.gs",
+      "directReads": [
+        "findFirstRow_",
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseForUpdate",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "getPurchaseForUpdate",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseManagementBankAccounts",
+      "file": "PurchaseManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseManagementBankAccounts",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getPurchaseManagementBankAccounts",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseManagementList",
+      "file": "PurchaseManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseManagementList",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getPurchaseManagementList",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseReport",
+      "file": "Reports.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseReport",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getPurchaseReport",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseReturnDetail",
+      "file": "PurchaseReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseReturnDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getPurchaseReturnDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getPurchaseReturnHistory",
+      "file": "PurchaseReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getPurchaseReturnHistory",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getPurchaseReturnHistory",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getReportsBootstrap",
+      "file": "Reports.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getReportsBootstrap",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getReportsBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getReturnBatchDetail",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getReturnBatchDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getReturnBatchDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getReturnDetail",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getReturnDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getReturnDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getReturnForEdit",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getReturnForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getReturnForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getReturnHistory",
+      "file": "SalesReturn.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getReturnHistory",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getReturnHistory",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getRolesBootstrap",
+      "file": "RoleManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getRolesBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getRolesBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSaleDetail",
+      "file": "SalesManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSaleDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSaleDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSaleForUpdate",
+      "file": "SalesManagement.gs",
+      "directReads": [
+        "findRows_",
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSaleForUpdate",
+        "findRows_"
+      ],
+      "writePath": [
+        "getSaleForUpdate",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSalesDraft",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSalesDraft",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "getSalesDraft",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSalesDraftList",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSalesDraftList",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSalesDraftList",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSalesDraftPreview",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSalesDraftPreview",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "getSalesDraftPreview",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSalesManagementBankAccounts",
+      "file": "SalesManagement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getSalesManagementBankAccounts",
+        "getActiveBankAccountsForUI_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSalesManagementBankAccounts",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSalesManagementList",
+      "file": "SalesManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSalesManagementList",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSalesManagementList",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSalesReport",
+      "file": "Reports.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSalesReport",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSalesReport",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSessionUser_",
+      "file": "Auth.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getSettingsBootstrap",
+      "file": "Settings.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSettingsBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSettingsBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSettingsMap_",
+      "file": "Database.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getStockReport",
+      "file": "Reports.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getStockReport",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getStockReport",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSupplierDetail",
+      "file": "Suppliers.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSupplierDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSupplierDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSupplierLedgerPage",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getSupplierLedgerPage",
+        "getPartyLedgerPage_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSupplierLedgerPage",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSupplierLedgerStatement",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getSupplierLedgerStatement",
+        "getPartyLedgerStatement_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSupplierLedgerStatement",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSupplierLedgerWorkspaceBootstrap",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getSupplierLedgerWorkspaceBootstrap",
+        "getPartyLedgerWorkspaceBootstrap_",
+        "assertCustomerSalesIntegrity_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSupplierLedgerWorkspaceBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSupplierPaymentForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getSupplierPaymentForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSupplierPaymentForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSuppliers",
+      "file": "Suppliers.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getSuppliers",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSuppliers",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getSuppliersBootstrap",
+      "file": "Suppliers.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getSuppliersBootstrap",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getSuppliersBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getTotalBankBalance_",
+      "file": "BankBook.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getTotalBankBalance_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getUnpricedInternalStockLots",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getUnpricedInternalStockLots",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getUnpricedInternalStockLots",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getUserPermissions_",
+      "file": "Auth.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getUserPermissions_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getUsersBootstrap",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getUsersBootstrap",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getUsersBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorDetail",
+      "file": "Vendors.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getVendorDetail",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorDetail",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorIssueForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getVendorIssueForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorIssueForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorIssueMemoForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getVendorIssueMemoForEdit",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorIssueMemoForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorOpenObligations_",
+      "file": "Vendors.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getVendorOpenObligations_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "getVendorPaymentForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getVendorPaymentForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorPaymentForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorReceiptForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getVendorReceiptForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorReceiptForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorReturnForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getVendorReturnForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorReturnForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorReturnReceivedForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getVendorReturnReceivedForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorReturnReceivedForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorSourcingForEdit",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "getVendorSourcingForEdit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorSourcingForEdit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "getVendorsBootstrap",
+      "file": "Vendors.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "getVendorsBootstrap",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "getVendorsBootstrap",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "giveProductsToVendor",
+      "file": "Vendors.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "giveProductsToVendor",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "giveProductsToVendor",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "hasPermission_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "hasPermission_",
+        "getUserPermissions_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "historicalOpeningCashRows_",
+      "file": "OpeningBalance.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "historicalOpeningCashRows_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "loadInternalStockLotCostCorrectionContext_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "loadInternalStockLotCostCorrectionContext_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "logDeletion_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "logDeletion_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "logDeletion_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "logError_",
+      "file": "Utils.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [],
+      "writePath": [
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "logReversalMovement_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "logReversalMovement_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "logReversalMovement_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "login",
+      "file": "Auth.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "login",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "login",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "logout",
+      "file": "Auth.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "deleteRow_"
+      ],
+      "readPath": [
+        "logout",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "logout",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "markMatchingDeleted_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "markMatchingDeleted_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "markMatchingDeleted_",
+        "markRowDeleted_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "markRowDeleted_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [],
+      "writePath": [
+        "markRowDeleted_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "migrateOpeningStockLots_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "migrateOpeningStockLots_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "migrateOpeningStockLots_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "migrateStockLotSellPrices_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "migrateStockLotSellPrices_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "migrateStockLotSellPrices_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "outstandingSaleOwnStockByProduct_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "outstandingSaleOwnStockByProduct_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerBuildAscendingIndex_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerBuildAscendingIndex_",
+        "partyLedgerReadIndex_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerBuildDisplayIndex_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerBuildDisplayIndex_",
+        "partyLedgerSourceDateMap_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerBusinessIdentity_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerBusinessIdentity_",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerCustomerSaleIndex_",
+      "file": "PartyLedger.gs",
+      "directReads": [
+        "getSheetHeaders_",
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerCustomerSaleIndex_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerMasterRows_",
+      "file": "PartyLedger.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerMasterRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerNormalizeFullRows_",
+      "file": "PartyLedger.gs",
+      "directReads": [
+        "getSheetHeaders_",
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerNormalizeFullRows_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerPageFromAscending_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerPageFromAscending_",
+        "partyLedgerNormalizeFullRows_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerProjectCustomerSales_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerProjectCustomerSales_",
+        "partyLedgerCustomerSaleIndex_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerProjectSupplierPurchases_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerProjectSupplierPurchases_",
+        "partyLedgerSupplierPurchaseIndex_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerReadIndex_",
+      "file": "PartyLedger.gs",
+      "directReads": [
+        "getSheetHeaders_",
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerReadIndex_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerSelectedParty_",
+      "file": "PartyLedger.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerSelectedParty_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerSelectorParties_",
+      "file": "PartyLedger.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerSelectorParties_",
+        "partyLedgerMasterRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerSourceDateMap_",
+      "file": "PartyLedger.gs",
+      "directReads": [
+        "getSheetHeaders_",
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerSourceDateMap_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "partyLedgerSupplierPurchaseIndex_",
+      "file": "PartyLedger.gs",
+      "directReads": [
+        "getSheetHeaders_",
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "partyLedgerSupplierPurchaseIndex_",
+        "getSheetHeaders_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "paySupplier",
+      "file": "Suppliers.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "paySupplier",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "paySupplier",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "payVendor",
+      "file": "Vendors.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "payVendor",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "payVendor",
+        "addBankBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "paymentAccountForReference_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "paymentAccountForReference_",
+        "activeBankEntryForReference_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "planBundleInvoiceEdit_",
+      "file": "Bundles.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "planBundleInvoiceEdit_",
+        "planSaleReturnRestoration_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "planPurchaseReturnLotReduction_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "planPurchaseReturnLotReduction_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "planSaleReturnRestoration_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "planSaleReturnRestoration_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "planSaleVendorConsumption_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "planSaleVendorConsumption_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "planSalesReturnStockUndo_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "planSalesReturnStockUndo_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "planStockConsumption_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "planStockConsumption_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "postFinanceTransactionMoney_",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "postFinanceTransactionMoney_",
+        "addBankBookEntry_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "postFinanceTransactionMoney_",
+        "addBankBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "postHistoricalOpeningCash_",
+      "file": "OpeningBalance.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "postHistoricalOpeningCash_",
+        "addCashBookEntry_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "postHistoricalOpeningCash_",
+        "addCashBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "postVendorLedgerEntry_",
+      "file": "Vendors.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "postVendorLedgerEntry_",
+        "adjustVendorDue_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "postVendorLedgerEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "prepareSalesDraftForPosting_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "prepareSalesDraftForPosting_",
+        "findFirstRow_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "prepareSalesReturnChange_",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "prepareSalesReturnChange_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "prepareSalesReturnChange_",
+        "requireActiveCashSession_",
+        "getActiveCashSession_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "prepareSalesReturn_",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "prepareSalesReturn_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "previewPosInvoiceProfit",
+      "file": "Sales.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "previewPosInvoiceProfit",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "previewPosInvoiceProfit",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "readRawHeaders_",
+      "file": "Database.gs",
+      "directReads": [
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "readRawHeaders_",
+        "getSheet_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "receivePayment",
+      "file": "Customer.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "receivePayment",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "receivePayment",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "receiveProductsFromVendor",
+      "file": "Vendors.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "receiveProductsFromVendor",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "receiveProductsFromVendor",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "receiveVendorPayment",
+      "file": "Vendors.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "receiveVendorPayment",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "receiveVendorPayment",
+        "addBankBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "reconcileProductStocksFromLots_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "reconcileProductStocksFromLots_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "reconcileProductStocksFromLots_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reduceLotForPurchaseReturn_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reduceLotForPurchaseReturn_",
+        "planPurchaseReturnLotReduction_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "reduceLotForPurchaseReturn_",
+        "applyPurchaseReturnLotReduction_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "refundCustomerAdvance",
+      "file": "Customer.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "refundCustomerAdvance",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "refundCustomerAdvance",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "removeInvoiceLogo",
+      "file": "Settings.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "removeInvoiceLogo",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "removeInvoiceLogo",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "removeSalesDraftAfterPost_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [
+        "deleteRow_"
+      ],
+      "readPath": [
+        "removeSalesDraftAfterPost_",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "removeSalesDraftAfterPost_",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "repairSaleItemLotSupplierIds_",
+      "file": "StockLots.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "repairSaleItemLotSupplierIds_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "repairSaleItemLotSupplierIds_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "replaceHistoricalOpeningCash_",
+      "file": "OpeningBalance.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "replaceHistoricalOpeningCash_",
+        "historicalOpeningCashRows_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "replaceHistoricalOpeningCash_",
+        "markRowDeleted_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "requireActiveCashSession_",
+      "file": "CashSession.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireActiveCashSession_",
+        "getActiveCashSession_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "requireActiveCashSession_",
+        "getActiveCashSession_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "requireAdmin_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireAdmin_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "requireAuth_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireAuth_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "requireBackdatePermission_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireBackdatePermission_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "requireDeletePermission_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireDeletePermission_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "requireManagementDeletePermission_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireManagementDeletePermission_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "requirePermission_",
+      "file": "Auth.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requirePermission_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "requireSalesDraftAccess_",
+      "file": "DraftSales.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireSalesDraftAccess_",
+        "hasPermission_",
+        "getUserPermissions_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "requireSalesDraftFeatureAccess_",
+      "file": "DraftSales.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "requireSalesDraftFeatureAccess_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "resetPassword",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "findFirstRow_",
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "resetPassword",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "resetPassword",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "resolveBankAccount_",
+      "file": "Utils.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "resolveBankAccount_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "resolveEditedTransactionDate_",
+      "file": "Utils.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "resolveEditedTransactionDate_",
+        "resolveTransactionDate_",
+        "requireBackdatePermission_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "resolveInvoiceLogoDataUri_",
+      "file": "Invoice.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "resolveInvoiceLogoDataUri_",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "resolveOrCreateCustomer_",
+      "file": "Customer.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "resolveOrCreateCustomer_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "resolveOrCreateCustomer_",
+        "addCustomer_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "resolveTransactionDate_",
+      "file": "Utils.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "resolveTransactionDate_",
+        "requireBackdatePermission_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "restoreSaleStockEffectForVendorSourcing_",
+      "file": "SalesManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "restoreSaleStockEffectForVendorSourcing_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "restoreSaleStockEffectForVendorSourcing_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "restoreStockToLots_",
+      "file": "StockLots.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "restoreStockToLots_",
+        "planSaleReturnRestoration_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "restoreStockToLots_",
+        "applySaleReturnRestorationPlan_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "returnProductsToVendor",
+      "file": "Vendors.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "returnProductsToVendor",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "returnProductsToVendor",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "reverseBankEntry",
+      "file": "BankLedger.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "reverseBankEntry",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "reverseBankEntry",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseCustomerPaymentMoney_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "reverseCustomerPaymentMoney_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "reverseCustomerPaymentMoney_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseFinanceTransactionMoney_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reverseFinanceTransactionMoney_",
+        "markMatchingDeleted_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "reverseFinanceTransactionMoney_",
+        "voidBankEntriesFor_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseHistoricalOpeningCash_",
+      "file": "OpeningBalance.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reverseHistoricalOpeningCash_",
+        "historicalOpeningCashRows_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "reverseHistoricalOpeningCash_",
+        "markRowDeleted_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseSupplierPaymentMoney_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "reverseSupplierPaymentMoney_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "reverseSupplierPaymentMoney_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseVendorIssueStockAndReceivable_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reverseVendorIssueStockAndReceivable_",
+        "adjustProductStock_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "reverseVendorIssueStockAndReceivable_",
+        "adjustProductStock_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseVendorPaymentMoney_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reverseVendorPaymentMoney_",
+        "adjustVendorDue_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "reverseVendorPaymentMoney_",
+        "adjustVendorDue_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseVendorReceiptMoney_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reverseVendorReceiptMoney_",
+        "adjustVendorReceivable_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "reverseVendorReceiptMoney_",
+        "adjustVendorReceivable_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseVendorReturnReceivedStockAndReceivable_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reverseVendorReturnReceivedStockAndReceivable_",
+        "adjustProductStock_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "reverseVendorReturnReceivedStockAndReceivable_",
+        "adjustProductStock_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "reverseVendorReturnStockAndDue_",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "reverseVendorReturnStockAndDue_",
+        "adjustProductStock_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "reverseVendorReturnStockAndDue_",
+        "adjustProductStock_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "revokeUserSessions_",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "deleteRow_"
+      ],
+      "readPath": [
+        "revokeUserSessions_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "revokeUserSessions_",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "salesDraftCanManageAll_",
+      "file": "DraftSales.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "salesDraftCanManageAll_",
+        "hasPermission_",
+        "getUserPermissions_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "salesReturnCashRefundAvailable_",
+      "file": "SalesReturn.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "salesReturnCashRefundAvailable_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "salesReturnCorrectionPriorJournal_",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "salesReturnCorrectionPriorJournal_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "saveCashReconciliationExplanation",
+      "file": "CashReconciliation.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "saveCashReconciliationExplanation",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "saveCashReconciliationExplanation",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "saveSalesDraft",
+      "file": "DraftSales.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "saveSalesDraft",
+        "generateDraftInvoiceNo_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "saveSalesDraft",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "searchCustomersForReturn",
+      "file": "SalesReturn.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "searchCustomersForReturn",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "searchCustomersForReturn",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "searchInvoicesForReturn",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "searchInvoicesForReturn",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "searchInvoicesForReturn",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "searchPurchasesForReturn",
+      "file": "PurchaseReturn.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "searchPurchasesForReturn",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "searchPurchasesForReturn",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "seedCashBookOpening_",
+      "file": "SeedData.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "seedCashBookOpening_",
+        "addCashBookEntry_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "seedCashBookOpening_",
+        "addCashBookEntry_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "seedCustomerLedger_",
+      "file": "SeedData.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRows_"
+      ],
+      "readPath": [
+        "seedCustomerLedger_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "seedCustomerLedger_",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "seedCustomers_",
+      "file": "SeedData.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRows_"
+      ],
+      "readPath": [
+        "seedCustomers_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "seedCustomers_",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "seedDefaultSettings_",
+      "file": "Setup.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "seedDefaultSettings_",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "seedDefaultSettings_",
+        "setSetting_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "seedDemoData_",
+      "file": "SeedData.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "seedDemoData_",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "seedDemoData_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "seedProductCategoriesAndUnits_",
+      "file": "Setup.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "seedProductCategoriesAndUnits_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "seedProductCategoriesAndUnits_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "seedProducts_",
+      "file": "SeedData.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRows_"
+      ],
+      "readPath": [
+        "seedProducts_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "seedProducts_",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "seedStockMovement_",
+      "file": "SeedData.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRows_"
+      ],
+      "readPath": [
+        "seedStockMovement_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "seedStockMovement_",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "seedSuppliers_",
+      "file": "SeedData.gs",
+      "directReads": [],
+      "directWrites": [
+        "appendRows_"
+      ],
+      "readPath": [
+        "seedSuppliers_",
+        "generateId_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "seedSuppliers_",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "setBankAccountStatus",
+      "file": "BankAccounts.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setBankAccountStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setBankAccountStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setExpenseCategoryStatus",
+      "file": "ExpenseSettings.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setExpenseCategoryStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setExpenseCategoryStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setExpensePayeeStatus",
+      "file": "ExpenseSettings.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setExpensePayeeStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setExpensePayeeStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setFinancePersonRoles",
+      "file": "FinanceModule.gs",
+      "directReads": [],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setFinancePersonRoles",
+        "findFinancePerson_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "setFinancePersonRoles",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setFinancePersonStatus",
+      "file": "FinanceModule.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setFinancePersonStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setFinancePersonStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setProductCategoryStatus",
+      "file": "ProductSettings.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "deleteRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setProductCategoryStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setProductCategoryStatus",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "setProductStatus",
+      "file": "Products.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setProductStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setProductStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setProductUnitStatus",
+      "file": "ProductSettings.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "deleteRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setProductUnitStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setProductUnitStatus",
+        "deleteRow_"
+      ]
+    },
+    {
+      "name": "setRoleStatus",
+      "file": "RoleManagement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setRoleStatus",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "setRoleStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setSetting_",
+      "file": "Database.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getSheetHeaders_",
+        "getSheet_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setSetting_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setSetting_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "setSupplierStatus",
+      "file": "Suppliers.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setSupplierStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setSupplierStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setUserStatus",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setUserStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setUserStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "setVendorStatus",
+      "file": "Vendors.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "setVendorStatus",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "setVendorStatus",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "settlementBalanceBeforePayment_",
+      "file": "SettlementDiscount.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "settlementBalanceBeforePayment_",
+        "activeRows_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "setupSystem_",
+      "file": "Setup.gs",
+      "directReads": [
+        "getSheet_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "setupSystem_",
+        "getSheet_"
+      ],
+      "writePath": [
+        "setupSystem_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "startCashSession",
+      "file": "CashSession.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "startCashSession",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "startCashSession",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "supplierPurchaseCashPaid_",
+      "file": "SupplierSettlement.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "supplierPurchaseCashPaid_",
+        "findFirstRow_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "supplierPurchaseSettlementSnapshot_",
+      "file": "SupplierSettlement.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "supplierPurchaseSettlementSnapshot_",
+        "findFirstRow_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "supplierSettlementState_",
+      "file": "SupplierSettlement.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "supplierSettlementState_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "syncIdCounters_",
+      "file": "Setup.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "syncIdCounters_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "syncIdCounters_",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "transferBetweenBankAccounts",
+      "file": "BankBook.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_"
+      ],
+      "readPath": [
+        "transferBetweenBankAccounts",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "transferBetweenBankAccounts",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "unwindBankEntryFromBalance_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "unwindBankEntryFromBalance_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "unwindBankEntryFromBalance_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateBankAccount",
+      "file": "BankAccounts.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateBankAccount",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateBankAccount",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateBundleProduct",
+      "file": "Bundles.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateBundleProduct",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateBundleProduct",
+        "appendRows_"
+      ]
+    },
+    {
+      "name": "updateCustomer",
+      "file": "Customer.gs",
+      "directReads": [
+        "findRow_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateCustomer",
+        "findRow_"
+      ],
+      "writePath": [
+        "updateCustomer",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateCustomerPayment",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateCustomerPayment",
+        "updateCustomerPaymentInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateCustomerPayment",
+        "updateCustomerPaymentInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateCustomerPaymentInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateCustomerPaymentInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateCustomerPaymentInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateExpense",
+      "file": "Expense.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateExpense",
+        "updateExpenseInternal_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateExpense",
+        "updateExpenseInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateExpenseCategory",
+      "file": "ExpenseSettings.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateExpenseCategory",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateExpenseCategory",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateExpenseInternal_",
+      "file": "Expense.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateExpenseInternal_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateExpenseInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateExpensePayee",
+      "file": "ExpenseSettings.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateExpensePayee",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateExpensePayee",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateFinancePerson",
+      "file": "FinanceModule.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateFinancePerson",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateFinancePerson",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateFinanceTransaction",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateFinanceTransaction",
+        "updateFinanceTransactionInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateFinanceTransaction",
+        "updateFinanceTransactionInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateFinanceTransactionInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateFinanceTransactionInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateFinanceTransactionInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateProduct",
+      "file": "Products.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateProduct",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateProduct",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updatePurchase",
+      "file": "PurchaseManagement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updatePurchase",
+        "updatePurchaseInternal_",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "updatePurchase",
+        "updatePurchaseInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updatePurchaseInternal_",
+      "file": "PurchaseManagement.gs",
+      "directReads": [
+        "findFirstRow_",
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_",
+        "deleteRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updatePurchaseInternal_",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "updatePurchaseInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateRole",
+      "file": "RoleManagement.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateRole",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateRole",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateSale",
+      "file": "SalesManagement.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateSale",
+        "updateSaleInternal_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateSale",
+        "updateSaleInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateSaleInternal_",
+      "file": "SalesManagement.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_",
+        "deleteRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateSaleInternal_",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateSaleInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateSalesDraft",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "findFirstRow_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateSalesDraft",
+        "findFirstRow_"
+      ],
+      "writePath": [
+        "updateSalesDraft",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateSalesReturn",
+      "file": "SalesReturn.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "appendRows_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateSalesReturn",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateSalesReturn",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateSettings",
+      "file": "Settings.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "updateSettings",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateSettings",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateSupplier",
+      "file": "Suppliers.gs",
+      "directReads": [
+        "findRow_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateSupplier",
+        "findRow_"
+      ],
+      "writePath": [
+        "updateSupplier",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateSupplierPayment",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateSupplierPayment",
+        "updateSupplierPaymentInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateSupplierPayment",
+        "updateSupplierPaymentInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateSupplierPaymentInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateSupplierPaymentInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateSupplierPaymentInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateUser",
+      "file": "UserManagement.gs",
+      "directReads": [
+        "findRowIndex_",
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateUser",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateUser",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendor",
+      "file": "Vendors.gs",
+      "directReads": [
+        "findRowIndex_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateVendor",
+        "findRowIndex_"
+      ],
+      "writePath": [
+        "updateVendor",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorIssue",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateVendorIssue",
+        "updateVendorIssueInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorIssue",
+        "updateVendorIssueInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateVendorIssueInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateVendorIssueInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorIssueInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateVendorIssueMemo",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "updateVendorIssueMemo",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorIssueMemo",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateVendorPayment",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateVendorPayment",
+        "updateVendorPaymentInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorPayment",
+        "updateVendorPaymentInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorPaymentInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateVendorPaymentInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorPaymentInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorReceipt",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateVendorReceipt",
+        "updateVendorReceiptInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorReceipt",
+        "updateVendorReceiptInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorReceiptInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateVendorReceiptInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorReceiptInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorReturn",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateVendorReturn",
+        "updateVendorReturnInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorReturn",
+        "updateVendorReturnInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateVendorReturnInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "appendRow_",
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateVendorReturnInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorReturnInternal_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "updateVendorReturnReceived",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateVendorReturnReceived",
+        "updateVendorReturnReceivedInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorReturnReceived",
+        "updateVendorReturnReceivedInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorReturnReceivedInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateVendorReturnReceivedInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorReturnReceivedInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorSourcing",
+      "file": "DeleteEngine.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "updateVendorSourcing",
+        "updateVendorSourcingInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorSourcing",
+        "updateVendorSourcingInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "updateVendorSourcingInternal_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "updateVendorSourcingInternal_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "updateVendorSourcingInternal_",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "uploadInvoiceLogo",
+      "file": "Settings.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "uploadInvoiceLogo",
+        "getSettingsMap_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "uploadInvoiceLogo",
+        "logError_",
+        "appendRow_"
+      ]
+    },
+    {
+      "name": "validateSalesDraftPayload_",
+      "file": "DraftSales.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [],
+      "readPath": [
+        "validateSalesDraftPayload_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "validateSession",
+      "file": "Auth.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "validateSession",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "validateSession",
+        "updateRowFields_"
+      ]
+    },
+    {
+      "name": "validateSettlementDiscount_",
+      "file": "SettlementDiscount.gs",
+      "directReads": [],
+      "directWrites": [],
+      "readPath": [
+        "validateSettlementDiscount_",
+        "requirePermission_",
+        "getSessionUser_",
+        "getAllRows_"
+      ],
+      "writePath": []
+    },
+    {
+      "name": "voidBankEntriesFor_",
+      "file": "DeleteEngine.gs",
+      "directReads": [
+        "getAllRows_"
+      ],
+      "directWrites": [
+        "updateRowFields_"
+      ],
+      "readPath": [
+        "voidBankEntriesFor_",
+        "getAllRows_"
+      ],
+      "writePath": [
+        "voidBankEntriesFor_",
+        "updateRowFields_"
+      ]
+    }
+  ]
+}

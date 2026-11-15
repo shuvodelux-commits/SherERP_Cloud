@@ -16,6 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked Node dependencies
+        run: npm ci --no-audit --no-fund
       - name: Verify repository and test-only Worker isolation policy
         run: npm test
       - name: Install pinned Wrangler only in this isolated CI runner
