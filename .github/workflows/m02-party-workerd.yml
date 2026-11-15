@@ -23,4 +23,6 @@ jobs:
       - name: Install pinned Wrangler only on the isolated CI runner
         run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
       - name: Prove Party legacy-ID, role and review SQL constraints against real local workerd D1
-        run: node --test tests/integration/m02-party-workerd.spec.mjs
+        run: |
+          node --test tests/integration/m02-party-workerd.spec.mjs
+          node --test tests/integration/m02-party-approval-evidence-workerd.spec.mjs
