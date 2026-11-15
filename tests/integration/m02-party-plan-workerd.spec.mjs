@@ -388,3 +388,21 @@ test('real D1 identity readback flags forged reviewed-group summary without muta
     /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
   assert.deepEqual(await counts(),before,'real local D1 readback remains SELECT-only');
 });
+
+
+test('real D1 readback refuses invalid UTC reviewer timestamp in tampered in-memory proposal',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  const verified=plan.links.find(link=>link.linkBasis==='HUMAN_VERIFIED');
+  assert.ok(verified,'frozen fixture has reviewed source link');
+  verified.reviewedAt='2026-02-30T12:00:00Z';
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(report.issues.some(issue=>issue.code==='PLAN_LINKAGE_INVALID'&&issue.table==='plan'));
+  assert.ok(report.issues.some(issue=>issue.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'old production D1 schema remains unable to prove approval-reference persistence');
+  assert.doesNotMatch(JSON.stringify(report),
+    /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000|2026-02-30/);
+  assert.deepEqual(await counts(),before,'read-only reconciliation must never write D1');
+});
