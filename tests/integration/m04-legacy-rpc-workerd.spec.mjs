@@ -60,6 +60,14 @@ before(async()=>{
     VALUES ('DirectoryReader','Active',?,'users')`)
     .bind(JSON.stringify({users:{view:true}})).run();
   await seed('USR-RPC-DIRECTORY','01710000109','DirectoryReader');
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('ManagementDeleteRolesOnly','Active',?,'users')`)
+    .bind(JSON.stringify({
+      users:{view:true,delete:false},
+      roles:{view:false,add:false,edit:false,delete:true,backdate:'unlimited'},
+    })).run();
+  await seed('USR-RPC-ROLE-DELETE','01710000110','ManagementDeleteRolesOnly');
 });
 after(async()=>{await harness.close();});
 
@@ -440,4 +448,82 @@ test('partial roles directory honors stored D1 roles.view, revocation and exact 
   assert.equal((await roleDirectory(fresh.body.data.token,NOW+146_000)).body.authorized,true);
   await rpc('logout',[fresh.body.data.token],NOW+147_000);
   assert.deepEqual(await roleDirectory(fresh.body.data.token,NOW+148_000),denied);
+});
+
+
+async function deletePreflight(methodName,token,nowMs=NOW+171_000,claims={}){
+  const response=await worker.fetch('http://m04.local/__m04_test__/delete-preflight',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({methodName,token,nowMs,...claims}),
+  });
+  return {status:response.status,body:await response.json()};
+}
+
+test('management-delete preflight grants only matching persisted D1 rights without ever deleting records',async()=>{
+  const usersSource=readFileSync(new URL('../../legacy/source/UserManagement.gs',import.meta.url),'utf8');
+  const rolesSource=readFileSync(new URL('../../legacy/source/RoleManagement.gs',import.meta.url),'utf8');
+  const authSource=readFileSync(new URL('../../legacy/source/Auth.gs',import.meta.url),'utf8');
+  assert.match(usersSource,/function deleteUser\(token, userId\)[\s\S]*?requireManagementDeletePermission_\(token, 'users'\)/);
+  assert.match(rolesSource,/function deleteRole\(token, roleId\)[\s\S]*?requireManagementDeletePermission_\(token, 'roles'\)/);
+  assert.match(authSource,/function requireManagementDeletePermission_\(token, moduleKey\)/);
+  const countBefore=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
+  const admin=await rpc('login',['01710000101',SECRET],NOW+170_000);
+  const source=await rpc('login',['01710000105',SECRET],NOW+170_000);
+  const rolesOnly=await rpc('login',['01710000110',SECRET],NOW+170_000);
+  assert.equal(admin.body.success,true);
+  assert.equal(source.body.success,true);
+  assert.equal(rolesOnly.body.success,true);
+  const adminToken=admin.body.data.token;
+  const sourceToken=source.body.data.token;
+  const roleToken=rolesOnly.body.data.token;
+  const deny={status:200,body:{eligible:false}};
+  const ok=(id,role)=>({status:200,body:{eligible:true,actor:{id,role}}});
+  assert.deepEqual(await deletePreflight('deleteUser',adminToken),
+    ok('USR-RPC-ADMIN','Administrator'));
+  assert.deepEqual(await deletePreflight('deleteRole',adminToken),
+    ok('USR-RPC-ADMIN','Administrator'));
+  assert.deepEqual(await deletePreflight('deleteUser',sourceToken),
+    ok('USR-RPC-SOURCE','SourceRole'));
+  assert.deepEqual(await deletePreflight('deleteRole',sourceToken),deny,
+    'roles.view does not grant roles.delete');
+  assert.deepEqual(await deletePreflight('deleteRole',roleToken),
+    ok('USR-RPC-ROLE-DELETE','ManagementDeleteRolesOnly'));
+  assert.deepEqual(await deletePreflight('deleteUser',roleToken),deny,
+    'users.view does not grant users.delete');
+  assert.deepEqual(await deletePreflight('deleteUser',roleToken,NOW+172_000,{
+    actor:{id:'USR-RPC-ADMIN',role:'Administrator'},
+    permissions:{users:{delete:true}},allowedModules:['users'],
+    target:{id:'USR-RPC-SOURCE'},
+  }),deny,'client identity, permissions, and target claims are never trusted');
+
+  for(const methodName of ['deleteCustomer','deleteRoles','deleteUser ',
+    'resetPassword','createUser','constructor','toString','__proto__',null]){
+    assert.deepEqual(await deletePreflight(methodName,adminToken),deny,String(methodName));
+  }
+  assert.deepEqual(await deletePreflight('deleteRole','not-a-token'),deny);
+  assert.deepEqual(await deletePreflight('deleteRole',roleToken,NOW+170_000+31*60*1000),deny,
+    'idle session cannot authorize a later write');
+  await rpc('logout',[adminToken],NOW+173_000);
+  assert.deepEqual(await deletePreflight('deleteRole',adminToken,NOW+174_000),deny);
+
+  // Role authority changes must invalidate the OLD token even if restored.
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='ManagementDeleteRolesOnly'")
+    .bind(JSON.stringify({users:{view:true,delete:false},roles:{delete:false}})).run();
+  assert.deepEqual(await deletePreflight('deleteRole',roleToken,NOW+175_000),deny);
+  const downgraded=await rpc('login',['01710000110',SECRET],NOW+176_000);
+  assert.equal(downgraded.body.success,true);
+  assert.deepEqual(await deletePreflight('deleteRole',downgraded.body.data.token,NOW+177_000),deny);
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='ManagementDeleteRolesOnly'")
+    .bind(JSON.stringify({users:{view:true,delete:false},roles:{delete:true}})).run();
+  assert.deepEqual(await deletePreflight('deleteRole',roleToken,NOW+178_000),deny);
+  assert.deepEqual(await deletePreflight('deleteRole',downgraded.body.data.token,NOW+178_000),deny);
+  const renewed=await rpc('login',['01710000110',SECRET],NOW+179_000);
+  assert.equal(renewed.body.success,true);
+  assert.equal((await deletePreflight('deleteRole',renewed.body.data.token,NOW+180_000)).body.eligible,true);
+  await db.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='ManagementDeleteRolesOnly'").run();
+  assert.deepEqual(await deletePreflight('deleteRole',renewed.body.data.token,NOW+181_000),deny);
+  await db.prepare("UPDATE auth_roles SET status='Active' WHERE role_name='ManagementDeleteRolesOnly'").run();
+  assert.deepEqual(await deletePreflight('deleteRole',renewed.body.data.token,NOW+182_000),deny);
+  const countAfter=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
+  assert.deepEqual(countAfter,countBefore,'the authorization preview performs no delete');
 });
