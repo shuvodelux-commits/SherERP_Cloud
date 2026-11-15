@@ -353,3 +353,21 @@ test('unsafe legacy physical row never compiles D1 Party identity inserts or mut
   assert.deepEqual(await counts(),before,'unsafe source row cannot change local D1');
   assert.deepEqual(source(),prior,'the original frozen source fixture remains unchanged');
 });
+
+
+test('real D1 Party identity readback never certifies two original anchors in tampered offline plan',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  const verified=plan.links.find(x=>x.linkBasis==='HUMAN_VERIFIED');
+  assert.ok(verified);
+  verified.linkBasis='ORIGINAL_RECORD';
+  verified.reviewedBy=null;
+  verified.reviewedAt=null;
+  verified.approvalRef=null;
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_LINKAGE_INVALID'&&x.table==='plan'));
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual(await counts(),before,'real D1 readback remains SELECT only');
+});
