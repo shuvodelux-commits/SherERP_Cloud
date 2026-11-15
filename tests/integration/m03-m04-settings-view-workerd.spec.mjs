@@ -155,3 +155,53 @@ test('standalone test Worker never exposes credential, Settings or arbitrary RPC
     readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
   assert.equal(production.includes('m04-settings-view'),false);
 });
+
+test('actual local Workerd D1 returns complete Settings map only for current settings.view',async()=>{
+  const expected=Object.assign(Object.create(null),{
+    'Shop Name':'নবাবী হার্ডওয়্যার','Currency Symbol':'৳',
+    'Phone 1':'01712345678','Delete Confirmation Key':'PRIVATE',
+    'Invoice Logo':'SECRET_LOGO'
+  });
+  assert.deepEqual(await adapter().getSettingsMap_(req()),expected);
+  for(const patch of [{token:C},{token:B},{token:'f'.repeat(64)},
+    {token:A,nowMs:NOW+1_200_000}]){
+    await assert.rejects(()=>adapter().getSettingsMap_(req(patch)),/Denied/i);
+  }
+  assert.deepEqual(await adapter().getAppShellSettings_(req()),{
+    shopName:'নবাবী হার্ডওয়্যার',currencySymbol:'৳'
+  });
+  assert.equal((await settings()).length,5,'read must never mutate Settings');
+});
+
+test('actual local D1 enforces 256-entry authorized Settings map limit and recovers after cleanup',async()=>{
+  const insert=DB.prepare('INSERT INTO settings(key,value) VALUES(?,?)');
+  const records=[];
+  for(let i=0;i<251;i++)records.push(insert.bind('Local extra '+i,String(i)));
+  await DB.batch(records); // existing 5 rows + 251 extras = 256
+  const full=await adapter().getSettingsMap_(req());
+  assert.equal(Object.keys(full).length,256);
+  assert.equal(full['Local extra 250'],'250');
+  await DB.prepare('INSERT INTO settings(key,value) VALUES(?,?)')
+    .bind('Local extra overflow','overflow').run();
+  await assert.rejects(()=>adapter().getSettingsMap_(req()),/NEEDS_REVIEW|limit|exceed/i);
+  await DB.prepare("DELETE FROM settings WHERE key LIKE 'Local extra %'").run();
+  assert.equal((await settings()).length,5);
+  assert.equal((await adapter().getSettingsMap_(req()))['Phone 1'],'01712345678');
+});
+
+test('real Workerd refuses unsafe Settings map keys, leaves D1 unchanged, and never exposes a public map RPC',async()=>{
+  await DB.prepare('INSERT INTO settings(key,value) VALUES(?,?)')
+    .bind('__proto__','DANGEROUS').run();
+  await assert.rejects(()=>adapter().getSettingsMap_(req()),/NEEDS_REVIEW/i);
+  await DB.prepare("DELETE FROM settings WHERE key='__proto__'").run();
+  assert.equal(Object.prototype.DANGEROUS,undefined);
+  for(const path of ['/api/rpc','/settings/bootstrap','/__m03_test__/settings-map']){
+    const response=await worker.fetch('http://settings-view.local'+path,{
+      method:'POST',body:JSON.stringify({token:A,permission:'settings.view'})
+    });
+    assert.equal(response.status,404);
+  }
+  assert.deepEqual(await adapter().getAppShellSettings_(req()),{
+    shopName:'নবাবী হার্ডওয়্যার',currencySymbol:'৳'
+  });
+});
