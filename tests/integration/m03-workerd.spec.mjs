@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
 import './m03-transaction-contract-workerd.spec.mjs'; // Separate synthetic atomic/idempotency D1 contract; local-only.
 import './m03-intent-fingerprint-workerd.spec.mjs'; // Canonical SHA-256 intent and synthetic D1 replay proof.
+import './m03-receipt-workerd.spec.mjs'; // Read-only immutable receipt reconciliation against synthetic local D1.
 import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
 
