@@ -40,6 +40,17 @@ This repository is the **target migration workspace** for https://github.com/shu
 - Preserve existing invoice footer flow, print pagination, fixed desktop shell, mobile behaviors and horizontal table scrolling.
 - One Party can have any combination of the seven roles; the new Party UI is additive and must not delete or redesign the original Customer/Supplier/Vendor/Finance/Expense workflows. Anonymous cash sales do not create Parties.
 
+## GitHub-first development, Superpowers TDD and KISS
+
+These owner-mandated rules apply to **every coding agent and every M00–M11 workstream**, including concurrent work. They extend, and never weaken, the architecture, financial-safety and deployment gates below.
+
+- **GitHub is the canonical development workspace.** Inspect, plan, branch, commit, review and integrate changes through this GitHub repository. Use a dedicated branch and a scoped PR for each objective; never make unreviewed direct commits to `main`. Keep source-of-truth plans, tests, test evidence and implementation in GitHub. Existing GitHub Actions checks are authoritative for CI status; don't claim checks passed without results.
+- **Remote Desktop Commander is exceptional, not the default coding environment.** Use it only when an operation genuinely requires access to the owner's local PC (for example, local files, device-specific reproduction or local environment maintenance). Do not use it for routine source editing, tests or Git operations that can be performed through GitHub-backed tooling. Do not modify local workspaces merely to mirror a GitHub task.
+- **Use the Superpowers method for each code change:** (1) inspect current GitHub source, requirements and dependencies; (2) write a small scoped implementation plan with acceptance criteria and affected files/contracts; (3) write or extend an automated regression/acceptance test **before** production code and demonstrate it fails for the expected reason (**RED**); (4) implement the smallest change that satisfies it (**GREEN**); (5) refactor only when useful, keeping tests passing; (6) run all affected tests, integration/real-D1 tests and browser checks as applicable; (7) open a PR documenting the plan, RED/GREEN evidence, CI results, risks and remaining gaps. Documentation-only changes without executable behavior are exempt from artificial failing tests, not from review.
+- **TDD evidence is required, not just a final green test.** For bug fixes reproduce the bug in a failing test first; for features cover acceptance behavior and relevant failure paths. Never misrepresent skipped, mocked or unavailable tests as real integration passes.
+- **KISS is mandatory.** Favor a minimal, readable solution that preserves the original ERP behavior and contracts. Do not redesign the UI, introduce frameworks/abstractions, expand dependencies or build speculative functionality without a demonstrated requirement. Avoid unrelated refactors; minimize changed files and make review easy.
+- **Parallel changes require boundaries.** Respect single ownership of shared schema, posting kernel and common files; use reviewed contracts and independent branches. Recheck CI and merge conflicts against the latest `main` before merging. Production deployment and financial migration approvals remain separate gated decisions.
+
 ## Mandatory migration workflow
 
 1. Start with a scoped M00–M11 workstream described in docs/WORKSTREAMS.md; branch by workstream, one objective per PR.
