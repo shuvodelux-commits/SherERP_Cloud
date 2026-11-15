@@ -1,0 +1,11 @@
+{
+  "name": "shererp-m05-multiline-local-test",
+  "main": "tests/fixtures/m05-purchase-d1-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-m05-multiline-synthetic-local",
+    "database_id": "00000000-0000-0000-0000-000000000035"
+  }]
+}
