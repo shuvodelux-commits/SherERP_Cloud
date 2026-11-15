@@ -22,8 +22,10 @@ function validSourceGroupSummary(plan){
   if(!Array.isArray(entries)||entries.length!==known.length)return false;
   const linked=new Map(known.map(group=>[group,0]));
   for(const link of plan.links){
-    if(!linked.has(link.sourceGroup))return false;
-    linked.set(link.sourceGroup,linked.get(link.sourceGroup)+1);
+    // Unknown link groups are already diagnosed by PLAN_LINKAGE_INVALID.
+    // Do not invent a separate inventory mismatch for that same invalid link.
+    if(linked.has(link.sourceGroup))
+      linked.set(link.sourceGroup,linked.get(link.sourceGroup)+1);
   }
   const seen=new Set();
   let total=0;
