@@ -1,0 +1,11 @@
+# M09 authorized Invoice Design D1 read — Superpowers implementation
+
+**Date:** 2026-11-15. **Branch:** `m09/invoice-design-authorized-d1-read-20261115`. **Authority:** pinned `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, original Invoice Design bootstrap and M04 authorized full Settings map.
+
+1. Inspect frozen `Settings.gs`, `Invoice.gs`, `invoiceDesign.html`, merged PR #227's pure `projectInvoiceDesignBootstrap`, `src/db/m04-settings-view.js` single-statement authorized D1 map, isolated M04 auth migrations and Workerd fixture. Don't touch concurrent PR #224's shared M03 test aggregator.
+2. RED: add `tests/m09-invoice-design-authorized-d1.test.mjs` using real Node SQLite in-memory database and M04 auth/session schema. Test full authorized snapshot, Unicode, original response, no-logo and nonempty legacy Drive ID fail, revoked/expired/edit-only denies, no SQL writes/leaks and no production RPC.
+3. Add standalone `tests/integration/m09-invoice-design-authorized-d1-workerd.spec.mjs` executing the same M04 auth/session/Settings contract on actual isolated Workerd D1 through existing test-only `wrangler.m03-m04-settings-view-test.jsonc`. Add a new PR-only no-secrets workflow with locked Node, pinned Wrangler, `npm test` and `node --test` new test file; no new deploy owner.
+4. Commit tests and workflow **before** `src/modules/m09-invoice-design-authorized-d1-read.js`, open draft PR; capture meaningful source/Worker and dedicated real local Workerd RED due to missing module, not fixture failure.
+5. GREEN: implement minimal internal function by composing `createM04AuthorizedShellSettingsReadAdapter(env).getSettingsMap_(request)` and `projectInvoiceDesignBootstrap(settings,'')`, with a fail-closed nonempty `Invoice Logo` check. Never read ordinary Settings without M04 authorization or call a logo resolver.
+6. Verify exact-head Node suite, original 84 pinned source files and 36 UI includes, local real D1/Workerd, Chromium and Cloudflare Worker preview. Review diff and update PR with RED/GREEN links, no public RPC/schema/finance/preview binding changes, unported logo and tenant isolation gates. Leave draft pending owner review and completed green.
+7. Rollback: revert six new files; no database migration required.
