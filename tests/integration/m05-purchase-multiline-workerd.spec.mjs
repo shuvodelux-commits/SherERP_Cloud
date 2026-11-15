@@ -811,7 +811,7 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     // A subsequent original supplier payable ledger makes retroactive
     // balance recomputation necessary; this isolated proof refuses it.
     assert.equal((await poster().post(input('OP-ADD-LATER01',{
-      items:[line('PIPE',1,'1','2',2)]
+      items:[line('PIPE',1,'5','6',2)],paidAmount:'0'
     }))).status,'COMMITTED');
     const before=await addedState();
     assert.equal((await addLine().add(addLineInput('OP-ADD-LATER02'))).status,'DECLINED');
