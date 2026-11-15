@@ -1,0 +1,6 @@
+# M02-safe Party review queue D1 integrity — Superpowers TDD plan
+
+1. Read current `AGENTS.md`, ADR-007, `src/party/d1-review-queue-summary.js` and `tests/integration/m02-party-plan-workerd.spec.mjs`; verify M03 schema ownership boundaries.
+2. **RED:** append one test to the existing real `tests/integration/m02-party-plan-workerd.spec.mjs`. Wrap the real prepared `DB.prepare(...).all()` return so every response contains real D1 rows but a mutated `success` value; require generic failure for missing/undefined/null/false/0/1/`'true'`. Inject `count:0` into a synthetic wrapper over a real query that returns a positive grouped count; assert fail closed. Ensure empty genuine query returns zero, and capture before/after row counts. Commit before implementation; verify red in GitHub M02 real D1 test CI.
+3. **GREEN:** one-line strict `result.success!==true` and positive grouped count `row.count<=0` checks in `src/party/d1-review-queue-summary.js`. No other changes to query/return types/SQL/schema.
+4. Verify M02 real D1 workflow green, Foundation Node suite/source-manifest/frontend, all eight GH Actions; document RED/GREEN and release gaps. Create a small PR, no merge until owner approves and checks pass.
