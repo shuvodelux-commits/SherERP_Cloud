@@ -8,6 +8,9 @@ import {AUTH_POLICY,createOfflinePasswordCredential,loginWithD1}
 import {createM04AuthorizedShellSettingsReadAdapter}
   from '../../src/db/m04-settings-view.js';
 
+import {createM04AuthorizedAppShellReader}
+  from '../../src/modules/m04-authorized-app-shell-reader.js';
+
 const server=createTestHarness({workers:[{
   configPath:'./wrangler.m03-m04-settings-view-test.jsonc'
 }]});
@@ -67,6 +70,30 @@ test('actual local D1 grants Administrator and view-only staff the same two-key 
   assert.deepEqual(await adapter().getAppShellSettings_(req({token:B})),output);
   assert.equal((await settings()).length,5);
   assert.equal(JSON.stringify(output).includes('PRIVATE'),false);
+});
+
+test('actual Workerd D1 returns complete frozen shell only to current settings.view sessions',async()=>{
+  const shell=createM04AuthorizedAppShellReader({DB});
+  const expected={success:true,data:{
+    shopName:'নবাবী হার্ডওয়্যার',currencySymbol:'৳'
+  }};
+  const admin=await shell.getAppShellData(req());
+  const viewer=await shell.getAppShellData(req({token:B}));
+  for(const envelope of [admin,viewer]){
+    assert.equal(envelope.success,expected.success);
+    assert.equal(envelope.data.shopName,expected.data.shopName);
+    assert.equal(envelope.data.currencySymbol,expected.data.currencySymbol);
+    assert.ok(envelope.data.navItems.some(item=>item.key==='pos' &&
+      item.landingKey==='posv2'));
+    assert.equal(JSON.stringify(envelope).includes('PRIVATE'),false);
+    assert.equal(JSON.stringify(envelope).includes('SECRET_LOGO'),false);
+  }
+  viewer.data.navItems[0].label='TAMPER';
+  const refreshed=await shell.getAppShellData(req({token:B}));
+  assert.notEqual(refreshed.data.navItems[0].label,'TAMPER');
+  for(const token of [C,'f'.repeat(64)]){
+    await assert.rejects(()=>shell.getAppShellData(req({token})),/Denied/i);
+  }
 });
 
 test('edit-only user, bad session, idle expired and absolute expired are denied by real D1',async()=>{
