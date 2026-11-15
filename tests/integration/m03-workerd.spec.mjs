@@ -9,6 +9,7 @@ import './m03-intent-fingerprint-workerd.spec.mjs'; // Canonical SHA-256 intent 
 import './m03-receipt-workerd.spec.mjs'; // Read-only immutable receipt reconciliation against synthetic local D1.
 import './m03-reversal-workerd.spec.mjs'; // Source-guarded exactly-once synthetic reversal in local D1.
 import './m03-authorized-receipt-workerd.spec.mjs'; // Session-derived actor and tenant-scoped receipt readback.
+import './m03-m04-receipt-workerd.spec.mjs'; // Actual proposed M04 session schema + single-business immutable receipt readback.
 import './m03-authorized-post-workerd.spec.mjs'; // Synthetic M04 authority checked inside atomic D1 receipt/post claim.
 import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
