@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {compileSyntheticPartyImport} from '../fixtures/m02-party-plan-batch.mjs';
+import {planPartyImport} from '../../src/party/party-import-plan.js';
 import {reconcilePartyIdentityD1} from '../../src/party/d1-identity-readback.js';
 import {summarizeOpenPartyIdentityReviews} from '../../src/party/d1-review-queue-summary.js';
 
@@ -405,4 +406,35 @@ test('real D1 readback refuses invalid UTC reviewer timestamp in tampered in-mem
   assert.doesNotMatch(JSON.stringify(report),
     /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000|2026-02-30/);
   assert.deepEqual(await counts(),before,'read-only reconciliation must never write D1');
+});
+
+
+test('duplicate source physical anchor is stable across local D1 preflight ordering and prevents SQL',async()=>{
+  const before=await counts();
+  const rows=source();
+  rows.CUSTOMERS.push({
+    ...rows.CUSTOMERS[0],
+    'Customer Name':'Different source business',
+    _rowIndex:3
+  });
+  const swapped=structuredClone(rows);
+  swapped.CUSTOMERS.reverse();
+  const original=structuredClone(rows);
+  const plans=[rows,swapped].map(input=>planPartyImport(input,[]));
+  const reviews=plans.map(plan=>plan.reviewItems.filter(item=>
+    item.reason==='DUPLICATE_ID'&&item.sourceGroup==='CUSTOMERS'));
+  assert.equal(reviews[0].length,1);
+  assert.deepEqual(reviews[0],reviews[1],
+    'same exact duplicate source identity must not change review provenance if array order flips');
+  assert.equal(reviews[0][0].legacySheetRow,2);
+  for(const input of [rows,swapped]){
+    let prepared=0;
+    const binding={prepare(sql){prepared++;return DB.prepare(sql);}};
+    assert.throws(()=>compileSyntheticPartyImport({
+      DB:binding,sourceRows:input,approvedGroups:reviewed(),createdAt:now
+    }),/review|quarantin|unknown/i);
+    assert.equal(prepared,0,'quarantined duplicate rows cannot prepare any SQL statements');
+  }
+  assert.deepEqual(await counts(),before,'local D1 rows must remain untouched');
+  assert.deepEqual(rows,original,'offline source snapshot unchanged');
 });
