@@ -154,6 +154,27 @@ test('late failure inside original M03 catalog trigger rolls back D1 actor/recei
     status:200,body:{success:true,data:{id:'PCAT-000021',name:'Fault'}}
   });
 });
+test('concurrent M04 role/session revocation versus actual D1 master INSERT has serializable outcome',async()=>{
+  const prior=await state();
+  const [mutation,revoked]=await Promise.all([
+    call('/__m04_master__/alternate-revoke-race'),
+    DB.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
+      .bind(NOW,hash(token.ALT)).run()
+  ]);
+  assert.equal(revoked.success,true);
+  assert([200,409].includes(mutation.status));
+  const after=await state();
+  const committed=Number(mutation.status===200&&mutation.body.success===true);
+  assert.equal(after.intents.filter(v=>v.operation_id==='OP-ALT-REVOCATION').length,committed);
+  assert.equal(
+    after.counters.find(v=>v.id_key==='PRODUCT_CATEGORIES').current_sequence,
+    prior.counters.find(v=>v.id_key==='PRODUCT_CATEGORIES').current_sequence+committed
+  );
+  assert.equal(after.categories.length,prior.categories.length+committed);
+  if(committed)assert.equal(after.intents.find(v=>v.operation_id==='OP-ALT-REVOCATION').actor_id,'ALT');
+  assert.equal((await call('/__m04_master__/alternate-revoke-race')).status,409);
+  assert.deepEqual(await state(),after);
+});
 test('test-only route ignores client actor/time/name/SQL and public Worker/RPC never imports writer',async()=>{
   const before=await state();
   assert.equal((await call('/__m04_master__/unknown',{sql:'DROP TABLE auth_users'})).status,404);
