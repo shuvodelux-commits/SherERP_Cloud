@@ -83,11 +83,17 @@ test('actual M04 session authorizes source-shaped D1 Settings CAS in same SQL st
   assert.deepEqual(after.slice(1),before.slice(1));
 });
 
-test('active custom staff role cannot update even if its permission JSON says settings edit',async()=>{
+test('actual D1 custom-role session can update only with a current literal settings.edit grant',async()=>{
   const before=await records();
-  await assert.rejects(()=>update().updateExisting_(make({
-    token:C,expectedValue:'নবাবী হার্ডওয়্যার',newValue:'Unauthorized'
-  })),/Denied|stale|conflict/i);
+  // M04 treats Allowed Modules as UI metadata, not permission authority.
+  await DB.prepare("UPDATE auth_roles SET allowed_modules='' WHERE role_name='Cashier'").run();
+  assert.deepEqual(await update().updateExisting_(make({
+    token:C,expectedValue:'নবাবী হার্ডওয়্যার',newValue:'Staff-authorized update'
+  })),{updated:true});
+  assert.equal((await records())[0].value,'Staff-authorized update');
+  assert.deepEqual(await update().updateExisting_(make({
+    token:C,expectedValue:'Staff-authorized update',newValue:'নবাবী হার্ডওয়্যার'
+  })),{updated:true});
   assert.deepEqual(await records(),before);
 });
 
@@ -177,4 +183,44 @@ test('private Settings and guessed RPC routes stay unavailable on local test Wor
   const prod=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8')+
     readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
   assert.equal(prod.includes('m04-settings-update'),false);
+});
+
+test('real local D1 role permission revocation and regrant cannot resurrect an old session',async()=>{
+  const before=await records();
+  await DB.prepare(`UPDATE auth_roles SET permissions_json='{"settings":{"edit":false}}'
+    WHERE role_name='Cashier'`).run();
+  await assert.rejects(()=>update().updateExisting_(make({
+    token:C,expectedValue:'Authenticated Shop',newValue:'Revoked edit'
+  })),/Denied|stale|conflict/i);
+  await DB.prepare(`UPDATE auth_roles SET permissions_json='{"settings":{"edit":true}}'
+    WHERE role_name='Cashier'`).run();
+  await assert.rejects(()=>update().updateExisting_(make({
+    token:C,expectedValue:'Authenticated Shop',newValue:'Resurrected edit'
+  })),/Denied|stale|conflict/i);
+  assert.deepEqual(await records(),before);
+
+  // A fresh credential-verified M04 session receives the new role epoch.
+  const cred=await createOfflinePasswordCredential('StaffFreshPassword123!');
+  await DB.prepare(`UPDATE auth_users
+    SET password_hash=?,password_salt=?,password_iterations=?
+    WHERE user_id='STAFF-C'`).bind(
+      cred.passwordHash,cred.passwordSalt,cred.iterations
+    ).run();
+  const fresh=await loginWithD1(DB,{
+    phoneKey:'01710000003',password:'StaffFreshPassword123!',nowMs:NOW+30_000
+  });
+  assert.equal(fresh.authenticated,true);
+  assert.deepEqual(await update().updateExisting_(make({
+    token:fresh.token,nowMs:NOW+30_000,
+    expectedValue:'Authenticated Shop',newValue:'Fresh staff edit'
+  })),{updated:true});
+  assert.equal((await records())[0].value,'Fresh staff edit');
+
+  // An inactive role is blocked even with the latest session epoch.
+  await DB.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='Cashier'").run();
+  await assert.rejects(()=>update().updateExisting_(make({
+    token:fresh.token,nowMs:NOW+31_000,
+    expectedValue:'Fresh staff edit',newValue:'Inactive role'
+  })),/Denied|stale|conflict/i);
+  assert.equal((await records())[0].value,'Fresh staff edit');
 });
