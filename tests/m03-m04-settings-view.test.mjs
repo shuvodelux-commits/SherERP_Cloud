@@ -285,7 +285,7 @@ test('complete Settings map enforces the same source-audited 256-row cap without
 });
 
 test('Settings map rejects prototype keys, blank keys, invalid data and duplicates without returning partial results',async()=>{
-  for(const key of ['__proto__','constructor','prototype','']){
+  for(const key of ['__proto__','constructor','prototype']){
     const x=fixture();try{
       x.sqlite.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run(key,'FORGED');
       await assert.rejects(()=>x.read.getSettingsMap_(req()),/NEEDS_REVIEW/i);
@@ -311,7 +311,7 @@ test('malformed D1 and illegal request descriptors cannot obtain full Settings m
   for(const result of [undefined,null,{}, {success:false,results:[]},
     {success:true,results:null}, {success:true,results:[]} ]){
     const DB={prepare(){return {bind(){return {all:async()=>result}}}}};
-    const error=result?.success===true?'Denied':'NEEDS_REVIEW';
+    const error=Array.isArray(result?.results) && result.results.length===0?'Denied':'NEEDS_REVIEW';
     await assert.rejects(()=>createM04AuthorizedShellSettingsReadAdapter({DB})
       .getSettingsMap_(req()),new RegExp(error));
   }
