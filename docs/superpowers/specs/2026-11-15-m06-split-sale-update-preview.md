@@ -1,0 +1,17 @@
+# M06 split-invoice Sale Update preview — source-faithful design
+
+**Frozen source:** Mohim_ERP commit `29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; `SalesManagement.gs::updateSaleInternal_`, `saleUpdateLineTotal_`; `SalePayments.gs::normalizeSalePayments_`; `Utils.gs::roundMoney_`, `isValidNonNegativeNumber_`. Current target AGENTS.md, docs/MIGRATION_PLAN.md, docs/WORKSTREAMS.md, ADR-007 apply.
+
+## Purpose
+
+Compose two **already merged and source-tested** pure M06 pieces: `planSaleUpdateLineTotals` (PR #243) and `normalizeSalePayments_` (M06 SalePayments port). Original `updateSaleInternal_` rounds each new line into subtotal; uses a valid nonnegative invoice discount or zero; computes `grandTotal=Math.max(0, subtotal-discount)`; then **for version-1 split invoices only**, passes `roundMoney_(grandTotal)` to the authoritative split allocator. Avoid assuming stored paid/due or later Customer settlement equals the replacement checkout tender; those are distinct historical/economic states.
+
+## Contract
+
+Add pure `planSplitSaleUpdatePreview(snapshot,{canEditSales})` returning `{invoiceId,subtotal,discount,grandTotal,lines,allocation}`. A trusted, tenant-filtered snapshot includes `invoiceId, sale, oldItems, newItems, discount, payments, bankAccounts`. `sale` is an original Sales header with matching Invoice ID, `Payment Detail Version:'1'`, not deleted. Authorization is M04 server-side `sales:edit`, supplied as an internal capability. M03 supplies tenant-scoped original Sales and Product rows, while bank account, stock, session and Settlement guards remain responsible components. Do not infer Customer ID from name or phone.
+
+The pure preview intentionally does **not** determine live edit eligibility or authorize a write: M06 `projectSaleForUpdate` must separately validate original active Cash Session/no returns and original payment revision; the eventual atomic D1 writer must recheck Cash Session, stock FIFO, original payment evidence, current settlement, operation ID, idempotency and ownership under SQL-enforced constraints. No RPC/Worker binding, DB migrations, Cash/Bank movements, Sales/Party changes or original UI edits.
+
+**Safety validation:** reject missing actor capability, mismatched/missing/deleted or non-v1 invoice, malformed row groups, row getters/prototypes, duplicate submitted products, nonfinite/nonnegative violations in candidate values, and malformed monetary discount including negative/NaN/Infinity. Blank discount is zero (as original); numeric zero and two-decimal/fractional discount are accepted subject to native final `salePaymentPaisa_` precision of the rounded grand total. Allow discounts greater than subtotal (source clamps grand total to zero); native split allocator rejects cash tender for zero invoice. Source `normalizeSalePayments_` handles Cash change, multiple Bank/Mobile accounts, one Cash row, 20-row cap, duplicate Payment row ID, active payment account type/ownership evidence and integer paisa. No client-provided `isSplitInvoice` switch.
+
+**Testing:** independent Node VM executes exact frozen source three files and reconstructs only the `updateSaleInternal_` loop with native extracted functions; compare its output with our pure composition across historical exact fractional line, discounts and zero subtotal, split cash+bank, partial due, mobile account, changed lines, malformed source/permissions, duplicate keys and immutability. CI: observable RED first, GREEN all Node/source/Chromium/local Workerd/D1/preview-safety. Draft review only; production posting remains blocked.
