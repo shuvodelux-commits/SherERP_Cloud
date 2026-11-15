@@ -4,6 +4,7 @@ import {createTestHarness} from 'wrangler';
 import './m04-auth-http-workerd.spec.mjs'; // M04 server-opt-in original RPC envelope against actual isolated D1.
 import './m03-settings-workerd.spec.mjs'; // M03 Settings Key/Value and restricted shell projection; local D1 only.
 import './m03-m04-settings-workerd.spec.mjs'; // M04 D1 sessions authorize source-shaped Settings CAS inside one SQL mutation.
+import './m03-m04-settings-view-workerd.spec.mjs'; // M04 session + settings.view authorized safe shell reads; actual isolated D1.
 import './m04-atomic-authority-workerd.spec.mjs'; // M04 synthetic same-statement session/RBAC authority; local D1 only.
 import './m04-session-workerd.spec.mjs'; // M04 test-only source-shaped session authority via real local D1.
 import './m03-transaction-contract-workerd.spec.mjs'; // Separate synthetic atomic/idempotency D1 contract; local-only.
@@ -21,6 +22,7 @@ import './m06-sale-posting-workerd.spec.mjs'; // M06 isolated synthetic sale/ten
 import './m07-cash-return-workerd.spec.mjs'; // M07 single-invoice Cash return exact-once/rollback proof on M06 source.
 import './m07-store-credit-workerd.spec.mjs'; // M07 signed Customer credit with no Cash/Bank and cross-method replay guard.
 import './m07-cash-batch-workerd.spec.mjs'; // M07 2–20 original-invoice Cash batch all-or-nothing local D1.
+import './m07-store-credit-batch-workerd.spec.mjs'; // M07 ordered signed Store Credit batch exact-once/rollback local D1.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
