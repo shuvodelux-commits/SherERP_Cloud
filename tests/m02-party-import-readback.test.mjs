@@ -539,3 +539,63 @@ test('approved inactive Customer and active Supplier retain separate correct rol
   assert.equal(report.approvalEvidencePersistent,true);
   assert.deepEqual(report.issues,[]);
 });
+
+
+test('mirrored future D1 cannot certify invalid source physical-row positions',()=>{
+  const values=[-1,1,2.5,'2',Number.MAX_SAFE_INTEGER+1,undefined];
+  for(const physicalRow of values){
+    const plan=planned();
+    const customer=plan.links.find(x=>x.sourceGroup==='CUSTOMERS');
+    assert.equal(customer.legacySheetRow,2);
+    customer.legacySheetRow=physicalRow;
+    const readback=snapshot(plan,{approvalRef:true});
+    const prior=structuredClone({plan,readback});
+    const report=audit(plan,readback);
+    assert.deepEqual(report.counts.expected,report.counts.actual);
+    assert.equal(report.identityRowsMatch,false,String(physicalRow));
+    assert.equal(report.approvalEvidencePersistent,false,String(physicalRow));
+    assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+    assert.doesNotMatch(JSON.stringify(report),
+      /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+    assert.deepEqual({plan,readback},prior,'readback must never alter evidence');
+  }
+});
+
+test('same original physical row cannot belong to two source IDs in the same group',()=>{
+  const rows=source();
+  rows.CUSTOMERS.push({
+    'Customer ID':'CUS-002','Customer Name':'Distinct Other Shop',
+    'Phone':'01500000003','Status':'Active','_rowIndex':3
+  });
+  const plan=planPartyImport(rows,approval());
+  assert.equal(plan.summary.pendingIdentityReviews,0);
+  const linked=plan.links.filter(x=>x.sourceGroup==='CUSTOMERS');
+  assert.deepEqual(linked.map(x=>x.legacySheetRow),[2,3]);
+  const clean=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(clean.identityRowsMatch,true);
+  linked[1].legacySheetRow=2;
+  const readback=snapshot(plan,{approvalRef:true});
+  const prior=structuredClone({plan,readback});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|CUS-002|REVIEW-001|admin-01|01500000003/);
+  assert.deepEqual({plan,readback},prior);
+});
+
+test('null source positions and equal row numbers across distinct source groups remain valid',()=>{
+  const records=source();
+  delete records.CUSTOMERS[0]._rowIndex;
+  delete records.FINANCE_PERSONS[0]._rowIndex;
+  const plan=planPartyImport(records,approval());
+  assert.equal(plan.links.find(x=>x.sourceGroup==='CUSTOMERS').legacySheetRow,null);
+  assert.equal(plan.links.find(x=>x.sourceGroup==='FINANCE_PERSONS').legacySheetRow,null);
+  assert.equal(plan.links.find(x=>x.sourceGroup==='SUPPLIERS').legacySheetRow,2);
+  assert.equal(plan.links.find(x=>x.sourceGroup==='VENDORS').legacySheetRow,2);
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,true);
+  assert.equal(report.approvalEvidencePersistent,true);
+  assert.deepEqual(report.issues,[]);
+});
