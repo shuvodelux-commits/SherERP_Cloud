@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
 import './m04-auth-http-workerd.spec.mjs'; // M04 server-opt-in original RPC envelope against actual isolated D1.
 import './m03-settings-workerd.spec.mjs'; // M03 Settings Key/Value and restricted shell projection; local D1 only.
+import './m03-m04-settings-workerd.spec.mjs'; // M04 D1 sessions authorize source-shaped Settings CAS inside one SQL mutation.
 import './m04-atomic-authority-workerd.spec.mjs'; // M04 synthetic same-statement session/RBAC authority; local D1 only.
 import './m04-session-workerd.spec.mjs'; // M04 test-only source-shaped session authority via real local D1.
 import './m03-transaction-contract-workerd.spec.mjs'; // Separate synthetic atomic/idempotency D1 contract; local-only.
