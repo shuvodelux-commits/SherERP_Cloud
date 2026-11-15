@@ -104,9 +104,11 @@ END;
 -- from resurrecting sessions created before the change. Nonrecursive because
 -- the UPDATE inside each trigger touches only auth_version.
 CREATE TRIGGER trg_auth_user_version AFTER UPDATE OF
-  status,role_name,credential_state,password_algo,password_hash,password_salt,
+  full_name,phone_key,status,role_name,credential_state,password_algo,password_hash,password_salt,
   password_iterations,credential_version ON auth_users
-WHEN OLD.status IS NOT NEW.status
+WHEN OLD.full_name IS NOT NEW.full_name
+  OR OLD.phone_key IS NOT NEW.phone_key
+  OR OLD.status IS NOT NEW.status
   OR OLD.role_name IS NOT NEW.role_name
   OR OLD.credential_state IS NOT NEW.credential_state
   OR OLD.password_algo IS NOT NEW.password_algo
@@ -126,6 +128,45 @@ WHEN OLD.role_name IS NOT NEW.role_name
   OR OLD.allowed_modules IS NOT NEW.allowed_modules
 BEGIN
   UPDATE auth_roles SET auth_version=OLD.auth_version+1 WHERE role_name=NEW.role_name;
+END;
+
+-- A role REPLACE can delete the existing row without normal DELETE
+-- triggers, then reset auth_version to 1 and revive old staff sessions.
+-- Allow genuinely new roles, never replace a role's authority identity.
+CREATE TRIGGER trg_auth_role_no_replace BEFORE INSERT ON auth_roles
+WHEN EXISTS (SELECT 1 FROM auth_roles r WHERE r.role_name=NEW.role_name)
+BEGIN
+  SELECT RAISE(ABORT,'role replacement forbidden');
+END;
+
+-- Frozen RoleManagement.gs refuses deleting roles assigned to ANY user.
+-- Do not let role deletion/recreation reset an active session's role epoch.
+CREATE TRIGGER trg_auth_role_assigned_no_delete BEFORE DELETE ON auth_roles
+WHEN EXISTS (SELECT 1 FROM auth_users u WHERE u.role_name=OLD.role_name)
+BEGIN
+  SELECT RAISE(ABORT,'assigned role cannot be deleted');
+END;
+
+-- Keep session authority epochs monotonic. A direct UPDATE reducing one
+-- of these counters could revalidate a bearer issued before a role/account
+-- change. Ordinary trigger-owned increments and credential upgrades remain
+-- allowed; this prevents rollback, not arbitrary privileged D1 edits.
+CREATE TRIGGER trg_auth_user_epoch_no_rollback BEFORE UPDATE OF auth_version ON auth_users
+WHEN NEW.auth_version < OLD.auth_version
+BEGIN
+  SELECT RAISE(ABORT,'user authority version rollback forbidden');
+END;
+
+CREATE TRIGGER trg_auth_role_epoch_no_rollback BEFORE UPDATE OF auth_version ON auth_roles
+WHEN NEW.auth_version < OLD.auth_version
+BEGIN
+  SELECT RAISE(ABORT,'role authority version rollback forbidden');
+END;
+
+CREATE TRIGGER trg_auth_credential_epoch_no_rollback BEFORE UPDATE OF credential_version ON auth_users
+WHEN NEW.credential_version < OLD.credential_version
+BEGIN
+  SELECT RAISE(ABORT,'credential version rollback forbidden');
 END;
 
 CREATE TABLE auth_sessions (

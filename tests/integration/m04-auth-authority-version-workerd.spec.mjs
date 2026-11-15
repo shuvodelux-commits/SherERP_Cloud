@@ -97,3 +97,180 @@ test('role permission update after password verification but before SQL insert d
   assert.deepEqual(output,{authenticated:false});
   assert.equal((await DB.prepare("SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id='USR-VERSION-CASHIER' AND created_at_ms=?").bind(BASE+40_000).first()).n,0);
 });
+
+
+test('REPLACE may not reset a role authority epoch while its staff session is active',async()=>{
+  const role='M04-Replace',phone='01720000009';
+  const old='{"sales":{"view":true}}';
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active',?)")
+    .bind(role,old).run();
+  await seed('USR-ROLE-REPLACE',phone,role);
+  const signed=await login(phone,BASE+50_000);
+  assert.equal(signed.body.authenticated,true);
+  const before=await DB.prepare("SELECT auth_version,permissions_json FROM auth_roles WHERE role_name=?")
+    .bind(role).first();
+  try {
+    await assert.rejects(
+      ()=>DB.prepare("INSERT OR REPLACE INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active',?)")
+        .bind(role,'{"sales":{"view":false}}').run(),
+      /role.*replace|constraint|unique/i
+    );
+  } finally {
+    const current=await DB.prepare("SELECT permissions_json FROM auth_roles WHERE role_name=?").bind(role).first();
+    if(current?.permissions_json!==old)
+      await DB.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name=?").bind(old,role).run();
+  }
+  assert.deepEqual(await DB.prepare("SELECT auth_version,permissions_json FROM auth_roles WHERE role_name=?")
+    .bind(role).first(),before);
+  assert.equal((await validate(signed.body.token,BASE+51_000)).body.authenticated,true);
+});
+
+test('delete assigned role denied, including when assigned user is inactive; unassigned role can delete',async()=>{
+  const role='M04-Assigned',phone='01720000010';
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active','{}')")
+    .bind(role).run();
+  await seed('USR-ROLE-ASSIGNED',phone,role);
+  const signed=await login(phone,BASE+60_000);
+  assert.equal(signed.body.authenticated,true);
+  try {
+    await assert.rejects(()=>DB.prepare("DELETE FROM auth_roles WHERE role_name=?")
+      .bind(role).run(),/assigned|role.*delete|constraint/i);
+  } finally {
+    const exists=await DB.prepare("SELECT role_name FROM auth_roles WHERE role_name=?").bind(role).first();
+    if(!exists) await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active','{}')")
+      .bind(role).run();
+  }
+  assert.equal((await validate(signed.body.token,BASE+61_000)).body.authenticated,true);
+  await DB.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='USR-ROLE-ASSIGNED'").run();
+  await assert.rejects(()=>DB.prepare("DELETE FROM auth_roles WHERE role_name=?")
+    .bind(role).run(),/assigned|role.*delete|constraint/i);
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES ('M04-Unused','Active','{}')").run();
+  await DB.prepare("DELETE FROM auth_roles WHERE role_name='M04-Unused'").run();
+});
+
+
+test('role auth epoch cannot roll back to revive a session after permission changes',async()=>{
+  const role='M04-Role-Epoch-Monotonic',phone='01720000011';
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,'Active','{}')")
+    .bind(role).run();
+  await seed('USR-ROLE-EPOCH-MONOTONIC',phone,role);
+  const issued=await login(phone,BASE+70_000);
+  assert.equal(issued.body.authenticated,true);
+  const previous=(await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?')
+    .bind(role).first()).auth_version;
+  await DB.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name=?")
+    .bind('{"sales":{"view":false}}',role).run();
+  const latest=(await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?')
+    .bind(role).first()).auth_version;
+  assert.ok(latest>previous);
+  assert.deepEqual(await validate(issued.body.token,BASE+71_000),deny);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_roles SET auth_version=? WHERE role_name=?')
+      .bind(previous,role).run(),/rollback|monotonic|constraint/i);
+  } finally {
+    const current=await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?').bind(role).first();
+    if(current.auth_version<latest)
+      await DB.prepare('UPDATE auth_roles SET auth_version=? WHERE role_name=?').bind(latest,role).run();
+  }
+  assert.equal((await DB.prepare('SELECT auth_version FROM auth_roles WHERE role_name=?')
+    .bind(role).first()).auth_version,latest);
+  assert.deepEqual(await validate(issued.body.token,BASE+72_000),deny);
+});
+
+test('user auth epoch cannot be rolled back after disabling and restoring an account',async()=>{
+  const phone='01720000012',id='USR-AUTH-EPOCH-MONOTONIC';
+  await seed(id,phone);
+  const issued=await login(phone,BASE+80_000);
+  assert.equal(issued.body.authenticated,true);
+  const previous=(await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).auth_version;
+  await DB.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id=?").bind(id).run();
+  await DB.prepare("UPDATE auth_users SET status='Active' WHERE user_id=?").bind(id).run();
+  const latest=(await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).auth_version;
+  assert.ok(latest>previous);
+  assert.deepEqual(await validate(issued.body.token,BASE+81_000),deny);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_users SET auth_version=? WHERE user_id=?')
+      .bind(previous,id).run(),/rollback|monotonic|constraint/i);
+  } finally {
+    const current=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?').bind(id).first();
+    if(current.auth_version<latest)
+      await DB.prepare('UPDATE auth_users SET auth_version=? WHERE user_id=?').bind(latest,id).run();
+  }
+  assert.equal((await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).auth_version,latest);
+  assert.deepEqual(await validate(issued.body.token,BASE+82_000),deny);
+});
+
+test('credential version cannot decrease after a credential rotation',async()=>{
+  const phone='01720000013',id='USR-CREDENTIAL-EPOCH-MONOTONIC';
+  await seed(id,phone);
+  const issued=await login(phone,BASE+90_000);
+  assert.equal(issued.body.authenticated,true);
+  const previous=(await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).credential_version;
+  await DB.prepare('UPDATE auth_users SET credential_version=credential_version+1 WHERE user_id=?')
+    .bind(id).run();
+  const latest=(await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).credential_version;
+  assert.equal(latest,previous+1);
+  assert.deepEqual(await validate(issued.body.token,BASE+91_000),deny);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_users SET credential_version=? WHERE user_id=?')
+      .bind(previous,id).run(),/rollback|monotonic|constraint/i);
+  } finally {
+    const current=await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+      .bind(id).first();
+    if(current.credential_version<latest)
+      await DB.prepare('UPDATE auth_users SET credential_version=? WHERE user_id=?').bind(latest,id).run();
+  }
+  assert.equal((await DB.prepare('SELECT credential_version FROM auth_users WHERE user_id=?')
+    .bind(id).first()).credential_version,latest);
+  assert.deepEqual(await validate(issued.body.token,BASE+92_000),deny);
+});
+
+
+test('changing staff login phone invalidates old bearer and accepts only the new phone',async()=>{
+  const userId='USR-STAFF-PHONE-CHANGE',oldPhone='01720000014',newPhone='01720000016';
+  await seed(userId,oldPhone);
+  const issued=await login(oldPhone,BASE+100_000);
+  assert.equal(issued.body.authenticated,true);
+  const before=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  await DB.prepare('UPDATE auth_users SET phone_key=? WHERE user_id=?')
+    .bind(newPhone,userId).run();
+  const after=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  assert.equal(after.auth_version,before.auth_version+1);
+  assert.deepEqual(await validate(issued.body.token,BASE+101_000),deny);
+  assert.equal((await login(oldPhone,BASE+102_000)).body.authenticated,false);
+  const fresh=await login(newPhone,BASE+103_000);
+  assert.equal(fresh.body.authenticated,true);
+  assert.equal(fresh.body.user.id,userId);
+  assert.notEqual(fresh.body.token,issued.body.token);
+});
+
+test('staff full-name edits invalidate prior bearer but no-op profile writes preserve current authority',async()=>{
+  const userId='USR-STAFF-NAME-CHANGE',phone='01720000015',updatedName='Updated Synthetic Staff';
+  await seed(userId,phone);
+  const issued=await login(phone,BASE+110_000);
+  assert.equal(issued.body.authenticated,true);
+  const before=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  await DB.prepare('UPDATE auth_users SET full_name=? WHERE user_id=?')
+    .bind(updatedName,userId).run();
+  const after=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  assert.equal(after.auth_version,before.auth_version+1);
+  assert.deepEqual(await validate(issued.body.token,BASE+111_000),deny);
+  const fresh=await login(phone,BASE+112_000);
+  assert.equal(fresh.body.authenticated,true);
+  assert.equal(fresh.body.user.name,updatedName);
+  await DB.prepare('UPDATE auth_users SET full_name=full_name WHERE user_id=?')
+    .bind(userId).run();
+  const noop=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  assert.equal(noop.auth_version,after.auth_version);
+  assert.equal((await validate(fresh.body.token,BASE+113_000)).body.authenticated,true);
+});
