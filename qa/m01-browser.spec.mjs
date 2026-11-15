@@ -334,3 +334,105 @@ test('stale browser token is rejected, cleared and not revalidated on next reloa
     assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
   }finally{await page.close();}
 });
+
+
+test('original thermal renderer prints short 58mm and 80mm receipts at actual paper width', async t=>{
+  for(const size of ['58mm','80mm']){
+    await t.test(size+' original receipt',async()=>{
+      const page=await browser.newPage({viewport:{width:1280,height:800}});
+      try{
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        const structure=await page.evaluate(receiptSize=>{
+          if(typeof renderInvoiceHtmlThermal_!=='function')
+            throw new Error('Original thermal renderer unavailable in compiled frontend');
+          const inv={
+            invoiceId:'M01-THERMAL-SYNTHETIC',date:'2026-11-15',
+            customerName:'Synthetic Buyer',customerPhone:'',
+            items:[
+              {name:'Synthetic cable',qty:1,unit:'pcs',unitPrice:50,lineTotal:50},
+              {name:'Synthetic switch',qty:2,unit:'pcs',unitPrice:35,lineTotal:70}
+            ],
+            subtotal:120,discount:20,grandTotal:100,paidAmount:100,dueAmount:0,
+            customerCreditUsed:0,paymentMethod:'Cash',
+            payments:[{method:'Cash',applied:100,tendered:110,change:10}],
+            shop:{
+              name:'Synthetic Hardware',nameBangla:'',address:'Synthetic Road',
+              phone1:'',phone2:'',currencySymbol:'৳',receiptSize,
+              showBismillah:false,showSignature:false,
+              terms:'[{"text":"Synthetic terms excluded from thermal"}]',
+              paymentMethods:'[{"label":"Synthetic payment chip","value":"000"}]',
+              footer:'A4-only footer'
+            }
+          };
+          const host=document.getElementById('printHost');
+          host.innerHTML='<div class="invoice-paper thermal'+
+            (receiptSize==='58mm'?' size-58':'')+'">'+renderInvoiceHtmlThermal_(inv)+'</div>';
+          document.body.classList.add('printing-invoice');
+          const paper=host.querySelector('.invoice-paper');
+          return {
+            namedPage:getComputedStyle(paper).getPropertyValue('page').trim(),
+            pages:host.querySelectorAll('.thermal-page').length,
+            items:host.querySelectorAll('.thermal-item').length,
+            breakdown:host.querySelectorAll('.thermal-payment-breakdown').length,
+            text:host.innerText,
+            a4Tables:host.querySelectorAll('.inv-table').length,
+            a4Footers:host.querySelectorAll('.inv-footer-block, .inv-signatures, .inv-payment-chip').length
+          };
+        },size);
+        assert.equal(structure.namedPage,size==='58mm'?'thermal58':'thermal80');
+        assert.equal(structure.pages,1);
+        assert.equal(structure.items,2);
+        assert.equal(structure.breakdown,1);
+        assert.equal(structure.a4Tables,0);
+        assert.equal(structure.a4Footers,0);
+        assert.match(structure.text,/Synthetic cable/);
+        assert.match(structure.text,/Synthetic switch/);
+        assert.match(structure.text,/Payments at Sale/);
+        assert.match(structure.text,/Cash Change:/);
+        assert.doesNotMatch(structure.text,/A4-only footer|Synthetic terms excluded from thermal|Synthetic payment chip/);
+        await page.emulateMedia({media:'print'});
+        const pdf=await page.pdf({printBackground:true,preferCSSPageSize:true});
+        assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+        const body=pdf.toString('latin1');
+        const physicalPages=[...body.matchAll(/\/Type\s*\/Page\b/g)].length;
+        assert.equal(physicalPages,1,'short thermal receipt must not print a blank page');
+        const mediaBox=body.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
+        assert.ok(mediaBox,'Chromium PDF must expose physical page MediaBox');
+        const expectedWidth=(size==='58mm'?58:80)*72/25.4;
+        assert.ok(Math.abs(Number(mediaBox[1])-expectedWidth)<1.5,
+          size+' PDF paper width must match configured thermal roll, not A4');
+        await saveArtifactBuffer(pdf,'original-thermal-'+size+'.pdf');
+      }finally{await page.close();}
+    });
+  }
+});
+
+test('original thermal draft renderer shows draft marker without A4-only paid decoration',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    const result=await page.evaluate(()=>{
+      const source={
+        invoiceId:'M01-SYNTHETIC-DRAFT',date:'2026-11-15',customerName:'Synthetic Buyer',
+        items:[{name:'Synthetic item',qty:1,unitPrice:10,lineTotal:10}],
+        subtotal:10,discount:0,grandTotal:10,paidAmount:0,dueAmount:10,
+        shop:{name:'Synthetic Shop',currencySymbol:'৳',receiptSize:'58mm'}
+      };
+      const host=document.getElementById('printHost');
+      const render=isDraft=>{
+        host.innerHTML='<div class="invoice-paper thermal size-58">'+
+          renderInvoiceHtmlThermal_({...source,isDraft})+'</div>';
+        return {
+          draft:host.querySelectorAll('.thermal-draft').length,
+          due:host.querySelectorAll('.thermal-due').length,
+          paid:host.querySelectorAll('.inv-paid-badge').length,
+          rows:host.querySelectorAll('.thermal-item').length
+        };
+      };
+      return {draft:render(true),normal:render(false)};
+    });
+    assert.deepEqual(result.draft,{draft:1,due:1,paid:0,rows:1});
+    assert.deepEqual(result.normal,{draft:0,due:1,paid:0,rows:1});
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+  }finally{await page.close();}
+});
