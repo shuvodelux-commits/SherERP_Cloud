@@ -18,9 +18,9 @@ function native(source,name){
 }
 function frozenConst(name){
   const start=settings.indexOf('const '+name+' = [');
-  const end=settings.indexOf('\n];',start);
+  const end=settings.indexOf('];',start);
   assert.ok(start>=0 && end>start,'Missing pinned Settings whitelist '+name);
-  return settings.slice(start,end+3);
+  return settings.slice(start,end+2);
 }
 const keys=JSON.parse('['+settings.slice(
   settings.indexOf('const SETTINGS_EDITABLE_KEYS = [')+'const SETTINGS_EDITABLE_KEYS = ['.length,
