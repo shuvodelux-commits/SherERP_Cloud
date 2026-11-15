@@ -49,7 +49,7 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
       const id=str(source[spec.idColumn]);
       const legacySheetRow=source._rowIndex===undefined?null:source._rowIndex;
       if(legacySheetRow!==null){
-        if(!Number.isInteger(legacySheetRow)||legacySheetRow<2)throw new Error('Invalid legacy row position in '+group);
+        if(!Number.isSafeInteger(legacySheetRow)||legacySheetRow<2)throw new Error('Invalid legacy row position in '+group);
         if(seenSourceRows.has(legacySheetRow))throw new Error('Duplicate source row position in '+group);
         seenSourceRows.add(legacySheetRow);
       }
