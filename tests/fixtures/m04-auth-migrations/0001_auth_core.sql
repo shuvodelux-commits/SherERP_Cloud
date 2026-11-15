@@ -20,6 +20,9 @@ CREATE TABLE auth_users (
       AND phone_key NOT GLOB '*[^0-9]*'),
   role_name TEXT NOT NULL CHECK (length(trim(role_name)) > 0),
   status TEXT NOT NULL CHECK (status IN ('Active','Inactive')),
+  -- Imported staff may start locked until first source-hash verification.
+  credential_state TEXT NOT NULL DEFAULT 'Modern'
+    CHECK (credential_state IN ('Modern','LegacyPending')),
   password_algo TEXT NOT NULL DEFAULT 'pbkdf2-sha256'
     CHECK (password_algo='pbkdf2-sha256'),
   password_hash TEXT NOT NULL
@@ -31,6 +34,40 @@ CREATE TABLE auth_users (
   credential_version INTEGER NOT NULL DEFAULT 1 CHECK (credential_version>=1),
   auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1)
 ) STRICT;
+
+-- Offline import staging only: source SHA256 hashes are NEVER inserted into
+-- PBKDF2 verifier columns. Synthetic pending users hold random unknown
+-- placeholders; real source hashes stay in this separate guarded table.
+CREATE TABLE auth_legacy_credentials (
+  user_id TEXT PRIMARY KEY REFERENCES auth_users(user_id) ON DELETE RESTRICT,
+  legacy_hash TEXT NOT NULL
+    CHECK (length(legacy_hash)=64 AND legacy_hash NOT GLOB '*[^0-9a-f]*'),
+  legacy_salt TEXT NOT NULL
+    CHECK (length(legacy_salt) BETWEEN 1 AND 128)
+) STRICT;
+
+CREATE TRIGGER trg_auth_legacy_insert_guard BEFORE INSERT ON auth_legacy_credentials
+WHEN NOT EXISTS (SELECT 1 FROM auth_users u WHERE u.user_id=NEW.user_id
+  AND u.credential_state='LegacyPending')
+BEGIN
+  SELECT RAISE(ABORT,'legacy import requires pending staff identity');
+END;
+
+-- Never downgrade a modern account to an imported weak hash, even if a
+-- future staff-import or management helper makes a mistake.
+CREATE TRIGGER trg_auth_credential_downgrade BEFORE UPDATE OF credential_state ON auth_users
+WHEN OLD.credential_state='Modern' AND NEW.credential_state='LegacyPending'
+BEGIN
+  SELECT RAISE(ABORT,'modern credential downgrade forbidden');
+END;
+
+-- The old secret disappears in the SAME D1 write that commits new PBKDF2
+-- password data. A losing concurrent CAS cannot delete the legacy verifier.
+CREATE TRIGGER trg_auth_legacy_purge AFTER UPDATE OF credential_state ON auth_users
+WHEN OLD.credential_state='LegacyPending' AND NEW.credential_state='Modern'
+BEGIN
+  DELETE FROM auth_legacy_credentials WHERE user_id=NEW.user_id;
+END;
 
 -- Active Administrator accounts are intrinsic, not managed through auth_roles.
 -- These triggers enforce "the final active Administrator cannot disappear"
@@ -56,10 +93,11 @@ END;
 -- from resurrecting sessions created before the change. Nonrecursive because
 -- the UPDATE inside each trigger touches only auth_version.
 CREATE TRIGGER trg_auth_user_version AFTER UPDATE OF
-  status,role_name,password_algo,password_hash,password_salt,
+  status,role_name,credential_state,password_algo,password_hash,password_salt,
   password_iterations,credential_version ON auth_users
 WHEN OLD.status IS NOT NEW.status
   OR OLD.role_name IS NOT NEW.role_name
+  OR OLD.credential_state IS NOT NEW.credential_state
   OR OLD.password_algo IS NOT NEW.password_algo
   OR OLD.password_hash IS NOT NEW.password_hash
   OR OLD.password_salt IS NOT NEW.password_salt
