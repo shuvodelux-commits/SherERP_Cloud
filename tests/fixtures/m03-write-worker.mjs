@@ -2,6 +2,7 @@
 import {createLegacyCatalogAppendAdapter} from '../../src/db/legacy-catalog-append.js';
 import {createLegacyCatalogReadAdapter} from '../../src/db/legacy-catalog-read.js';
 import {createLegacyCatalogActivationAdapter} from '../../src/db/legacy-catalog-activation.js';
+import {createGuardedCatalogDeleteAdapter} from '../../src/db/legacy-catalog-delete.js';
 
 const json=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 const FIXTURES=Object.freeze({
@@ -47,10 +48,25 @@ const ACTIVATIONS=Object.freeze({
   '/__m03_write_test__/activate-unit-1':Object.freeze(['PRODUCT_UNITS',2,'UNIT-1','Inactive']),
 });
 
+// Three fixed synthetic test-only delete actions. Request bodies are ignored.
+const DELETES=Object.freeze({
+  '/__m03_write_test__/delete-category-batch-1':Object.freeze(['PRODUCT_CATEGORIES',7,Object.freeze({sourceId:'CAT-W-BATCH-1',name:'Hardware',status:'Active'})]),
+  '/__m03_write_test__/delete-category-batch-2':Object.freeze(['PRODUCT_CATEGORIES',7,Object.freeze({sourceId:'CAT-W-BATCH-2',name:'বাংলা',status:'Active'})]),
+  '/__m03_write_test__/delete-unit-last':Object.freeze(['PRODUCT_UNITS',3,Object.freeze({sourceId:'UNIT-W-A',name:'Feet',status:'Active'})])
+});
+
 export default {
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
     if(request.method==='POST') {
+      if(Object.hasOwn(DELETES,path)) {
+        try {
+          await createGuardedCatalogDeleteAdapter(env).deleteRow_(...DELETES[path]);
+          return json(200,{deleted:true});
+        } catch {
+          return json(500,{error:'Synthetic D1 catalog deletion refused'});
+        }
+      }
       if(Object.hasOwn(ACTIVATIONS,path)) {
         try {
           const rowIndex=await createLegacyCatalogActivationAdapter(env).activate_(...ACTIVATIONS[path]);

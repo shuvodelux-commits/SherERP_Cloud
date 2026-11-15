@@ -114,3 +114,30 @@ test('real Workerd D1 guarded reactivation rejects stale replay and corrupt sour
   assert.equal((await call('/__m03_write_test__/activate-unit-1','POST')).status,500);
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM settings').first()).n,0);
 });
+
+test('real Workerd/D1 catalog delete rolls back on mid-batch failure and compacts physical Sheet rows',async()=>{
+  const pre=await db.prepare("SELECT category_id,legacy_sheet_row FROM product_categories WHERE category_id LIKE 'CAT-W-BATCH-%' ORDER BY legacy_sheet_row").all();
+  assert.deepEqual(pre.results,[
+    {category_id:'CAT-W-BATCH-1',legacy_sheet_row:7},
+    {category_id:'CAT-W-BATCH-2',legacy_sheet_row:8}
+  ]);
+  await db.prepare(`CREATE TRIGGER stop_compaction BEFORE UPDATE ON product_categories
+    WHEN NEW.legacy_sheet_row>1002
+    BEGIN SELECT RAISE(ABORT,'forced-middle-step-failure'); END`).run();
+  assert.equal((await call('/__m03_write_test__/delete-category-batch-1','POST')).status,500);
+  const rolledBack=await db.prepare("SELECT category_id,legacy_sheet_row FROM product_categories WHERE category_id LIKE 'CAT-W-BATCH-%' ORDER BY legacy_sheet_row").all();
+  assert.deepEqual(rolledBack.results,pre.results,'aborting the shift must restore the already-deleted row');
+  await db.prepare('DROP TRIGGER stop_compaction').run();
+
+  assert.deepEqual(await call('/__m03_write_test__/delete-category-batch-1','POST'),{status:200,body:{deleted:true}});
+  const after=await db.prepare("SELECT category_id,legacy_sheet_row FROM product_categories WHERE category_id LIKE 'CAT-W-BATCH-%' ORDER BY legacy_sheet_row").all();
+  assert.deepEqual(after.results,[{category_id:'CAT-W-BATCH-2',legacy_sheet_row:7}]);
+  assert.equal((await call('/__m03_write_test__/delete-category-batch-1','POST')).status,500,'idempotent retry must not delete a shifted sibling');
+  assert.deepEqual((await call('/__m03_write_test__/categories')).body.rows.map(row=>row._rowIndex),[2,3,4,5,6,7]);
+  assert.deepEqual(await call('/__m03_write_test__/delete-category-batch-2','POST'),{status:200,body:{deleted:true}});
+  assert.deepEqual((await call('/__m03_write_test__/categories')).body.rows.map(row=>row._rowIndex),[2,3,4,5,6]);
+  assert.deepEqual(await call('/__m03_write_test__/delete-unit-last','POST'),{status:200,body:{deleted:true}});
+  const units=await db.prepare('SELECT unit_id,legacy_sheet_row FROM product_units ORDER BY legacy_sheet_row').all();
+  assert.deepEqual(units.results,[{unit_id:'UNIT-1',legacy_sheet_row:2}]);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM settings').first()).n,0);
+});
