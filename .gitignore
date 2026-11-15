@@ -7,3 +7,6 @@ node_modules/
 .env.*
 !.env.example
 source-audit.json
+
+# M01 Playwright QA artifacts
+test-results/

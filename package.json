@@ -13,6 +13,10 @@
     "build:frontend": "npm run build:frontend:raw && node scripts/patch-rpc.mjs dist/index.html",
     "inventory:schema": "node scripts/inventory-schema.mjs legacy/source/Config.gs",
     "catalog:dry-run": "node scripts/dry-run-catalog.mjs",
-    "party:dry-run": "node scripts/dry-run-party.mjs"
+    "party:dry-run": "node scripts/dry-run-party.mjs",
+    "test:m01:browser": "node --test qa/m01-browser.spec.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
   }
 }

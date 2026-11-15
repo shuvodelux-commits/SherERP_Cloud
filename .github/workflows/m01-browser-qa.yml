@@ -1,0 +1,33 @@
+name: M01 preserved-UI Chromium smoke QA
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Chromium desktop, mobile and synthetic A4 print
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned browser automation
+        run: npm ci
+      - name: Install isolated Chromium dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run original UI in real browser with fail-closed RPC fixture
+        run: npm run test:m01:browser
+      - name: Keep synthetic evidence for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m01-browser-evidence
+          path: test-results/m01-browser/
+          retention-days: 7
+          if-no-files-found: warn
