@@ -1,0 +1,29 @@
+name: M04 authentication real Workerd D1 (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  local-auth-workerd-d1:
+    name: Verify legacy and modern login against isolated local D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked baseline dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Wrangler only on this disposable test runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Execute complete internal M04 login and session D1 suites
+        run: |
+          node --test \
+            tests/integration/m04-auth-workerd.spec.mjs \
+            tests/integration/m04-auth-authority-version-workerd.spec.mjs \
+            tests/integration/m04-legacy-rpc-workerd.spec.mjs \
+            tests/integration/m04-legacy-upgrade-workerd.spec.mjs
