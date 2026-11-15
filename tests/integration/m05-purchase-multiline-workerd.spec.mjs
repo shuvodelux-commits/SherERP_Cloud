@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
 import {M05ML_DDL,M05ML_SEED} from '../fixtures/m05-purchase-multiline-schema.mjs';
 import {createSyntheticMultilinePurchasePoster} from '../fixtures/m05-purchase-multiline-contract.mjs';
+import {planPurchaseInventoryEdit,planPurchaseInventoryDelete} from '../../src/modules/purchase-correction-guards.js';
 
 // Synthetic local D1; NEVER the deployed Worker, main D1, or real shop data.
 const server=createTestHarness({workers:[{configPath:'./wrangler.m05-multiline-test.jsonc'}]});
@@ -231,4 +232,60 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
       assert.equal(await count('m05ml_items'),0);
     }
   });
+
+  test('real D1 posted two-SKU purchase correction guard refuses consumed lot and never posts reversal',async()=>{
+    const receiptId='PUR-OP-CORR-00001';
+    assert.equal((await poster().post(input('OP-CORR-00001'))).status,'COMMITTED');
+    const readSourceShape=async()=>({
+      purchases:(await all("SELECT * FROM m05ml_purchases WHERE purchase_id='"+receiptId+"'"))
+        .map(p=>({'Purchase ID':p.purchase_id,'Is Deleted':'FALSE'})),
+      items:(await all("SELECT * FROM m05ml_items WHERE purchase_id='"+receiptId+"'"))
+        .map(i=>({'Purchase ID':i.purchase_id,'Product ID':i.sku,'Product Name':i.sku,
+          'Quantity':i.qty,'Unit Price':i.cost_paisa/100})),
+      lots:(await all("SELECT * FROM m05ml_lots WHERE purchase_id='"+receiptId+"'"))
+        .map(l=>({'Purchase ID':l.purchase_id,'Lot ID':l.lot_id,'Product ID':l.sku,
+          'Original Quantity':l.qty,'Remaining Quantity':l.remaining_qty})),
+      products:(await all("SELECT * FROM m05ml_products WHERE tenant_id='SHOP-A'"))
+        .map(p=>({'Product ID':p.sku,'Product Name':p.sku,'Current Stock':p.stock})),
+      returns:[]
+    });
+    const original=await readSourceShape();
+    const propose=[{productId:'PIPE',name:'PIPE',qty:1,unitPrice:15.25},
+      {productId:'SWITCH',name:'SWITCH',qty:3,unitPrice:7.5}];
+    assert.deepEqual(planPurchaseInventoryEdit(receiptId,original,propose),{
+      stockChanges:[{productId:'PIPE',delta:-1,newStock:5}],costChanges:[]
+    });
+    assert.deepEqual(planPurchaseInventoryDelete(receiptId,original),{
+      stockReversals:[
+        {productId:'PIPE',qty:2,newStock:4,lotIds:['LOT-'+receiptId+'-PIPE']},
+        {productId:'SWITCH',qty:3,newStock:2,lotIds:['LOT-'+receiptId+'-SWITCH']}
+      ]
+    });
+
+    // Simulate an independent POS FIFO consumption AFTER preview.
+    await DB.prepare("UPDATE m05ml_lots SET remaining_qty=remaining_qty-1 WHERE sku='PIPE'").run();
+    await DB.prepare("UPDATE m05ml_products SET stock=stock-1 WHERE sku='PIPE'").run();
+    const latest=await readSourceShape();
+    const beforeChecks=await snapshot();
+    assert.deepEqual(planPurchaseInventoryEdit(receiptId,latest,propose),{
+      stockChanges:[{productId:'PIPE',delta:-1,newStock:4}],costChanges:[]
+    });
+    assert.throws(()=>planPurchaseInventoryEdit(receiptId,latest,[
+      {...propose[0],unitPrice:16},propose[1]
+    ]),/Purchase price cannot be changed after stock from this lot has already been sold/);
+    assert.throws(()=>planPurchaseInventoryDelete(receiptId,latest),
+      /Cannot delete this purchase - stock from it has already been sold: PIPE \(1 of 2 already sold\)/);
+    assert.deepEqual(await snapshot(),beforeChecks,'read-only correction checks cannot mutate accounting');
+
+    // A second sale makes the previously eligible -1 reduction stale.
+    await DB.prepare("UPDATE m05ml_lots SET remaining_qty=remaining_qty-1 WHERE sku='PIPE'").run();
+    await DB.prepare("UPDATE m05ml_products SET stock=stock-1 WHERE sku='PIPE'").run();
+    const newer=await readSourceShape();
+    assert.throws(()=>planPurchaseInventoryEdit(receiptId,newer,propose),
+      /only 0 of the 2 bought on this purchase is still unsold/);
+    assert.equal((await one("SELECT COUNT(*) AS n FROM m05ml_supplier_ledger")).n,1);
+    assert.equal((await one("SELECT COUNT(*) AS n FROM m05ml_cash_book")).n,1);
+    assert.equal((await one("SELECT customer_ar_paisa FROM m05ml_customer_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+  });
+
 });
