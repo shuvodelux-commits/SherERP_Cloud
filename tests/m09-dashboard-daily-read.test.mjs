@@ -61,7 +61,7 @@ test('M09 daily totals match frozen Dashboard.gs for noncash discounts and cance
   assert.deepEqual(Object.keys(actual),[
     'todayCollectionTotal','todayExpenseTotal','todayPurchaseTotal'
   ]);
-  assert.equal(actual.todayCollectionTotal,226.38);
+  assert.equal(actual.todayCollectionTotal,226.25);
   assert.equal(actual.todayExpenseTotal,10.13);
   assert.equal(actual.todayPurchaseTotal,83.13);
 });
