@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createSettingsReadAdapter} from '../../src/db/settings-read.js';
+import {createSourceShapedAppShellReader} from '../../src/modules/source-app-shell-reader.js';
 import {createGuardedShellSettingsUpdateAdapter} from '../../src/db/settings-update.js';
 
 const harness=createTestHarness({workers:[{configPath:'./wrangler.m03-settings-test.jsonc'}]});
@@ -191,4 +192,45 @@ test('real Workerd/D1 Currency Symbol can be cleared without exposing private se
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({key:'Shop Name',value:'FORGED'})
   })).status,404);
+});
+
+test('real local D1 composes original shell nav with only public Settings keys',async()=>{
+  await insert('Shop Name','নবাবী হার্ডওয়্যার',2);
+  await insert('Currency Symbol','৳',3);
+  await insert('Phone 1','01710000101',4);
+  await insert('Email','private@example.invalid',5);
+  await insert('Delete Confirmation Key','SECRET_DELETE',6);
+  await insert('Invoice Logo','SECRET_LOGO',7);
+  const before=await records();
+  const adapter=createSourceShapedAppShellReader({DB});
+  const result=await adapter.getAppShellData();
+  assert.equal(result.success,true);
+  assert.deepEqual(Object.keys(result.data),['shopName','currencySymbol','navItems']);
+  assert.equal(result.data.shopName,'নবাবী হার্ডওয়্যার');
+  assert.equal(result.data.currencySymbol,'৳');
+  assert.ok(Array.isArray(result.data.navItems));
+  assert.ok(result.data.navItems.some(x=>x.key==='settings' &&
+    x.children.some(y=>y.key==='users')));
+  for(const secret of ['01710000101','private@example.invalid','SECRET_DELETE','SECRET_LOGO'])
+    assert.equal(JSON.stringify(result).includes(secret),false,secret);
+  assert.deepEqual(await records(),before,'shell is read-only in actual D1');
+});
+
+test('real local D1 shell respects read freshness and isolates deep nested nav mutations',async()=>{
+  const adapter=createSourceShapedAppShellReader({DB});
+  const first=await adapter.getAppShellData();
+  assert.equal(first.data.shopName,'Hardware Store ERP');
+  assert.equal(first.data.currencySymbol,'');
+  await insert('Shop Name','Initial',2);
+  await insert('Currency Symbol','৳',3);
+  const second=await adapter.getAppShellData();
+  assert.equal(second.data.shopName,'Initial');
+  const before=structuredClone(second.data.navItems);
+  second.data.navItems[0].label='MUTATED';
+  second.data.navItems.find(x=>x.key==='sales').children[0].label='MUTATED CHILD';
+  await DB.prepare("UPDATE settings SET value='Latest' WHERE key='Shop Name'").run();
+  const third=await adapter.getAppShellData();
+  assert.equal(third.data.shopName,'Latest');
+  assert.deepEqual(third.data.navItems,before,'no cached navigation mutation');
+  assert.equal((await records()).length,2);
 });
