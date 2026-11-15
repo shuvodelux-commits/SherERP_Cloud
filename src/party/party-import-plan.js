@@ -76,7 +76,13 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
   }
   const duplicateKeys=new Set([...byKey].filter(([,rows])=>rows.length>1).map(([key])=>key));
   for(const key of duplicateKeys){
-    const row=byKey.get(key)[0];
+    // Preserve exact source ID; a stable physical anchor must not depend on
+    // the order of exported rows. Prefer known positions over missing ones.
+    const row=byKey.get(key).reduce((best,next)=>
+      next.legacySheetRow!==null &&
+      (best.legacySheetRow===null || next.legacySheetRow<best.legacySheetRow)
+        ?next:best
+    );
     reviews.push({reviewId:reviewId('DUPLICATE_ID',key),sourceGroup:row.group,
       sourceId:row.id,legacySheetRow:row.legacySheetRow,reason:'DUPLICATE_ID',status:'OPEN'});
   }
