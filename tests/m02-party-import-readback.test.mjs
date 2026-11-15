@@ -413,3 +413,75 @@ test('source-backed Customer+Supplier review and original Finance 3-role plan re
   assert.equal(report.approvalEvidencePersistent,true);
   assert.deepEqual(report.issues,[]);
 });
+
+
+test('a source-backed ACTIVE Party cannot claim INACTIVE in a mirrored D1 snapshot',()=>{
+  const plan=planned();
+  const customer=plan.links.find(x=>x.sourceGroup==='CUSTOMERS');
+  const party=plan.parties.find(x=>x.partyId===customer.partyId);
+  assert.equal(customer.status,'ACTIVE');
+  assert.equal(party.status,'ACTIVE');
+  party.status='INACTIVE';
+  const readback=snapshot(plan,{approvalRef:true});
+  const before=structuredClone({plan,readback});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual({plan,readback},before,'status readback does not mutate evidence');
+});
+
+test('all-RETIRED original Payee Party cannot claim ACTIVE in matching readback',()=>{
+  const plan=planned();
+  const payee=plan.links.find(x=>x.sourceGroup==='EXPENSE_PAYEES');
+  const party=plan.parties.find(x=>x.partyId===payee.partyId);
+  assert.equal(payee.status,'RETIRED');
+  assert.equal(party.status,'INACTIVE');
+  party.status='ACTIVE';
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(report),/PAY-001|REVIEW-001|admin-01|01600000000/);
+});
+
+test('fabricated legacy link, Party and role status labels fail closed on matching rows',()=>{
+  for(const [table,source,status] of [
+    ['links','CUSTOMERS','INACTIVE'],
+    ['links','EXPENSE_PAYEES','DELETED'],
+    ['roles','Owner','RETIRED'],
+    ['parties','FINANCE_PERSONS','RETIRED']
+  ]){
+    const plan=planned();
+    let target;
+    if(table==='links')target=plan.links.find(x=>x.sourceGroup===source);
+    if(table==='roles')target=plan.roles.find(x=>x.role===source);
+    if(table==='parties'){
+      const finance=plan.links.find(x=>x.sourceGroup===source);
+      target=plan.parties.find(x=>x.partyId===finance.partyId);
+    }
+    assert.ok(target);
+    target.status=status;
+    const report=audit(plan,snapshot(plan,{approvalRef:true}));
+    assert.equal(report.identityRowsMatch,false,table+' status '+status);
+    assert.equal(report.approvalEvidencePersistent,false,table+' status '+status);
+    assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+    assert.doesNotMatch(JSON.stringify(report),/CUS-001|FIN-001|PAY-001|REVIEW-001|admin-01/);
+  }
+});
+
+test('valid mixed ACTIVE and RETIRED original Party links keep source-derived status',()=>{
+  const plan=planned();
+  const payee=plan.links.find(x=>x.sourceGroup==='EXPENSE_PAYEES');
+  const retiredParty=plan.parties.find(x=>x.partyId===payee.partyId);
+  const activeParties=plan.parties.filter(x=>x.partyId!==payee.partyId);
+  assert.equal(retiredParty.status,'INACTIVE');
+  assert.equal(activeParties.every(x=>x.status==='ACTIVE'),true);
+  assert.equal(plan.roles.find(x=>x.partyId===payee.partyId).status,'INACTIVE');
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,true);
+  assert.equal(report.approvalEvidencePersistent,true);
+  assert.deepEqual(report.issues,[]);
+});

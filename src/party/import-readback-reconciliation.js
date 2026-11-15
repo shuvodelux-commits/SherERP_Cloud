@@ -13,6 +13,8 @@ import {partyLegacyContracts} from './legacy-contracts.js';
 const tables=['parties','party_roles','party_legacy_links'];
 const validObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const validCount=value=>Number.isSafeInteger(value)&&value>=0;
+const validMemberStatus=value=>value==='ACTIVE'||value==='INACTIVE';
+const validLegacyStatus=value=>value==='ACTIVE'||value==='RETIRED';
 const rowKey=(row,columns)=>{
   const values=columns.map(column=>row[column]);
   return values.every(value=>typeof value==='string'&&value.length>0)
@@ -67,18 +69,20 @@ const utcReviewEvidence=value=>{
 function validPlanLinkage(plan){
   const ids=new Set(plan.parties.map(p=>p.partyId));
   const anchors=new Map([...ids].map(id=>[id,0]));
+  const activeSources=new Set();
   const observedRoles=new Map([...ids].map(id=>[id,new Set()]));
   const allowedRoles=new Map([...ids].map(id=>[id,new Set()]));
   const requiredRoles=new Map([...ids].map(id=>[id,new Set()]));
   const financeLinked=new Set();
   const proofsByParty=new Map(),ownersByApprovalRef=new Map();
   for(const role of plan.roles){
-    if(!ids.has(role.partyId))return false;
+    if(!ids.has(role.partyId)||!validMemberStatus(role.status))return false;
     observedRoles.get(role.partyId).add(role.role);
   }
   for(const link of plan.links){
-    if(!ids.has(link.partyId) ||
+    if(!ids.has(link.partyId) || !validLegacyStatus(link.status) ||
        !Object.hasOwn(partyLegacyContracts,link.sourceGroup))return false;
+    if(link.status==='ACTIVE')activeSources.add(link.partyId);
     const spec=partyLegacyContracts[link.sourceGroup];
     for(const role of spec.roles){
       requiredRoles.get(link.partyId).add(role);
@@ -118,6 +122,12 @@ function validPlanLinkage(plan){
        [...requiredRoles.get(id)].some(role=>!actual.has(role)) ||
        (financeLinked.has(id) &&
         !partyLegacyContracts.FINANCE_PERSONS.financeRoles.some(role=>actual.has(role))))
+      return false;
+  }
+  // Source-only planner derives Party ACTIVE iff any original link is ACTIVE.
+  for(const party of plan.parties){
+    if(!validMemberStatus(party.status) ||
+       (party.status==='ACTIVE')!==activeSources.has(party.partyId))
       return false;
   }
   return [...anchors.values()].every(count=>count===1) &&
