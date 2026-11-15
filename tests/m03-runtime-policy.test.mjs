@@ -28,6 +28,7 @@ test('runtime test workflow is PR-only, local-only, secret-free and excludes dep
   assert.doesNotMatch(yml,/secrets\.|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|--remote\b|wrangler deploy|--config wrangler\.staging\.jsonc/i);
   assert.match(yml,/npm install --no-save --package-lock=false wrangler@4\.161\.0/);
   assert.match(yml,/node --test tests\/integration\/m03-workerd\.spec\.mjs/);
+  assert.equal(read('tests/integration/m03-workerd.spec.mjs').includes("import './m03-catalog-append-workerd.spec.mjs'"),true);
 });
 
 test('production and PR-preview config retain their original DB-free status',()=>{
@@ -37,4 +38,21 @@ test('production and PR-preview config retain their original DB-free status',()=
   assert.deepEqual(cfg.previews,{});
   assert.match(read('src/index.js'),/database:'not-connected'/);
   assert.doesNotMatch(read('src/index.js'),/m03-readonly-worker|createCatalogReader|resolveLegacyPartyId/);
+});
+
+test('separate catalog write fixture is local-only and isolated from deployed Worker',()=>{
+  const cfg=JSON.parse(read('wrangler.m03-write-test.jsonc'));
+  assert.equal(cfg.name,'shererp-m03-write-workerd-test');
+  assert.equal(cfg.main,'tests/fixtures/m03-write-worker.mjs');
+  assert.equal(cfg.workers_dev,false);
+  assert.equal(cfg.routes,undefined);
+  assert.equal(cfg.assets,undefined);
+  assert.equal(cfg.previews,undefined);
+  assert.deepEqual(cfg.d1_databases,[{
+    binding:'DB',database_name:'shererp-m03-write-workerd-local',
+    database_id:'00000000-0000-0000-0000-000000000002',
+    migrations_dir:'migrations'
+  }]);
+  const live=read('src/index.js')+read('src/rpc/registry.js')+read('wrangler.preview.jsonc');
+  assert.doesNotMatch(live,/m03-write-worker|legacy-catalog-append|__m03_write_test__|shererp-m03-write-workerd-test/);
 });

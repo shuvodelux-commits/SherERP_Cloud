@@ -1,0 +1,14 @@
+{
+  "name": "shererp-m03-write-workerd-test",
+  "main": "tests/fixtures/m03-write-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shererp-m03-write-workerd-local",
+      "database_id": "00000000-0000-0000-0000-000000000002",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
