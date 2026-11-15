@@ -89,8 +89,9 @@ function aggregate(items){
 }
 
 /** Compares private preflight and independently SUPPLIED private readback. */
-export function reconcileGrossPartyCheckpoints({preflight,readback}={}){
+export function reconcileGrossPartyCheckpoints(input={}){
   try{
+    const {preflight,readback}=input;
     if(!plain(preflight)||!Array.isArray(preflight.blockingIssues)||
       !Array.isArray(preflight.currentCheckpoints)||
       !Array.isArray(preflight.openingCheckpoints)||
