@@ -213,3 +213,53 @@ test('staff preflight is internal: RPC and Worker remain fail closed',async()=>{
   // The public Worker explicitly reports unconfigured login as HTTP 503.
   assert.equal(response.status,503);
 });
+
+test('offline source preflight blocks staff-phone aliases even with distinct source IDs',()=>{
+  const users=[
+    staff({'Mobile Number':'01712345678'}),
+    cashier({'Mobile Number':'+8801712345678'}),
+    cashier({'User ID':'USR-0003','Mobile Number':'০১৭১২৩৪৫৬৭৮','Status':'Inactive'}),
+    cashier({'User ID':'USR-0004','Mobile Number':1712345678}),
+  ];
+  const before=structuredClone(users);
+  const result=auditLegacyStaffImport(users,[role()]);
+  assert.equal(result.preflightPass,false);
+  assert.equal(has(result,'user','USER_MOBILE_DUPLICATE',0),false);
+  for(const row of [1,2,3])
+    assert.equal(has(result,'user','USER_MOBILE_DUPLICATE',row),true,'duplicate staff row '+row);
+  assert.deepEqual(users,before);
+  assert.deepEqual(result.counts,{users:4,roles:1,activeAdministrators:1});
+});
+
+test('offline preflight fails closed on noncanonical phones instead of treating any nonblank string as login-safe',()=>{
+  const entries=['hello','+12025550100','0171234567','০১৭১২৩৪৫৬৭','00000000000','013000000001'];
+  for(const raw of entries){
+    const {users,roles}=sample();
+    users[1]['Mobile Number']=raw;
+    const out=auditLegacyStaffImport(users,roles);
+    assert.equal(has(out,'user','USER_MOBILE_UNSUPPORTED',1),true,'unsupported phone '+raw);
+    assert.equal(out.preflightPass,false);
+  }
+  const out=auditLegacyStaffImport([staff({'Mobile Number':null})],[role()]);
+  assert.equal(has(out,'user','USER_MOBILE_INVALID',0),true);
+  assert.equal(has(out,'user','USER_MOBILE_UNSUPPORTED',0),false);
+});
+
+test('distinct normalized staff phones pass and preflight reports never expose phone or credentials',()=>{
+  const users=[
+    staff({'Mobile Number':1712345678}),
+    cashier({'Mobile Number':'০১৮১২৩৪৫৬৭৮'}),
+  ];
+  const ok=auditLegacyStaffImport(users,[role()]);
+  assert.equal(ok.preflightPass,true);
+  assert.deepEqual(ok.issues,[]);
+  users[1]['Mobile Number']='+8801712345678';
+  const denied=auditLegacyStaffImport(users,[role()]);
+  assert.equal(has(denied,'user','USER_MOBILE_DUPLICATE',1),true);
+  const output=JSON.stringify(denied);
+  assert.equal(output.includes('1712345678'),false);
+  assert.equal(output.includes('+880'),false);
+  assert.equal(output.includes(hash),false);
+  assert.equal(output.includes(SALT),false);
+  assert.ok(denied.issues.every(i=>Object.keys(i).sort().join(',')==='code,row,scope'));
+});

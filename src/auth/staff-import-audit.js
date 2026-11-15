@@ -6,6 +6,9 @@
  * nor names, phones, role metadata or source IDs are returned or logged.
  * SESSIONS bearer tokens are intentionally out of scope.
  */
+import {normalizeLegacyStaffPhoneSearch} from './staff-phone-identity.js';
+
+const STAFF_PHONE_KEY=/^01[3-9][0-9]{8}$/;
 const SHA256_HEX=/^[a-f0-9]{64}$/;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -96,7 +99,7 @@ export function auditLegacyStaffImport(users,roles) {
   const counts={users:userCount,roles:roleCount,activeAdministrators:0};
   const issues=[];
   const usedRoleIds=new Set(),usedRoleNames=new Set();
-  const usedUserIds=new Set();
+  const usedUserIds=new Set(),usedStaffPhones=new Set();
   const availableRoles=new Map();
 
   // Build an exact source-name lookup, but detect case-folded conflicts for
@@ -145,7 +148,19 @@ export function auditLegacyStaffImport(users,roles) {
     else usedUserIds.add(id);
 
     if(!filled(row['Full Name'])) addIssue(issues,'user',i,'USER_NAME_INVALID');
-    if(!validMobile(row['Mobile Number'])) addIssue(issues,'user',i,'USER_MOBILE_INVALID');
+    const phone=row['Mobile Number'];
+    if(!validMobile(phone)) {
+      addIssue(issues,'user',i,'USER_MOBILE_INVALID');
+    } else {
+      // Preserve source identity; imported D1 login keys must be unambiguous.
+      // Do not select a winner, modify source rows, or reveal phone values.
+      const key=normalizeLegacyStaffPhoneSearch(phone);
+      if(!STAFF_PHONE_KEY.test(key))
+        addIssue(issues,'user',i,'USER_MOBILE_UNSUPPORTED');
+      else if(usedStaffPhones.has(key))
+        addIssue(issues,'user',i,'USER_MOBILE_DUPLICATE');
+      else usedStaffPhones.add(key);
+    }
     if(!validStatus(status)) addIssue(issues,'user',i,'USER_STATUS_INVALID');
     if(typeof row['Password Hash']!=='string' ||
        !SHA256_HEX.test(row['Password Hash']) ||
