@@ -121,3 +121,60 @@ export function projectSourceNavigation(navItems,profile){
 
   return {sidebarItems,groupTabs,sidebarLandings,firstPageKey};
 }
+
+/**
+ * Internal M03 desktop/mobile display layout, preserving the frozen
+ * javascript.html sidebarItemsInOrder_/buildMobileNav_/syncMobileNavigation_
+ * behavior. The browser remains the owner of actual DOM rendering.
+ *
+ * This is not authorization or an RPC interface. All role visibility comes
+ * from projectSourceNavigation, never a second permission rule set.
+ */
+export function projectSourceNavigationLayout(navItems,profile,currentPage){
+  const projected=projectSourceNavigation(navItems,profile);
+  const landingByKey=new Map(projected.sidebarLandings
+    .map(item=>[item.groupKey,item.pageKey]));
+  const order=item=>{
+    const n=Number(item?.sidebarOrder);
+    return Number.isFinite(n)?n:9999;
+  };
+
+  let lastGroup=null;
+  const desktop=projected.sidebarItems.slice()
+    .sort((a,b)=>order(a)-order(b))
+    .map(item=>{
+      const group=Number(item.sidebarGroup);
+      const dividerBefore=lastGroup!==null && group!==lastGroup;
+      lastGroup=group;
+      return {key:item.key,landingKey:landingByKey.get(item.key),dividerBefore};
+    });
+
+  // This is the original fixed bottom navigation order. The More sheet
+  // deliberately preserves source NAV_ITEMS order, unlike desktop sorting.
+  const primaryKeys=['dashboard','pos','sales','products'];
+  const primaryVisibleKeys=primaryKeys.filter(key=>
+    projected.sidebarItems.some(item=>item.key===key));
+  const more=projected.sidebarItems
+    .filter(item=>!primaryKeys.includes(item.key))
+    .map(item=>({key:item.key,landingKey:landingByKey.get(item.key)}));
+
+  // The original navGroupFor_ checks the full source menu, including child
+  // routes (such as posv2 and returnHistory), not the filtered sidebar.
+  function groupFor(key){
+    for(const item of navItems){
+      if(item.key===key && !item.children)return item;
+      if((item.children || []).some(child=>child.key===key))return item;
+      if(item.key===key)return item;
+    }
+    return null;
+  }
+  const activeGroup=groupFor(currentPage);
+  const parentKey=activeGroup?activeGroup.key:currentPage;
+  const activeKey=primaryKeys.includes(parentKey)?parentKey:'more';
+  const activeMoreKey=more.find(entry=>{
+    const target=groupFor(entry.landingKey);
+    return !!target && !!activeGroup && target.key===activeGroup.key;
+  })?.key??null;
+
+  return {desktop,mobile:{primaryVisibleKeys,more,activeKey,activeMoreKey}};
+}
