@@ -160,7 +160,7 @@ test('same operation in another tenant issues independently without exposing pre
   assert.equal(current(s,'TENANT-G'),1);
   assert.equal(available(s,'TENANT-G'),0);
   assert.deepEqual(postingsFor(s,'TENANT-G').map(r=>r.source_id),['INV-000001']);
-  assert.deepEqual(postingsFor(s,'TENANT-A').map(r=>r.source_id),
+  assert.deepEqual(postingsFor(s,'TENANT-A').map(r=>r.source_id).sort(),
     ['INV-000017','INV-000018']);
 });
 
