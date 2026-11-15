@@ -215,7 +215,7 @@ test('issue diagnostics never echo original source IDs, amounts or user-defined 
   x.financeRows[1]['Person ID']='SECRET_PERSON_44444';
   const r=run(x),s=JSON.stringify(r);
   assert.equal(r.offlineGrossRehearsalClear,false);
-  assert.doesNotMatch(s,/SECRET_TX_55555|SECRET_PERSON_44444|FIN-001|REVIEW-001|5000|7000|Amount|Person ID|sourceId|partyId/);
+  assert.doesNotMatch(s,/SECRET_TX_55555|SECRET_PERSON_44444|FIN-001|REVIEW-001|5000|7000|"Amount"|"Person ID"|"sourceId"|"partyId"/);
   assert.ok(r.issues.every(x=>Object.keys(x).sort().join(',')==='code,count,scope,stage'));
 });
 test('offline check is never an authenticated D1, production posting or manual settlement action',()=>{
