@@ -38,7 +38,7 @@ beforeEach(async()=>{
   for(const table of ['m05_supplier_ledger','m05_bank_book','m05_cash_book','m05_movements','m05_lots','m05_items','m05_purchases']) {
     await DB.prepare('DELETE FROM '+table).run();
   }
-  await DB.prepare("UPDATE m05_products SET stock=3,version=1,active=1,deleted=0,product_type='Standard' WHERE tenant_id='SHOP-A'").run();
+  await DB.prepare("UPDATE m05_products SET stock=CASE sku WHEN 'PIPE' THEN 3 ELSE 0 END,version=1,active=1,deleted=0,product_type=CASE sku WHEN 'BUNDLE' THEN 'Bundle' ELSE 'Standard' END WHERE tenant_id='SHOP-A'").run();
   await DB.prepare("UPDATE m05_suppliers SET payable_paisa=4000,active=1 WHERE tenant_id='SHOP-A'").run();
   await DB.prepare("UPDATE m05_party_links SET reviewed=1,party_id='PARTY-1' WHERE tenant_id='SHOP-A'").run();
   await DB.prepare("UPDATE m05_sessions SET state='Open' WHERE tenant_id='SHOP-A'").run();
@@ -130,7 +130,7 @@ test('concurrent operations cannot both spend the same product version',async()=
   assert.equal(status.filter(x=>x==='COMMITTED').length,1);
   assert.equal(status.every(x=>['COMMITTED','DECLINED','NEEDS_REVIEW'].includes(x)),true);
   assert.equal((await one('SELECT COUNT(*) AS n FROM m05_purchases')).n,1);
-  assert.equal((await one('SELECT stock FROM m05_products')).stock,5);
+  assert.equal((await one('SELECT stock FROM m05_products WHERE sku='PIPE'')).stock,5);
 });
 
 test('late ledger constraint failure rolls back receipt, lot, stock, cash and due in the same D1 transaction',async()=>{
