@@ -139,7 +139,7 @@ export function prepareGrossPartyBalances({sourceRows,approvedGroups=[],financeR
   // Party merge may contain additional roles from OTHER original records;
   // they never authorize attributing one source ID's transaction to another.
   const financeRolesBySource=new Map(sourceRows.FINANCE_PERSONS.map(row=>[
-    string(row['Person ID']).trim(),new Set(rolesForLegacyRow('FINANCE_PERSONS',row))
+    string(row['Person ID']),new Set(rolesForLegacyRow('FINANCE_PERSONS',row))
   ]));
   const perPerson=new Map();
   for(const [txId,rows] of [...ids].sort(([a],[b])=>a.localeCompare(b))){
@@ -148,8 +148,10 @@ export function prepareGrossPartyBalances({sourceRows,approvedGroups=[],financeR
       continue;
     }
     const row=rows[0];
-    const personId=string(row['Person ID']).trim();
-    if(!personId){
+    const personId=string(row['Person ID']);
+    // Preserve literal original identity; trim is used only for blank checking.
+    // Normalizing nonblank IDs can silently attribute finance roles across masters.
+    if(!personId.trim()){
       issue('FINANCE_PERSON_ID_REQUIRED','FINANCE_TRANSACTIONS');
       continue;
     }
