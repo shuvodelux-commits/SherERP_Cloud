@@ -30,6 +30,7 @@ const reversalState=async()=>({
   original:await snapshot(),
   deleted:await all('SELECT * FROM m05ml_delete_receipts ORDER BY operation_id'),
   audit:await all('SELECT * FROM m05ml_delete_audit ORDER BY operation_id'),
+  reversalMovements:await all('SELECT * FROM m05ml_delete_movements ORDER BY sku'),
   activeCash:await all('SELECT * FROM m05ml_active_cash_book ORDER BY purchase_id'),
   activeBank:await all('SELECT * FROM m05ml_active_bank_book ORDER BY purchase_id'),
   activeSupplierLedger:await all('SELECT * FROM m05ml_active_supplier_ledger ORDER BY purchase_id')
@@ -61,7 +62,7 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
   beforeEach(async()=>{
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_ledger').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_delete_audit').run();
-    for(const t of ['m05ml_delete_audit','m05ml_delete_receipts','m05ml_purchase_returns','m05ml_purchase_settlements'])
+    for(const t of ['m05ml_delete_movements','m05ml_delete_audit','m05ml_delete_receipts','m05ml_purchase_returns','m05ml_purchase_settlements'])
       await DB.prepare('DELETE FROM '+t).run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_purchase_immutable_delete').run();
     for(const table of [
@@ -328,6 +329,9 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     assert.equal((await all('SELECT * FROM m05ml_active_cash_book')).length,0,'source cash entry becomes hidden');
     assert.equal((await all('SELECT * FROM m05ml_active_supplier_ledger')).length,0,'source payable entry becomes hidden');
     assert.equal(await count('m05ml_purchases'),1,'purchase header remains immutable');
+    assert.deepEqual(await all('SELECT sku,units_out,balance_stock FROM m05ml_delete_movements ORDER BY sku'),[
+      {sku:'PIPE',units_out:2,balance_stock:4},{sku:'SWITCH',units_out:3,balance_stock:2}
+    ]);
     assert.equal((await one("SELECT reason,actor_id FROM m05ml_delete_receipts")).reason,'Incorrect original purchase');
     assert.deepEqual(await one('SELECT lines_reversed,due_reversed_paisa FROM m05ml_delete_audit'),{
       lines_reversed:2,due_reversed_paisa:3200
