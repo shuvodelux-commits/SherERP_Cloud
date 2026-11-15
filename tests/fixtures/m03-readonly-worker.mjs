@@ -19,6 +19,9 @@ export default {
         const limit=url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 50;
         return json(200,{rows:await createCatalogReader(env).listUnits(limit)});
       }
+      if(url.pathname==='/__m03_test__/product-bootstrap-references') {
+        return json(200,await createProductMasterOptionsReader(env).getBootstrapReferences());
+      }
       if(url.pathname==='/__m03_test__/product-master-options') {
         return json(200,await createProductMasterOptionsReader(env).getOptions());
       }

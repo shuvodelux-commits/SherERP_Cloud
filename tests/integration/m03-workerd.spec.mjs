@@ -1,5 +1,6 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import './m04-auth-http-workerd.spec.mjs'; // M04 server-opt-in original RPC envelope against actual isolated D1.
 import './m03-settings-workerd.spec.mjs'; // M03 Settings Key/Value and restricted shell projection; local D1 only.
@@ -117,6 +118,25 @@ test('source-shaped catalog reads execute via real local D1 and preserve physica
   assert.deepEqual(await query('/__m03_test__/legacy-find?sheet=PRODUCT_CATEGORIES&column=Category%20ID&value=CAT-2'),{
     status:200,body:{match:{row:{'Category ID':'CAT-2','Category Name':'দড়ি',Status:'Inactive','Created At':'',_rowIndex:3},rowIndex:3}}
   });
+});
+
+test('Products bootstrap reference slice awaits actual D1 catalogs and Settings with source defaults',async()=>{
+  const before=await db.prepare("SELECT (SELECT COUNT(*) FROM product_categories) AS categories, (SELECT COUNT(*) FROM product_units) AS units, (SELECT COUNT(*) FROM settings) AS settings").first();
+  const result=await query('/__m03_test__/product-bootstrap-references');
+  assert.deepEqual(result,{
+    status:200,
+    body:{
+      categories:[{id:'CAT-1',name:'Electrical'}],
+      units:[{id:'UNIT-1',name:'Pcs'},{id:'UNIT-2',name:'Feet'}],
+      currencySymbol:'',
+      lowStockThreshold:5
+    }
+  });
+  const after=await db.prepare("SELECT (SELECT COUNT(*) FROM product_categories) AS categories, (SELECT COUNT(*) FROM product_units) AS units, (SELECT COUNT(*) FROM settings) AS settings").first();
+  assert.deepEqual(after,before);
+  const live=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8')+
+    readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
+  assert.equal(live.includes('product-bootstrap-references'),false);
 });
 
 test('source-shaped test routes refuse Settings, other sheets and arbitrary columns without writes',async()=>{
