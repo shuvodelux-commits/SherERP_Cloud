@@ -67,7 +67,9 @@ test('SQL blocks raw session token, malformed salts, and duplicate session finge
    (token_hash,user_id,created_at_ms,last_activity_at_ms,expires_at_ms,user_auth_version,credential_version)
    VALUES (?,?,?,?,?,1,1)`);
   insert.run('ef'.repeat(32),'USR-1',1,1,2);
-  assert.throws(()=>insert.run('ef'.repeat(32),'USR-1',1,1,2),/UNIQUE/);
+  // The session REPLACE guard now rejects duplicate hashes before UNIQUE.
+  assert.throws(()=>insert.run('ef'.repeat(32),'USR-1',1,1,2),
+    /UNIQUE|session fingerprint replacement forbidden/);
   assert.throws(()=>insert.run('ab'.repeat(32),'UNKNOWN',1,1,2),/FOREIGN KEY/);
   db.close();
 });
