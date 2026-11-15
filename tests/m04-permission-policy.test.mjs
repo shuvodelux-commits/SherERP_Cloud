@@ -114,3 +114,21 @@ test('allowed module derivation rejects malformed, inherited and nonboolean view
   const inherited = Object.create({pos:{view:true}});
   assert.deepEqual(allowedStaffModules(inherited),[]);
 });
+
+test('hostile Proxy traps never crash staff policy normalization or expose inherited rights', () => {
+  const trap = new Proxy({}, {
+    getOwnPropertyDescriptor() { throw new Error('secret marker must not escape'); },
+  });
+  assert.deepEqual(sanitizeStaffPermissions(trap), {});
+  assert.deepEqual(sanitizeStaffPermissions({sales:trap}), {});
+  assert.deepEqual(sanitizeStaffPermissions({sales:{view:trap,edit:false}}), {});
+});
+
+test('hostile navigation projection cannot infer rights or invoke getters and traps', async () => {
+  const {allowedStaffModules} = await import('../src/modules/auth/permission-policy.js');
+  const trap = new Proxy({}, {
+    getOwnPropertyDescriptor() { throw new Error('secret marker must not escape'); },
+  });
+  assert.deepEqual(allowedStaffModules(trap), []);
+  assert.deepEqual(allowedStaffModules({sales:trap}), []);
+});
