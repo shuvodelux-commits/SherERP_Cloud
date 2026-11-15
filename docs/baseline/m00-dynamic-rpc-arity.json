@@ -1,0 +1,124 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "methodology": "AST source-only four dynamic browser RPCs vs original GAS positional formals; not authorization, not a Worker allowlist, not a business port",
+  "counts": {
+    "dynamicCallsites": 4,
+    "possibleTargetPairs": 16,
+    "matchedTargetPairs": 16
+  },
+  "callsites": [
+    {
+      "frontendFile": "products.html",
+      "line": 997,
+      "argumentSyntax": "fn",
+      "clientArguments": 2,
+      "targets": [
+        {
+          "name": "addProductCategory",
+          "backendFile": "ProductSettings.gs",
+          "backendArguments": 2
+        },
+        {
+          "name": "addProductUnit",
+          "backendFile": "ProductSettings.gs",
+          "backendArguments": 2
+        }
+      ]
+    },
+    {
+      "frontendFile": "products.html",
+      "line": 1030,
+      "argumentSyntax": "fn",
+      "clientArguments": 3,
+      "targets": [
+        {
+          "name": "setProductCategoryStatus",
+          "backendFile": "ProductSettings.gs",
+          "backendArguments": 3
+        },
+        {
+          "name": "setProductUnitStatus",
+          "backendFile": "ProductSettings.gs",
+          "backendArguments": 3
+        }
+      ]
+    },
+    {
+      "frontendFile": "vendors.html",
+      "line": 1062,
+      "argumentSyntax": "handlers.get",
+      "clientArguments": 2,
+      "targets": [
+        {
+          "name": "getVendorIssueForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 2
+        },
+        {
+          "name": "getVendorPaymentForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 2
+        },
+        {
+          "name": "getVendorReceiptForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 2
+        },
+        {
+          "name": "getVendorReturnForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 2
+        },
+        {
+          "name": "getVendorReturnReceivedForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 2
+        },
+        {
+          "name": "getVendorSourcingForEdit",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 2
+        }
+      ]
+    },
+    {
+      "frontendFile": "vendors.html",
+      "line": 1153,
+      "argumentSyntax": "handlers.update",
+      "clientArguments": 3,
+      "targets": [
+        {
+          "name": "updateVendorIssue",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 3
+        },
+        {
+          "name": "updateVendorPayment",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 3
+        },
+        {
+          "name": "updateVendorReceipt",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 3
+        },
+        {
+          "name": "updateVendorReturn",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 3
+        },
+        {
+          "name": "updateVendorReturnReceived",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 3
+        },
+        {
+          "name": "updateVendorSourcing",
+          "backendFile": "DeleteEngine.gs",
+          "backendArguments": 3
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+# M06: source parity for mixed Bundle/Standard POS profit preview (Superpowers)
+
+**2026-11-15; source pin:** `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, original `Sales.gs::estimatePosInvoiceProfit_`, `Bundles.gs::buildSaleStockDemands_`, `StockLots.gs`, `Utils.gs`. Repository rules: `AGENTS.md`, `docs/MIGRATION_PLAN.md`, `docs/WORKSTREAMS.md`, `docs/architecture/ADR-007-unified-party-relationships.md`.
+
+## Goal and acceptance
+Extend the merged M06 source-parity Standard-only POS profit estimator to Bundle and mixed Standard/Bundle carts **without changing it**. Bundle sales have their own independent selling price. Bundle component COGS follows source per-component requirements and M05 FIFO draws across all suppliers; standalone physical products also inside a Bundle's recipe MUST be aggregated with that Bundle's physical requirement before planning FIFO, so each physical lot is accounted exactly once. Shared components across several bundle lines are similarly aggregated. Normal Standard-only carts delegate unchanged to the merged `estimateStandardPosInvoiceProfit`.
+
+Handle source combinations: current Bundle Revision exactness, integer set qty, missing recipe, invalid nested/missing component, vendor-sourced standalone component overlapping a Bundle rejected, independent vendor-shortage COGS, FIFO positive lots and negative-stock fallback, incomplete costs, auto/manual/fixed line prices, discount/zero margin, duplicate SKU, invalid cart, and explicit already-authorized snapshots only. No hidden/implicit GAS/DB reads and no mutations.
+
+## TDD
+1. RED: commit plan, isolated native GAS oracle loading unchanged original `estimatePosInvoiceProfit_`, original `buildSaleStockDemands_`, source M05 lot planners and helpers by Acorn AST, then 15+ direct parity/security tests before implementation. Observe GitHub Foundation failure `ERR_MODULE_NOT_FOUND`.
+2. GREEN: exactly two new internal modules: pure, **byte-for-byte frozen-source** `buildSaleStockDemands_` port under `src/modules/pos-bundle-demands.js`, and `src/modules/pos-profit-with-bundles.js` lightweight adapter importing merged M05 planners, M06 Standard estimator and M06 Bundle type helper. No duplicate FIFO engine. Record source-identical demand function AST regression.
+3. Verify all GitHub Actions (Node, Workerd/D1 regression, M04 auth, M02 Party, M01 Chromium, preview safety) on exact head. Existing Workerd/D1 regression is **not** an integrated bundle POS finance test.
+
+## Ownership and release safety
+Only **five additive files**: plan, two internal modules, one oracle, one focused test. No modifications to original GAS, original frontend, M03 repositories or schema, M04 auth/permissions, M05 stock kernel, M06 old Standard adapter, M08 financial accounts, Cloudflare preview, D1 migrations or runtime bindings. **No new public RPC**, no actual sale, stock movement, cash, bank, customer/supplier/vendor/Party ledger, journal, settlement or cash-session write. Costs are confidential: future M04 caller MUST enforce `pos.view` AND `canViewInvoiceProfit_` BEFORE loading trusted tenant-scoped lots; client permissions never count. Bundle display/profit estimate is not proof of stock reservation. Rollback is a PR revert without data impact. M03/M04/M05/M06/M08 full POS posting concurrency/rollback acceptance remains gated.
