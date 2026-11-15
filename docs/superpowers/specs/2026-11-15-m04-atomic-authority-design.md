@@ -1,0 +1,15 @@
+# M04 — same-statement D1 authorization boundary (synthetic contract)
+
+**Status:** Local-only security contract, not a production authentication implementation or real inventory posting.
+
+**Source:** Immutable `legacy/source/Auth.gs` (`requireAuth_`/`requirePermission_`), `docs/M04_AUTH_SOURCE_CONTRACT.md`, and merged `docs/M04_D1_SESSION_PREFLIGHT.md`. The session preflight proved immediate revocation at lookup but explicitly warned of a time-of-check/time-of-use gap between lookup and sensitive writes.
+
+**Goal:** Prove in actual Workerd+D1 that a single parameterized mutation can enforce **current** tenant-scoped, nonrevoked, nonexpired session, active user+role, matching user/role authority versions, and a narrow role permission **in the same SQLite statement as the write**. No earlier JavaScript read supplies authority.
+
+**Dedicated test schema:** Four tables created at test time only: `synthetic_auth_roles(tenant_id,role_id,status,auth_version,can_edit)`, `synthetic_auth_users(tenant_id,user_id,role_id,status,auth_version)`, `synthetic_auth_sessions(token_hash PRIMARY KEY,tenant_id,user_id,role_id,user_version,role_version,expires_at,revoked_at)`, `synthetic_auth_resources(tenant_id,item_id,available CHECK>=0)`. Each source identity is tenant-qualified. `can_edit` is deliberately a synthetic boolean, **not an approved ERP RBAC map**. The synthetic resource count represents integer units only, **not real stock or currency**.
+
+**Interface:** Test-only `createSyntheticAuthorizedD1Mutation(DB).decrement_({tokenHash,tenantId,itemId,quantity,now})`; input tenant and clock are trusted synthetic server inputs (not browser authority). Require strict own properties and lowercase 64-hex SHA256 digest. Fixed `UPDATE synthetic_auth_resources SET available=available-? ... AND EXISTS (SELECT ... JOIN session/user/role ...)` with role and session checks and `RETURNING`. On 0 updated rows (revoked, denied, out of units, changed role, wrong tenant) raise uniform refusal, disclose no reason or identity; never update another tenant. No caller SQL or table identifiers. No `src/**`, migrations, GitHub workflows, Cloudflare remote/staging config, or public RPC changes.
+
+**TDD acceptance:** Actual local Workerd/D1 tests: active session allowed, wrong tenant denied, expired/revoked denied, user disable/re-enable + auth version denies old token, role permission removed/status/version denies old token, insufficient units denied, concurrent last-unit claims only one succeeds, malformed/injection input rejected before SQL, concurrent revoke/mutate serialization, no public Worker route. Always verify data across **both tenants** after attempted writes.
+
+**Limits:** A single SQL UPDATE proves the *synthetic conditional mutation* only. It does not implement financial posting, tenant ownership validation, real session-token issuance, RBAC permissions, audit, caller time, multi-statement atomic posting, state idempotency, reconciliation or exact-once reversal. Future D1 batches must include authorization as part of the same safe write transaction and enforce a reviewed ledger schema. Real M04 login and M05–M08 remain gated.

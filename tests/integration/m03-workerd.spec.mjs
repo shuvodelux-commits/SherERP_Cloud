@@ -1,6 +1,7 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
+import './m04-atomic-authority-workerd.spec.mjs'; // M04 synthetic same-statement session/RBAC authority; local D1 only.
 import './m04-session-workerd.spec.mjs'; // M04 test-only source-shaped session authority via real local D1.
 import './m03-transaction-contract-workerd.spec.mjs'; // Separate synthetic atomic/idempotency D1 contract; local-only.
 import './m03-intent-fingerprint-workerd.spec.mjs'; // Canonical SHA-256 intent and synthetic D1 replay proof.
