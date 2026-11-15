@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {compileSyntheticPartyImport} from '../fixtures/m02-party-plan-batch.mjs';
+import {reconcilePartyIdentityD1} from '../../src/party/d1-identity-readback.js';
 
 const masters=JSON.parse(readFileSync(new URL('../fixtures/party-import.synthetic.json',import.meta.url),'utf8'));
 const approvals=JSON.parse(readFileSync(new URL('../fixtures/party-approved.synthetic.json',import.meta.url),'utf8'));
@@ -113,4 +114,69 @@ test('local rehearsal does not create accounts/cash/bank or expose RPC and test-
     });
     assert.equal(response.status,404);
   }
+});
+test('real local D1 identity readback reconciles all source IDs while blocking unpersisted approvalRef',async()=>{
+  const expected=compile().plan,prior=await counts();
+  const audit=await reconcilePartyIdentityD1({DB,plan:expected});
+  assert.deepEqual(audit.counts.expected,{parties:4,party_roles:7,party_legacy_links:5});
+  assert.deepEqual(audit.counts.actual,audit.counts.expected);
+  assert.equal(audit.identityRowsMatch,false);
+  assert.equal(audit.approvalEvidencePersistent,false);
+  assert.deepEqual(audit.issues,[{code:'APPROVAL_REF_NOT_PERSISTED',table:'party_legacy_links',field:'approval_ref'}]);
+  assert.deepEqual(await counts(),prior);
+  assert.doesNotMatch(JSON.stringify(audit),/CUS-001|SUP-001|01700000000|admin-01|REVIEW-001/);
+});
+
+test('one D1 prepared SELECT-only batch reads all three identity tables consistently',async()=>{
+  const queries=[];let calls=0;
+  const binding={
+    prepare(sql){queries.push(sql);return DB.prepare(sql);},
+    batch(statements){calls++;return DB.batch(statements);}
+  };
+  const result=await reconcilePartyIdentityD1({DB:binding,plan:compile().plan});
+  assert.equal(calls,1,'no read/await/replan sequence across multiple D1 transactions');
+  assert.equal(queries.length,3);
+  assert.ok(queries.every(sql=>/^SELECT\s/i.test(sql.trim())));
+  assert.ok(queries.every(sql=>!/INSERT|UPDATE|DELETE|DROP|PRAGMA|JOIN/i.test(sql)));
+  assert.equal(result.identityRowsMatch,false);
+});
+
+test('readback against real D1 detects modified role status without changing persisted source links',async()=>{
+  const before=await counts();
+  await DB.prepare("UPDATE party_roles SET status='INACTIVE' WHERE role='Customer'").run();
+  try{
+    const report=await reconcilePartyIdentityD1({DB,plan:compile().plan});
+    assert.equal(report.identityRowsMatch,false);
+    assert.ok(report.issues.some(x=>x.code==='FIELD_MISMATCH'&&x.table==='party_roles'&&x.field==='status'));
+    assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|admin-01/);
+  }finally{
+    await DB.prepare("UPDATE party_roles SET status='ACTIVE' WHERE role='Customer'").run();
+  }
+  assert.deepEqual(await counts(),before);
+});
+
+test('D1 readback flags unexpected Party even when the SQL row is structurally valid',async()=>{
+  const prior=await counts();
+  await DB.prepare("INSERT INTO parties(party_id,display_name,created_at) VALUES('PT-READBACK-EXTRA','Synthetic Unexpected','2026-11-15T00:00:00Z')").run();
+  try{
+    const report=await reconcilePartyIdentityD1({DB,plan:compile().plan});
+    assert.ok(report.issues.some(x=>x.code==='EXTRA_ROW'&&x.table==='parties'));
+    assert.equal(report.identityRowsMatch,false);
+  }finally{
+    await DB.prepare("DELETE FROM parties WHERE party_id='PT-READBACK-EXTRA'").run();
+  }
+  assert.deepEqual(await counts(),prior);
+});
+
+test('missing or failed D1 binding cannot leak SQL errors or real Party details',async()=>{
+  await assert.rejects(()=>reconcilePartyIdentityD1({DB:null,plan:compile().plan}),/binding/i);
+  const broken={
+    prepare(){return {};},
+    async batch(){throw new Error('SENSITIVE_NAME 01700000000');}
+  };
+  await assert.rejects(
+    ()=>reconcilePartyIdentityD1({DB:broken,plan:compile().plan}),
+    error=>error instanceof Error&&/readback unavailable/i.test(error.message)&&
+      !/SENSITIVE_NAME|01700000000/.test(error.message)
+  );
 });
