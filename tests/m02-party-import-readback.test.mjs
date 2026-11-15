@@ -485,3 +485,57 @@ test('valid mixed ACTIVE and RETIRED original Party links keep source-derived st
   assert.equal(report.approvalEvidencePersistent,true);
   assert.deepEqual(report.issues,[]);
 });
+
+
+test('mirrored future D1 cannot certify INACTIVE Customer role with an ACTIVE original Customer link',()=>{
+  const plan=planned();
+  const customer=plan.links.find(link=>link.sourceGroup==='CUSTOMERS');
+  const role=plan.roles.find(x=>x.partyId===customer.partyId && x.role==='Customer');
+  const party=plan.parties.find(x=>x.partyId===customer.partyId);
+  assert.equal(customer.status,'ACTIVE');
+  assert.equal(party.status,'ACTIVE');
+  assert.equal(role.status,'ACTIVE');
+  role.status='INACTIVE';
+  const readback=snapshot(plan,{approvalRef:true});
+  const frozen=structuredClone({plan,readback});
+  const result=audit(plan,readback);
+  assert.deepEqual(result.counts.expected,result.counts.actual);
+  assert.equal(result.identityRowsMatch,false);
+  assert.equal(result.approvalEvidencePersistent,false);
+  assert.deepEqual(result.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(result),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual({plan,readback},frozen,'read-only validation does not mutate inputs');
+});
+
+test('mirrored future D1 cannot certify ACTIVE Payee role when its original source link is RETIRED',()=>{
+  const plan=planned();
+  const payee=plan.links.find(link=>link.sourceGroup==='EXPENSE_PAYEES');
+  const role=plan.roles.find(x=>x.partyId===payee.partyId && x.role==='Payee');
+  assert.equal(payee.status,'RETIRED');
+  assert.equal(role.status,'INACTIVE');
+  role.status='ACTIVE';
+  const result=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(result.identityRowsMatch,false);
+  assert.equal(result.approvalEvidencePersistent,false);
+  assert.deepEqual(result.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(result),/PAY-001|REVIEW-001|admin-01|01600000000/);
+});
+
+test('approved inactive Customer and active Supplier retain separate correct role statuses',()=>{
+  const rows=source();
+  rows.CUSTOMERS[0].Status='Inactive';
+  const plan=planPartyImport(rows,approval());
+  const customer=plan.links.find(link=>link.sourceGroup==='CUSTOMERS');
+  const supplier=plan.links.find(link=>link.sourceGroup==='SUPPLIERS');
+  assert.equal(customer.partyId,supplier.partyId);
+  assert.equal(customer.status,'RETIRED');
+  assert.equal(supplier.status,'ACTIVE');
+  const roleByName=role=>plan.roles.find(x=>x.partyId===customer.partyId&&x.role===role);
+  assert.equal(roleByName('Customer').status,'INACTIVE');
+  assert.equal(roleByName('Supplier').status,'ACTIVE');
+  assert.equal(plan.parties.find(x=>x.partyId===customer.partyId).status,'ACTIVE');
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,true);
+  assert.equal(report.approvalEvidencePersistent,true);
+  assert.deepEqual(report.issues,[]);
+});

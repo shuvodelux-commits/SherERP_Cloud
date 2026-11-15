@@ -495,3 +495,24 @@ test('real D1 readback rejects forged ACTIVE status for original RETIRED Payee P
     /PAY-001|CUS-001|SUP-001|REVIEW-001|admin-01|01600000000/);
   assert.deepEqual(await counts(),before,'local D1 readback must not write Party rows');
 });
+
+
+test('real local D1 readback rejects forged INACTIVE Customer role backed by ACTIVE source',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  const customer=plan.links.find(x=>x.sourceGroup==='CUSTOMERS');
+  assert.equal(customer.status,'ACTIVE');
+  const role=plan.roles.find(x=>x.partyId===customer.partyId && x.role==='Customer');
+  assert.equal(role.status,'ACTIVE');
+  role.status='INACTIVE';
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_LINKAGE_INVALID'&&x.table==='plan'),
+    'a role status must match its original role-bearing source links');
+  assert.ok(report.issues.some(x=>x.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'unchanged 0002 D1 schema still blocks reviewed approval evidence');
+  assert.doesNotMatch(JSON.stringify(report),
+    /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual(await counts(),before,'read-only D1 reconciliation must not write');
+});
