@@ -1,0 +1,12 @@
+{
+  "name": "shererp-m03-intent-workerd-test",
+  "main": "tests/fixtures/m03-intent-fingerprint-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-m03-intent-fingerprint-local",
+    "database_id": "00000000-0000-0000-0000-000000000007",
+    "migrations_dir": "migrations"
+  }]
+}
