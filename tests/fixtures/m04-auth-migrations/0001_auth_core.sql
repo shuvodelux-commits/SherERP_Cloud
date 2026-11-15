@@ -145,6 +145,28 @@ BEGIN
   SELECT RAISE(ABORT,'assigned role cannot be deleted');
 END;
 
+-- Keep session authority epochs monotonic. A direct UPDATE reducing one
+-- of these counters could revalidate a bearer issued before a role/account
+-- change. Ordinary trigger-owned increments and credential upgrades remain
+-- allowed; this prevents rollback, not arbitrary privileged D1 edits.
+CREATE TRIGGER trg_auth_user_epoch_no_rollback BEFORE UPDATE OF auth_version ON auth_users
+WHEN NEW.auth_version < OLD.auth_version
+BEGIN
+  SELECT RAISE(ABORT,'user authority version rollback forbidden');
+END;
+
+CREATE TRIGGER trg_auth_role_epoch_no_rollback BEFORE UPDATE OF auth_version ON auth_roles
+WHEN NEW.auth_version < OLD.auth_version
+BEGIN
+  SELECT RAISE(ABORT,'role authority version rollback forbidden');
+END;
+
+CREATE TRIGGER trg_auth_credential_epoch_no_rollback BEFORE UPDATE OF credential_version ON auth_users
+WHEN NEW.credential_version < OLD.credential_version
+BEGIN
+  SELECT RAISE(ABORT,'credential version rollback forbidden');
+END;
+
 CREATE TABLE auth_sessions (
   token_hash TEXT PRIMARY KEY
     CHECK (length(token_hash)=64 AND token_hash NOT GLOB '*[^0-9a-f]*'),
