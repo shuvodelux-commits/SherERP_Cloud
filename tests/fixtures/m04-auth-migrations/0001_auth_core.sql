@@ -108,10 +108,11 @@ BEGIN
 END;
 
 CREATE TRIGGER trg_auth_role_version AFTER UPDATE OF
-  role_name,status,permissions_json ON auth_roles
+  role_name,status,permissions_json,allowed_modules ON auth_roles
 WHEN OLD.role_name IS NOT NEW.role_name
   OR OLD.status IS NOT NEW.status
   OR OLD.permissions_json IS NOT NEW.permissions_json
+  OR OLD.allowed_modules IS NOT NEW.allowed_modules
 BEGIN
   UPDATE auth_roles SET auth_version=OLD.auth_version+1 WHERE role_name=NEW.role_name;
 END;

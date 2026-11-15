@@ -8,6 +8,13 @@ const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-test.
 const worker=harness.getWorker('shererp-m04-auth-workerd-local-only');
 const NOW=1_800_200_000_000;
 const SECRET='SyntheticTestOnlyPass!2026';
+const SOURCE_ROLE_PERMISSIONS={
+  sales:{view:true,add:false,edit:true,delete:'same',backdate:'7'},
+  roles:{view:true,add:false,edit:false,delete:false,backdate:'same'},
+  users:{view:false,add:false,edit:false,delete:true,backdate:'unlimited'},
+  openingBalance:{view:false,add:false,edit:true,delete:'disabled',backdate:'unlimited'},
+};
+
 let db;
 async function seed(id,phone,role='Administrator',status='Active'){
   const c=await createOfflinePasswordCredential(SECRET);
@@ -30,10 +37,21 @@ before(async()=>{
     (role_name,status,permissions_json,allowed_modules)
     VALUES ('Cashier','Active',?,?),('Corrupt','Active','[]','sales')`)
     .bind(JSON.stringify({sales:{view:true,add:true,edit:false,delete:'7'},products:{view:true}}),'sales,products').run();
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('SourceRole','Active',?,'sales,roles'),
+      ('BadManagementDelete','Active',?,''),
+      ('BadBackdate','Active',?,'sales')`)
+    .bind(JSON.stringify(SOURCE_ROLE_PERMISSIONS),
+      JSON.stringify({users:{view:false,add:false,edit:false,delete:'7',backdate:'unlimited'}}),
+      JSON.stringify({sales:{view:true,add:false,edit:false,delete:'disabled',backdate:'365'}})).run();
   await seed('USR-RPC-ADMIN','01710000101');
   await seed('USR-RPC-CASHIER','01710000102','Cashier');
   await seed('USR-RPC-BAD-ROLE','01710000103','Corrupt');
   await seed('USR-RPC-DISABLED','01710000104','Cashier','Inactive');
+  await seed('USR-RPC-SOURCE','01710000105','SourceRole');
+  await seed('USR-RPC-BAD-MANAGEMENT','01710000106','BadManagementDelete');
+  await seed('USR-RPC-BAD-BACKDATE','01710000107','BadBackdate');
 });
 after(async()=>{await harness.close();});
 
@@ -145,4 +163,53 @@ test('real local D1 login accepts all source-equivalent Bangladesh staff phone f
   }
   const invalid=await rpc('login',['0171000010',SECRET],NOW+61_000);
   assert.deepEqual(invalid,{status:200,body:{success:false,message:'Invalid mobile number or password.'}});
+});
+
+
+test('native GAS custom roles with same-day delete, backdate, edit-only and boolean management rights can log in',async()=>{
+  const result=await rpc('login',['০১৭১০০০০১০৫',SECRET],NOW+70000);
+  assert.equal(result.status,200);
+  assert.equal(result.body.success,true);
+  assert.equal(result.body.data.user.id,'USR-RPC-SOURCE');
+  assert.deepEqual(result.body.data.allowedModules,['sales','roles']);
+  assert.deepEqual(result.body.data.permissions,SOURCE_ROLE_PERMISSIONS);
+  assert.match(result.body.data.token,/^[0-9a-f]{64}$/);
+  assert.deepEqual(await rpc('validateSession',[result.body.data.token],NOW+71000),result);
+});
+
+test('invalid management delete and unknown backdate still fail closed with stored session revocation',async()=>{
+  for(const [phone,id] of [
+    ['01710000106','USR-RPC-BAD-MANAGEMENT'],
+    ['01710000107','USR-RPC-BAD-BACKDATE'],
+  ]){
+    const result=await rpc('login',[phone,SECRET],NOW+72000);
+    assert.deepEqual(result,{
+      status:200,body:{success:false,message:'Sign-in role configuration is unavailable.'}
+    });
+    const row=await db.prepare(`SELECT revoked_at_ms AS revoked FROM auth_sessions
+      WHERE user_id=? ORDER BY created_at_ms DESC LIMIT 1`).bind(id).first();
+    assert.equal(row.revoked,NOW+72000);
+  }
+});
+
+test('changing only role allowed_modules invalidates old sessions; no-op update does not bump authority',async()=>{
+  const login=await rpc('login',['01710000105',SECRET],NOW+80000);
+  assert.equal(login.body.success,true);
+  const token=login.body.data.token;
+  const before=await db.prepare(`SELECT auth_version FROM auth_roles
+    WHERE role_name='SourceRole'`).first();
+  await db.prepare(`UPDATE auth_roles SET allowed_modules=allowed_modules
+    WHERE role_name='SourceRole'`).run();
+  const same=await db.prepare(`SELECT auth_version FROM auth_roles
+    WHERE role_name='SourceRole'`).first();
+  assert.equal(same.auth_version,before.auth_version);
+  assert.equal((await rpc('validateSession',[token],NOW+81000)).body.success,true);
+  await db.prepare(`UPDATE auth_roles SET allowed_modules='sales'
+    WHERE role_name='SourceRole'`).run();
+  const changed=await db.prepare(`SELECT auth_version FROM auth_roles
+    WHERE role_name='SourceRole'`).first();
+  assert.equal(changed.auth_version,before.auth_version+1);
+  assert.deepEqual(await rpc('validateSession',[token],NOW+82000),{
+    status:200,body:{success:false,message:'Session expired. Please sign in again.'}
+  });
 });
