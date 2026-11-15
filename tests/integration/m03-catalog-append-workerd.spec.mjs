@@ -71,3 +71,22 @@ test('test-only write endpoint is strict and never accepts external row payload 
   assert.deepEqual(saved,{category_id:'CAT-W-C',category_name:'Hardware'});
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM settings').first()).n,0);
 });
+
+test('local Worker/D1 batch insert is ordered and duplicate replay rolls back every sibling',async()=>{
+  const initial=await db.prepare('SELECT MAX(legacy_sheet_row) AS last FROM product_categories').first();
+  const savedBefore=await db.prepare('SELECT COUNT(*) AS n FROM product_categories').first();
+  const batch=await call('/__m03_write_test__/batch-categories','POST');
+  assert.deepEqual(batch,{status:200,body:{inserted:2}});
+  const stored=await db.prepare("SELECT category_id,category_name,legacy_sheet_row FROM product_categories WHERE category_id LIKE 'CAT-W-BATCH-%' ORDER BY legacy_sheet_row").all();
+  assert.deepEqual(stored.results,[
+    {category_id:'CAT-W-BATCH-1',category_name:'Hardware',legacy_sheet_row:initial.last+1},
+    {category_id:'CAT-W-BATCH-2',category_name:'বাংলা',legacy_sheet_row:initial.last+2}
+  ]);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM product_categories').first()).n,savedBefore.n+2);
+  const replay=await call('/__m03_write_test__/batch-categories','POST');
+  assert.equal(replay.status,500);
+  const conflict=await call('/__m03_write_test__/batch-conflict','POST');
+  assert.equal(conflict.status,500);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM product_categories').first()).n,savedBefore.n+2);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM product_categories WHERE category_id='CAT-W-BATCH-UNCOMMITTED'").first()).n,0);
+});

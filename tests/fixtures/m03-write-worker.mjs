@@ -23,6 +23,20 @@ const FIXTURES=Object.freeze({
   '/__m03_write_test__/append-unit-b':Object.freeze({
     sheet:'PRODUCT_UNITS',
     row:Object.freeze({'Unit ID':'UNIT-W-B','Unit Name':'Gira','Status':'Active','Created At':''})
+  }),
+  '/__m03_write_test__/batch-categories':Object.freeze({
+    sheet:'PRODUCT_CATEGORIES',
+    rows:Object.freeze([
+      Object.freeze({'Category ID':'CAT-W-BATCH-1','Category Name':'Hardware','Status':'Active','Created At':''}),
+      Object.freeze({'Category ID':'CAT-W-BATCH-2','Category Name':'বাংলা','Status':'Active','Created At':''})
+    ])
+  }),
+  '/__m03_write_test__/batch-conflict':Object.freeze({
+    sheet:'PRODUCT_CATEGORIES',
+    rows:Object.freeze([
+      Object.freeze({'Category ID':'CAT-W-BATCH-UNCOMMITTED','Category Name':'New','Status':'Active','Created At':''}),
+      Object.freeze({'Category ID':'CAT-W-A','Category Name':'Duplicate existing ID','Status':'Active','Created At':''})
+    ])
   })
 });
 
@@ -33,7 +47,12 @@ export default {
       if(!Object.hasOwn(FIXTURES,path)) return json(405,{error:'Method unavailable'});
       const fixed=FIXTURES[path]; // only fixed synthetic values; never request body
       try {
-        const rowIndex=await createLegacyCatalogAppendAdapter(env).appendRow_(fixed.sheet,fixed.row);
+        const writer=createLegacyCatalogAppendAdapter(env);
+        if(fixed.rows) {
+          await writer.appendRows_(fixed.sheet,fixed.rows);
+          return json(200,{inserted:fixed.rows.length});
+        }
+        const rowIndex=await writer.appendRow_(fixed.sheet,fixed.row);
         return json(200,{rowIndex});
       } catch {
         return json(500,{error:'Synthetic D1 append refused'});
