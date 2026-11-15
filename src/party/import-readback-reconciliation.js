@@ -45,6 +45,20 @@ const descriptions={
   }
 };
 
+// Validate imported review claims as strictly as the source-only planner.
+// These are data-quality checks, never proof of authenticated reviewer authority.
+const canonicalReviewEvidence=value=>typeof value==='string' &&
+  value.length>0 && value.trim()===value &&
+  !/[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/u.test(value);
+const utcReviewEvidence=value=>{
+  if(typeof value!=='string' ||
+    !/^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?Z$/.test(value))
+    return false;
+  const parsed=new Date(value);
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0,19)===value.slice(0,19);
+};
+
 // A matching D1-shaped snapshot must not certify an internally impossible
 // Party graph. This checks only structural lineage, never names or phone data.
 function validPlanLinkage(plan){
@@ -59,8 +73,9 @@ function validPlanLinkage(plan){
          link.approvalRef!==null)return false;
       anchors.set(link.partyId,anchors.get(link.partyId)+1);
     }else if(link.linkBasis==='HUMAN_VERIFIED'){
-      if(![link.reviewedBy,link.reviewedAt,link.approvalRef].every(
-        value=>typeof value==='string'&&value.trim().length>0))return false;
+      if(!canonicalReviewEvidence(link.reviewedBy) ||
+         !canonicalReviewEvidence(link.approvalRef) ||
+         !utcReviewEvidence(link.reviewedAt))return false;
       const earlier=proofsByParty.get(link.partyId);
       if(earlier){
         if(earlier.reviewedBy!==link.reviewedBy ||
