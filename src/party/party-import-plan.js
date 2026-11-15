@@ -17,7 +17,8 @@ const inactive=(row)=>String(row.Status||'').trim().toLowerCase()==='inactive'||
   String(row['Is Deleted']||'').trim().toLowerCase()==='true';
 const cite=(row)=>({sourceGroup:row.group,sourceId:row.id});
 const canonicalReviewId=value=>typeof value==='string' &&
-  value.length>0 && value.trim()===value;
+  value.length>0 && value.trim()===value &&
+  !/[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/u.test(value);
 // Approval reviews are UTC instants, not locale-dependent or freeform values.
 const utcReviewTimestamp=value=>{
   if(typeof value!=='string' ||

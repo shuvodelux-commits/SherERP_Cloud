@@ -6,6 +6,8 @@ import {createSyntheticMultilinePurchasePoster} from '../fixtures/m05-purchase-m
 import {planPurchaseInventoryEdit,planPurchaseInventoryDelete} from '../../src/modules/purchase-correction-guards.js';
 import {M05ML_DELETE_DDL} from '../fixtures/m05-purchase-delete-d1-schema.mjs';
 import {createSyntheticPurchaseDeleter} from '../fixtures/m05-purchase-delete-d1-contract.mjs';
+import {M05ML_EDIT_DDL} from '../fixtures/m05-purchase-edit-d1-schema.mjs';
+import {createSyntheticPurchaseEditor} from '../fixtures/m05-purchase-edit-d1-contract.mjs';
 
 // Synthetic local D1; NEVER the deployed Worker, main D1, or real shop data.
 const server=createTestHarness({workers:[{configPath:'./wrangler.m05-multiline-test.jsonc'}]});
@@ -22,6 +24,21 @@ const input=(operationId,overrides={})=>({
 });
 const poster=options=>createSyntheticMultilinePurchasePoster(DB,options);
 const deleter=options=>createSyntheticPurchaseDeleter(DB,options);
+const editor=options=>createSyntheticPurchaseEditor(DB,options);
+const editInput=(operationId,overrides={})=>({
+  tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-EDIT-00001',
+  operationId,reason:'Invoice quantity and cost correction',
+  items:[
+    {sku:'PIPE',qty:3,unitPrice:'16',expectedVersion:2},
+    {sku:'SWITCH',qty:2,unitPrice:'7',expectedVersion:2}
+  ],...overrides
+});
+const editState=async()=>({
+  source:await snapshot(),
+  receipts:await all('SELECT * FROM m05ml_edit_receipts ORDER BY operation_id'),
+  audit:await all('SELECT * FROM m05ml_edit_audit ORDER BY operation_id'),
+  movements:await all('SELECT * FROM m05ml_edit_movements ORDER BY sku')
+});
 const deletionInput=(id,overrides={})=>({
   tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-DELETE-0001',
   operationId:id,reason:'Incorrect original purchase',...overrides
@@ -57,11 +74,15 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     ({DB}=await worker.getEnv());
     for(const sql of M05ML_DDL)await DB.prepare(sql).run();
     for(const sql of M05ML_DELETE_DDL)await DB.prepare(sql).run();
+    for(const sql of M05ML_EDIT_DDL)await DB.prepare(sql).run();
     for(const [sql,args] of M05ML_SEED)await DB.prepare(sql).bind(...args).run();
   });
   beforeEach(async()=>{
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_ledger').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_delete_audit').run();
+    await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_edit_audit').run();
+    for(const table of ['m05ml_edit_movements','m05ml_edit_audit','m05ml_edit_receipts'])
+      await DB.prepare('DELETE FROM '+table).run();
     for(const t of ['m05ml_delete_movements','m05ml_delete_audit','m05ml_delete_receipts','m05ml_purchase_returns','m05ml_purchase_settlements'])
       await DB.prepare('DELETE FROM '+t).run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_purchase_immutable_delete').run();
@@ -478,6 +499,188 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
       assert.notEqual(result.status,'COMMITTED');
     }
     assert.deepEqual(await reversalState(),before);
+  });
+
+
+  test('M05 D1 two-SKU purchase edit reconciles stock, lots, unit costs and gross supplier due atomically',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    assert.deepEqual(await editor().edit(editInput('OP-EDIT-COMMIT-01')),{
+      status:'COMMITTED',operationId:'OP-EDIT-COMMIT-01',
+      purchaseId:'PUR-OP-EDIT-00001',newDuePaisa:4100,linesChanged:2
+    });
+    assert.deepEqual(await all("SELECT sku,stock,version FROM m05ml_products WHERE sku IN ('PIPE','SWITCH') ORDER BY sku"),[
+      {sku:'PIPE',stock:7,version:3},{sku:'SWITCH',stock:4,version:3}
+    ]);
+    assert.deepEqual(await all('SELECT sku,qty,remaining_qty,cost_paisa FROM m05ml_lots ORDER BY sku'),[
+      {sku:'PIPE',qty:3,remaining_qty:3,cost_paisa:1600},
+      {sku:'SWITCH',qty:2,remaining_qty:2,cost_paisa:700}
+    ]);
+    assert.deepEqual(await all("SELECT sku,qty,cost_paisa FROM m05ml_effective_purchase_items ORDER BY sku"),[
+      {sku:'PIPE',qty:3,cost_paisa:1600},{sku:'SWITCH',qty:2,cost_paisa:700}
+    ]);
+    assert.deepEqual(await all("SELECT sku,qty,cost_paisa FROM m05ml_items ORDER BY sku"),[
+      {sku:'PIPE',qty:2,cost_paisa:1525},{sku:'SWITCH',qty:3,cost_paisa:750}
+    ],'original immutable line items preserved');
+    assert.equal((await one("SELECT debit_paisa FROM m05ml_effective_supplier_ledger WHERE purchase_id='PUR-OP-EDIT-00001'")).debit_paisa,4100);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,8100);
+    assert.equal((await one("SELECT customer_ar_paisa FROM m05ml_customer_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+    assert.equal((await one("SELECT debit_paisa FROM m05ml_cash_book")).debit_paisa,2000);
+    assert.equal((await one("SELECT due_paisa FROM m05ml_purchases")).due_paisa,3200,'original header retains audit provenance');
+    assert.deepEqual(await all('SELECT sku,qty_delta,new_cost_paisa FROM m05ml_edit_movements ORDER BY sku'),[
+      {sku:'PIPE',qty_delta:1,new_cost_paisa:1600},{sku:'SWITCH',qty_delta:-1,new_cost_paisa:700}
+    ]);
+  });
+
+  test('price-only edit works for unconsumed lots and leaves stock unchanged',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    const result=await editor().edit(editInput('OP-EDIT-COSTONLY',{
+      items:[{sku:'PIPE',qty:2,unitPrice:'17',expectedVersion:2},
+        {sku:'SWITCH',qty:3,unitPrice:'7.50',expectedVersion:2}]
+    }));
+    assert.equal(result.status,'COMMITTED');
+    assert.equal(result.newDuePaisa,3550);
+    assert.deepEqual(await all("SELECT sku,stock FROM m05ml_products WHERE sku IN ('PIPE','SWITCH') ORDER BY sku"),[
+      {sku:'PIPE',stock:6},{sku:'SWITCH',stock:5}
+    ]);
+    assert.equal((await one("SELECT cost_paisa FROM m05ml_lots WHERE sku='PIPE'")).cost_paisa,1700);
+  });
+
+  test('sold purchase lot can increase quantity but cannot silently change historical FIFO cost',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    await DB.prepare("UPDATE m05ml_lots SET remaining_qty=1 WHERE sku='PIPE'").run();
+    await DB.prepare("UPDATE m05ml_products SET stock=5,version=3 WHERE sku='PIPE'").run();
+    const original=await editState();
+    assert.equal((await editor().edit(editInput('OP-EDIT-SOLDCOST'))).status,'DECLINED');
+    assert.deepEqual(await editState(),original);
+    const safe=editInput('OP-EDIT-SOLDQTY',{
+      items:[{sku:'PIPE',qty:3,unitPrice:'15.25',expectedVersion:3},
+        {sku:'SWITCH',qty:3,unitPrice:'7.50',expectedVersion:2}]
+    });
+    assert.equal((await editor().edit(safe)).status,'COMMITTED');
+    assert.equal((await one("SELECT qty,remaining_qty,cost_paisa FROM m05ml_lots WHERE sku='PIPE'")).qty,3);
+    assert.equal((await one("SELECT remaining_qty FROM m05ml_lots WHERE sku='PIPE'")).remaining_qty,2);
+  });
+
+  test('unsold remainder and product shortage block both-SKU edit as one transaction',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    await DB.prepare("UPDATE m05ml_lots SET remaining_qty=0 WHERE sku='SWITCH'").run();
+    let before=await editState();
+    assert.equal((await editor().edit(editInput('OP-EDIT-OWNLOT'))).status,'DECLINED');
+    assert.deepEqual(await editState(),before);
+    await DB.prepare("UPDATE m05ml_lots SET remaining_qty=qty WHERE sku='SWITCH'").run();
+    await DB.prepare("UPDATE m05ml_products SET stock=0,version=3 WHERE sku='SWITCH'").run();
+    before=await editState();
+    assert.equal((await editor().edit(editInput('OP-EDIT-STOCK'))).status,'DECLINED');
+    assert.deepEqual(await editState(),before);
+  });
+
+  test('active Purchase Return, allocated supplier payment, deletion and later supplier ledger block edits',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    for(const [sql,undo] of [
+      ["INSERT INTO m05ml_purchase_returns VALUES('SHOP-A','RET-X','PUR-OP-EDIT-00001',1)","DELETE FROM m05ml_purchase_returns"],
+      ["INSERT INTO m05ml_purchase_settlements VALUES('SHOP-A','PAY-X','PUR-OP-EDIT-00001',100,1)","DELETE FROM m05ml_purchase_settlements"]
+    ]){
+      await DB.prepare(sql).run();
+      const before=await editState();
+      assert.equal((await editor().edit(editInput('OP-EDIT-GATE-001'))).status,'DECLINED');
+      assert.deepEqual(await editState(),before);
+      await DB.prepare(undo).run();
+    }
+    const other=input('OP-EDIT-OTHER',{
+      items:[line('SWITCH',1,'7','8',2),line('PIPE',1,'5','6',2)]
+    });
+    assert.equal((await poster().post(other)).status,'COMMITTED');
+    const before=await editState();
+    assert.equal((await editor().edit(editInput('OP-EDIT-LATER-1'))).status,'DECLINED');
+    assert.deepEqual(await editState(),before);
+  });
+
+  test('closed Cash Session, inactive supplier, unreviewed legacy link fail closed on edit claim',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    for(const [sql,undo] of [
+      ["UPDATE m05ml_sessions SET state='Closed'","UPDATE m05ml_sessions SET state='Open'"],
+      ["UPDATE m05ml_suppliers SET active=0 WHERE supplier_id='SUP-1'","UPDATE m05ml_suppliers SET active=1 WHERE supplier_id='SUP-1'"],
+      ["UPDATE m05ml_party_links SET reviewed=0 WHERE source_id='SUP-1'","UPDATE m05ml_party_links SET reviewed=1 WHERE source_id='SUP-1'"]
+    ]){
+      await DB.prepare(sql).run();
+      const before=await editState();
+      assert.equal((await editor().edit(editInput('OP-EDIT-GATE-002'))).status,'DECLINED');
+      assert.deepEqual(await editState(),before);
+      await DB.prepare(undo).run();
+    }
+  });
+
+  test('a stale preview fails when sale consumes stock immediately before SQL edit',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    const pre=await editState();
+    assert.equal(pre.receipts.length,0);
+    const result=await editor({
+      beforeBatch:async()=>{
+        await DB.prepare("UPDATE m05ml_lots SET remaining_qty=0 WHERE sku='SWITCH'").run();
+        await DB.prepare("UPDATE m05ml_products SET stock=2,version=3 WHERE sku='SWITCH'").run();
+      }
+    }).edit(editInput('OP-EDIT-STALE-1'));
+    assert.equal(result.status,'DECLINED');
+    assert.equal(await count('m05ml_edit_receipts'),0);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,7200);
+    assert.equal((await one("SELECT customer_ar_paisa FROM m05ml_customer_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+  });
+
+  test('exact replay once, conflicting intent, second edit operation and edit-delete collision all fail safely',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    const first=editInput('OP-EDIT-REPLAY-1');
+    assert.equal((await editor().edit(first)).status,'COMMITTED');
+    const saved=await editState();
+    assert.equal((await editor().edit(first)).status,'REPLAY');
+    for(const change of [
+      {actorId:'USER-B'},{reason:'Another reason'},
+      {items:[{...first.items[0],qty:4},first.items[1]]},
+      {purchaseId:'PUR-OP-EDIT-NONE'}
+    ])assert.equal((await editor().edit({...first,...change})).status,'CONFLICT');
+    assert.equal((await editor().edit(editInput('OP-EDIT-SECOND-1'))).status,'DECLINED');
+    assert.equal((await deleter().remove(deletionInput('OP-DEL-EDIT-LOCK',{purchaseId:first.purchaseId}))).status,'DECLINED');
+    assert.deepEqual(await editState(),saved);
+  });
+
+  test('late audit failure rolls back BOTH SKU changes, lot cost and gross supplier payable',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    await DB.prepare("CREATE TRIGGER m05ml_inject_fail_edit_audit BEFORE INSERT ON m05ml_edit_audit BEGIN SELECT RAISE(ABORT,'forced-edit-audit-failure'); END").run();
+    const before=await editState();
+    await assert.rejects(editor().edit(editInput('OP-EDIT-FAIL-1')),/NEEDS_REVIEW/);
+    assert.deepEqual(await editState(),before);
+  });
+
+  test('two concurrent independent operation IDs can commit this source purchase edit only once',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    const outcomes=await Promise.allSettled([
+      editor().edit(editInput('OP-EDIT-CONCUR-1')),
+      editor().edit(editInput('OP-EDIT-CONCUR-2'))
+    ]);
+    const statuses=outcomes.map(x=>x.status==='fulfilled'?x.value.status:'NEEDS_REVIEW');
+    assert.equal(statuses.filter(x=>x==='COMMITTED').length,1);
+    assert.ok(statuses.every(x=>['COMMITTED','DECLINED','NEEDS_REVIEW'].includes(x)));
+    assert.equal(await count('m05ml_edit_receipts'),1);
+    assert.equal(await count('m05ml_edit_audit'),1);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,8100);
+  });
+
+  test('invalid schema/monetary precision and partial SKU correction cannot post',async()=>{
+    assert.equal((await poster().post(input('OP-EDIT-00001'))).status,'COMMITTED');
+    const base=editInput('OP-EDIT-VALID-1');
+    const original=await editState();
+    for(const inputChange of [
+      {reason:''},{operationId:'short'}, {tenantId:'WRONG'},
+      {items:[base.items[0]]},
+      {items:[{...base.items[0],unitPrice:'16.001'},base.items[1]]},
+      {items:[{...base.items[0],qty:0},base.items[1]]},
+      {items:[base.items[0],base.items[0]]},
+      {items:[{...base.items[0],expectedVersion:1},base.items[1]]},
+      {items:[{...base.items[0],sku:'NOT-THIS-PURCHASE'},base.items[1]]}
+    ]){
+      const outcome=await editor().edit({...base,...inputChange}).catch(e=>({error:e.message}));
+      assert.notEqual(outcome.status,'COMMITTED');
+      assert.deepEqual(await editState(),original);
+    }
   });
 
 });
