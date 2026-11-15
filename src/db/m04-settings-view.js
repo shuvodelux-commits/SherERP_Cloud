@@ -11,12 +11,14 @@ import {AUTH_POLICY} from '../auth/d1-auth-core.js';
 const TOKEN=/^[0-9a-f]{64}$/;
 const SHELL_KEYS=new Set(['Shop Name','Currency Symbol']);
 const DEFAULT_APP_NAME='Hardware Store ERP'; // pinned Config.gs CONFIG.APP_NAME
+const MAX_SETTINGS_ROWS=256;
+const FORBIDDEN_KEYS=new Set(['__proto__','constructor','prototype']);
 
 // Authorization and safe two-key projection are one D1 SELECT. A JS
 // permissions preflight followed by a separate unprotected Settings query
 // could disclose rows after a revocation. The current role version and
 // literal boolean settings.view grant are checked in the same statement.
-const READ_SHELL=`WITH authorized AS (
+const AUTH_CTE=`WITH authorized AS (
   SELECT 1 AS allowed
   FROM auth_sessions AS s
   JOIN auth_users AS u ON u.user_id=s.user_id
@@ -43,12 +45,19 @@ const READ_SHELL=`WITH authorized AS (
       )
     )
   LIMIT 1
-)
+)`;
+const READ_SHELL=`${AUTH_CTE}
 SELECT v.key,v.value
 FROM authorized AS a
 LEFT JOIN settings AS v ON v.key IN ('Shop Name','Currency Symbol')
 ORDER BY v.row_id ASC
 LIMIT 3`;
+const READ_MAP=`${AUTH_CTE}
+SELECT v.key,v.value
+FROM authorized AS a
+LEFT JOIN settings AS v ON 1=1
+ORDER BY v.row_id ASC
+LIMIT 257`;
 
 function validate(request){
   if(!request || typeof request!=='object' || Array.isArray(request) ||
@@ -116,34 +125,70 @@ function decode(rows){
   };
 }
 
+
+function decodeMap(rows){
+  if(rows.length<1 || rows.length>MAX_SETTINGS_ROWS){
+    throw new Error('NEEDS_REVIEW: Settings map exceeds safe row limit');
+  }
+  const map=Object.create(null);
+  if(rows.length===1 && rows[0]?.key===null && rows[0]?.value===null){
+    return map; // Valid M04 authority, zero actual Settings rows.
+  }
+  for(const row of rows){
+    if(!row || typeof row!=='object' || Array.isArray(row)){
+      throw new Error('NEEDS_REVIEW: invalid D1 Settings map row');
+    }
+    const key=Object.getOwnPropertyDescriptor(row,'key');
+    const value=Object.getOwnPropertyDescriptor(row,'value');
+    if(!key || !value || !Object.hasOwn(key,'value') ||
+       !Object.hasOwn(value,'value') ||
+       typeof key.value!=='string' || !key.value.trim() ||
+       FORBIDDEN_KEYS.has(key.value) ||
+       typeof value.value!=='string' || Object.hasOwn(map,key.value)){
+      throw new Error('NEEDS_REVIEW: unsafe or duplicate D1 Settings key');
+    }
+    map[key.value]=value.value;
+  }
+  return map;
+}
+
+async function readAuthorized(DB,sql,request,limit){
+  const {token,nowMs}=validate(request);
+  const digest=await digestBearer(token);
+  let response;
+  try{
+    response=await DB.prepare(sql).bind(
+      digest,nowMs,nowMs,
+      nowMs-AUTH_POLICY.sessionIdleMs,nowMs
+    ).all();
+  }catch(cause){
+    throw new Error('NEEDS_REVIEW: authorized Settings read unavailable',{cause});
+  }
+  if(response?.success!==true || !Array.isArray(response.results) ||
+     response.results.length>limit){
+    throw new Error('NEEDS_REVIEW: malformed authorized Settings read response');
+  }
+  if(response.results.length===0){
+    throw new Error('Denied: Settings view permission unavailable');
+  }
+  return response.results;
+}
+
 /**
- * No session heartbeat, full-map access, extra read or cache. Caller supplies
- * an M04-authenticated opaque bearer and trusted server clock. A successful
- * SELECT is a point-in-time read, never permission for a later SQL write.
+ * No session heartbeat, unguarded read, extra auth preflight or cache.
+ * getAppShellSettings_ is strictly two-key only.
+ * getSettingsMap_ contains the original full Settings values, including
+ * private keys, so it MUST remain internal until a reviewed secure RPC
+ * implements the source's settings.view permission and transport policy.
  */
 export function createM04AuthorizedShellSettingsReadAdapter(env){
   const DB=requireD1Binding(env);
   return Object.freeze({
     async getAppShellSettings_(request){
-      const {token,nowMs}=validate(request);
-      const digest=await digestBearer(token);
-      let response;
-      try{
-        response=await DB.prepare(READ_SHELL).bind(
-          digest,nowMs,nowMs,
-          nowMs-AUTH_POLICY.sessionIdleMs,nowMs
-        ).all();
-      }catch(cause){
-        throw new Error('NEEDS_REVIEW: authorized Settings read unavailable',{cause});
-      }
-      if(response?.success!==true || !Array.isArray(response.results) ||
-         response.results.length>2){
-        throw new Error('NEEDS_REVIEW: malformed authorized Settings read response');
-      }
-      if(response.results.length===0){
-        throw new Error('Denied: Settings view permission unavailable');
-      }
-      return decode(response.results);
+      return decode(await readAuthorized(DB,READ_SHELL,request,SHELL_KEYS.size));
+    },
+    async getSettingsMap_(request){
+      return decodeMap(await readAuthorized(DB,READ_MAP,request,MAX_SETTINGS_ROWS+1));
     }
   });
 }
