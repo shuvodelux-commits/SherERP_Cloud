@@ -42,10 +42,11 @@ before(async()=>{
   for(const [sql,values] of M06_SALE_TEST_SEED)await DB.prepare(sql).bind(...values).run();
 });
 beforeEach(async()=>{
-  for(const t of ['m06_fail_payment','m06_fail_bank','m06_fail_cash','m06_fail_due'])
+  for(const t of ['m06_fail_payment','m06_fail_bank','m06_fail_cash','m06_fail_due','m06_fail_draft_audit'])
     await DB.prepare('DROP TRIGGER IF EXISTS '+t).run();
   await DB.prepare('DROP TRIGGER m06_invoice_immutable_delete').run();
-  for(const table of transactionalTables)await DB.prepare('DELETE FROM '+table).run();
+  for(const table of ['m06_draft_audit','m06_drafts',...transactionalTables])
+    await DB.prepare('DELETE FROM '+table).run();
   await DB.prepare(`CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices
     BEGIN SELECT RAISE(ABORT,'m06-immutable-invoice'); END`).run();
   await DB.prepare("UPDATE m06_owned_stock SET available=CASE sku WHEN 'PIPE' THEN 2 ELSE 4 END WHERE tenant_id='SHOP-A'").run();
