@@ -1,0 +1,26 @@
+name: M09 Invoice Design authorized local Workerd D1 (no public binding)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  authorized-invoice-settings:
+    name: Verify authorized Invoice Design against isolated Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check Node original-source and Settings authorization suite
+        run: npm test
+      - name: Install pinned Wrangler in test runner only
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Test source-authorized Invoice Design on isolated local Workerd D1
+        run: node --test tests/integration/m09-invoice-design-authorized-d1-workerd.spec.mjs
