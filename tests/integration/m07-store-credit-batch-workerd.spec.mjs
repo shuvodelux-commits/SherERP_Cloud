@@ -299,3 +299,21 @@ test('unsupported input shape and HTTP POST cannot create credit batches',async(
   assert.equal((await worker.fetch('http://m07.local/completeReturnBatch',{method:'POST',body:'{}'})).status,404);
   assert.deepEqual(await snapshot(),before);
 });
+
+test('SQL parent claim rejects any child whose return ID or operation ID aliases the parent',async()=>{
+  const {children}=await sources();
+  const input=batch(children);
+  for(const changed of [
+    [{...children[0],operationId:input.operationId},children[1]],
+    [{...children[0],returnId:input.batchId},children[1]]
+  ]){
+    const before=await snapshot();
+    const claim=await DB.prepare(
+      'INSERT INTO m07_credit_batches VALUES (?,?,?,?,?,?,?,?,?,?)'
+    ).bind(input.tenantId,input.batchId,input.operationId,input.actorId,
+      input.customerId,input.reason,'a'.repeat(64),
+      JSON.stringify(changed),changed.length,15000).run();
+    assert.equal(claim.meta.changes,0,'DB must reject parent/child shared identity');
+    assert.deepEqual(await snapshot(),before);
+  }
+});
