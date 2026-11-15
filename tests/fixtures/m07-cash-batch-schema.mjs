@@ -21,6 +21,13 @@ export const M07_CASH_BATCH_TEST_DDL=[
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM m06_cash_sessions s
   WHERE s.tenant_id=NEW.tenant_id AND s.state='Open')
   THEN RAISE(IGNORE) END;
+ SELECT CASE WHEN EXISTS(SELECT 1 FROM m07_cash_returns prior
+   WHERE prior.tenant_id=NEW.tenant_id
+    AND (prior.operation_id=NEW.operation_id OR prior.return_id=NEW.batch_id))
+  OR EXISTS(SELECT 1 FROM m07_credit_returns prior
+   WHERE prior.tenant_id=NEW.tenant_id
+    AND (prior.operation_id=NEW.operation_id OR prior.return_id=NEW.batch_id))
+  THEN RAISE(IGNORE) END;
  SELECT CASE WHEN json_array_length(NEW.children_json)<>NEW.child_count
   OR (SELECT COUNT(DISTINCT json_extract(j.value,'$.invoiceId'))
    FROM json_each(NEW.children_json) j)<>NEW.child_count
