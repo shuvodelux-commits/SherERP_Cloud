@@ -37,3 +37,9 @@ Mark **PARALLEL-MODULE-READY** only when ALL are evidenced by merged PRs and loc
 - Every issue/PR must record `workstream`, `depends-on`, `file owner`, `read/write scope`, `test gate` and `merge sequence`.
 - A green CI build / preview is **not** proof of accounting correctness or a production-ready ERP.
 - Turn the readiness flag on only after explicit checklist review, and send the owner a status change notification at that milestone. Until then, say **parallel preparation ready; module implementation blocked**.
+
+## 2026-11-15 current gate review addendum
+
+The original M03 readiness statement above remains the **release gate**, not an instruction to start full parallel transaction coding. See [the evidence-based gate review](reviews/2026-11-15-parallel-module-readiness.md), [394-function transitive async gap review](reviews/2026-11-15-m03-async-gap-review.md), and [M04 products.add exact-mutation authorization contract](reviews/2026-11-15-m04-products-add-atomic-auth-gate.md).
+
+**Decision remains: parallel preparation READY; parallel transaction-module implementation NOT READY.** PR #248 exercises Product master creation only against nondeployable synthetic D1 schema; it is not a live source-ID issuance or M04 permission integration. Authorizing staff write operations requires real source reconciliation, current session/role proof inside the D1 write, source-shaped endpoint tests and separate cutover approval.
