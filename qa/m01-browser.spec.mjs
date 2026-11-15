@@ -270,3 +270,67 @@ test('original mobile sign-in controls fit and remain tappable at 320px',async()
     await saveArtifact(page,'mobile-320-login.png');
   }finally{await page.close();}
 });
+
+
+test('rejected login permits one intentional retry without creating a browser session',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const attempts=[];
+  const matchesLogin=request=>request.url().endsWith('/api/rpc') &&
+    request.method()==='POST' && request.postDataJSON()?.fnName==='login';
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    page.on('request',request=>{if(matchesLogin(request))attempts.push(request.postDataJSON().args);});
+    await page.locator('#loginMobile').fill('01700000000');
+    await page.locator('#loginPassword').fill('invalid-synthetic-first');
+    for(const [index,password] of ['invalid-synthetic-first','invalid-synthetic-retry'].entries()){
+      if(index===1)await page.locator('#loginPassword').fill(password);
+      const response=page.waitForResponse(r=>matchesLogin(r.request()));
+      if(index===0)await page.locator('#loginSubmitBtn').click();
+      else await page.locator('#loginPassword').press('Enter');
+      const rpc=await response;
+      assert.equal(rpc.status(),503,'inert Worker must never authenticate a test user');
+      await page.locator('#loginError').getByText(
+        'Sign-in is unavailable because server authentication is not configured yet.').waitFor();
+      await page.locator('#loginSubmitBtn:not([disabled])').waitFor();
+      assert.equal(await page.locator('#loginSubmitBtn').getAttribute('aria-busy'),'false');
+      assert.equal(await page.locator('#loginOverlay').isVisible(),true);
+      assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+      assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),null);
+      assert.equal(attempts.length,index+1,'one RPC per intentional attempt');
+    }
+    assert.deepEqual(attempts,[
+      ['01700000000','invalid-synthetic-first'],
+      ['01700000000','invalid-synthetic-retry']
+    ]);
+  }finally{await page.close();}
+});
+
+test('stale browser token is rejected, cleared and not revalidated on next reload',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const validations=[];
+  const matchesValidation=request=>request.url().endsWith('/api/rpc') &&
+    request.method()==='POST' && request.postDataJSON()?.fnName==='validateSession';
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.evaluate(()=>localStorage.setItem('hwerp.session.token','f'.repeat(64)));
+    page.on('request',request=>{
+      if(matchesValidation(request))validations.push(request.postDataJSON().args);
+    });
+    const validation=page.waitForResponse(r=>matchesValidation(r.request()));
+    await page.reload({waitUntil:'domcontentloaded'});
+    const rpc=await validation;
+    assert.equal(rpc.status(),501,'public Worker has no session-validation implementation');
+    assert.deepEqual(validations,[['f'.repeat(64)]]);
+    await page.waitForFunction(()=>localStorage.getItem('hwerp.session.token')===null);
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+    assert.equal(await page.evaluate(()=>authToken),'');
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    assert.equal(validations.length,1,'cleared token must not be revalidated');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),null);
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+  }finally{await page.close();}
+});
