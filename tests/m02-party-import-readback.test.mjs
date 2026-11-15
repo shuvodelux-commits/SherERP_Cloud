@@ -176,3 +176,82 @@ test('Party with only HUMAN_VERIFIED links cannot certify an absent original sou
   assert.equal(result.approvalEvidencePersistent,false);
   assert.ok(codes(result).includes('PLAN_LINKAGE_INVALID'));
 });
+
+
+const threeMemberSource=()=>{
+  const rows=source();
+  rows.CUSTOMERS.push({
+    ...rows.CUSTOMERS[0],
+    'Customer ID':'CUS-002',
+    'Customer Name':'Distinct branch',
+    'Phone':'01512345678',
+    _rowIndex:3
+  });
+  return rows;
+};
+const threeMemberApproval=()=>[{
+  members:[
+    {sourceGroup:'CUSTOMERS',sourceId:'CUS-001'},
+    {sourceGroup:'SUPPLIERS',sourceId:'SUP-001'},
+    {sourceGroup:'CUSTOMERS',sourceId:'CUS-002'}
+  ],
+  reviewedBy:'admin-01',reviewedAt:'2026-11-14T12:00:00Z',approvalRef:'REVIEW-001'
+}];
+
+test('two separate reviewed Parties may not reuse one approval reference in a mirrored readback',()=>{
+  const groups=approval();
+  groups.push({
+    members:[
+      {sourceGroup:'VENDORS',sourceId:'VEN-001'},
+      {sourceGroup:'EXPENSE_PAYEES',sourceId:'PAY-001'}
+    ],
+    reviewedBy:'admin-02',reviewedAt:'2026-11-14T13:00:00Z',
+    approvalRef:'REVIEW-002'
+  });
+  const plan=planned(groups);
+  assert.equal(plan.summary.reviewedGroups,2);
+  const links=plan.links.filter(x=>x.linkBasis==='HUMAN_VERIFIED');
+  assert.equal(links.length,2);
+  assert.notEqual(links[0].partyId,links[1].partyId);
+  links[1].approvalRef=links[0].approvalRef;
+  const readback=snapshot(plan,{approvalRef:true});
+  const prior=structuredClone({plan,readback});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+  assert.doesNotMatch(JSON.stringify(report),
+    /REVIEW-001|admin-01|CUS-001|SUP-001|VEN-001|PAY-001/);
+  assert.deepEqual({plan,readback},prior);
+});
+
+test('one three-member reviewed Party must retain one consistent reviewer and time tuple',()=>{
+  const plan=planPartyImport(threeMemberSource(),threeMemberApproval());
+  assert.equal(plan.summary.reviewedGroups,1);
+  const verified=plan.links.filter(x=>x.linkBasis==='HUMAN_VERIFIED');
+  assert.equal(verified.length,2);
+  assert.equal(new Set(verified.map(x=>x.partyId)).size,1);
+  assert.equal(new Set(verified.map(x=>x.approvalRef)).size,1);
+  assert.deepEqual(audit(plan,snapshot(plan,{approvalRef:true})).issues,
+    [],'all members with original shared review proof reconcile successfully');
+  verified[1].reviewedAt='2026-11-14T14:00:00Z';
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+  assert.doesNotMatch(JSON.stringify(report),/2026-11-14T14:00:00Z|CUS-002|SUP-001/);
+});
+
+test('reviewed group summary cannot contradict the number of source-backed reviewed Parties',()=>{
+  const plan=planned();
+  assert.equal(plan.summary.reviewedGroups,1);
+  plan.summary.reviewedGroups=0;
+  const readback=snapshot(plan,{approvalRef:true});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01/);
+});
