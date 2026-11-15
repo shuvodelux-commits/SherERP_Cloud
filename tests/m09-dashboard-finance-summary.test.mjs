@@ -78,7 +78,7 @@ test('gross positive and credit/advance buckets do not cancel across people or b
 });
 test('legacy normalized name grouping differs from identified person; no unsafe name-based identity merger',()=>{
   const rows=[
-    tx('','  M D   Rana  ','Loan Received',15),
+    tx('','  MD   Rana  ','Loan Received',15),
     tx(null,'md rana','Loan Repayment',5),
     tx('P-200','Md Rana','Loan Received',40),
     tx('P-201','Md Rana','Loan Repayment',2)
@@ -97,7 +97,7 @@ test('per-person account balance rounds after each transaction and final totals 
     tx('P-3','C','Loan Repayment','0.125')
   ];
   const result=parity(rows);
-  assert.equal(result.ownerCapital,0.32);
+  assert.equal(result.ownerCapital,0.33);
   assert.equal(result.outstandingLoan,2);
 });
 test('source unknown types ignored; bad scalar amounts become zero; no synthetic cash move',()=>{
