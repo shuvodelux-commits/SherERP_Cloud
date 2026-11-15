@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import {buildLegacyAsyncCallGraph} from '../scripts/audit-m03-async-graph.mjs';
 
 const find=(graph,file,name)=>{
@@ -131,4 +132,25 @@ test('full frozen 47-file source parses, matches original SHA and exposes comple
   assert(complete.length>=1,'Frozen Sales.gs completeSale required');
   assert(complete.some(row=>Array.isArray(row.pathToBoundary) && row.pathToBoundary.length>=1),
     'completeSale must have a resolvable migration-boundary path');
+});
+
+test('CLI verifies original digest and produces deterministic, scoped source summary',()=>{
+  const script=new URL('../scripts/audit-m03-async-graph.mjs',import.meta.url).pathname;
+  const check=spawnSync(process.execPath,[script,'--check'],{
+    encoding:'utf8',timeout:30000
+  });
+  assert.equal(check.status,0,check.stderr);
+  assert.match(check.stdout,/source pin verified: 47 files/i);
+  const summary=spawnSync(process.execPath,[script,'--summary'],{
+    encoding:'utf8',timeout:30000
+  });
+  assert.equal(summary.status,0,summary.stderr);
+  const parsed=JSON.parse(summary.stdout);
+  assert.equal(parsed.sourceFiles,47);
+  assert(parsed.summary.functions>200);
+  assert(parsed.summary.direct>25);
+  assert(parsed.summary.indirect>25);
+  assert(Array.isArray(parsed.ambiguousNames));
+  assert.equal(Object.hasOwn(parsed,'functions'),false,
+    'brief CLI must not accidentally print the full original graph');
 });
