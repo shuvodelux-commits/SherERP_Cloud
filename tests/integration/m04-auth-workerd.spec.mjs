@@ -150,3 +150,76 @@ test('a password reset after verification cannot create a stale-credential sessi
   const sessions=await DB.prepare("SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id='USR-CAS'").first();
   assert.equal(sessions.n,0);
 });
+
+
+test('revocation is write-once in real D1 and a logged-out bearer cannot be resurrected',async()=>{
+  const now=BASE+500_000;
+  const signed=await rpc('login',{phoneKey:'01710000001',password:PASSWORD,nowMs:now});
+  assert.equal(signed.body.authenticated,true);
+  const token=signed.body.token;
+  const tokenHash=createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
+  assert.deepEqual(await rpc('logout',{token,nowMs:now+1000}),{status:200,body:{revoked:true}});
+  assert.deepEqual(await rpc('validate',{token,nowMs:now+2000}),{status:200,body:{authenticated:false}});
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_sessions SET revoked_at_ms=NULL WHERE token_hash=?')
+      .bind(tokenHash).run(),/revocation|immutable|constraint/i);
+  } finally {
+    // RED proof may allow unrevocation; restore synthetic fixture before next test.
+    const current=await DB.prepare('SELECT revoked_at_ms FROM auth_sessions WHERE token_hash=?')
+      .bind(tokenHash).first();
+    if(current?.revoked_at_ms===null)
+      await DB.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
+        .bind(now+1000,tokenHash).run();
+  }
+  assert.deepEqual(await rpc('validate',{token,nowMs:now+3000}),{status:200,body:{authenticated:false}});
+});
+
+test('a session cannot be reassigned to a second active Administrator with matching epochs',async()=>{
+  const now=BASE+600_000;
+  await seed('USR-SEAL-SECOND','01710000009','Administrator');
+  const signed=await rpc('login',{phoneKey:'01710000001',password:PASSWORD,nowMs:now});
+  assert.equal(signed.body.authenticated,true);
+  const tokenHash=createHash('sha256').update(Buffer.from(signed.body.token,'hex')).digest('hex');
+  const snapshots=await DB.prepare('SELECT u.user_id,u.auth_version,u.credential_version FROM auth_users u WHERE u.user_id IN (?,?)')
+    .bind('USR-ADMIN','USR-SEAL-SECOND').all();
+  assert.equal(snapshots.results.length,2);
+  assert.equal(snapshots.results[0].auth_version,snapshots.results[1].auth_version);
+  assert.equal(snapshots.results[0].credential_version,snapshots.results[1].credential_version);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_sessions SET user_id=? WHERE token_hash=?')
+      .bind('USR-SEAL-SECOND',tokenHash).run(),/session|immutable|constraint/i);
+  } finally {
+    const row=await DB.prepare('SELECT user_id FROM auth_sessions WHERE token_hash=?')
+      .bind(tokenHash).first();
+    if(row?.user_id!=='USR-ADMIN')
+      await DB.prepare('UPDATE auth_sessions SET user_id=? WHERE token_hash=?')
+        .bind('USR-ADMIN',tokenHash).run();
+  }
+  const session=await rpc('validate',{token:signed.body.token,nowMs:now+1000});
+  assert.equal(session.body.authenticated,true);
+  assert.equal(session.body.user.id,'USR-ADMIN');
+});
+
+test('session absolute expiry cannot be extended by SQL after issuance',async()=>{
+  const now=BASE+700_000;
+  const signed=await rpc('login',{phoneKey:'01710000001',password:PASSWORD,nowMs:now});
+  assert.equal(signed.body.authenticated,true);
+  const tokenHash=createHash('sha256').update(Buffer.from(signed.body.token,'hex')).digest('hex');
+  const oldRow=await DB.prepare('SELECT expires_at_ms FROM auth_sessions WHERE token_hash=?')
+    .bind(tokenHash).first();
+  assert.equal(oldRow.expires_at_ms,now+12*60*60*1000);
+  try {
+    await assert.rejects(()=>DB.prepare('UPDATE auth_sessions SET expires_at_ms=? WHERE token_hash=?')
+      .bind(oldRow.expires_at_ms+60_000,tokenHash).run(),/session|immutable|constraint/i);
+  } finally {
+    const row=await DB.prepare('SELECT expires_at_ms FROM auth_sessions WHERE token_hash=?')
+      .bind(tokenHash).first();
+    if(row?.expires_at_ms!==oldRow.expires_at_ms)
+      await DB.prepare('UPDATE auth_sessions SET expires_at_ms=? WHERE token_hash=?')
+        .bind(oldRow.expires_at_ms,tokenHash).run();
+  }
+  assert.equal((await DB.prepare('SELECT expires_at_ms FROM auth_sessions WHERE token_hash=?')
+    .bind(tokenHash).first()).expires_at_ms,oldRow.expires_at_ms);
+  assert.equal((await rpc('validate',{token:signed.body.token,nowMs:now+1000})).body.authenticated,true);
+  assert.equal((await rpc('validate',{token:signed.body.token,nowMs:oldRow.expires_at_ms})).body.authenticated,false);
+});
