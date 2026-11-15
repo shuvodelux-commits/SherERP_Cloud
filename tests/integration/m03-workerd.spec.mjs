@@ -17,6 +17,7 @@ import './m03-authorized-post-workerd.spec.mjs'; // Synthetic M04 authority chec
 import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
 import './m03-exactly-one-workerd.spec.mjs'; // Internal atomic write guard on synthetic local D1.
+import './m03-id-issuer-workerd.spec.mjs'; // M03 source IDs: isolated D1 receipt+counter trigger, replay and concurrency.
 import './m05-purchase-posting-workerd.spec.mjs'; // M05 test-only atomic supplier purchase posting; local D1 only.
 import './m06-sale-posting-workerd.spec.mjs'; // M06 isolated synthetic sale/tender/Customer due atomic D1 proof.
 import './m07-cash-return-workerd.spec.mjs'; // M07 single-invoice Cash return exact-once/rollback proof on M06 source.
