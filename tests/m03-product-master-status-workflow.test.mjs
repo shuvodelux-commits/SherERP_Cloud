@@ -21,14 +21,14 @@ function fixture(){
     prepare(sql){
       statementCount++;
       const prepared=db.prepare(sql);
-      return {bind(...args){
-        return {
-          prepared,args,
-          async all(){return {success:true,results:prepared.all(...args)};},
-          async first(){return prepared.get(...args)??null;},
-          async run(){return {success:true,meta:prepared.run(...args)};}
-        };
-      }};
+      const statement=(args=[])=>({
+        prepared,args,sql,
+        bind(...nextArgs){return statement(nextArgs);},
+        async all(){return {success:true,results:prepared.all(...args)};},
+        async first(){return prepared.get(...args)??null;},
+        async run(){return {success:true,meta:prepared.run(...args)};}
+      });
+      return statement();
     },
     async batch(items){
       batches++;
