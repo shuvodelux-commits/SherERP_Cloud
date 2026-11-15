@@ -30,9 +30,9 @@ test('reports bootstrap awaits fixed-key D1 Settings and matches source-checked 
     assert.equal(result.defaultFrom,'2026-11-01');
     assert.equal(JSON.stringify(result).includes('DO-NOT-LEAK'),false);
     assert.equal(t.queries.length,1);
-    assert.match(t.queries[0],/^SELECT\\b/i);
+    assert.match(t.queries[0],/^SELECT\b/i);
     assert.match(t.queries[0],/WHERE key IN/i);
-    assert.doesNotMatch(t.queries[0],/SELECT\\s+\\*/i);
+    assert.doesNotMatch(t.queries[0],/SELECT\s+\*/i);
     assert.doesNotMatch(t.queries[0],/JWT_SECRET|PASSWORD|TOKEN/i);
     assert.equal(result.reportTypes.some(x=>x instanceof Promise),false);
     assert.equal(t.db.prepare('SELECT COUNT(*) AS n FROM settings').get().n,3);
