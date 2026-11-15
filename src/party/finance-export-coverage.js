@@ -48,7 +48,7 @@ export function validateFinanceTransactionExport(input={}){
   };
   const issues=[];
   if(sourceHeaders.length!==columns.length ||
-    sourceHeaders.some((field,i)=>field!==columns[i]))
+    columns.some((field,i)=>sourceHeaders[i]!==field))
     counts.headerIssues=1;
   issue(issues,'HEADER_MISMATCH',counts.headerIssues);
   issue(issues,'SOURCE_COUNT_MISMATCH',
