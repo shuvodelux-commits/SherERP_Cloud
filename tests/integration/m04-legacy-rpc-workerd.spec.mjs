@@ -75,6 +75,11 @@ before(async()=>{
       JSON.stringify({roles:{add:true,view:false,edit:false,delete:false}})).run();
   await seed('USR-RPC-USER-ADD','01710000111','UsersAdder');
   await seed('USR-RPC-ROLE-ADD','01710000112','RolesAdder');
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('UsersEditor','Active',?,'')`)
+    .bind(JSON.stringify({users:{view:false,add:false,edit:true,delete:false}})).run();
+  await seed('USR-RPC-USER-EDIT','01710000113','UsersEditor');
 });
 after(async()=>{await harness.close();});
 
@@ -625,4 +630,97 @@ test('management add preflight checks independent stored D1 users.add and roles.
   assert.deepEqual(afterUsers,beforeUsers,'createUser preflight never creates a user');
   assert.deepEqual(afterRoles,beforeRoles,'addRole preflight never creates a role');
   assert.equal(JSON.stringify(ok('USR-RPC-ADMIN','Administrator')).includes(SECRET),false);
+});
+
+
+async function usersEditPreflight(methodName,token,nowMs=NOW+211_000,claims={}){
+  const response=await worker.fetch('http://m04.local/__m04_test__/users-edit-preflight',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({methodName,token,nowMs,...claims}),
+  });
+  return {status:response.status,body:await response.json()};
+}
+
+test('users.edit preflight requires live D1 action rights for update, reset password and status without writes',async()=>{
+  const source=readFileSync(new URL('../../legacy/source/UserManagement.gs',import.meta.url),'utf8');
+  for(const [method,signature] of [
+    ['updateUser','token, userId, payload'],
+    ['resetPassword','token, userId, newPassword'],
+    ['setUserStatus','token, userId, status'],
+  ]){
+    const escaped=signature.replace(/[.*+?^$()|[\]{}]/g,'\\$&');
+    assert.match(source,new RegExp('function '+method+'\\('+escaped+'\\)[\\s\\S]*?requirePermission_\\(token, \'users\', \'edit\'\\)'));
+  }
+  const countBefore=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
+  const accountBefore=await db.prepare(`SELECT user_id,status,role_name,
+      password_hash,password_salt,credential_version,auth_version
+    FROM auth_users WHERE user_id='USR-RPC-USER-EDIT'`).first();
+
+  const signins=await Promise.all([
+    rpc('login',['01710000101',SECRET],NOW+210_000),
+    rpc('login',['01710000113',SECRET],NOW+210_000),
+    rpc('login',['01710000111',SECRET],NOW+210_000),
+    rpc('login',['01710000105',SECRET],NOW+210_000),
+    rpc('login',['01710000110',SECRET],NOW+210_000),
+  ]);
+  for(const r of signins)assert.equal(r.body.success,true);
+  const [admin,editor,adder,viewer,deleter]=signins.map(r=>r.body.data.token);
+  const deny={status:200,body:{eligible:false}};
+  const allow=(id,role)=>({status:200,body:{eligible:true,actor:{id,role}}});
+
+  for(const methodName of ['updateUser','resetPassword','setUserStatus']){
+    assert.deepEqual(await usersEditPreflight(methodName,admin),
+      allow('USR-RPC-ADMIN','Administrator'));
+    assert.deepEqual(await usersEditPreflight(methodName,editor),
+      allow('USR-RPC-USER-EDIT','UsersEditor'));
+    for(const token of [adder,viewer,deleter])
+      assert.deepEqual(await usersEditPreflight(methodName,token),deny,
+        'users.add/users.delete/view must not imply users.edit');
+  }
+  assert.deepEqual(await usersEditPreflight('resetPassword',adder,NOW+212_000,{
+    actor:{id:'USR-RPC-ADMIN',role:'Administrator'},
+    permissions:{users:{edit:true}},
+    allowedModules:['users'],
+    target:{id:'USR-RPC-ADMIN'},
+    payload:{password:SECRET},
+  }),deny);
+  for(const methodName of ['updateRole','setRoleStatus','addRole','deleteUser',
+    'updateUsers','resetPassword ','toString','constructor','__proto__',null]){
+    assert.deepEqual(await usersEditPreflight(methodName,admin),deny,String(methodName));
+  }
+  assert.deepEqual(await usersEditPreflight('updateUser','bad-session'),deny);
+  assert.deepEqual(await usersEditPreflight('resetPassword',editor,NOW+210_000+31*60*1000),
+    deny,'idle session rejected');
+  await rpc('logout',[admin],NOW+213_000);
+  assert.deepEqual(await usersEditPreflight('setUserStatus',admin,NOW+214_000),deny);
+
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='UsersEditor'")
+    .bind(JSON.stringify({users:{view:true,edit:false}})).run();
+  assert.deepEqual(await usersEditPreflight('updateUser',editor,NOW+215_000),deny);
+  const downgraded=await rpc('login',['01710000113',SECRET],NOW+216_000);
+  assert.equal(downgraded.body.success,true);
+  assert.deepEqual(await usersEditPreflight('resetPassword',downgraded.body.data.token,NOW+217_000),deny);
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='UsersEditor'")
+    .bind(JSON.stringify({users:{edit:true}})).run();
+  assert.deepEqual(await usersEditPreflight('updateUser',editor,NOW+218_000),deny);
+  assert.deepEqual(await usersEditPreflight('updateUser',downgraded.body.data.token,NOW+218_000),deny);
+  const reissued=await rpc('login',['01710000113',SECRET],NOW+219_000);
+  assert.equal(reissued.body.success,true);
+  assert.deepEqual(await usersEditPreflight('setUserStatus',reissued.body.data.token,NOW+220_000),
+    allow('USR-RPC-USER-EDIT','UsersEditor'));
+  await db.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='UsersEditor'").run();
+  assert.deepEqual(await usersEditPreflight('resetPassword',reissued.body.data.token,NOW+221_000),deny);
+  await db.prepare("UPDATE auth_roles SET status='Active' WHERE role_name='UsersEditor'").run();
+  assert.deepEqual(await usersEditPreflight('resetPassword',reissued.body.data.token,NOW+222_000),deny);
+
+  // Read-time RBAC preview has NO staff or credential writes.
+  const countAfter=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
+  const accountAfter=await db.prepare(`SELECT user_id,status,role_name,
+      password_hash,password_salt,credential_version,auth_version
+    FROM auth_users WHERE user_id='USR-RPC-USER-EDIT'`).first();
+  assert.deepEqual(countAfter,countBefore);
+  assert.deepEqual(accountAfter,accountBefore);
+  const response=JSON.stringify(allow('USR-RPC-USER-EDIT','UsersEditor'));
+  for(const secret of [SECRET,'password_hash','password_salt','auth_version','token_hash'])
+    assert.equal(response.includes(secret),false,'private field should never be returned');
 });
