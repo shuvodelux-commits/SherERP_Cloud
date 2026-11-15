@@ -48,7 +48,7 @@ function inspect(snapshot){
       else ids.add(id);
       let locator;
       if(Object.hasOwn(row,'_rowIndex')){
-        if(!Number.isInteger(row._rowIndex) || row._rowIndex<2)throw badProvenance();
+        if(!Number.isSafeInteger(row._rowIndex) || row._rowIndex<2)throw badProvenance();
         locator='ROW:'+row._rowIndex;
       }else if(goodId){
         locator='ID:'+id;
