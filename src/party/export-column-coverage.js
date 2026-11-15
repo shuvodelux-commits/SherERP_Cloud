@@ -94,7 +94,7 @@ export function validatePartyExportCompleteness({sourceRows,sourceHeaders}={}){
           continue;
         }
         if(name==='_rowIndex'){
-          if(!Number.isInteger(value)||value<2)unsafe++;
+          if(!Number.isSafeInteger(value)||value<2)unsafe++;
           continue;
         }
         if(!validCell(value) ||
