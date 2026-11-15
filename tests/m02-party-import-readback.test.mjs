@@ -260,11 +260,11 @@ test('reviewed group summary cannot contradict the number of source-backed revie
 test('tampered reviewer and approval IDs cannot pass a mirrored future D1 readback',()=>{
   const cases=[
     {field:'reviewedBy',value:' admin-01 '},
-    {field:'reviewedBy',value:'admin\\u202E01'},
-    {field:'reviewedBy',value:'admin\\u000701'},
+    {field:'reviewedBy',value:'admin\u202E01'},
+    {field:'reviewedBy',value:'admin\u000701'},
     {field:'approvalRef',value:' REVIEW-001 '},
-    {field:'approvalRef',value:'REVIEW\\u200B-001'},
-    {field:'approvalRef',value:'REVIEW\\u2066-001'}
+    {field:'approvalRef',value:'REVIEW\u200B-001'},
+    {field:'approvalRef',value:'REVIEW\u2066-001'}
   ];
   for(const {field,value} of cases){
     const plan=planned(),verified=plan.links.find(x=>x.linkBasis==='HUMAN_VERIFIED');
