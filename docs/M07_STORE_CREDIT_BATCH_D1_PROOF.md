@@ -35,3 +35,11 @@ Only internal local synthetic proof; M04 authenticated authority, M05 imported s
 **RED:** A raw local D1 `INSERT INTO m07_credit_batches` with a child `operationId` equal to its own parent `operation_id` committed **17 affected rows** instead of being declined. The same invalid condition applies to a child `returnId` matching the parent `batch_id`. Relying on the JS input adapter alone would not guarantee unique financial identities.
 
 **GREEN:** Added an explicit `json_each(children_json)` self-alias check in the **BEFORE INSERT SQL trigger**, returning `RAISE(IGNORE)` before any parent/child effect. Raw-SQL assertions now demonstrate zero D1 changes and an identical stock/customer/ledger snapshot for both colliding identity patterns. New focused Workerd/D1 suite: **15/15 PASS** after patch `ade9d50`. No production source/schema changes.
+
+## Paid walk-in exclusion (additional source characterization)
+
+Added a real local D1 test that first **posts** a fully paid anonymous Cash sale through the actual M06 synthetic sale contract, then tries to include its Invoice ID with a named Customer's Store Credit batch. The Store Credit batch is `DECLINED` and the complete stock, Cash/Bank and signed customer ledger snapshots remain unchanged. This is distinct from an invalid unpaid walk-in fixture: M06 correctly refuses an unpaid anonymous sale.
+
+**Latest focused Workerd/D1 suite:** **16/16 PASS** on commit `8c2036e`, including the raw SQL parent/child ID guard. Prior **13/13 Cash batch**, **12/12 Store Credit single** and **11/11 Cash single** suites passed on the immediately preceding M07 branch revision; aggregate GitHub CI will rerun all current tests.
+
+The unrelated full Node baseline currently contains M04 Settings authorization issue [#120](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/120) (`592/593` UTC test cases on the reconciled `main@de92eb4` branch). Do not mark full Node/CI green until fixed and rerun.
