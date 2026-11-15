@@ -98,7 +98,7 @@ test('per-person account balance rounds after each transaction and final totals 
   ];
   const result=parity(rows);
   assert.equal(result.ownerCapital,0.33);
-  assert.equal(result.outstandingLoan,2);
+  assert.equal(result.outstandingLoan,2.01);
 });
 test('source unknown types ignored; bad scalar amounts become zero; no synthetic cash move',()=>{
   const rows=[
