@@ -9,7 +9,7 @@ import {reportDefaultRange} from './report-date-range.js';
 
 const required=['today','todaySales','customerLedgerRows','expenseRows','purchaseRows'];
 
-function trustedRecord(value,context){
+function trustedRecord(value,context,allowRowArrays=false){
   try{
     if(!value || typeof value!=='object' || Array.isArray(value) ||
        (Object.getPrototypeOf(value)!==Object.prototype &&
@@ -19,7 +19,10 @@ function trustedRecord(value,context){
     for(const [key,d] of Object.entries(desc)){
       if(!Object.hasOwn(d,'value') ||
          d.value!==null &&
-         (typeof d.value==='object' || typeof d.value==='function'))
+         (typeof d.value==='function' ||
+          (typeof d.value==='object' &&
+           !(allowRowArrays && required.includes(key) && Array.isArray(d.value)))))
+
         throw new TypeError('Invalid '+context+' field: '+key);
     }
     return value;
@@ -54,7 +57,7 @@ const amount=value=>Number(value)||0;
  * filtered as the frozen source's activeRows_ would filter them.
  */
 export function projectDashboardDailyMovements(snapshot){
-  const s=trustedRecord(snapshot,'Dashboard snapshot');
+  const s=trustedRecord(snapshot,'Dashboard snapshot',true);
   const keys=Reflect.ownKeys(s);
   if(keys.length!==required.length ||
      keys.some(key=>typeof key!=='string'||!required.includes(key)))
