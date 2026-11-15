@@ -48,7 +48,9 @@ test('changed quantity or visible unit price recomputes line using original mone
 
 test('historical blank, null, invalid and negative totals safely use rounded multiplication',()=>{
   for(const total of ['',null,undefined,'invalid',-1,Infinity]){
-    const result=parity([historical('PIPE',2,12.5,total)],[candidate()]);
+    const row=historical();
+    row['Line Total']=total; // Explicit undefined must not activate the fixture default.
+    const result=parity([row],[candidate()]);
     assert.equal(result.lines[0].lineTotal,25);
   }
 });
