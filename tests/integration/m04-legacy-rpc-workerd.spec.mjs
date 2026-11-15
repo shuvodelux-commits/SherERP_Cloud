@@ -68,6 +68,13 @@ before(async()=>{
       roles:{view:false,add:false,edit:false,delete:true,backdate:'unlimited'},
     })).run();
   await seed('USR-RPC-ROLE-DELETE','01710000110','ManagementDeleteRolesOnly');
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('UsersAdder','Active',?,''),('RolesAdder','Active',?,'')`)
+    .bind(JSON.stringify({users:{add:true,view:false,edit:false,delete:false}}),
+      JSON.stringify({roles:{add:true,view:false,edit:false,delete:false}})).run();
+  await seed('USR-RPC-USER-ADD','01710000111','UsersAdder');
+  await seed('USR-RPC-ROLE-ADD','01710000112','RolesAdder');
 });
 after(async()=>{await harness.close();});
 
@@ -526,4 +533,93 @@ test('management-delete preflight grants only matching persisted D1 rights witho
   assert.deepEqual(await deletePreflight('deleteRole',renewed.body.data.token,NOW+182_000),deny);
   const countAfter=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
   assert.deepEqual(countAfter,countBefore,'the authorization preview performs no delete');
+});
+
+
+async function addPreflight(methodName,token,nowMs=NOW+191_000,claims={}){
+  const response=await worker.fetch('http://m04.local/__m04_test__/add-preflight',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({methodName,token,nowMs,...claims}),
+  });
+  return {status:response.status,body:await response.json()};
+}
+
+test('management add preflight checks independent stored D1 users.add and roles.add without creating records',async()=>{
+  const usersSource=readFileSync(new URL('../../legacy/source/UserManagement.gs',import.meta.url),'utf8');
+  const rolesSource=readFileSync(new URL('../../legacy/source/RoleManagement.gs',import.meta.url),'utf8');
+  assert.match(usersSource,/function createUser\(token, payload\)[\s\S]*?requirePermission_\(token, 'users', 'add'\)/);
+  assert.match(rolesSource,/function addRole\(token, payload\)[\s\S]*?requirePermission_\(token, 'roles', 'add'\)/);
+
+  const beforeUsers=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
+  const beforeRoles=await db.prepare('SELECT COUNT(*) AS n FROM auth_roles').first();
+  const admin=await rpc('login',['01710000101',SECRET],NOW+190_000);
+  const userAdder=await rpc('login',['01710000111',SECRET],NOW+190_000);
+  const roleAdder=await rpc('login',['01710000112',SECRET],NOW+190_000);
+  const viewer=await rpc('login',['01710000108',SECRET],NOW+190_000);
+  const roleDeleter=await rpc('login',['01710000110',SECRET],NOW+190_000);
+  for(const result of [admin,userAdder,roleAdder,viewer,roleDeleter])
+    assert.equal(result.body.success,true);
+
+  const tokenAdmin=admin.body.data.token;
+  const tokenUser=userAdder.body.data.token;
+  const tokenRole=roleAdder.body.data.token;
+  const deny={status:200,body:{eligible:false}};
+  const ok=(id,role)=>({status:200,body:{eligible:true,actor:{id,role}}});
+  assert.deepEqual(await addPreflight('createUser',tokenAdmin),
+    ok('USR-RPC-ADMIN','Administrator'));
+  assert.deepEqual(await addPreflight('addRole',tokenAdmin),
+    ok('USR-RPC-ADMIN','Administrator'));
+  assert.deepEqual(await addPreflight('createUser',tokenUser),
+    ok('USR-RPC-USER-ADD','UsersAdder'));
+  assert.deepEqual(await addPreflight('addRole',tokenUser),deny);
+  assert.deepEqual(await addPreflight('addRole',tokenRole),
+    ok('USR-RPC-ROLE-ADD','RolesAdder'));
+  assert.deepEqual(await addPreflight('createUser',tokenRole),deny);
+  assert.deepEqual(await addPreflight('addRole',viewer.body.data.token),deny,
+    'roles.view is not roles.add');
+  assert.deepEqual(await addPreflight('addRole',roleDeleter.body.data.token),deny,
+    'roles.delete is not roles.add');
+  assert.deepEqual(await addPreflight('createUser',roleDeleter.body.data.token),deny,
+    'users.view is not users.add');
+
+  // No client claims may substitute for the server's D1 role snapshot.
+  assert.deepEqual(await addPreflight('createUser',tokenRole,NOW+192_000,{
+    actor:{id:'USR-RPC-ADMIN',role:'Administrator'},
+    permissions:{users:{add:true}},allowedModules:['users'],
+    payload:{role:'Administrator',password:SECRET},
+  }),deny);
+  for(const methodName of ['deleteUser','deleteRole','updateUser','resetPassword',
+    'addRole ','createUsers','constructor','toString','__proto__',null]){
+    assert.deepEqual(await addPreflight(methodName,tokenAdmin),deny,String(methodName));
+  }
+  assert.deepEqual(await addPreflight('createUser','bad-token'),deny);
+  assert.deepEqual(await addPreflight('addRole',tokenRole,NOW+190_000+31*60*1000),deny,
+    'idle token cannot pass a fresh action check');
+  await rpc('logout',[tokenAdmin],NOW+193_000);
+  assert.deepEqual(await addPreflight('createUser',tokenAdmin,NOW+194_000),deny);
+
+  // New authority snapshot is needed after every role update. Re-enabling
+  // a role cannot resurrect an old bearer even when permissions return.
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='RolesAdder'")
+    .bind(JSON.stringify({roles:{add:false,view:true}})).run();
+  assert.deepEqual(await addPreflight('addRole',tokenRole,NOW+195_000),deny);
+  const demoted=await rpc('login',['01710000112',SECRET],NOW+196_000);
+  assert.equal(demoted.body.success,true);
+  assert.deepEqual(await addPreflight('addRole',demoted.body.data.token,NOW+197_000),deny);
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='RolesAdder'")
+    .bind(JSON.stringify({roles:{add:true,view:false}})).run();
+  assert.deepEqual(await addPreflight('addRole',tokenRole,NOW+198_000),deny);
+  assert.deepEqual(await addPreflight('addRole',demoted.body.data.token,NOW+198_000),deny);
+  const renewed=await rpc('login',['01710000112',SECRET],NOW+199_000);
+  assert.equal(renewed.body.success,true);
+  assert.equal((await addPreflight('addRole',renewed.body.data.token,NOW+200_000)).body.eligible,true);
+  await db.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='RolesAdder'").run();
+  assert.deepEqual(await addPreflight('addRole',renewed.body.data.token,NOW+201_000),deny);
+  await db.prepare("UPDATE auth_roles SET status='Active' WHERE role_name='RolesAdder'").run();
+  assert.deepEqual(await addPreflight('addRole',renewed.body.data.token,NOW+202_000),deny);
+  const afterUsers=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
+  const afterRoles=await db.prepare('SELECT COUNT(*) AS n FROM auth_roles').first();
+  assert.deepEqual(afterUsers,beforeUsers,'createUser preflight never creates a user');
+  assert.deepEqual(afterRoles,beforeRoles,'addRole preflight never creates a role');
+  assert.equal(JSON.stringify(ok('USR-RPC-ADMIN','Administrator')).includes(SECRET),false);
 });
