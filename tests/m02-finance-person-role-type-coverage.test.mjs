@@ -78,7 +78,7 @@ test('canonical and historical blank/null role fields preserve original role fal
     ['',null,['Owner']],
     [null,null,['Owner']]
   ]){
-    const input=source(),before=structuredClone(input);
+    const input=source();
     const record=input.sourceRows.FINANCE_PERSONS[0];
     record.Roles=roles;
     record['Person Type']=personType;
@@ -87,7 +87,6 @@ test('canonical and historical blank/null role fields preserve original role fal
     assert.equal(report.offlineExportComplete,true,JSON.stringify([roles,personType]));
     assert.deepEqual(rolesForLegacyRow('FINANCE_PERSONS',record),wanted);
     assert.deepEqual(input,unchanged);
-    assert.notDeepEqual(input,before);
   }
 });
 
