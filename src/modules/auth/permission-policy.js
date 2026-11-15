@@ -24,9 +24,13 @@ const management = new Set(['users','roles']);
 
 function ownData(object, key) {
   if (object === null || typeof object !== 'object') return undefined;
-  // Accessor properties and inherited values must not grant permission.
-  const descriptor = Object.getOwnPropertyDescriptor(object, key);
-  return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+  // Accessor, inherited and trapped properties must not grant permission.
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
