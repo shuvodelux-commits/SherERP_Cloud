@@ -49,7 +49,7 @@ before(async()=>{
       .bind(key,value,index).run();
   }
   await DB.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
-    VALUES('Cashier','Active','{"settings":{"edit":true}}','settings')`).run();
+    VALUES('Cashier','Active','{"settings":{"edit":true}}','')`).run();
   for(const [id,phone,role] of [
     ['ADMIN-A','01710000001','Administrator'],
     ['ADMIN-B','01710000002','Administrator'],
@@ -85,8 +85,7 @@ test('actual M04 session authorizes source-shaped D1 Settings CAS in same SQL st
 
 test('actual D1 custom-role session can update only with a current literal settings.edit grant',async()=>{
   const before=await records();
-  // M04 treats Allowed Modules as UI metadata, not permission authority.
-  await DB.prepare("UPDATE auth_roles SET allowed_modules='' WHERE role_name='Cashier'").run();
+  // Empty navigation metadata is seeded before M04 session issuance; its later edits invalidate epochs.
   assert.deepEqual(await update().updateExisting_(make({
     token:C,expectedValue:'নবাবী হার্ডওয়্যার',newValue:'Staff-authorized update'
   })),{updated:true});
