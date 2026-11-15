@@ -454,3 +454,22 @@ test('real local D1 readback rejects forged negative quarantined source count',a
   assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
   assert.deepEqual(await counts(),before,'D1 readback must perform no writes');
 });
+
+test('real D1 readback blocks forged Supplier role on original Finance-only Party',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  const finance=plan.links.find(link=>link.sourceGroup==='FINANCE_PERSONS');
+  assert.ok(finance);
+  const role=plan.roles.find(x=>x.partyId===finance.partyId && x.role==='Owner');
+  assert.ok(role);
+  role.role='Supplier';
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_LINKAGE_INVALID'&&x.table==='plan'));
+  assert.ok(report.issues.some(x=>x.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'old production schema still cannot retain authenticated approved group reference');
+  assert.doesNotMatch(JSON.stringify(report),
+    /FIN-001|CUS-001|SUP-001|REVIEW-001|admin-01|01900000000/);
+  assert.deepEqual(await counts(),before,'local Workerd/D1 reconciliation is read-only');
+});
