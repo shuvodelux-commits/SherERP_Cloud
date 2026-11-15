@@ -2,6 +2,7 @@
 import {createCatalogReader} from '../../src/db/read-only-catalog.js';
 import {resolveLegacyPartyId} from '../../src/db/party-identity-read.js';
 import {createLegacyCatalogReadAdapter} from '../../src/db/legacy-catalog-read.js';
+import {createProductMasterOptionsReader} from '../../src/modules/product-master-options.js';
 
 const json=(status, value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 
@@ -17,6 +18,9 @@ export default {
       if(url.pathname==='/__m03_test__/units') {
         const limit=url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 50;
         return json(200,{rows:await createCatalogReader(env).listUnits(limit)});
+      }
+      if(url.pathname==='/__m03_test__/product-master-options') {
+        return json(200,await createProductMasterOptionsReader(env).getOptions());
       }
       if(url.pathname==='/__m03_test__/legacy-rows') {
         const sheet=url.searchParams.get('sheet');
