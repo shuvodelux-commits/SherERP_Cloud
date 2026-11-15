@@ -162,3 +162,39 @@ test('product dropdown projection awaits actual Worker D1 and leaves catalog rec
   const after=await db.prepare('SELECT (SELECT COUNT(*) FROM product_categories) AS categories, (SELECT COUNT(*) FROM product_units) AS units').first();
   assert.deepEqual(after,before);
 });
+
+
+test('M09 Reports bootstrap derives safe source-shaped projection through actual Workerd/D1 Settings',async()=>{
+  // This endpoint exists ONLY in wrangler.m03-test.jsonc; not in the live Worker.
+  const before=await db.prepare('SELECT COUNT(*) AS n FROM settings').first();
+  try{
+    await db.prepare('INSERT INTO settings(key,value) VALUES (?,?)')
+      .bind('Shop Name','মেসার্স হার্ডওয়্যার').run();
+    await db.prepare('INSERT INTO settings(key,value) VALUES (?,?)')
+      .bind('Currency Symbol','৳').run();
+    await db.prepare('INSERT INTO settings(key,value) VALUES (?,?)')
+      .bind('JWT_SECRET','PRIVATE-REPORT-CANARY').run();
+    const result=await query('/__m03_test__/reports-bootstrap?today=2020-01-01');
+    assert.equal(result.status,200);
+    assert.deepEqual(Object.keys(result.body),[
+      'reportTypes','currencySymbol','shopName','defaultFrom','defaultTo'
+    ]);
+    assert.equal(result.body.currencySymbol,'৳');
+    assert.equal(result.body.shopName,'মেসার্স হার্ডওয়্যার');
+    assert.equal(result.body.defaultFrom,'2026-11-01');
+    assert.equal(result.body.defaultTo,'2026-11-15');
+    assert.deepEqual(result.body.reportTypes.map(row=>row.key),[
+      'sales','purchase','stock','cashbank','profit','balancesheet'
+    ]);
+    assert.doesNotMatch(JSON.stringify(result.body),/PRIVATE-REPORT-CANARY/);
+    const during=await db.prepare('SELECT COUNT(*) AS n FROM settings').first();
+    assert.equal(during.n,before.n+3);
+    const live=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8')+
+      readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
+    assert.equal(live.includes('/__m03_test__/reports-bootstrap'),false);
+  }finally{
+    await db.prepare("DELETE FROM settings WHERE key IN ('Shop Name','Currency Symbol','JWT_SECRET')").run();
+    const after=await db.prepare('SELECT COUNT(*) AS n FROM settings').first();
+    assert.equal(after.n,before.n);
+  }
+});
