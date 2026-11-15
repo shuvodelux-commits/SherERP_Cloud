@@ -127,8 +127,8 @@ export function prepareGrossPartyBalances({sourceRows,approvedGroups=[],financeR
     if(!row || typeof row!=='object'||Array.isArray(row))
       throw new Error('Invalid finance row');
     if(deleted(row)){deletedFinanceRows++;continue;}
-    const id=string(row['Finance ID']).trim();
-    if(!id){
+    const id=string(row['Finance ID']);
+    if(!id.trim()){
       issue('FINANCE_ID_REQUIRED','FINANCE_TRANSACTIONS');
       continue;
     }
