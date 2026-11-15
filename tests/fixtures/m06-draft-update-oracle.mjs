@@ -92,5 +92,7 @@ export function nativeUpdateSalesDraft(draftId,expectedVersion,payload,draftRows
     note:capturedAudit['Note'],
     timestamp:capturedAudit['Timestamp']
   };
-  return {...result,fields:capturedFields,audit};
+  return result.success
+    ? {success:true,reply:result.data,fields:capturedFields,audit}
+    : {success:false,message:result.message,fields:capturedFields,audit};
 }
