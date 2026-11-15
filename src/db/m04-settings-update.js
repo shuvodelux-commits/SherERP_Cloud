@@ -14,13 +14,14 @@ const SHELL_KEYS=new Set(['Shop Name','Currency Symbol']);
 
 // Current session authorization and old-value CAS are checked INSIDE the
 // same D1 UPDATE. A separate JavaScript auth preflight can race revocation.
-// Custom staff roles stay denied until the source-faithful settings.edit
-// permission mapping has been reviewed and approved by M04.
+// Non-Administrator users require the current active role epoch and an actual
+// JSON boolean 'settings.edit' grant (not Allowed Modules display metadata).
 const AUTHORIZED_UPDATE=`UPDATE settings SET value=?
   WHERE key=? AND value=?
     AND EXISTS(
       SELECT 1 FROM auth_sessions AS s
       JOIN auth_users AS u ON u.user_id=s.user_id
+      LEFT JOIN auth_roles AS r ON r.role_name=u.role_name
       WHERE s.token_hash=?
         AND s.revoked_at_ms IS NULL
         AND s.created_at_ms<=? AND s.expires_at_ms>?
@@ -28,8 +29,20 @@ const AUTHORIZED_UPDATE=`UPDATE settings SET value=?
         AND u.status='Active' AND u.credential_state='Modern'
         AND u.auth_version=s.user_auth_version
         AND u.credential_version=s.credential_version
-        AND u.role_name='Administrator'
-        AND s.role_auth_version IS NULL
+        AND (
+          (u.role_name='Administrator' AND s.role_auth_version IS NULL)
+          OR (
+            u.role_name<>'Administrator'
+            AND r.status='Active'
+            AND r.auth_version=s.role_auth_version
+            AND length(r.permissions_json)<=65536
+            AND CASE WHEN json_valid(r.permissions_json) THEN
+              json_type(r.permissions_json)='object'
+              AND json_type(r.permissions_json,'$.settings')='object'
+              AND json_type(r.permissions_json,'$.settings.edit')='true'
+            ELSE 0 END
+          )
+        )
     )
   RETURNING key,value`;
 

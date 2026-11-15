@@ -15,7 +15,8 @@ const MODULES=new Set([
   'cashReconciliation','reports','settings','users','roles',
   'openingBalance','settlementDiscount','posCost',
 ]);
-const WINDOWS=new Set(['1','3','7','15','30','unlimited']);
+const WINDOWS=new Set(['disabled','same','1','3','7','15','30','unlimited']);
+const MANAGEMENT=new Set(['users','roles']);
 const failure=message=>({success:false,message});
 const EXPIRED='Session expired. Please sign in again.';
 const LOGIN_FAILED='Invalid mobile number or password.';
@@ -48,6 +49,10 @@ function roleMetadata(row){
       return null;
     for(const [action,value] of Object.entries(actions)){
       if(action==='delete') {
+        if(MANAGEMENT.has(module)){
+          if(typeof value!=='boolean') return null;
+        } else if(!WINDOWS.has(value)) return null;
+      } else if(action==='backdate') {
         if(!WINDOWS.has(value)) return null;
       } else if(['view','add','edit'].includes(action)){
         if(typeof value!=='boolean') return null;
