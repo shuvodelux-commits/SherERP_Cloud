@@ -61,9 +61,9 @@ test('source groups, approved links, and review evidence fail closed',()=>{
   const extra=snapshot();extra.PAYMENTS=[];
   assert.throws(()=>planPartyImport(extra),/unknown.*PAYMENTS/i);
   const pair=[{sourceGroup:'CUSTOMERS',sourceId:'CUS-001'},{sourceGroup:'SUPPLIERS',sourceId:'SUP-001'}];
-  assert.throws(()=>planPartyImport(snapshot(),[{members:pair,reviewedBy:'',reviewedAt:'now'}]),/review|evidence/i);
-  assert.throws(()=>planPartyImport(snapshot(),[{members:pair,reviewedBy:'u1',reviewedAt:'now',approvalRef:'r1'},{members:pair,reviewedBy:'u2',reviewedAt:'now',approvalRef:'r2'}]),/overlap|duplicate/i);
-  assert.throws(()=>planPartyImport(snapshot(),[{members:[pair[0],{sourceGroup:'SUPPLIERS',sourceId:'unknown'}],reviewedBy:'u1',reviewedAt:'now',approvalRef:'r1'}]),/unknown|missing/i);
+  assert.throws(()=>planPartyImport(snapshot(),[{members:pair,reviewedBy:'',reviewedAt:'2026-11-14T12:00:00Z'}]),/review|evidence/i);
+  assert.throws(()=>planPartyImport(snapshot(),[{members:pair,reviewedBy:'u1',reviewedAt:'2026-11-14T12:00:00Z',approvalRef:'r1'},{members:pair,reviewedBy:'u2',reviewedAt:'2026-11-14T12:00:00Z',approvalRef:'r2'}]),/overlap|duplicate/i);
+  assert.throws(()=>planPartyImport(snapshot(),[{members:[pair[0],{sourceGroup:'SUPPLIERS',sourceId:'unknown'}],reviewedBy:'u1',reviewedAt:'2026-11-14T12:00:00Z',approvalRef:'r1'}]),/unknown|missing/i);
 });
 
 test('plan IDs and output are deterministic across input source row order and group-member order',()=>{
