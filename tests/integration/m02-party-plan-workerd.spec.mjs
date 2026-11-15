@@ -283,3 +283,56 @@ test('Party import real-D1 readback rejects ambiguous batch success flags withou
   }],'genuine successful readback must still block missing human approval evidence');
   assert.deepEqual(await counts(),original,'readback must never mutate Party tables');
 });
+
+
+test('Party review queue rejects ambiguous D1 success flags and impossible zero group counts',async()=>{
+  const before=await counts();
+  const first=await summarizeOpenPartyIdentityReviews({DB});
+  assert.equal(first.totalOpen,4,'real D1 must have four previously seeded open reviews');
+  const malformed=[
+    {label:'missing',mutate:result=>{const {success,...rest}=result;return rest;}},
+    {label:'undefined',mutate:result=>({...result,success:undefined})},
+    {label:'null',mutate:result=>({...result,success:null})},
+    {label:'numeric zero',mutate:result=>({...result,success:0})},
+    {label:'numeric one',mutate:result=>({...result,success:1})},
+    {label:'string',mutate:result=>({...result,success:'true'})},
+    {label:'false',mutate:result=>({...result,success:false})}
+  ];
+  for(const {label,mutate} of malformed){
+    const intercepted={prepare(sql){
+      assert.match(sql.trim(),/^SELECT\s/i,'review summaries are read-only SQL');
+      const statement=DB.prepare(sql);
+      return {async all(){return mutate(await statement.all());}};
+    }};
+    await assert.rejects(
+      ()=>summarizeOpenPartyIdentityReviews({DB:intercepted}),
+      error=>error instanceof Error &&
+        error.message==='Party identity review summary unavailable',
+      label+' result status must fail closed'
+    );
+  }
+
+  const impossible={prepare(sql){
+    const statement=DB.prepare(sql);
+    return {async all(){
+      const original=await statement.all();
+      assert.equal(original.success,true);
+      assert.ok(original.results.length>0);
+      return {...original,results:[
+        {...original.results[0],count:0},...original.results.slice(1)
+      ]};
+    }};
+  }};
+  await assert.rejects(
+    ()=>summarizeOpenPartyIdentityReviews({DB:impossible}),
+    error=>error instanceof Error &&
+      error.message==='Invalid Party identity review summary',
+    'COUNT(*) GROUP BY cannot generate a zero-count group'
+  );
+  assert.deepEqual(await counts(),before,'review diagnostic must never write');
+  const valid=await summarizeOpenPartyIdentityReviews({DB});
+  assert.equal(valid.totalOpen,4);
+  assert.doesNotMatch(JSON.stringify(valid),
+    /CUS-001|SUP-001|VEN-001|01700000000|admin-01|Rahim/,
+    'all summaries must remain source-ID and PII free');
+});
