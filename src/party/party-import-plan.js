@@ -61,9 +61,10 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
         continue;
       }
       const key=sourceKey(group,id);
-      // Detect repeated source IDs even when one or both rows lack a name.
-      if(!byKey.has(key))byKey.set(key,[]);
-      byKey.get(key).push({group,id,legacySheetRow});
+      // Trim only for collision detection; preserve raw source IDs and links.
+      const collisionKey=sourceKey(group,id.trim());
+      if(!byKey.has(collisionKey))byKey.set(collisionKey,[]);
+      byKey.get(collisionKey).push({group,id,key,legacySheetRow});
       const name=str(source[spec.nameColumn]);
       if(!name.trim()){
         unnamed.push({group,id,key,legacySheetRow});
@@ -74,10 +75,16 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
       candidates.push(row);
     }
   }
-  const duplicateKeys=new Set([...byKey].filter(([,rows])=>rows.length>1).map(([key])=>key));
-  for(const key of duplicateKeys){
-    const row=byKey.get(key)[0];
-    reviews.push({reviewId:reviewId('DUPLICATE_ID',key),sourceGroup:row.group,
+  const duplicateKeys=new Set();
+  for(const [collisionKey,rows] of byKey){
+    if(rows.length<2)continue;
+    for(const row of rows)duplicateKeys.add(row.key);
+    // Deterministic review anchor even if source rows arrive in a new order.
+    const row=[...rows].sort((a,b)=>
+      a.id.localeCompare(b.id)||
+      (a.legacySheetRow??0)-(b.legacySheetRow??0)
+    )[0];
+    reviews.push({reviewId:reviewId('DUPLICATE_ID',collisionKey),sourceGroup:row.group,
       sourceId:row.id,legacySheetRow:row.legacySheetRow,reason:'DUPLICATE_ID',status:'OPEN'});
   }
   for(const row of unnamed){
