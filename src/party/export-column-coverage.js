@@ -38,6 +38,19 @@ const plain=value=>value!==null && typeof value==='object' &&
 const validCell=value=>value===null || typeof value==='string' ||
   typeof value==='boolean' ||
   (typeof value==='number' && Number.isFinite(value));
+// Source financial cells are exact signed minor units, never silently rounded.
+// Align with the existing gross-balance-preflight.js::toMinorUnits contract.
+const balanceGroups=new Set(['CUSTOMERS','SUPPLIERS','VENDORS']);
+const balanceFields=new Set(['Opening Balance','Current Due','Current Receivable']);
+const exactBalance=value=>{
+  if(value===null || value==='')return true;
+  if(typeof value!=='number' && typeof value!=='string')return false;
+  if(typeof value==='number' && !Number.isFinite(value))return false;
+  const raw=String(value).trim();
+  if(!/^[+-]?\d+(?:\.\d{1,2})?$/.test(raw))return false;
+  const [whole,frac='']=raw.replace(/^[+-]/,'').split('.');
+  return Number.isSafeInteger(Number(whole)*100+Number(frac.padEnd(2,'0')));
+};
 const add=(issues,sourceGroup,code,count)=>{
   if(count>0)issues.push({sourceGroup,code,count});
 };
@@ -84,7 +97,8 @@ export function validatePartyExportCompleteness({sourceRows,sourceHeaders}={}){
           if(!Number.isInteger(value)||value<2)unsafe++;
           continue;
         }
-        if(!validCell(value)){
+        if(!validCell(value) ||
+          (balanceGroups.has(group) && balanceFields.has(name) && !exactBalance(value))){
           unsafe++;
         }else if(
           (name===expected[0] && typeof value!=='string') ||
