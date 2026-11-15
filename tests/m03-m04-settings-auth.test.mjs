@@ -167,10 +167,14 @@ test('malformed, absent and truthy-but-not-boolean Settings grants never authori
       x.sqlite.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='Cashier'")
         .run(permissions);
       const roleVersion=x.sqlite.prepare("SELECT auth_version FROM auth_roles WHERE role_name='Cashier'").get().auth_version;
-      // Deliberately simulate a fresh matching role epoch, isolating JSON validation.
-      x.sqlite.prepare("UPDATE auth_sessions SET role_auth_version=? WHERE token_hash=?")
-        .run(roleVersion,digest(C));
-      await assert.rejects(()=>x.adapter.updateExisting_(call({token:C})),/Denied|stale|conflict/i,permissions);
+      // Issue a separate synthetic session snapshot at the current role
+      // epoch; issued bearer identity and epoch snapshots are immutable.
+      const freshToken='f'.repeat(64);
+      x.sqlite.prepare(`INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,
+        role_auth_version,credential_version,created_at_ms,last_activity_at_ms,
+        expires_at_ms,revoked_at_ms) VALUES (?, 'STAFF-C',1,?,1,?,?,?,NULL)`)
+        .run(digest(freshToken),roleVersion,NOW-300_000,NOW-60_000,NOW+3_600_000);
+      await assert.rejects(()=>x.adapter.updateExisting_(call({token:freshToken})),/Denied|stale|conflict/i,permissions);
       assert.deepEqual(records(x),before);
     }finally{x.close();}
   }

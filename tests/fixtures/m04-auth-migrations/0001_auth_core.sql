@@ -182,6 +182,25 @@ CREATE TABLE auth_sessions (
   revoked_at_ms INTEGER CHECK (revoked_at_ms IS NULL OR revoked_at_ms>=created_at_ms)
 ) STRICT;
 CREATE INDEX idx_auth_sessions_by_user ON auth_sessions(user_id,revoked_at_ms);
+-- Once issued, the opaque session's identity, authority snapshots and
+-- absolute lifetime are fixed. An existing revocation marker is write-once:
+-- clearing it would resurrect a logged-out bearer. The first revocation and
+-- normal last_activity_at_ms heartbeat remain allowed.
+CREATE TRIGGER trg_auth_session_identity_seal BEFORE UPDATE ON auth_sessions
+WHEN OLD.token_hash IS NOT NEW.token_hash
+  OR OLD.user_id IS NOT NEW.user_id
+  OR OLD.user_auth_version IS NOT NEW.user_auth_version
+  OR OLD.role_auth_version IS NOT NEW.role_auth_version
+  OR OLD.credential_version IS NOT NEW.credential_version
+  OR OLD.created_at_ms IS NOT NEW.created_at_ms
+  OR OLD.expires_at_ms IS NOT NEW.expires_at_ms
+  OR (OLD.revoked_at_ms IS NOT NULL
+      AND OLD.revoked_at_ms IS NOT NEW.revoked_at_ms)
+BEGIN
+  SELECT RAISE(ABORT,'session identity or revocation immutable');
+END;
+
+
 
 CREATE TABLE auth_login_throttle (
   login_hash TEXT PRIMARY KEY
