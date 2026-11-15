@@ -12,8 +12,9 @@ const OP_ID=/^[A-Za-z0-9_-]{12,100}$/;
 const SQLITE_INTEGER_LIMIT=1_000_000_000; // Bound amounts well below JS integer-paisa precision.
 const SQL_ACCOUNTS=`SELECT account_id,account_name,method,active FROM m06_bank_accounts WHERE tenant_id=?`;
 const SQL_POST=`INSERT INTO m06_invoices(tenant_id,invoice_id,operation_id,actor_id,
-  payload_hash,sku,units,grand_paisa,paid_paisa,due_paisa,customer_id,payments_json)
- SELECT ?,?,?,?,?,?,?,?,?,?,?,?
+  payload_hash,sku,units,grand_paisa,paid_paisa,due_paisa,customer_id,payments_json,
+  unit_price_paisa,discount_paisa,source_draft_id,source_draft_version)
+ SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
  WHERE EXISTS(SELECT 1 FROM m06_cash_sessions WHERE tenant_id=? AND state='Open')
  AND EXISTS(SELECT 1 FROM m06_owned_stock WHERE tenant_id=? AND sku=? AND available>=?)
  AND (?=0 OR EXISTS(SELECT 1 FROM m06_customer_accounts c JOIN m06_party_links l
@@ -25,6 +26,10 @@ const SQL_POST=`INSERT INTO m06_invoices(tenant_id,invoice_id,operation_id,actor
    AND NOT EXISTS(SELECT 1 FROM m06_bank_accounts b WHERE b.tenant_id=?
     AND b.account_id=json_extract(tender.value,'$.accountId')
     AND b.method=json_extract(tender.value,'$.method') AND b.active=1))
+ AND (?='' OR EXISTS (SELECT 1 FROM m06_drafts d WHERE d.tenant_id=?
+   AND d.draft_id=? AND d.version=? AND d.owner_id=? AND d.payment_mode='Split'
+   AND d.sku=? AND d.units=? AND d.unit_price_paisa=? AND d.discount_paisa=?
+   AND d.customer_id=? AND d.payments_json=?))
  ON CONFLICT(tenant_id,operation_id) DO NOTHING
  RETURNING invoice_id,payload_hash,actor_id`;
 const SQL_LOOKUP=`SELECT invoice_id,payload_hash,actor_id FROM m06_invoices
@@ -39,8 +44,14 @@ const dataRows=part=>{
 const plain=obj=>obj!==null && typeof obj==='object' && !Array.isArray(obj) &&
   (Object.getPrototypeOf(obj)===Object.prototype || Object.getPrototypeOf(obj)===null);
 function validate(input){
-  if(!plain(input) || Reflect.ownKeys(input).sort().join(',')!==
-    'actorId,customerId,discount,invoiceId,operationId,payments,sku,tenantId,unitPrice,units' ||
+  const keys=plain(input)?Reflect.ownKeys(input).sort().join(','):'';
+  const normal='actorId,customerId,discount,invoiceId,operationId,payments,sku,tenantId,unitPrice,units';
+  const withDraft='actorId,customerId,discount,invoiceId,operationId,payments,sku,sourceDraftId,sourceDraftVersion,tenantId,unitPrice,units';
+  const hasDraft=keys===withDraft;
+  if((keys!==normal && !hasDraft) ||
+    (hasDraft && (!SIMPLE_ID.test(input.sourceDraftId||'') ||
+      !Number.isSafeInteger(input.sourceDraftVersion) ||
+      input.sourceDraftVersion<1 || input.sourceDraftVersion>1_000_000)) ||
     !SIMPLE_ID.test(input.tenantId||'') || !SIMPLE_ID.test(input.actorId||'') ||
     !SIMPLE_ID.test(input.invoiceId||'') || !OP_ID.test(input.operationId||'') ||
     !SIMPLE_ID.test(input.sku||'') ||
@@ -66,6 +77,8 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
     async post(input){
       const {price,discount,grand}=validate(input);
       const {tenantId,actorId,invoiceId,operationId,sku,units,customerId}=input;
+      const sourceDraftId=Object.hasOwn(input,'sourceDraftId')?input.sourceDraftId:'';
+      const sourceDraftVersion=sourceDraftId?input.sourceDraftVersion:0;
       // A read can become stale: the SAME SQL posting statement must repeat
       // every bank/customer/stock/session guard. This read grants NO authority.
       const trustedBankRows=(await DB.prepare(SQL_ACCOUNTS).bind(tenantId).all()).results.map(a=>({
@@ -85,6 +98,10 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
       }));
       const payload={sku,units,pricePaisa:price,discountPaisa:discount,
         customerId,payments:children};
+      if(sourceDraftId){
+        payload.sourceDraftId=sourceDraftId;
+        payload.sourceDraftVersion=sourceDraftVersion;
+      }
       const payloadHash=await hashCanonicalOperationIntent({
         tenantId,actorId,operationType:'sales.post',payload
       });
@@ -95,8 +112,11 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
         result=await DB.batch([
           DB.prepare(SQL_POST).bind(tenantId,invoiceId,operationId,actorId,
             payloadHash,sku,units,grand,paid,due,customerId,paymentJson,
+            price,discount,sourceDraftId,sourceDraftVersion,
             tenantId,tenantId,sku,units,due,tenantId,customerId,
-            paymentJson,tenantId),
+            paymentJson,tenantId,
+            sourceDraftId,tenantId,sourceDraftId,sourceDraftVersion,actorId,
+            sku,units,price,discount,customerId,paymentJson),
           DB.prepare(SQL_LOOKUP).bind(tenantId,operationId)
         ]);
       }catch{
