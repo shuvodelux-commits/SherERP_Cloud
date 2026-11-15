@@ -26,3 +26,6 @@ For each top-level `function name(...){...}`:
 
 ## Verification
 Synthetic tests and a full 47-file frozen-source regression must show transitive chains and shortest paths, direct/indirect write propagation, recursion without infinite traversal, comments/strings ignored, missing function definition preservation, duplicate function rejection, and snapshot drift. Run full `npm test`, pinned-source verification, frontend build, snapshot check and CI. If merged, M03 owner consumes this artifact to plan awaited D1 call-chain conversion, with real D1 write/rollback and M04-auth gates still independent.
+
+## CI dependency integrity
+The pinned Acorn parser is a development-only package, but `npm test` imports the new audit. Existing validation workflows must run `npm ci` from the committed lockfile before tests. This includes the manual staging workflow solely to keep its local tests reproducible; no workflow triggers, credentials, D1 bindings, remote operations or deployment ownership change.

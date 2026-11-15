@@ -31,3 +31,8 @@
 - `src/db` stays exclusively with M03 kernel owner; M04 authentication and all D1/SQL/financial writes untouched.
 
 Parser is a pinned development-only dependency (`package.json` and `package-lock.json` modified for CI `npm ci`); no production runtime dependency.
+
+## CI regression correction
+- [x] Diagnose GitHub failures: the fresh runner lacked Acorn because workflows ran `npm test` without `npm ci`.
+- [x] Add `npm ci` before tests in five existing validation workflows, preserving triggers and deployment gates.
+- [ ] Verify all GitHub PR workflows pass from a fresh checkout.

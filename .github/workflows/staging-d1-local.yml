@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked Node dependencies
+        run: npm ci --no-audit --no-fund
       - name: Verify staging binding safety and source-code tests
         run: |
           npm test
