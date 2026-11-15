@@ -182,6 +182,16 @@ CREATE TABLE auth_sessions (
   revoked_at_ms INTEGER CHECK (revoked_at_ms IS NULL OR revoked_at_ms>=created_at_ms)
 ) STRICT;
 CREATE INDEX idx_auth_sessions_by_user ON auth_sessions(user_id,revoked_at_ms);
+-- SQLite INSERT OR REPLACE can delete/reinsert a conflicting row without
+-- invoking BEFORE UPDATE integrity seals. Keep issued token fingerprints
+-- unique for their entire stored lifetime; a revoked token cannot be revived
+-- or reassigned by REPLACE. First-time token insertion is unaffected.
+CREATE TRIGGER trg_auth_session_no_replace BEFORE INSERT ON auth_sessions
+WHEN EXISTS (SELECT 1 FROM auth_sessions s WHERE s.token_hash=NEW.token_hash)
+BEGIN
+  SELECT RAISE(ABORT,'session fingerprint replacement forbidden');
+END;
+
 -- Once issued, the opaque session's identity, authority snapshots and
 -- absolute lifetime are fixed. An existing revocation marker is write-once:
 -- clearing it would resurrect a logged-out bearer. The first revocation and
