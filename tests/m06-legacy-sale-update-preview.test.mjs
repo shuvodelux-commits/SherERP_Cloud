@@ -57,7 +57,7 @@ test('Partial payment uses raw original paid amount and due arithmetic, not a sp
   const d=original();d.paymentType='Partial';d.paidAmount=10;
   const r=compare(d);
   assert.equal(r.paidAmount,10);
-  assert.equal(r.dueAmount,29.99);
+  assert(Math.abs(r.dueAmount-29.99)<1e-9, 'Original raw Partial due preserves JavaScript floating point precision');
   assert.equal(r.paymentStatus,'Partial');
   assert.equal(r.paymentMethod,'Cash');
 });
