@@ -157,7 +157,7 @@ test('all source lots include positive orphan/inactive lots, skip zero and negat
   const z=matchesSource(s);
   assert.equal(z.products.find(p=>p.productId==='P-A').lotQuantity,13);
   assert.equal(z.products.find(p=>p.productId==='P-A').lotValue,101.35);
-  assert.equal(z.totals.mismatchCount,2); // A (13 vs 10), B (1 vs 2), E (0 vs -2) => 3
+  assert.equal(z.totals.mismatchCount,3); // A (13 vs 10), B (1 vs 2), E (0 vs -2)
 });
 
 test('source preserves unrounded fractions, sort ties and missing defaults',()=>{
