@@ -137,7 +137,7 @@ test('full getDashboardStats original response has all 11 exact fields and nativ
 test('Finance and Cash figures are passed through unchanged, never inferred or rounded by M09',()=>{
   const input=fixture();
   input.financeSummary={borrowerReceivable:-123.456,outstandingLoan:0.105};
-  input.cashBalance:-0.105;
+  input.cashBalance=-0.105;
   const x=assertParity(input);
   assert.equal(x.borrowerReceivable,-123.456);
   assert.equal(x.outstandingLoan,0.105);
