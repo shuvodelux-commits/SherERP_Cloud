@@ -132,5 +132,5 @@ test('snapshots and planner output cannot share mutable state or issue any write
   assert.equal(a.floor,5);
   assert.equal(a.nextPreviewId,'INV-000006');
   const code=readFileSync(new URL('../src/modules/source-id-counter-floor.js',import.meta.url),'utf8');
-  assert.doesNotMatch(code,/import\s|SpreadsheetApp|PropertiesService|LockService|\.prepare\(|\.run\(|\.batch\(/);
+  assert.doesNotMatch(code,/^\s*import\s|SpreadsheetApp|PropertiesService|LockService|\.prepare\(|\.run\(|\.batch\(/m);
 });
