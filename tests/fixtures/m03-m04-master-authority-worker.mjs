@@ -2,6 +2,7 @@
 import {createM03M04AuthorizedMasterCreator} from '../../src/modules/m03-m04-master-authorized-create.js';
 const A='a'.repeat(64),B='b'.repeat(64),C='c'.repeat(64);
 const D='d'.repeat(64),E='e'.repeat(64),F='f'.repeat(64),G='1'.repeat(64);
+const H='2'.repeat(64),J='3'.repeat(64),K='4'.repeat(64);
 const NOW=1_800_000_000_000;
 const operations=Object.freeze({
   '/__m03_m04_master__/admin-category':['createCategory_',A,'OP-ADMIN','Tools',NOW],
@@ -15,6 +16,10 @@ const operations=Object.freeze({
   '/__m03_m04_master__/expired':['createUnit_',E,'OP-EXPIRE','Box',NOW],
   '/__m03_m04_master__/idle':['createUnit_',F,'OP-IDLE','Box',NOW],
   '/__m03_m04_master__/unknown':['createUnit_',G,'OP-UNKNOWN','Box',NOW],
+  '/__m03_m04_master__/staff-fresh':['createUnit_',H,'OP-STAFF-FRESH','Box',NOW],
+  '/__m03_m04_master__/staff-race':['createUnit_',J,'OP-STAFF-RACE','Meter',NOW],
+  '/__m03_m04_master__/staff-malformed':['createUnit_',K,'OP-STAFF-MALFORMED','Meter',NOW],
+  '/__m03_m04_master__/admin-after-password':['createCategory_',A,'OP-ADMIN-PASSWORD','Meter',NOW],
   '/__m03_m04_master__/fault':['createCategory_',A,'OP-FAULT','Fault',NOW],
   '/__m03_m04_master__/lost':['createCategory_',A,'OP-LOST','Tape',NOW],
   '/__m03_m04_master__/lost-replay':['createCategory_',A,'OP-LOST','Tape',NOW]
