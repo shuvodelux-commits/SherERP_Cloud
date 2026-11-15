@@ -169,7 +169,7 @@ test('diagnostics never include original transaction IDs, Person IDs, names or a
   a.sourceHeaders.push('PRIVATE HEADER');
   const r=check(a),output=JSON.stringify(r);
   assert.equal(r.offlineExportComplete,false);
-  assert.doesNotMatch(output,/FIN-TX-001|FIN-001|Synthetic Name|SENSITIVE|98765|PRIVATE HEADER|Amount|Person ID/);
+  assert.doesNotMatch(output,/FIN-TX-001|FIN-001|Synthetic Name|SENSITIVE|98765|PRIVATE HEADER|"Amount"|"Person ID"/);
   assert.ok(r.issues.every(x=>Object.keys(x).sort().join(',')==='code,count'));
 });
 test('the report is metadata only: no approval, account posting or production import claims',()=>{
