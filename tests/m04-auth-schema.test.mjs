@@ -34,7 +34,7 @@ test('auth SQL fixture is isolated from production migration directory and publi
 test('SQL creates only proposed staff and session tables and uses strict uniqueness',()=>{
   const db=setup();
   const names=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(r=>r.name);
-  assert.deepEqual(names,['auth_login_throttle','auth_roles','auth_sessions','auth_users']);
+  assert.deepEqual(names,['auth_legacy_credentials','auth_login_throttle','auth_roles','auth_sessions','auth_users']);
   addUser(db,'USR-1','01710000001');
   assert.throws(()=>addUser(db,'USR-2','01710000001'),/UNIQUE/);
   assert.throws(()=>addUser(db,'USR-2','not-phone'),/CHECK/);
@@ -74,5 +74,28 @@ test('legacy SHA256 credential metadata is not silently accepted as modern KDF',
   assert.throws(()=>db.prepare(`INSERT INTO auth_users
     (user_id,full_name,phone_key,role_name,status,password_algo,password_hash,password_salt,password_iterations)
     VALUES (?,?,?,?,?,?,?,?,?)`).run('USR-1','Test','01710000001','Administrator','Active','legacy-sha256',fakePassword,fakeSalt,210000),/CHECK/);
+  db.close();
+});
+
+test('legacy import is isolated to pending staff and source verifier is erased atomically on upgrade',()=>{
+  const db=setup();
+  addUser(db,'MODERN','01710000001');
+  const legacyHash='ef'.repeat(32);
+  const salt='synthetic-legacy-uuid-only';
+  const importLegacy=db.prepare('INSERT INTO auth_legacy_credentials(user_id,legacy_hash,legacy_salt) VALUES (?,?,?)');
+  assert.throws(()=>importLegacy.run('MODERN',legacyHash,salt),/pending staff identity/);
+  assert.throws(()=>db.prepare("UPDATE auth_users SET credential_state='LegacyPending' WHERE user_id='MODERN'").run(),/downgrade forbidden/);
+  db.prepare(`INSERT INTO auth_users
+    (user_id,full_name,phone_key,role_name,status,credential_state,password_hash,password_salt,password_iterations)
+    VALUES ('PENDING','Synthetic Pending','01710000002','Administrator','Active','LegacyPending',?,?,210000)`)
+    .run('ab'.repeat(32),'cd'.repeat(24));
+  importLegacy.run('PENDING',legacyHash,salt);
+  assert.equal(db.prepare("SELECT auth_version AS n FROM auth_users WHERE user_id='PENDING'").get().n,1);
+  db.prepare(`UPDATE auth_users SET credential_state='Modern',password_hash=?,password_salt=?,
+    credential_version=credential_version+1 WHERE user_id='PENDING'`)
+    .run('89'.repeat(32),'00'.repeat(24));
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM auth_legacy_credentials WHERE user_id='PENDING'").get().n,0);
+  assert.equal(db.prepare("SELECT auth_version AS n FROM auth_users WHERE user_id='PENDING'").get().n,2);
+  assert.equal(db.prepare("SELECT credential_version AS n FROM auth_users WHERE user_id='PENDING'").get().n,2);
   db.close();
 });
