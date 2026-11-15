@@ -62,7 +62,7 @@ export function validateFinanceTransactionExport(input={}){
     }
     for(const [field,value] of Object.entries(row)){
       if(field==='_rowIndex'){
-        if(!Number.isInteger(value) || value<2)invalidSourceRows++;
+        if(!Number.isSafeInteger(value) || value<2)invalidSourceRows++;
         else if(positions.has(value))counts.duplicateSourceRows++;
         else positions.add(value);
       }else if(!allowed.has(field))counts.unexpectedFields++;
