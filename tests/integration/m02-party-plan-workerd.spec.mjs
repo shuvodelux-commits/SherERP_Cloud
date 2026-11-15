@@ -535,3 +535,26 @@ test('real local Workerd D1 readback rejects fractional in-memory physical sourc
     /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
   assert.deepEqual(await counts(),before,'D1 readback must not write or mutate tables');
 });
+
+
+test('real Workerd D1 readback rejects falsified group counts even when source total is unchanged',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  const customer=plan.summary.sourceGroups.find(x=>x.sourceGroup==='CUSTOMERS');
+  const supplier=plan.summary.sourceGroups.find(x=>x.sourceGroup==='SUPPLIERS');
+  assert.equal(customer.rows,1);
+  assert.equal(supplier.rows,1);
+  customer.rows=0;
+  supplier.rows=2;
+  assert.equal(plan.summary.sourceRows,
+    plan.summary.sourceGroups.reduce((total,entry)=>total+entry.rows,0));
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_COUNT_MISMATCH'&&x.table==='plan'),
+    'a source group cannot claim fewer records than existing original links');
+  assert.ok(report.issues.some(x=>x.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'current D1 schema still does not persist approved reviewer reference');
+  assert.doesNotMatch(JSON.stringify(report),
+    /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual(await counts(),before,'local Workerd/D1 readback remains strictly read-only');
+});
