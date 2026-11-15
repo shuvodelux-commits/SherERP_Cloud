@@ -122,12 +122,16 @@ test('a historical opening incorrectly stored as current is rejected separately 
   assert.equal(reason(r,'SOURCE_CURRENT','EXTRA_CHECKPOINT').count,1);
   assert.equal(r.openingMatch,false);
 });
-test('soft-deleted Finance source row has no gross contribution and round-trips local D1',async()=>{
+test('deleted loan receipt preserves active repayment as separate Lender credit on local D1',async()=>{
   const transactions=finance();transactions[3]['Is Deleted']='TRUE';
   const preflight=await seed(source(review,transactions));
+  assert.equal(preflight.summary.deletedFinanceRows,1);
+  assert.equal(preflight.currentCheckpoints.some(x=>x.kind==='LENDER_LOAN_PAYABLE'),false);
+  const credit=preflight.currentCheckpoints.find(x=>x.kind==='LENDER_CREDIT');
+  assert.equal(credit.amountMinor,8000,'active Loan Repayment remains a credit, not cash turnover');
   const r=await report(preflight);
   assert.equal(r.offlineCheckpointParity,true);
-  assert.equal(r.counts.expectedCurrent,6);
+  assert.equal(r.counts.expectedCurrent,7,'opposite-sign gross account remains an independent checkpoint');
 });
 test('invalid/review-pending source plan returns skip without invoking any D1 method',async()=>{
   const bad=source([]);
