@@ -10,6 +10,8 @@ import {M05ML_EDIT_DDL} from '../fixtures/m05-purchase-edit-d1-schema.mjs';
 import {createSyntheticPurchaseEditor} from '../fixtures/m05-purchase-edit-d1-contract.mjs';
 import {M05ML_ADD_DDL} from '../fixtures/m05-purchase-add-line-d1-schema.mjs';
 import {createSyntheticPurchaseLineAdder} from '../fixtures/m05-purchase-add-line-d1-contract.mjs';
+import {M05ML_REMOVE_DDL} from '../fixtures/m05-purchase-remove-line-d1-schema.mjs';
+import {createSyntheticPurchaseLineRemover} from '../fixtures/m05-purchase-remove-line-d1-contract.mjs';
 
 // Synthetic local D1; NEVER the deployed Worker, main D1, or real shop data.
 const server=createTestHarness({workers:[{configPath:'./wrangler.m05-multiline-test.jsonc'}]});
@@ -28,6 +30,18 @@ const poster=options=>createSyntheticMultilinePurchasePoster(DB,options);
 const deleter=options=>createSyntheticPurchaseDeleter(DB,options);
 const editor=options=>createSyntheticPurchaseEditor(DB,options);
 const addLine=options=>createSyntheticPurchaseLineAdder(DB,options);
+const removeLine=options=>createSyntheticPurchaseLineRemover(DB,options);
+const removeInput=(operationId,overrides={})=>({
+  tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-REMOVE-0001',
+  operationId,reason:'Wrong product on source purchase',
+  sku:'SWITCH',expectedVersion:2,...overrides
+});
+const removedState=async()=>({
+  original:await snapshot(),
+  receipts:await all('SELECT * FROM m05ml_remove_receipts ORDER BY operation_id'),
+  movements:await all('SELECT * FROM m05ml_remove_movements ORDER BY sku'),
+  audit:await all('SELECT * FROM m05ml_remove_audit ORDER BY operation_id')
+});
 const addLineInput=(operationId,overrides={})=>({
   tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-ADD-00001',
   operationId,reason:'Missed original purchased product',
@@ -92,6 +106,7 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     for(const sql of M05ML_DELETE_DDL)await DB.prepare(sql).run();
     for(const sql of M05ML_EDIT_DDL)await DB.prepare(sql).run();
     for(const sql of M05ML_ADD_DDL)await DB.prepare(sql).run();
+    for(const sql of M05ML_REMOVE_DDL)await DB.prepare(sql).run();
     for(const [sql,args] of M05ML_SEED)await DB.prepare(sql).bind(...args).run();
   });
   beforeEach(async()=>{
@@ -99,6 +114,9 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_delete_audit').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_edit_audit').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_add_audit').run();
+    await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_remove_audit').run();
+    for(const table of ['m05ml_remove_movements','m05ml_remove_audit','m05ml_remove_receipts'])
+      await DB.prepare('DELETE FROM '+table).run();
     for(const table of ['m05ml_add_movements','m05ml_add_audit','m05ml_add_receipts'])
       await DB.prepare('DELETE FROM '+table).run();
     for(const table of ['m05ml_edit_movements','m05ml_edit_audit','m05ml_edit_receipts'])
@@ -883,6 +901,174 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
         .catch(e=>({error:e.message}));
       assert.notEqual(result.status,'COMMITTED');
       assert.deepEqual(await addedState(),before);
+    }
+  });
+
+
+  test('M05 remove unsold SWITCH line atomically restores stock and Supplier payable, immutable original remains',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    assert.deepEqual(await removeLine().remove(removeInput('OP-RMV-COMMIT01')),{
+      status:'COMMITTED',operationId:'OP-RMV-COMMIT01',purchaseId:'PUR-OP-REMOVE-0001',
+      newDuePaisa:950,linesRemoved:1
+    });
+    assert.deepEqual(await all("SELECT sku,stock,version FROM m05ml_products WHERE sku IN ('PIPE','SWITCH') ORDER BY sku"),[
+      {sku:'PIPE',stock:6,version:2},{sku:'SWITCH',stock:2,version:3}
+    ]);
+    assert.deepEqual(await all("SELECT sku,qty,cost_paisa FROM m05ml_effective_remove_items WHERE purchase_id='PUR-OP-REMOVE-0001'"),[
+      {sku:'PIPE',qty:2,cost_paisa:1525}
+    ]);
+    assert.deepEqual(await all("SELECT sku,qty,remaining_qty FROM m05ml_effective_remove_lots WHERE purchase_id='PUR-OP-REMOVE-0001' ORDER BY sku"),[
+      {sku:'PIPE',qty:2,remaining_qty:2},{sku:'SWITCH',qty:0,remaining_qty:0}
+    ]);
+    assert.deepEqual(await one("SELECT qty,remaining_qty,cost_paisa FROM m05ml_lots WHERE sku='SWITCH'"),
+      {qty:3,remaining_qty:3,cost_paisa:750},'immutable original lot retained');
+    assert.equal((await all("SELECT * FROM m05ml_items WHERE purchase_id='PUR-OP-REMOVE-0001'")).length,2);
+    assert.equal((await one("SELECT due_paisa FROM m05ml_purchases")).due_paisa,3200);
+    assert.equal((await one("SELECT debit_paisa FROM m05ml_effective_remove_supplier_ledger")).debit_paisa,950);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,4950);
+    assert.equal((await one("SELECT customer_ar_paisa FROM m05ml_customer_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+    assert.equal((await one('SELECT debit_paisa FROM m05ml_cash_book')).debit_paisa,2000);
+    assert.deepEqual(await one('SELECT sku,qty_out,balance_stock FROM m05ml_remove_movements'),
+      {sku:'SWITCH',qty_out:3,balance_stock:2});
+    assert.equal((await one('SELECT reason FROM m05ml_remove_audit')).reason,'Wrong product on source purchase');
+  });
+
+  test('alternate removal of PIPE reconciles retained SWITCH and unchanged Bank tender',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001',{
+      paymentMethod:'Bank',bankAccountId:'BANK-1'
+    }))).status,'COMMITTED');
+    const result=await removeLine().remove(removeInput('OP-RMV-PIPE0001',{
+      sku:'PIPE',expectedVersion:2
+    }));
+    assert.equal(result.status,'COMMITTED');
+    assert.equal(result.newDuePaisa,150);
+    assert.equal((await one("SELECT stock FROM m05ml_products WHERE sku='PIPE'")).stock,4);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,4150);
+    assert.equal((await one('SELECT debit_paisa FROM m05ml_bank_book')).debit_paisa,2000);
+    assert.equal(await count('m05ml_cash_book'),0);
+    assert.equal((await all('SELECT sku FROM m05ml_effective_remove_items')).length,1);
+  });
+
+  test('identical operation replays exactly once, changed actor/line/reason conflicts, second operation declines',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    const first=removeInput('OP-RMV-REPLAY01');
+    assert.equal((await removeLine().remove(first)).status,'COMMITTED');
+    const saved=await removedState();
+    assert.equal((await removeLine().remove(first)).status,'REPLAY');
+    for(const change of [{actorId:'USER-B'},{reason:'Other reason'},{sku:'PIPE'},
+      {purchaseId:'PUR-OTHER'},{expectedVersion:3}]){
+      assert.equal((await removeLine().remove({...first,...change})).status,'CONFLICT');
+    }
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-SECOND01'))).status,'DECLINED');
+    assert.deepEqual(await removedState(),saved);
+  });
+
+  test('sold original lot or insufficient own-lot remaining refuses removing entire line',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    await DB.prepare("UPDATE m05ml_lots SET remaining_qty=2 WHERE sku='SWITCH'").run();
+    const before=await removedState();
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-SOLD0001'))).status,'DECLINED');
+    assert.deepEqual(await removedState(),before);
+  });
+
+  test('insufficient shared stock, stale version and missing lot fail before any reversal',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    await DB.prepare("UPDATE m05ml_products SET stock=2,version=3 WHERE sku='SWITCH'").run();
+    let before=await removedState();
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-SHORT001',{expectedVersion:3}))).status,'DECLINED');
+    assert.deepEqual(await removedState(),before);
+    await DB.prepare("UPDATE m05ml_products SET stock=5,version=4 WHERE sku='SWITCH'").run();
+    before=await removedState();
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-STALE001',{expectedVersion:2}))).status,'DECLINED');
+    assert.deepEqual(await removedState(),before);
+    await DB.prepare("DELETE FROM m05ml_lots WHERE sku='SWITCH'").run();
+    before=await removedState();
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-NOLOT001',{expectedVersion:4}))).status,'DECLINED');
+    assert.deepEqual(await removedState(),before);
+  });
+
+  test('active Purchase Return, Supplier settlement and later payable ledger refuse removal',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    for(const [mutation,restore] of [
+      ["INSERT INTO m05ml_purchase_returns VALUES('SHOP-A','RET-RMV','PUR-OP-REMOVE-0001',1)","DELETE FROM m05ml_purchase_returns"],
+      ["INSERT INTO m05ml_purchase_settlements VALUES('SHOP-A','SET-RMV','PUR-OP-REMOVE-0001',100,1)","DELETE FROM m05ml_purchase_settlements"]
+    ]){
+      await DB.prepare(mutation).run();
+      const before=await removedState();
+      assert.equal((await removeLine().remove(removeInput('OP-RMV-GUARD001'))).status,'DECLINED');
+      assert.deepEqual(await removedState(),before);
+      await DB.prepare(restore).run();
+    }
+    assert.equal((await poster().post(input('OP-REMOVE-LATER',{
+      items:[line('PIPE',1,'5','6',2)],paidAmount:'0'
+    }))).status,'COMMITTED');
+    const before=await removedState();
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-LATER001'))).status,'DECLINED');
+    assert.deepEqual(await removedState(),before);
+  });
+
+  test('closed session, unreviewed Supplier identity and inactive Supplier all refuse line removal',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    for(const [mutation,restore] of [
+      ["UPDATE m05ml_sessions SET state='Closed'","UPDATE m05ml_sessions SET state='Open'"],
+      ["UPDATE m05ml_party_links SET reviewed=0 WHERE source_id='SUP-1'","UPDATE m05ml_party_links SET reviewed=1 WHERE source_id='SUP-1'"],
+      ["UPDATE m05ml_suppliers SET active=0 WHERE supplier_id='SUP-1'","UPDATE m05ml_suppliers SET active=1 WHERE supplier_id='SUP-1'"]
+    ]){
+      await DB.prepare(mutation).run();
+      const before=await removedState();
+      assert.equal((await removeLine().remove(removeInput('OP-RMV-GATES001'))).status,'DECLINED');
+      assert.deepEqual(await removedState(),before);
+      await DB.prepare(restore).run();
+    }
+  });
+
+  test('paid amount exceeding corrected grand total refuses removing a SKU',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001',{paidAmount:'45'}))).status,'COMMITTED');
+    const before=await removedState();
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-OVERPAID'))).status,'DECLINED');
+    assert.deepEqual(await removedState(),before);
+  });
+
+  test('late audit failure atomically rolls back removed stock, Supplier due, movement and receipt',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    await DB.prepare("CREATE TRIGGER m05ml_inject_fail_remove_audit BEFORE INSERT ON m05ml_remove_audit BEGIN SELECT RAISE(ABORT,'forced-remove-audit'); END").run();
+    const before=await removedState();
+    await assert.rejects(removeLine().remove(removeInput('OP-RMV-ABORT001')),/NEEDS_REVIEW/);
+    assert.deepEqual(await removedState(),before);
+  });
+
+  test('two simultaneous removals at most one commit; subsequent add, edit and delete blocked',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    const results=await Promise.allSettled([
+      removeLine().remove(removeInput('OP-RMV-CONCUR01')),
+      removeLine().remove(removeInput('OP-RMV-CONCUR02'))
+    ]);
+    const states=results.map(r=>r.status==='fulfilled'?r.value.status:'NEEDS_REVIEW');
+    assert.equal(states.filter(s=>s==='COMMITTED').length,1);
+    assert.ok(states.every(s=>['COMMITTED','DECLINED','NEEDS_REVIEW'].includes(s)));
+    assert.equal(await count('m05ml_remove_receipts'),1);
+    assert.equal(await count('m05ml_remove_audit'),1);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,4950);
+    await seedBolt();
+    const prior=await removedState();
+    assert.equal((await addLine().add(addLineInput('OP-ADD-RMV-LOCK',{purchaseId:'PUR-OP-REMOVE-0001'}))).status,'DECLINED');
+    assert.equal((await editor().edit(editInput('OP-EDIT-RMVLOCK',{purchaseId:'PUR-OP-REMOVE-0001'}))).status,'DECLINED');
+    assert.equal((await deleter().remove(deletionInput('OP-DEL-RMVLOCK',{purchaseId:'PUR-OP-REMOVE-0001'}))).status,'DECLINED');
+    assert.deepEqual(await removedState(),prior);
+  });
+
+  test('malformed envelope, unknown SKU and insufficient original paid room never mutate D1',async()=>{
+    assert.equal((await poster().post(input('OP-REMOVE-0001'))).status,'COMMITTED');
+    const prior=await removedState();
+    for(const update of [
+      {operationId:'short'},{tenantId:'SHOP-B'},{actorId:''},{reason:''},
+      {sku:'NOT-SOURCED'},{sku:'BAD SKU'},{purchaseId:'NOT-EXIST'},
+      {expectedVersion:0},{expectedVersion:1},{expectedVersion:2.5}
+    ]){
+      const v=await removeLine().remove(removeInput('OP-RMV-INVALID1',update))
+        .catch(e=>({error:e.message}));
+      assert.notEqual(v.status,'COMMITTED');
+      assert.deepEqual(await removedState(),prior);
     }
   });
 
