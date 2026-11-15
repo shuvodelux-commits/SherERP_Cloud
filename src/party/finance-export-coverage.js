@@ -70,7 +70,7 @@ export function validateFinanceTransactionExport(input={}){
     }
     const id=row['Finance ID'],personId=row['Person ID'];
     if(typeof id==='number')unsafeIdentifiers++;
-    if(typeof personId==='number')unsafeIdentifiers++;
+    if(typeof personId==='number' || typeof personId==='boolean')unsafeIdentifiers++;
     if(typeof id!=='string'){
       if(typeof id!=='number')counts.missingIds++;
     }else if(!id.trim())counts.missingIds++;
