@@ -98,7 +98,9 @@ export function validatePartyExportCompleteness({sourceRows,sourceHeaders}={}){
           continue;
         }
         if(!validCell(value) ||
-          (balanceGroups.has(group) && balanceFields.has(name) && !exactBalance(value))){
+          (balanceGroups.has(group) && balanceFields.has(name) && !exactBalance(value)) ||
+          (group==='FINANCE_PERSONS' && (name==='Roles'||name==='Person Type') &&
+            value!==null && typeof value!=='string')){
           unsafe++;
         }else if(
           (name===expected[0] && typeof value!=='string') ||
