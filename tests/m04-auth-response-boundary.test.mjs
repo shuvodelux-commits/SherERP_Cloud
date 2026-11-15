@@ -55,6 +55,39 @@ test('source-shaped Administrator and Cashier auth profiles remain byte-shape-co
     assert.deepEqual(result.body,{success:false,message});
   }
 });
+
+test('source-valid custom staff delete and backdate windows survive trusted HTTP auth envelopes',async()=>{
+  // Exact SourceRole metadata is also seeded in the real M04 Workerd/D1 fixture.
+  const data={
+    ...profile('Cashier'),
+    user:{...profile('Cashier').user,role:'SourceRole'},
+    allowedModules:['sales','roles'],
+    permissions:{
+      sales:{view:true,add:false,edit:true,delete:'same',backdate:'7'},
+      roles:{view:true,add:false,edit:false,delete:false,backdate:'same'},
+      users:{view:false,add:false,edit:false,delete:true,backdate:'unlimited'},
+      openingBalance:{view:false,add:false,edit:true,delete:'disabled',backdate:'unlimited'},
+    }
+  };
+  for(const method of ['login','validateSession']){
+    const response=await rpc(method,{success:true,data});
+    assert.equal(response.status,200,method);
+    assert.deepEqual(response.body,{success:true,data});
+    assert.equal(response.headers.get('Cache-Control'),'no-store');
+  }
+  // Validation is not a generic object sanitizer: invalid role permission
+  // types or unknown windows must still fail closed.
+  for(const broken of [
+    {...data,permissions:{...data.permissions,users:{delete:'unlimited'}}},
+    {...data,permissions:{...data.permissions,sales:{delete:'365'}}},
+    {...data,permissions:{...data.permissions,sales:{backdate:'365'}}},
+    {...data,permissions:{...data.permissions,sales:{delete:true}}},
+  ]){
+    const response=await rpc('login',{success:true,data:broken});
+    assert.equal(response.status,503);
+    assert.deepEqual(response.body,{success:false,message:'Authentication backend unavailable'});
+  }
+});
 test('nested credential and unexpected identity fields never cross the M04 HTTP boundary',async()=>{
   const forbidden=[
     {...profile(),passwordHash:'SECRET-CREDENTIAL'},

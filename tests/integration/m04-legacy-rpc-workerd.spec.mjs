@@ -22,10 +22,10 @@ async function seed(id,phone,role='Administrator',status='Active'){
     (user_id,full_name,phone_key,role_name,status,password_hash,password_salt,password_iterations)
     VALUES (?,?,?,?,?,?,?,?)`).bind(id,'Fixture '+id,phone,role,status,c.passwordHash,c.passwordSalt,c.iterations).run();
 }
-async function rpc(fnName,args=[],nowMs=NOW){
+async function rpc(fnName,args=[],nowMs=NOW,throughHttpBoundary=false){
   const response=await worker.fetch('http://m04.local/__m04_test__/rpc',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({fnName,args,nowMs}),
+    body:JSON.stringify({fnName,args,nowMs,throughHttpBoundary}),
   });
   return {status:response.status,body:await response.json()};
 }
@@ -175,6 +175,15 @@ test('native GAS custom roles with same-day delete, backdate, edit-only and bool
   assert.deepEqual(result.body.data.permissions,SOURCE_ROLE_PERMISSIONS);
   assert.match(result.body.data.token,/^[0-9a-f]{64}$/);
   assert.deepEqual(await rpc('validateSession',[result.body.data.token],NOW+71000),result);
+
+  // End-to-end local D1 SourceRole -> internal legacy RPC -> trusted HTTP
+  // response validator. The public Worker still has no auth adapter.
+  const viaHttp=await rpc('login',['01710000105',SECRET],NOW+70000,true);
+  assert.equal(viaHttp.status,200);
+  assert.equal(viaHttp.body.success,true);
+  assert.deepEqual(viaHttp.body.data.permissions,SOURCE_ROLE_PERMISSIONS);
+  assert.deepEqual(viaHttp.body.data.allowedModules,['sales','roles']);
+  assert.deepEqual(await rpc('validateSession',[viaHttp.body.data.token],NOW+71000,true),viaHttp);
 });
 
 test('invalid management delete and unknown backdate still fail closed with stored session revocation',async()=>{

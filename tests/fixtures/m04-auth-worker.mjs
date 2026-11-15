@@ -5,6 +5,7 @@
 import {loginWithD1,validateSessionWithD1,revokeSessionWithD1} from '../../src/auth/d1-auth-core.js';
 import {createD1LegacyAuthRpc} from '../../src/auth/d1-legacy-rpc.js';
 import {normalizeLegacyStaffPhoneSearch} from '../../src/auth/staff-phone-identity.js';
+import {handleRpc} from '../../src/rpc/handler.js';
 
 const json=(status,value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 export default {
@@ -24,6 +25,14 @@ export default {
         if(!Array.isArray(raw.args) || raw.args.length!==(raw.fnName==='login'?2:1))
           return json(400,{error:'Invalid test RPC args'});
         const adapter=createD1LegacyAuthRpc(env.DB,{now:()=>nowMs,normalizeMobile:normalizeLegacyStaffPhoneSearch});
+        // Synthetic local-only HTTP boundary parity check; never a public route.
+        if(raw.throughHttpBoundary===true){
+          const forwarded=new Request(request.url,{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({fnName:raw.fnName,args:raw.args}),
+          });
+          return handleRpc(forwarded,{authAdapter:adapter});
+        }
         return json(200,await adapter[raw.fnName](...raw.args));
       }
       if(path==='/__m04_test__/login')

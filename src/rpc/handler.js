@@ -23,7 +23,9 @@ const AUTH_MODULES=new Set([
   'cashReconciliation','reports','settings','users','roles',
   'openingBalance','settlementDiscount','posCost',
 ]);
-const AUTH_DELETE_WINDOWS=new Set(['1','3','7','15','30','unlimited']);
+// Source Auth.gs DELETE_WINDOW_OPTIONS; management delete is Boolean.
+const AUTH_PERMISSION_WINDOWS=new Set(['disabled','same','1','3','7','15','30','unlimited']);
+const AUTH_MANAGEMENT_MODULES=new Set(['users','roles']);
 const AUTH_FAILURE_MESSAGES=new Set([
   'Invalid mobile number or password.',
   'Session expired. Please sign in again.',
@@ -68,7 +70,11 @@ function validRoleMetadata(profile) {
       const d=Object.getOwnPropertyDescriptor(actions,action);
       if(!d?.enumerable || !Object.hasOwn(d,'value'))return false;
       if(action==='delete'){
-        if(!AUTH_DELETE_WINDOWS.has(d.value))return false;
+        if(AUTH_MANAGEMENT_MODULES.has(moduleName)){
+          if(typeof d.value!=='boolean')return false;
+        }else if(!AUTH_PERMISSION_WINDOWS.has(d.value))return false;
+      }else if(action==='backdate'){
+        if(!AUTH_PERMISSION_WINDOWS.has(d.value))return false;
       }else if(['view','add','edit'].includes(action)){
         if(typeof d.value!=='boolean')return false;
       }else return false;
