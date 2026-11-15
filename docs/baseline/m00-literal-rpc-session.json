@@ -1,0 +1,236 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "methodology": "AST lexical-backed original browser-to-GAS token position inventory; not authentication, not authorization, not a Worker RPC allowlist or full functional port",
+  "counts": {
+    "literalCallsites": 204,
+    "lexicalCallsites": 172,
+    "missingFromLexical": 32,
+    "tokenFirstCallsites": 200,
+    "exceptionCallsites": 4,
+    "distinctMethods": 155,
+    "lexicalMethods": 129
+  },
+  "exceptions": [
+    {
+      "name": "getAppShellData",
+      "frontendFile": "javascript.html",
+      "line": 201,
+      "clientFirstArgument": null,
+      "backendFirstParameter": null,
+      "phase": "PRE_SESSION"
+    },
+    {
+      "name": "login",
+      "frontendFile": "javascript.html",
+      "line": 274,
+      "clientFirstArgument": "mobile",
+      "backendFirstParameter": "mobile",
+      "phase": "PRE_SESSION"
+    },
+    {
+      "name": "logout",
+      "frontendFile": "javascript.html",
+      "line": 299,
+      "clientFirstArgument": "token",
+      "backendFirstParameter": "token",
+      "phase": "LOGOUT"
+    },
+    {
+      "name": "validateSession",
+      "frontendFile": "javascript.html",
+      "line": 224,
+      "clientFirstArgument": "saved",
+      "backendFirstParameter": "token",
+      "phase": "PRE_SESSION"
+    }
+  ],
+  "coverageGaps": [
+    {
+      "name": "addBankAccount",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "addRole",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "addVendor",
+      "indexed": 2,
+      "actual": 3,
+      "missing": 1
+    },
+    {
+      "name": "completeSale",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "deleteRole",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "findInvoice",
+      "indexed": 1,
+      "actual": 2,
+      "missing": 1
+    },
+    {
+      "name": "findSalesByPhone",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getBalanceSheetReport",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getBankAccountsBootstrap",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getBankLedger",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getBankLedgerBootstrap",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getBankTransferHistory",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getCashBankReport",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getProfitReport",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getPurchaseReport",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getReportsBootstrap",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getRolesBootstrap",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getSaleForUpdate",
+      "indexed": 2,
+      "actual": 3,
+      "missing": 1
+    },
+    {
+      "name": "getSalesDraft",
+      "indexed": 2,
+      "actual": 4,
+      "missing": 2
+    },
+    {
+      "name": "getSalesReport",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "getStockReport",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "previewPosInvoiceProfit",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "reverseBankEntry",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "saveSalesDraft",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "setBankAccountStatus",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "setRoleStatus",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "transferBetweenBankAccounts",
+      "indexed": 1,
+      "actual": 2,
+      "missing": 1
+    },
+    {
+      "name": "updateBankAccount",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "updateRole",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "updateSale",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    },
+    {
+      "name": "updateSalesDraft",
+      "indexed": 0,
+      "actual": 1,
+      "missing": 1
+    }
+  ]
+}
