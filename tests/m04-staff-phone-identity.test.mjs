@@ -116,5 +116,6 @@ test('internal helper never creates Party links or activates public auth RPC',as
     method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},
     body:JSON.stringify({fnName:'login',args:['01712345678','synthetic']}),
   }),{});
-  assert.equal(result.status,501);
+  // Public login is deliberately unavailable until reviewed D1 activation.
+  assert.equal(result.status,503);
 });
