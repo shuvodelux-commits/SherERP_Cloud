@@ -160,9 +160,13 @@ test('malformed and typed-but-not-boolean role grants fail closed even with matc
         .run(permissions);
       const epoch=x.sqlite.prepare("SELECT auth_version FROM auth_roles WHERE role_name='Viewer'")
         .get().auth_version;
-      x.sqlite.prepare('UPDATE auth_sessions SET role_auth_version=? WHERE token_hash=?')
-        .run(epoch,digest(B));
-      await assert.rejects(()=>x.read.getAppShellSettings_(req({token:B})),/Denied/i,
+      // Model a freshly issued session with the updated role epoch.
+      // Never rewrite an existing bearer's immutable authority snapshot.
+      x.sqlite.prepare(`INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,
+        role_auth_version,credential_version,created_at_ms,last_activity_at_ms,
+        expires_at_ms,revoked_at_ms) VALUES (?,'USR-B',1,?,1,?,?,?,NULL)`)
+        .run(digest(E),epoch,NOW-300_000,NOW-60_000,NOW+1_200_000);
+      await assert.rejects(()=>x.read.getAppShellSettings_(req({token:E})),/Denied/i,
         permissions);
     }finally{x.close();}
   }
