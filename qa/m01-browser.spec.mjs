@@ -183,3 +183,90 @@ test('original invoice A4 renderer keeps exact 1/25/49-item physical page bounda
     });
   }
 });
+
+
+test('original login Enter key validates blank fields locally then rejects one real Worker RPC', async () => {
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const loginRequests=[];
+  try {
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    page.on('request',request=>{
+      if(request.url().endsWith('/api/rpc') && request.method()==='POST' &&
+         request.postDataJSON()?.fnName==='login')loginRequests.push(request);
+    });
+    await page.locator('#loginMobile').press('Enter');
+    await page.locator('#loginError').getByText('Enter your mobile number and password.').waitFor();
+    assert.equal(loginRequests.length,0,'blank input must not send a login RPC');
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+
+    await page.locator('#loginMobile').fill('01700000000');
+    await page.locator('#loginPassword').fill('synthetic-invalid-password');
+    const rpcResponse=page.waitForResponse(response=>response.url().endsWith('/api/rpc') &&
+      response.request().method()==='POST' &&
+      response.request().postDataJSON()?.fnName==='login');
+    await page.locator('#loginPassword').press('Enter');
+    const reply=await rpcResponse;
+    assert.equal(reply.status(),503,'real public Worker has no active login backend');
+    await page.locator('#loginError').getByText('Sign-in is unavailable because server authentication is not configured yet.').waitFor();
+    await page.locator('#loginSubmitBtn:not([disabled])').waitFor();
+    assert.equal(await page.locator('#loginSubmitBtn').getAttribute('aria-busy'),'false');
+    assert.equal(loginRequests.length,1,'Enter on password must submit exactly once');
+    assert.deepEqual(loginRequests[0].postDataJSON().args,['01700000000','synthetic-invalid-password']);
+    assert.equal(await page.locator('#loginOverlay').isVisible(),true);
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+  }finally{await page.close();}
+});
+
+test('original login Show/Hide is keyboard-activatable without sending credentials',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  let loginCount=0;
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    page.on('request',request=>{
+      if(request.url().endsWith('/api/rpc') && request.method()==='POST' &&
+        request.postDataJSON()?.fnName==='login')loginCount++;
+    });
+    const password=page.locator('#loginPassword');
+    const toggle=page.locator('#loginTogglePassword');
+    await password.fill('synthetic-keyboard-password');
+    assert.equal(await password.getAttribute('type'),'password');
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await password.getAttribute('type'),'text');
+    assert.equal(await toggle.textContent(),'Hide');
+    assert.equal(await password.inputValue(),'synthetic-keyboard-password');
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await password.getAttribute('type'),'password');
+    assert.equal(await toggle.textContent(),'Show');
+    assert.equal(await password.inputValue(),'synthetic-keyboard-password');
+    assert.equal(loginCount,0,'visibility toggle must never submit');
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+  }finally{await page.close();}
+});
+
+test('original mobile sign-in controls fit and remain tappable at 320px',async()=>{
+  const width=320;
+  const page=await browser.newPage({viewport:{width,height:640},isMobile:true,hasTouch:true});
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    const targets=['.login-card','#loginMobile','#loginPassword','#loginTogglePassword','#loginSubmitBtn'];
+    for(const selector of targets){
+      const locator=page.locator(selector);
+      assert.equal(await locator.isVisible(),true,selector+' is visible');
+      const rect=await locator.boundingBox();
+      assert.ok(rect && rect.width>0,selector+' has positive width');
+      assert.ok(rect.x>=-1,selector+' stays inside left edge');
+      assert.ok(rect.x+rect.width<=width+1,selector+' stays inside right edge');
+    }
+    await page.locator('#loginTogglePassword').tap();
+    assert.equal(await page.locator('#loginPassword').getAttribute('type'),'text');
+    await page.locator('#loginTogglePassword').tap();
+    assert.equal(await page.locator('#loginPassword').getAttribute('type'),'password');
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+    await saveArtifact(page,'mobile-320-login.png');
+  }finally{await page.close();}
+});
