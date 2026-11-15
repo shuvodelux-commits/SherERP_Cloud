@@ -23,6 +23,8 @@ async function purchase(id='A',patch={}){
   assert.equal((await createSyntheticPurchasePoster(DB).post(input)).status,'COMMITTED');
   const row=await DB.prepare('SELECT intent_hash FROM m05_purchases WHERE tenant_id=? AND purchase_id=?')
     .bind(input.tenantId,input.purchaseId).first();
+  await DB.prepare('INSERT INTO m07_purchase_lot_balances VALUES (?,?,?,?,?)')
+    .bind(input.tenantId,'LOT-'+input.purchaseId,input.purchaseId,input.sku,input.qty).run();
   return {purchaseId:input.purchaseId,originalHash:row.intent_hash,
     sku:input.sku,lotId:'LOT-'+input.purchaseId,supplierId:input.supplierId};
 }
@@ -38,6 +40,7 @@ async function snapshot(){
     items:'SELECT * FROM m05_items ORDER BY purchase_id',
     originalMoves:'SELECT * FROM m05_movements ORDER BY purchase_id',
     lots:'SELECT * FROM m05_lots ORDER BY lot_id',
+    remaining:'SELECT * FROM m07_purchase_lot_balances ORDER BY lot_id',
     products:'SELECT * FROM m05_products ORDER BY sku',
     suppliers:'SELECT * FROM m05_suppliers ORDER BY supplier_id',
     customer:'SELECT * FROM m05_unrelated_accounts ORDER BY party_id',
@@ -61,7 +64,7 @@ beforeEach(async()=>{
   for(const name of ['m07_inject_cash','m07_inject_move','m05_receipt_delete_guard',
     'm07_purchase_cash_immutable_delete'])await DB.prepare('DROP TRIGGER IF EXISTS '+name).run();
   for(const name of ['m07_purchase_cash_inflows','m07_purchase_return_moves',
-    'm07_purchase_cash_returns','m05_supplier_ledger','m05_bank_book','m05_cash_book',
+    'm07_purchase_cash_returns','m07_purchase_lot_balances','m05_supplier_ledger','m05_bank_book','m05_cash_book',
     'm05_movements','m05_lots','m05_items','m05_purchases'])
     await DB.prepare('DELETE FROM '+name).run();
   for(const ddl of [
@@ -81,8 +84,8 @@ test('original discounted Purchase Cash Return reduces only its source lot/stock
     status:'COMMITTED',operationId:'OP-RETURN-CASH-001',returnId:'PRET-OP-RETURN-CASH-001'
   });
   assert.equal((await one("SELECT stock FROM m05_products WHERE sku='PIPE'")).stock,4);
-  assert.deepEqual(await all('SELECT lot_id,qty FROM m05_lots'),[
-    {lot_id:src.lotId,qty:1}
+  assert.deepEqual(await all('SELECT lot_id,remaining FROM m07_purchase_lot_balances'),[
+    {lot_id:src.lotId,remaining:1}
   ]);
   assert.deepEqual(await all('SELECT purchase_id,lot_id,units_out FROM m07_purchase_return_moves'),[
     {purchase_id:src.purchaseId,lot_id:src.lotId,units_out:1}
@@ -130,7 +133,7 @@ test('paid-in-full original purchase can return both units once, no over-return'
   assert.equal((await returns().post(cash(src,'OP-RETURN-CASH-003',{
     returnId:'PRET-FULL-1',units:2,refundPaisa:3000
   }))).status,'COMMITTED');
-  assert.equal((await one('SELECT qty FROM m05_lots')).qty,0);
+  assert.equal((await one('SELECT remaining FROM m07_purchase_lot_balances')).remaining,0);
   assert.equal((await one("SELECT stock FROM m05_products WHERE sku='PIPE'")).stock,3);
   const before=await snapshot();
   assert.equal((await returns().post(cash(src,'OP-RETURN-CASH-004',{
@@ -152,7 +155,7 @@ test('forged source receipt, foreign lot or wrong SKU cannot reduce unrelated in
 
 test('source lot depleted by earlier sale blocks return rather than borrowing another lot',async()=>{
   const src=await purchase();
-  await DB.prepare("UPDATE m05_lots SET qty=0 WHERE purchase_id='PUR-A'").run();
+  await DB.prepare("UPDATE m07_purchase_lot_balances SET remaining=0 WHERE purchase_id='PUR-A'").run();
   const before=await snapshot();
   assert.equal((await returns().post(cash(src))).status,'DECLINED');
   assert.deepEqual(await snapshot(),before);
@@ -166,7 +169,6 @@ test('forged refund price, over-original quantity, and unsupported fractional-ce
     assert.equal((await returns().post(cash(src,'OP-RETURN-CASH-006',changes))).status,'DECLINED');
     assert.deepEqual(await snapshot(),before);
   }
-  await DB.prepare("UPDATE m05_purchases SET discount_paisa=49,grand_paisa=3001,due_paisa=1001 WHERE purchase_id='PUR-A'").run().catch(()=>{});
 });
 
 test('stale supplier Party link and closed Cash Session decline at in-DB claim time',async()=>{
@@ -206,7 +208,7 @@ test('concurrent last source-lot unit has exactly one successful Cash refund',as
   const outcomes=await Promise.all([returns().post(a),returns().post(b)]);
   assert.deepEqual(outcomes.map(x=>x.status).sort(),['COMMITTED','DECLINED']);
   assert.equal((await one('SELECT COUNT(*) n FROM m07_purchase_cash_inflows')).n,1);
-  assert.equal((await one('SELECT qty FROM m05_lots')).qty,0);
+  assert.equal((await one('SELECT remaining FROM m07_purchase_lot_balances')).remaining,0);
 });
 
 test('duplicate return identity with different operation cannot commit and 404 test Worker stays closed',async()=>{
