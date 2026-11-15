@@ -36,7 +36,10 @@ test('SQL creates only proposed staff and session tables and uses strict uniquen
   const names=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(r=>r.name);
   assert.deepEqual(names,['auth_legacy_credentials','auth_login_throttle','auth_roles','auth_sessions','auth_users']);
   addUser(db,'USR-1','01710000001');
-  assert.throws(()=>addUser(db,'USR-2','01710000001'),/UNIQUE/);
+  // The replacement guard may reject a duplicate before SQLite's UNIQUE
+  // constraint fires. Both outcomes must deny the duplicate staff identity.
+  assert.throws(()=>addUser(db,'USR-2','01710000001'),
+    /UNIQUE|staff identity replacement forbidden/);
   assert.throws(()=>addUser(db,'USR-2','not-phone'),/CHECK/);
   assert.throws(()=>addUser(db,'USR-2','01710000002','Administrator','Disabled'),/CHECK/);
   db.close();
