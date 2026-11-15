@@ -45,6 +45,41 @@ const descriptions={
   }
 };
 
+// A matching D1-shaped snapshot must not certify an internally impossible
+// Party graph. This checks only structural lineage, never names or phone data.
+function validPlanLinkage(plan){
+  const ids=new Set(plan.parties.map(p=>p.partyId));
+  const anchors=new Map([...ids].map(id=>[id,0]));
+  const proofsByParty=new Map(),ownersByApprovalRef=new Map();
+  for(const role of plan.roles)if(!ids.has(role.partyId))return false;
+  for(const link of plan.links){
+    if(!ids.has(link.partyId))return false;
+    if(link.linkBasis==='ORIGINAL_RECORD'){
+      if(link.reviewedBy!==null || link.reviewedAt!==null ||
+         link.approvalRef!==null)return false;
+      anchors.set(link.partyId,anchors.get(link.partyId)+1);
+    }else if(link.linkBasis==='HUMAN_VERIFIED'){
+      if(![link.reviewedBy,link.reviewedAt,link.approvalRef].every(
+        value=>typeof value==='string'&&value.trim().length>0))return false;
+      const earlier=proofsByParty.get(link.partyId);
+      if(earlier){
+        if(earlier.reviewedBy!==link.reviewedBy ||
+           earlier.reviewedAt!==link.reviewedAt ||
+           earlier.approvalRef!==link.approvalRef)return false;
+      }else{
+        if(ownersByApprovalRef.has(link.approvalRef))return false;
+        proofsByParty.set(link.partyId,{
+          reviewedBy:link.reviewedBy,reviewedAt:link.reviewedAt,
+          approvalRef:link.approvalRef
+        });
+        ownersByApprovalRef.set(link.approvalRef,link.partyId);
+      }
+    }else return false;
+  }
+  return [...anchors.values()].every(count=>count===1) &&
+    plan.summary.reviewedGroups===proofsByParty.size;
+}
+
 function indexRows(rows,table,keys,issues){
   const result=new Map();
   for(const row of rows){
@@ -77,6 +112,9 @@ export function reconcilePartyImportReadback({plan,readback}={}){
 
   const expected=expectedRows(plan);
   const issues=[];
+  const planLinkageValid=validPlanLinkage(plan);
+  if(!planLinkageValid)
+    issues.push({code:'PLAN_LINKAGE_INVALID',table:'plan'});
   const counts={expected:{},actual:{}};
   for(const table of tables){
     counts.expected[table]=expected[table].length;
@@ -94,7 +132,7 @@ export function reconcilePartyImportReadback({plan,readback}={}){
   if(plan.reviewItems.length>0)
     issues.push({code:'PENDING_IDENTITY_REVIEW',table:'plan'});
 
-  let approvalEvidencePersistent=true;
+  let approvalEvidencePersistent=planLinkageValid;
   for(const table of tables){
     const {key,fields}=descriptions[table];
     const proposed=indexRows(expected[table],table,key,issues);

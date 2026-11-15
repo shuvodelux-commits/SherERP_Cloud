@@ -115,3 +115,71 @@ async function saveArtifactBuffer(bytes,filename){
   await mkdir(artifactDirectory,{recursive:true});
   await writeFile(join(artifactDirectory,filename),bytes);
 }
+
+test('original invoice A4 renderer keeps exact 1/25/49-item physical page boundaries', async (t) => {
+  // Synthetic only: invoke the frozen javascript.html renderer, never an
+  // emulated invoice function, logged-in POS session, or financial RPC.
+  for (const count of [1, 25, 49]) {
+    await t.test(count + ' original source items', async () => {
+      const page=await browser.newPage({viewport:{width:1280,height:800}});
+      try {
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        const structure=await page.evaluate((itemCount)=>{
+          if(typeof renderInvoicePrintHtml_!=='function')
+            throw new Error('Original print renderer unavailable in compiled frontend');
+          const items=Array.from({length:itemCount},(_,i)=>({
+            name:'Synthetic cable '+String(i+1),
+            qty:1,unit:'pcs',unitPrice:10,lineTotal:10
+          }));
+          const inv={
+            invoiceId:'M01-PRINT-'+itemCount,date:'2026-11-15',
+            customerName:'Synthetic Customer',customerPhone:'',
+            items,subtotal:itemCount*10,discount:0,
+            grandTotal:itemCount*10,paidAmount:itemCount*10,dueAmount:0,
+            paymentMethod:'Cash',payments:[],
+            shop:{
+              name:'Synthetic Hardware',nameBangla:'',address:'',
+              phone1:'',phone2:'',currencySymbol:'৳',
+              showBismillah:false,showSignature:false,
+              footer:'Synthetic footer — not a real invoice',
+              paymentMethods:'[]',terms:'[]'
+            }
+          };
+          const host=document.getElementById('printHost');
+          host.innerHTML='<div class="invoice-paper">'+renderInvoicePrintHtml_(inv)+'</div>';
+          document.body.classList.add('printing-invoice');
+          const pages=[...host.querySelectorAll('.invoice-print-page')];
+          return {
+            count:pages.length,
+            rows:pages.map(el=>el.querySelectorAll('.inv-table tbody tr').length),
+            headers:pages.map(el=>el.querySelectorAll('.inv-header, .inv-table thead').length),
+            customers:pages.map(el=>el.querySelectorAll('.inv-customer-info-row').length),
+            totals:pages.map(el=>el.querySelectorAll('.inv-bottom').length),
+            footers:pages.map(el=>el.querySelectorAll('.inv-footer-block').length),
+            paidBadges:pages.map(el=>el.querySelectorAll('.inv-paid-badge').length),
+            firstIndex:pages[0].querySelector('.inv-table tbody tr .idx')?.textContent,
+            lastIndex:pages.at(-1).querySelector('.inv-table tbody tr:last-child .idx')?.textContent,
+            expectedLastIndex:toBn_(itemCount)
+          };
+        },count);
+        const pageCount=Math.ceil(count/24);
+        assert.equal(structure.count,pageCount,'original renderer chunk count');
+        assert.deepEqual(structure.rows,Array.from({length:pageCount},(_,i)=>Math.min(24,count-i*24)));
+        assert.deepEqual(structure.headers,Array(pageCount).fill(2),'shop and table headers repeated');
+        assert.deepEqual(structure.customers,Array.from({length:pageCount},(_,i)=>i===0?1:0));
+        assert.deepEqual(structure.totals,Array.from({length:pageCount},(_,i)=>i===pageCount-1?1:0));
+        assert.deepEqual(structure.footers,Array.from({length:pageCount},(_,i)=>i===pageCount-1?1:0));
+        assert.deepEqual(structure.paidBadges,Array.from({length:pageCount},(_,i)=>i===pageCount-1?1:0));
+        assert.equal(structure.firstIndex,'১');
+        assert.equal(structure.lastIndex,structure.expectedLastIndex,'row indices continue across pages');
+
+        await page.emulateMedia({media:'print'});
+        const pdf=await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true});
+        assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+        const physicalPages=[...pdf.toString('latin1').matchAll(/\/Type\s*\/Page\b/g)].length;
+        assert.equal(physicalPages,pageCount,'original invoice must print without overflow or blank A4 pages');
+        await saveArtifactBuffer(pdf,'original-invoice-'+count+'-a4.pdf');
+      } finally { await page.close(); }
+    });
+  }
+});

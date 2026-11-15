@@ -128,3 +128,130 @@ test('tampered plan counts and malformed readback fail closed',()=>{
   assert.throws(()=>audit(plan,{...readback,party_roles:null}),/invalid|array|readback/i);
   assert.throws(()=>reconcilePartyImportReadback({plan:null,readback}),/invalid|plan/i);
 });
+
+
+test('self-consistent readback cannot certify two ORIGINAL_RECORD anchors on one Party',()=>{
+  const plan=planned();
+  const verified=plan.links.find(x=>x.linkBasis==='HUMAN_VERIFIED');
+  assert.ok(verified);
+  verified.linkBasis='ORIGINAL_RECORD';
+  verified.reviewedBy=null;
+  verified.reviewedAt=null;
+  verified.approvalRef=null;
+  const readback=snapshot(plan,{approvalRef:true});
+  const before=structuredClone({plan,readback});
+  const result=audit(plan,readback);
+  assert.deepEqual(result.counts.expected,result.counts.actual,
+    'plan/readback row counts are deliberately equal');
+  assert.equal(result.identityRowsMatch,false);
+  assert.equal(result.approvalEvidencePersistent,false);
+  assert.ok(result.issues.some(issue=>issue.code==='PLAN_LINKAGE_INVALID'&&issue.table==='plan'));
+  assert.doesNotMatch(JSON.stringify(result),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual({plan,readback},before,'graph audit must not mutate evidence');
+});
+
+test('readback rejects Party role and legacy link orphan references even with matching rows',()=>{
+  for(const table of ['roles','links']){
+    const plan=planned();
+    plan[table][0].partyId='PT-ORPHAN-SYNTHETIC';
+    const report=audit(plan,snapshot(plan,{approvalRef:true}));
+    assert.equal(report.identityRowsMatch,false,table+' orphan cannot be reconciled');
+    assert.equal(report.approvalEvidencePersistent,false);
+    assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+    assert.doesNotMatch(JSON.stringify(report),/PT-ORPHAN-SYNTHETIC|CUS-001|SUP-001/);
+  }
+});
+
+test('Party with only HUMAN_VERIFIED links cannot certify an absent original source anchor',()=>{
+  const plan=planned();
+  const original=plan.links.find(link=>link.linkBasis==='ORIGINAL_RECORD' &&
+    plan.links.filter(other=>other.partyId===link.partyId).length===1);
+  assert.ok(original,'fixture must contain a single-source Party');
+  original.linkBasis='HUMAN_VERIFIED';
+  original.reviewedBy='synthetic-reviewer';
+  original.reviewedAt='2026-11-15T00:00:00Z';
+  original.approvalRef='SYNTHETIC-ANCHOR-REVIEW';
+  const result=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(result.identityRowsMatch,false);
+  assert.equal(result.approvalEvidencePersistent,false);
+  assert.ok(codes(result).includes('PLAN_LINKAGE_INVALID'));
+});
+
+
+const threeMemberSource=()=>{
+  const rows=source();
+  rows.CUSTOMERS.push({
+    ...rows.CUSTOMERS[0],
+    'Customer ID':'CUS-002',
+    'Customer Name':'Distinct branch',
+    'Phone':'01512345678',
+    _rowIndex:3
+  });
+  return rows;
+};
+const threeMemberApproval=()=>[{
+  members:[
+    {sourceGroup:'CUSTOMERS',sourceId:'CUS-001'},
+    {sourceGroup:'SUPPLIERS',sourceId:'SUP-001'},
+    {sourceGroup:'CUSTOMERS',sourceId:'CUS-002'}
+  ],
+  reviewedBy:'admin-01',reviewedAt:'2026-11-14T12:00:00Z',approvalRef:'REVIEW-001'
+}];
+
+test('two separate reviewed Parties may not reuse one approval reference in a mirrored readback',()=>{
+  const groups=approval();
+  groups.push({
+    members:[
+      {sourceGroup:'VENDORS',sourceId:'VEN-001'},
+      {sourceGroup:'EXPENSE_PAYEES',sourceId:'PAY-001'}
+    ],
+    reviewedBy:'admin-02',reviewedAt:'2026-11-14T13:00:00Z',
+    approvalRef:'REVIEW-002'
+  });
+  const plan=planned(groups);
+  assert.equal(plan.summary.reviewedGroups,2);
+  const links=plan.links.filter(x=>x.linkBasis==='HUMAN_VERIFIED');
+  assert.equal(links.length,2);
+  assert.notEqual(links[0].partyId,links[1].partyId);
+  links[1].approvalRef=links[0].approvalRef;
+  const readback=snapshot(plan,{approvalRef:true});
+  const prior=structuredClone({plan,readback});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+  assert.doesNotMatch(JSON.stringify(report),
+    /REVIEW-001|admin-01|CUS-001|SUP-001|VEN-001|PAY-001/);
+  assert.deepEqual({plan,readback},prior);
+});
+
+test('one three-member reviewed Party must retain one consistent reviewer and time tuple',()=>{
+  const plan=planPartyImport(threeMemberSource(),threeMemberApproval());
+  assert.equal(plan.summary.reviewedGroups,1);
+  const verified=plan.links.filter(x=>x.linkBasis==='HUMAN_VERIFIED');
+  assert.equal(verified.length,2);
+  assert.equal(new Set(verified.map(x=>x.partyId)).size,1);
+  assert.equal(new Set(verified.map(x=>x.approvalRef)).size,1);
+  assert.deepEqual(audit(plan,snapshot(plan,{approvalRef:true})).issues,
+    [],'all members with original shared review proof reconcile successfully');
+  verified[1].reviewedAt='2026-11-14T14:00:00Z';
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+  assert.doesNotMatch(JSON.stringify(report),/2026-11-14T14:00:00Z|CUS-002|SUP-001/);
+});
+
+test('reviewed group summary cannot contradict the number of source-backed reviewed Parties',()=>{
+  const plan=planned();
+  assert.equal(plan.summary.reviewedGroups,1);
+  plan.summary.reviewedGroups=0;
+  const readback=snapshot(plan,{approvalRef:true});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(codes(report).includes('PLAN_LINKAGE_INVALID'));
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01/);
+});
