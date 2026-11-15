@@ -28,12 +28,13 @@ function createTrigger(table,key,id,name){
     "DELETE FROM "+table+" WHERE "+id+" IN (SELECT value FROM json_each(NEW.cleanup_json)); "+
     "SELECT CASE WHEN changes()!=json_array_length(NEW.cleanup_json) "+
       "THEN RAISE(ABORT,'master cleanup count mismatch') END; "+
-    "WITH ranked AS MATERIALIZED ("+
-      "SELECT row_id,ROW_NUMBER() OVER (ORDER BY legacy_sheet_row) AS pos FROM "+table+") "+
-    "UPDATE "+table+" SET legacy_sheet_row=1002+("+
-      "SELECT pos FROM ranked WHERE ranked.row_id="+table+".row_id) "+
+    "UPDATE "+table+" SET legacy_sheet_row=legacy_sheet_row+1002 "+
       "WHERE json_array_length(NEW.cleanup_json)>0; "+
-    "UPDATE "+table+" SET legacy_sheet_row=legacy_sheet_row-1001 "+
+    "UPDATE "+table+" SET legacy_sheet_row=1+("+
+      "SELECT COUNT(*) FROM json_each(NEW.snapshot_json) AS prior "+
+      "WHERE CAST(json_extract(prior.value,'$[0]') AS INTEGER)<=("+table+".legacy_sheet_row-1002) "+
+        "AND NOT EXISTS (SELECT 1 FROM json_each(NEW.cleanup_json) AS removed "+
+          "WHERE removed.value=json_extract(prior.value,'$[1]'))) "+
       "WHERE legacy_sheet_row>1002; "+
     "INSERT INTO synthetic_m03_id_receipts(tenant_id,id_key,operation_id,intent_hash) "+
       "VALUES(NEW.tenant_id,NEW.id_key,NEW.operation_id,NEW.intent_hash); "+
