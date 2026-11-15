@@ -84,7 +84,7 @@ export function projectDashboardTodayNetSales(snapshot){
   let grossSales=0;
   for(const sale of sales){
     const id=invoiceId(sale,'Sales');
-    if(reportDefaultRange(sale.Date).to!==data.today)
+    if(reportDefaultRange(sale.Date).defaultTo!==data.today)
       throw new TypeError('Invalid trusted Sales invoice date for Today');
     const key=id.trim();
     if(seen.has(key))throw new TypeError('Duplicate Sales Invoice ID');
