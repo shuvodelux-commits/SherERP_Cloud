@@ -89,18 +89,32 @@ test('M04 Administrator session authorizes one CAS UPDATE, no separate JS permis
 test('active custom role with literal settings.edit true can CAS an existing row inside the same SQL guard',async()=>{
   const x=fixture();try{
     const before=records(x);
-    // The frozen GAS uses Permissions for authority; Allowed Modules is UI metadata.
+    // Allowed Modules is UI-only, but changing it revokes OLD role sessions.
     x.sqlite.exec("UPDATE auth_roles SET allowed_modules='' WHERE role_name='Cashier'");
-    assert.deepEqual(await x.adapter.updateExisting_(call({
+    await assert.rejects(()=>x.adapter.updateExisting_(call({
       token:C,newValue:'  Role-authorized shop  '
+    })),/Denied|stale|conflict/i);
+    assert.deepEqual(records(x),before);
+    // Only a NEW session bound to the current role authority version can edit.
+    const roleEpoch=x.sqlite.prepare(
+      "SELECT auth_version FROM auth_roles WHERE role_name='Cashier'").get().auth_version;
+    assert.ok(roleEpoch>1);
+    const freshToken='f'.repeat(64);
+    x.sqlite.prepare(`INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,
+      role_auth_version,credential_version,created_at_ms,last_activity_at_ms,
+      expires_at_ms,revoked_at_ms) VALUES(?,?,1,?,1,?,?,?,NULL)`)
+      .run(digest(freshToken),'STAFF-C',roleEpoch,NOW-1000,NOW-1000,NOW+60000);
+    // The SQL permission is still settings.edit, NOT allowed_modules display.
+    assert.deepEqual(await x.adapter.updateExisting_(call({
+      token:freshToken,newValue:'  Role-authorized shop  '
     })),{updated:true});
     const after=records(x);
     assert.deepEqual(after[0],{...before[0],value:'Role-authorized shop'});
     assert.deepEqual(after.slice(1),before.slice(1));
-    assert.equal(x.sqls.length,1,'no preflight role SELECT before Settings mutation');
-    assert.match(x.sqls[0],/auth_roles/);
-    assert.match(x.sqls[0],/role_auth_version/);
-    assert.match(x.sqls[0],/json_type/);
+    assert.equal(x.sqls.length,2,'one guarded SQL UPDATE per attempt; no preflight role SELECT');
+    assert.match(x.sqls[1],/auth_roles/);
+    assert.match(x.sqls[1],/role_auth_version/);
+    assert.match(x.sqls[1],/json_type/);
   }finally{x.close();}
 });
 

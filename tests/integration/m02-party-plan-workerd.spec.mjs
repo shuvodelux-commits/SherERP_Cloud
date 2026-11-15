@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {compileSyntheticPartyImport} from '../fixtures/m02-party-plan-batch.mjs';
 import {reconcilePartyIdentityD1} from '../../src/party/d1-identity-readback.js';
+import {summarizeOpenPartyIdentityReviews} from '../../src/party/d1-review-queue-summary.js';
 
 const masters=JSON.parse(readFileSync(new URL('../fixtures/party-import.synthetic.json',import.meta.url),'utf8'));
 const approvals=JSON.parse(readFileSync(new URL('../fixtures/party-approved.synthetic.json',import.meta.url),'utf8'));
@@ -194,4 +195,52 @@ test('reused human approval reference cannot create D1 writes for disjoint ident
   });
   assert.throws(()=>compile(source(),groups),/approval.*(reus|duplic)|(?:reus|duplic).*approval/i);
   assert.deepEqual(await counts(),before);
+});
+
+test('real workerd/D1 identity review queue is initially empty and read-only',async()=>{
+  const before=await counts();
+  assert.deepEqual(await summarizeOpenPartyIdentityReviews({DB}),{
+    totalOpen:0,byReason:[]
+  });
+  assert.deepEqual(await counts(),before);
+});
+
+test('real D1 OPEN review counts exclude confirmed/rejected and never change Party identities',async()=>{
+  const before=await counts();
+  const reviewedAt='2026-11-14T12:00:00Z';
+  const items=[
+    ['REV-SUM-1','CUSTOMERS',null,'MISSING_ID','OPEN'],
+    ['REV-SUM-2','SUPPLIERS','SUP-001','SHARED_PHONE','OPEN'],
+    ['REV-SUM-3','VENDORS','VEN-001','SHARED_PHONE','OPEN'],
+    ['REV-SUM-4','FINANCE_PERSONS','FIN-001','SAME_NAME','OPEN'],
+    ['REV-SUM-5','EXPENSE_PAYEES','PAY-001','OTHER','CONFIRMED'],
+    ['REV-SUM-6','CUSTOMERS','CUS-001','OTHER','REJECTED']
+  ];
+  await DB.batch(items.map(([id,group,sourceId,reason,status])=>
+    DB.prepare(`INSERT INTO party_identity_review
+      (review_id,source_group,source_id,reason,status,reviewer_id,reviewed_at,created_at)
+      VALUES(?,?,?,?,?,?,?,?)`).bind(
+      id,group,sourceId,reason,status,
+      status==='OPEN'?null:'synthetic-reviewer',
+      status==='OPEN'?null:reviewedAt,now
+    )
+  ));
+  const report=await summarizeOpenPartyIdentityReviews({DB});
+  assert.deepEqual(report,{totalOpen:4,byReason:[
+    {reason:'MISSING_ID',count:1},
+    {reason:'SAME_NAME',count:1},
+    {reason:'SHARED_PHONE',count:2}
+  ]});
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|VEN-001|reviewer|01700000000|Rahim/);
+  const after=await counts();
+  assert.equal(after.parties,before.parties);
+  assert.equal(after.party_roles,before.party_roles);
+  assert.equal(after.party_legacy_links,before.party_legacy_links);
+  assert.equal(after.party_identity_review,before.party_identity_review+6);
+  for(const path of ['/api/rpc','/__m02_test__/reviews']){
+    const response=await worker.fetch('http://synthetic.local'+path,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:'{}'
+    });
+    assert.equal(response.status,404,'review queue is never a public route');
+  }
 });
