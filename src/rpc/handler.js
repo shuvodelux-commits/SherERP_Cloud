@@ -49,7 +49,12 @@ export async function handleRpc(request) {
       !Array.isArray(payload.args) || payload.args.length>MAX_ARGS) {
     return rpcError(400,'Invalid RPC payload');
   }
-  if (!Object.hasOwn(rpcRegistry,payload.fnName)) return rpcError(501,'RPC method not migrated');
+  if (!Object.hasOwn(rpcRegistry,payload.fnName)) {
+    if (payload.fnName === 'login') {
+      return rpcError(503,'Sign-in is unavailable because server authentication is not configured yet.');
+    }
+    return rpcError(501,'RPC method not migrated');
+  }
   // No handlers are registered until the authenticated authorization layer (M04).
   return rpcError(501,'RPC method not migrated');
 }

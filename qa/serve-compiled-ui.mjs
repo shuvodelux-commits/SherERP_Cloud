@@ -23,8 +23,19 @@ export async function serveCompiledUi() {
       response.setHeader('X-Content-Type-Options','nosniff');
       const path=new URL(request.url,'http://localhost').pathname;
       if(path==='/api/rpc'){
-        response.writeHead(501,{'Content-Type':'application/json; charset=utf-8'});
-        response.end(JSON.stringify({success:false,message:'RPC method not migrated'}));
+        // No fixture authenticates users. Mirror the M04 unconfigured-login
+        // response so the preserved browser login error is tested end-to-end.
+        let body='';
+        request.on('data',chunk=>{body+=chunk;});
+        request.on('end',()=>{
+          let fnName;
+          try {fnName=JSON.parse(body).fnName;} catch {}
+          const isLogin=fnName==='login';
+          response.writeHead(isLogin?503:501,{'Content-Type':'application/json; charset=utf-8'});
+          response.end(JSON.stringify({success:false,message:isLogin
+            ? 'Sign-in is unavailable because server authentication is not configured yet.'
+            : 'RPC method not migrated'}));
+        });
       }else if(path==='/api/health'){
         response.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
         response.end(JSON.stringify({status:'foundation',service:'shererp-cloud',database:'not-connected'}));
