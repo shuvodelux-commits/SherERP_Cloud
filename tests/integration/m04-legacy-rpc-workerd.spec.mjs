@@ -120,3 +120,29 @@ test('test-only RPC is explicit allowlist and cannot reach production auth or ad
   assert.doesNotMatch(registry,/d1-legacy-rpc|createD1LegacyAuthRpc/);
   assert.doesNotMatch(worker,/d1-legacy-rpc|createD1LegacyAuthRpc/);
 });
+
+test('local D1 RPC fixture uses the reviewed pinned-GAS staff-phone helper without a duplicate parser',()=>{
+  const fixture=readFileSync(new URL('../fixtures/m04-auth-worker.mjs',import.meta.url),'utf8');
+  assert.match(fixture,/import\s+\{normalizeLegacyStaffPhoneSearch\}\s+from\s+['"]\.\.\/\.\.\/src\/auth\/staff-phone-identity\.js['"]/);
+  assert.match(fixture,/normalizeMobile:\s*normalizeLegacyStaffPhoneSearch/);
+  assert.doesNotMatch(fixture,/const\s+testPhone\s*=/);
+});
+
+test('real local D1 login accepts all source-equivalent Bangladesh staff phone forms',async()=>{
+  const canonical='01710000101';
+  for(const input of [
+    '০১৭১০০০০১০১',
+    '১৭১০০০০১০১',
+    1710000101,
+    '+880 (171) 000-0101',
+    '017 100 00101',
+  ]){
+    const result=await rpc('login',[input,SECRET],NOW+60_000);
+    assert.equal(result.status,200);
+    assert.equal(result.body.success,true,'source-equivalent login input');
+    assert.equal(result.body.data.user.mobile,canonical);
+    assert.equal(result.body.data.user.id,'USR-RPC-ADMIN');
+  }
+  const invalid=await rpc('login',['0171000010',SECRET],NOW+61_000);
+  assert.deepEqual(invalid,{status:200,body:{success:false,message:'Invalid mobile number or password.'}});
+});
