@@ -438,3 +438,19 @@ test('duplicate source physical anchor is stable across local D1 preflight order
   assert.deepEqual(await counts(),before,'local D1 rows must remain untouched');
   assert.deepEqual(rows,original,'offline source snapshot unchanged');
 });
+
+
+test('real local D1 readback rejects forged negative quarantined source count',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  assert.equal(plan.summary.quarantinedRows,0);
+  plan.summary.quarantinedRows=-1;
+  plan.summary.sourceRows=plan.links.length-1;
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_COUNT_MISMATCH'&&x.table==='plan'));
+  assert.ok(report.issues.some(x=>x.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'existing D1 schema still cannot preserve reviewed approval reference');
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual(await counts(),before,'D1 readback must perform no writes');
+});
