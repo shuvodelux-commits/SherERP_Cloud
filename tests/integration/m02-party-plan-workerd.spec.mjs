@@ -336,3 +336,20 @@ test('Party review queue rejects ambiguous D1 success flags and impossible zero 
     /CUS-001|SUP-001|VEN-001|01700000000|admin-01|Rahim/,
     'all summaries must remain source-ID and PII free');
 });
+
+
+test('unsafe legacy physical row never compiles D1 Party identity inserts or mutates existing Parties',async()=>{
+  const before=await counts();
+  const input=source(),prior=structuredClone(input);
+  input.SUPPLIERS[0]._rowIndex=Number.MAX_SAFE_INTEGER+1;
+  let prepared=0;
+  const intercepted={
+    prepare(sql){prepared++;return DB.prepare(sql);}
+  };
+  assert.throws(()=>compileSyntheticPartyImport({
+    DB:intercepted,sourceRows:input,approvedGroups:reviewed(),createdAt:now
+  }),/invalid legacy row position/i);
+  assert.equal(prepared,0,'all source row provenance must validate before preparing any D1 statement');
+  assert.deepEqual(await counts(),before,'unsafe source row cannot change local D1');
+  assert.deepEqual(source(),prior,'the original frozen source fixture remains unchanged');
+});

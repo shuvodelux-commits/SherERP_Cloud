@@ -84,3 +84,23 @@ test('reviewed groups cannot change preserved original legacy source IDs',()=>{
     'CUSTOMERS','EXPENSE_PAYEES','FINANCE_PERSONS','SUPPLIERS','VENDORS'
   ]);
 });
+
+
+test('source row provenance rejects unsafe JS integers rather than silently rounding physical sheet positions',()=>{
+  const original=source(),before=structuredClone(original);
+  const safe=source();
+  safe.CUSTOMERS[0]._rowIndex=Number.MAX_SAFE_INTEGER;
+  assert.equal(planPartyImport(safe,pair()).links.find(x=>
+    x.sourceGroup==='CUSTOMERS').legacySheetRow,Number.MAX_SAFE_INTEGER);
+  for(const invalid of [Number.MAX_SAFE_INTEGER+1,Number.MAX_SAFE_INTEGER+2]){
+    assert.equal(Number.isInteger(invalid),true,'old validation allowed unsafe row');
+    assert.equal(Number.isSafeInteger(invalid),false);
+    const records=source();
+    records.CUSTOMERS[0]._rowIndex=invalid;
+    assert.throws(()=>planPartyImport(records,pair()),
+      /invalid legacy row position/i);
+  }
+  assert.equal(planPartyImport(original,pair()).links.find(x=>
+    x.sourceGroup==='CUSTOMERS').legacySheetRow,2);
+  assert.deepEqual(original,before,'source row metadata must never be rewritten');
+});

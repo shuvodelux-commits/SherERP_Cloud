@@ -9,6 +9,8 @@ const groups=Object.keys(partyLegacyContracts);
 const str=(v)=>typeof v==='string'?v:'';
 const sourceKey=(g,id)=>JSON.stringify([g,id]);
 const hash=(value)=>createHash('sha256').update(value).digest('hex').slice(0,26).toUpperCase();
+// Flat legacy sheet columns: property insertion order is not row identity.
+const missingIdFingerprint=row=>hash(JSON.stringify(Object.keys(row).sort().map(key=>[key,row[key]])));
 const entityId=(key)=>'PT-'+hash(key);
 const reviewId=(reason,key)=>'REV-'+hash(reason+'|'+key);
 const normName=(s)=>str(s).trim().replace(/\s+/g,' ').toLocaleLowerCase('en');
@@ -49,12 +51,12 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
       const id=str(source[spec.idColumn]);
       const legacySheetRow=source._rowIndex===undefined?null:source._rowIndex;
       if(legacySheetRow!==null){
-        if(!Number.isInteger(legacySheetRow)||legacySheetRow<2)throw new Error('Invalid legacy row position in '+group);
+        if(!Number.isSafeInteger(legacySheetRow)||legacySheetRow<2)throw new Error('Invalid legacy row position in '+group);
         if(seenSourceRows.has(legacySheetRow))throw new Error('Duplicate source row position in '+group);
         seenSourceRows.add(legacySheetRow);
       }
       if(!id.trim()){
-        const key=sourceKey(group,'missing:'+(legacySheetRow??hash(JSON.stringify(source))));
+        const key=sourceKey(group,'missing:'+(legacySheetRow??missingIdFingerprint(source)));
         reviews.push({reviewId:reviewId('MISSING_ID',key),sourceGroup:group,sourceId:null,legacySheetRow,reason:'MISSING_ID',status:'OPEN'});
         continue;
       }
