@@ -22,19 +22,27 @@ const reads=Object.freeze([
           link_basis, reviewed_by, reviewed_at, status
      FROM party_legacy_links ORDER BY source_group, source_id`
 ]);
+// Explicit future-schema path; NEVER auto-select it on the current 0002 schema.
+// Schema and reviewer authorization remain owned by M03/M04 respectively.
+const readsWithApproval=Object.freeze([
+  reads[0],reads[1],
+  `SELECT source_group, source_id, party_id, legacy_sheet_row,
+          link_basis, reviewed_by, reviewed_at, approval_ref, status
+     FROM party_legacy_links ORDER BY source_group, source_id`
+]);
 const tables=Object.freeze(['parties','party_roles','party_legacy_links']);
 
 /**
  * @param {{DB: object, plan: object}} input
  * @returns {Promise<object>} Redacted parity report, never database rows.
  */
-export async function reconcilePartyIdentityD1({DB,plan}={}){
+async function readAndReconcilePartyIdentity(DB,plan,statements){
   if(!DB || typeof DB.prepare!=='function' || typeof DB.batch!=='function')
     throw new Error('Party D1 binding unavailable');
 
   let readback;
   try{
-    const prepared=reads.map(sql=>DB.prepare(sql));
+    const prepared=statements.map(sql=>DB.prepare(sql));
     const results=await DB.batch(prepared);
     if(!Array.isArray(results) || results.length!==tables.length ||
       results.some(row=>!row || row.success!==true || !Array.isArray(row.results)))
@@ -48,4 +56,18 @@ export async function reconcilePartyIdentityD1({DB,plan}={}){
     throw new Error('Party D1 identity readback unavailable');
   }
   return reconcilePartyImportReadback({plan,readback});
+}
+
+/** Current 0002 Party schema: original links remain approval-ref unverified. */
+export async function reconcilePartyIdentityD1({DB,plan}={}){
+  return readAndReconcilePartyIdentity(DB,plan,reads);
+}
+
+/**
+ * Strict opt-in for a FUTURE owner-approved schema that stores approval_ref.
+ * Missing column or ambiguous D1 result fails closed; no fallback to 0002.
+ * The result is a read-only parity report, NOT authorization to import/merge.
+ */
+export async function reconcilePartyIdentityApprovalD1({DB,plan}={}){
+  return readAndReconcilePartyIdentity(DB,plan,readsWithApproval);
 }
