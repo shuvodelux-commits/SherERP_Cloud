@@ -1,0 +1,26 @@
+name: M02 Party identity real workerd D1 proof (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  party-identity-workerd:
+    name: Verify existing Party constraints using isolated local D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install baseline dependencies from lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler only on the isolated CI runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Prove Party legacy-ID, role and review SQL constraints against real local workerd D1
+        run: node --test tests/integration/m02-party-workerd.spec.mjs
