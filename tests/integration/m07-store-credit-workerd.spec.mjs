@@ -217,3 +217,26 @@ test('malformed input, missing Customer and unknown test route fail closed',asyn
   assert.equal(response.status,404);
   assert.equal((await one('SELECT COUNT(*) AS n FROM m07_credit_returns')).n,0);
 });
+
+test('two independent verified invoice credits concurrently decrement the same selected account without lost update',async()=>{
+  const a=await seed({id:'RACE-A',units:1});
+  const b=await seed({id:'RACE-B',units:1});
+  assert.equal((await one("SELECT signed_due_paisa FROM m07_customer_signed_accounts WHERE customer_id='CUS-1'")).signed_due_paisa,20000);
+  const results=await Promise.all([
+    credit().post(request(a,'CREDIT-TWO-SALEA',{creditPaisa:5000})),
+    credit().post(request(b,'CREDIT-TWO-SALEB',{creditPaisa:5000}))
+  ]);
+  assert.deepEqual(results.map(x=>x.status),['COMMITTED','COMMITTED']);
+  assert.equal((await one("SELECT signed_due_paisa FROM m07_customer_signed_accounts WHERE customer_id='CUS-1'")).signed_due_paisa,10000);
+  assert.equal((await one('SELECT COUNT(*) AS n FROM m07_credit_ledger')).n,2);
+  assert.equal((await one("SELECT payable_paisa FROM m06_supplier_accounts WHERE supplier_id='SUP-1'")).payable_paisa,4000);
+});
+
+test('injected return movement fault aborts all Stock and Store Credit effects',async()=>{
+  const src=await seed();
+  const before=await snap();
+  await DB.prepare(`CREATE TRIGGER m07_fail_credit_stock BEFORE INSERT ON m07_return_movements
+    BEGIN SELECT RAISE(ABORT,'fault-credit-stock-move'); END`).run();
+  await assert.rejects(()=>credit().post(request(src,'CREDIT-STOCKFLT01')),/NEEDS_REVIEW/);
+  assert.deepEqual(await snap(),before);
+});
