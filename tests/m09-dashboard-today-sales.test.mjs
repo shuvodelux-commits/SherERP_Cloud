@@ -62,7 +62,7 @@ test('empty source sales remains zero despite return rows; unrelated return rows
 test('source rounds only once and preserves negative totals for over-return, without monetary reclassification',()=>{
   const s=snapshot([invoice('INV-A',10)],[{'Invoice ID':'INV-A','Line Total':11.005}]);
   assert.equal(projectDashboardTodayNetSales(s),oracle(s));
-  assert.equal(projectDashboardTodayNetSales(s),-1);
+  assert.equal(projectDashboardTodayNetSales(s),-1.01);
 });
 test('valid frozen source fixtures and arrays are never mutated',()=>{
   const s=snapshot(Object.freeze([Object.freeze(invoice('INV-1',10))]),
