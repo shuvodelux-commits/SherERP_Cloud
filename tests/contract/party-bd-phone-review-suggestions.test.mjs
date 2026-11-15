@@ -46,7 +46,7 @@ test('common phone punctuation and whitespace do not hide +880 review candidates
 });
 
 test('different country codes and different mobile numbers never falsely match local review key',()=>{
-  for(const phone of ['+9711700000000','+8801800000000','+880170000000','01712345678']){
+  for(const phone of ['+9711700000000','+8801500000000','+880170000000','01712345678']){
     const plan=planPartyImport(source(phone));
     assert.equal(shared(plan).length,0,phone);
     assert.notEqual(id(plan,'CUSTOMERS'),id(plan,'SUPPLIERS'));
