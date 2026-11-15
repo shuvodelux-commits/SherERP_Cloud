@@ -255,3 +255,16 @@ test('invalid batch shape, wrong tenant and arbitrary HTTP POST cannot create fi
   assert.equal((await worker.fetch('http://m07.local/completeReturnBatch',{method:'POST',body:'{}'})).status,404);
   assert.deepEqual(await snapshot(),before);
 });
+
+test('parent batch operation ID cannot reuse an unrelated already committed single Cash operation',async()=>{
+  const {children}=await sources();
+  const c=await sale('C',{sku:'PIPE'});
+  assert.equal((await createSyntheticD1CashReturnContract(DB).post({
+    tenantId:'SHOP-A',actorId:'RETURN-CLERK',operationId:'OP-BATCH-000001',
+    returnId:'RET-UNRELATED-C-1',invoiceId:c.invoiceId,sku:c.sku,lotId:c.lotId,
+    originalHash:c.originalHash,units:1,refundPaisa:5000,reason:'Broken part'
+  })).status,'COMMITTED');
+  const before=await snapshot();
+  assert.equal((await writer().post(batch(children))).status,'DECLINED');
+  assert.deepEqual(await snapshot(),before);
+});
