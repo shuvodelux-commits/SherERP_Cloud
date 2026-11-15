@@ -88,7 +88,7 @@ function trustedLogoDataUri(value){
   if(typeof value!=='string')
     throw new TypeError('Trusted Invoice logo data URI must be a string');
   if(value==='')return '';
-  const match=LOGO_URI.exec(value);
+  const match=value.match(LOGO_URI);
   if(!match || !CANONICAL_BASE64.test(match[1]))
     throw new TypeError('Invalid trusted Invoice logo image base64 URI');
   const payload=match[1];
