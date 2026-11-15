@@ -136,7 +136,12 @@ export async function loginWithD1(db,{phoneKey,password,nowMs}={}){
   if(await locked(db,phoneDigest,nowMs)) return denyLogin();
 
   const row=await db.prepare(`SELECT user_id,full_name,role_name,
-     password_algo,password_hash,password_salt,password_iterations,credential_version
+     password_algo,password_hash,password_salt,password_iterations,credential_version,
+     auth_version,
+     (CASE WHEN role_name='Administrator' THEN NULL ELSE
+       (SELECT r.auth_version FROM auth_roles r
+        WHERE r.role_name=auth_users.role_name AND r.status='Active') END)
+       AS role_auth_version
      FROM auth_users WHERE phone_key=? AND status='Active'
        AND (role_name='Administrator' OR EXISTS (
          SELECT 1 FROM auth_roles r WHERE r.role_name=auth_users.role_name AND r.status='Active'))`)
@@ -154,17 +159,25 @@ export async function loginWithD1(db,{phoneKey,password,nowMs}={}){
   // Recheck active actor and lock state inside the SQL write; never grant a
   // session based only on stale verification from before the password KDF.
   const inserted=await db.prepare(`INSERT INTO auth_sessions
-    (token_hash,user_id,created_at_ms,last_activity_at_ms,expires_at_ms)
-    SELECT ?,u.user_id,?,?,? FROM auth_users u
+    (token_hash,user_id,created_at_ms,last_activity_at_ms,expires_at_ms,
+     user_auth_version,role_auth_version,credential_version)
+    SELECT ?,u.user_id,?,?,?,u.auth_version,
+      (CASE WHEN u.role_name='Administrator' THEN NULL ELSE
+        (SELECT r.auth_version FROM auth_roles r
+         WHERE r.role_name=u.role_name AND r.status='Active') END),
+      u.credential_version FROM auth_users u
     WHERE u.user_id=? AND u.status='Active'
       AND u.role_name=? AND u.password_hash=? AND u.password_salt=?
       AND u.password_iterations=? AND u.credential_version=?
+      AND u.auth_version=?
       AND (u.role_name='Administrator' OR EXISTS (
-        SELECT 1 FROM auth_roles r WHERE r.role_name=u.role_name AND r.status='Active'))
+        SELECT 1 FROM auth_roles r WHERE r.role_name=u.role_name
+          AND r.status='Active' AND r.auth_version=?))
       AND NOT EXISTS (SELECT 1 FROM auth_login_throttle t
          WHERE t.login_hash=? AND t.reset_at_ms > ? AND t.locked_until_ms > ?)`)
     .bind(tokenHash,nowMs,nowMs,expires,row.user_id,row.role_name,
       row.password_hash,row.password_salt,row.password_iterations,row.credential_version,
+      row.auth_version,row.role_auth_version,
       phoneDigest,nowMs,nowMs).run();
   if(inserted.meta?.changes!==1) return denyLogin();
 
@@ -193,17 +206,23 @@ export async function validateSessionWithD1(db,{token,nowMs}={}){
        AND last_activity_at_ms>? AND last_activity_at_ms<=?
        AND EXISTS (SELECT 1 FROM auth_users u
          WHERE u.user_id=auth_sessions.user_id AND u.status='Active'
-         AND (u.role_name='Administrator' OR EXISTS (
-           SELECT 1 FROM auth_roles r
-           WHERE r.role_name=u.role_name AND r.status='Active')))`)
+         AND u.auth_version=auth_sessions.user_auth_version
+         AND u.credential_version=auth_sessions.credential_version
+         AND ((u.role_name='Administrator' AND auth_sessions.role_auth_version IS NULL)
+           OR EXISTS (SELECT 1 FROM auth_roles r
+             WHERE r.role_name=u.role_name AND r.status='Active'
+               AND r.auth_version=auth_sessions.role_auth_version)))`)
      .bind(nowMs,digest,nowMs,nowMs,nowMs-AUTH_POLICY.sessionIdleMs,nowMs).run();
   if(updated.meta?.changes!==1) return denyLogin();
 
   const row=await db.prepare(`SELECT u.user_id,u.full_name,u.role_name FROM auth_sessions s
      JOIN auth_users u ON u.user_id=s.user_id
      WHERE s.token_hash=? AND s.revoked_at_ms IS NULL AND s.expires_at_ms>?
-       AND u.status='Active' AND (u.role_name='Administrator' OR EXISTS (
-         SELECT 1 FROM auth_roles r WHERE r.role_name=u.role_name AND r.status='Active'))`)
+       AND u.status='Active' AND u.auth_version=s.user_auth_version
+       AND u.credential_version=s.credential_version
+       AND ((u.role_name='Administrator' AND s.role_auth_version IS NULL)
+         OR EXISTS (SELECT 1 FROM auth_roles r WHERE r.role_name=u.role_name
+           AND r.status='Active' AND r.auth_version=s.role_auth_version))`)
     .bind(digest,nowMs).first();
   return row ? {authenticated:true,user:sanitizedUser(row)} : denyLogin();
 }
