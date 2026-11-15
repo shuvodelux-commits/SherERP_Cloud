@@ -23,7 +23,7 @@ const LOGIN_FAILED='Invalid mobile number or password.';
 const ROLE_UNAVAILABLE='Sign-in role configuration is unavailable.';
 const ok=data=>({success:true,data});
 
-function roleMetadata(row){
+export function roleMetadata(row){
   if(row.role_name==='Administrator'){
     return {allowedModules:null,permissions:null};
   }
@@ -67,7 +67,7 @@ function tokenToBytes(token){
   for(let i=0;i<32;i++)bytes[i]=parseInt(token.slice(i*2,i*2+2),16);
   return bytes;
 }
-async function tokenFingerprint(token){
+export async function tokenFingerprint(token){
   if(typeof token!=='string' || !TOKEN.test(token))return null;
   if(typeof globalThis.crypto?.subtle?.digest!=='function')
     throw new Error('Web Crypto required');
