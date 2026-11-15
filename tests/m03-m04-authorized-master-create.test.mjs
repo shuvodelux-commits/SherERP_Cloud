@@ -108,14 +108,18 @@ test('revoked, expired, idle and stale authority epochs deny with no source ID e
       .run(NOW,hash(T.STAFF));
     x.db.exec("UPDATE auth_roles SET permissions_json='{}' WHERE role_name='Viewer'");
     x.db.exec("UPDATE auth_users SET credential_version=2 WHERE user_id='ALT'");
-    // An idle bearer must fail while its absolute expiry is still in the future.
+    // Expiry is independently tested while this bearer is still recently active.
+    const beforeExpiry=x.state();
+    await assert.rejects(()=>x.creator.createCategory_(
+      req(T.ADMIN,'OP-EXPIRE','Tape',NOW+1_000_001)),/Denied|authorization/i);
+    assert.deepEqual(x.state(),beforeExpiry);
+    // Idle expiry is independently tested before the absolute expiration.
     x.db.prepare('UPDATE auth_sessions SET last_activity_at_ms=? WHERE token_hash=?')
       .run(NOW-1_800_001,hash(T.ADMIN));
     const before=x.state();
     for(const [token,now,op] of [
-      [T.STAFF,NOW,'OP-REVOKE'],[T.ADMIN,NOW+1_000_001,'OP-EXPIRE'],
-      [T.ADMIN,NOW,'OP-IDLE'],[T.DENY,NOW,'OP-ROLE'],
-      [T.ALT,NOW,'OP-CREDENTIAL']
+      [T.STAFF,NOW,'OP-REVOKE'],[T.ADMIN,NOW,'OP-IDLE'],
+      [T.DENY,NOW,'OP-ROLE'],[T.ALT,NOW,'OP-CREDENTIAL']
     ]){
       await assert.rejects(()=>x.creator.createCategory_(req(token,op,'Tape',now)),
         /Denied|authorization/i);
