@@ -34,7 +34,11 @@ before(async()=>{
   const source=readFileSync(
     new URL('../../migrations/0001_core_catalog.sql',import.meta.url),'utf8'
   );
-  await DB.exec(source);
+  const start=source.indexOf('CREATE TABLE settings (');
+  const end=source.indexOf('CREATE TABLE product_categories (');
+  assert.ok(start>=0 && end>start,'the reviewed M02 Settings DDL must exist');
+  const ddl=source.slice(start,end).trim().replace(/;\s*$/,'');
+  await DB.prepare(ddl).run();
   for(const [key,value,index] of [
     ['Shop Name','Original Shop',2],
     ['Currency Symbol','৳',3],
