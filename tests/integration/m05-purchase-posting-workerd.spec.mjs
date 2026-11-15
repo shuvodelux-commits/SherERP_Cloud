@@ -100,10 +100,10 @@ test('stale product version, inactive supplier, unreviewed Party link, closed se
     const beforeState=await snapshot();
     assert.equal((await poster().post(input(id,override))).status,'DECLINED',id);
     assert.deepEqual(await snapshot(),beforeState,id);
-    if(sql.includes('suppliers'))await DB.prepare('UPDATE m05_suppliers SET active=1').run();
-    if(sql.includes('party_links'))await DB.prepare('UPDATE m05_party_links SET reviewed=1').run();
-    if(sql.includes('sessions'))await DB.prepare("UPDATE m05_sessions SET state='Open'").run();
-    if(sql.includes('banks'))await DB.prepare('UPDATE m05_banks SET active=1').run();
+    if(sql?.includes('suppliers'))await DB.prepare('UPDATE m05_suppliers SET active=1').run();
+    if(sql?.includes('party_links'))await DB.prepare('UPDATE m05_party_links SET reviewed=1').run();
+    if(sql?.includes('sessions'))await DB.prepare("UPDATE m05_sessions SET state='Open'").run();
+    if(sql?.includes('banks'))await DB.prepare('UPDATE m05_banks SET active=1').run();
   }
 });
 
@@ -116,8 +116,8 @@ test('after preflight the SQL claim rejects stale supplier Party mapping and cha
     assert.equal(result.status,'DECLINED');
     assert.equal((await one('SELECT COUNT(*) AS n FROM m05_purchases')).n,0);
     assert.equal((await one('SELECT COUNT(*) AS n FROM m05_lots')).n,0);
-    if(sql.includes('party_links'))await DB.prepare("UPDATE m05_party_links SET party_id='PARTY-1'").run();
-    if(sql.includes('products'))await DB.prepare("UPDATE m05_products SET version=1").run();
+    if(sql?.includes('party_links'))await DB.prepare("UPDATE m05_party_links SET party_id='PARTY-1'").run();
+    if(sql?.includes('products'))await DB.prepare("UPDATE m05_products SET version=1").run();
   }
 });
 
