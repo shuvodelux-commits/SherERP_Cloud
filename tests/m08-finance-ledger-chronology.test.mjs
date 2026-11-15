@@ -58,8 +58,6 @@ test('all nine original source finance types shape exact account labels and cash
   assert.equal(result.rows.length,9);
   assert.deepEqual(result.rows.filter(row=>row.transactionType.startsWith('Opening '))
     .map(row=>[row.debit,row.credit]),[[0,0],[0,0],[0,0]]);
-  assert.deepEqual(result.rows.find(row=>row.transactionType==='Borrower Loan') &&
-    ['Borrower Balance',100,0],['Borrower Balance',100,0]);
   const borrower=result.rows.find(row=>row.transactionType==='Borrower Loan');
   assert.equal(borrower.account,'borrowerReceivable');
   assert.equal(borrower.accountLabel,'Borrower Balance');
