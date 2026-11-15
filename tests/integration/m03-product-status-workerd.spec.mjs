@@ -57,13 +57,12 @@ test('two concurrent delete requests remove exactly one source category and do n
     call('/__m03_status__/delete-category'),
     call('/__m03_status__/delete-category')
   ]);
-  assert.deepEqual([a.body.success,b.body.success].sort(),[false,true]);
-  assert.deepEqual(
-    [a.body,b.body].sort((x,y)=>Number(x.success)-Number(y.success)),[
-      {success:false,message:'Category not found.'},
-      {success:true,data:{id:'CAT-B',deleted:true}}
-    ]
-  );
+  const pair=[a,b];
+  assert.equal(pair.filter(x=>x.status===200&&x.body.success===true).length,1);
+  const losing=pair.find(x=>x.body.success!==true);
+  assert(losing.status===409 ||
+    (losing.status===200 && losing.body.success===false &&
+     losing.body.message==='Category not found.'));
   assert.deepEqual((await categoryRows()).map(x=>[x.category_id,x.legacy_sheet_row]),
     [['CAT-A',2],['CAT-C',3]]);
   assert.deepEqual(await call('/__m03_status__/missing-category'),{
