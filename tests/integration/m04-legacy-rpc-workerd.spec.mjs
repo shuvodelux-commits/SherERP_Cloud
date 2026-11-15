@@ -648,21 +648,20 @@ test('users.edit preflight requires live D1 action rights for update, reset pass
     ['resetPassword','token, userId, newPassword'],
     ['setUserStatus','token, userId, status'],
   ]){
-    const escaped=signature.replace(/[.*+?^$()|[\]{}]/g,'\\$&');
-    assert.match(source,new RegExp('function '+method+'\\('+escaped+'\\)[\\s\\S]*?requirePermission_\\(token, \'users\', \'edit\'\\)'));
+    // Frozen signatures contain no regexp special characters.
+    assert.match(source,new RegExp('function '+method+'\\('+signature+'\\)[\\s\\S]*?requirePermission_\\(token, \'users\', \'edit\'\\)'));
   }
   const countBefore=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
   const accountBefore=await db.prepare(`SELECT user_id,status,role_name,
       password_hash,password_salt,credential_version,auth_version
     FROM auth_users WHERE user_id='USR-RPC-USER-EDIT'`).first();
 
-  const signins=await Promise.all([
-    rpc('login',['01710000101',SECRET],NOW+210_000),
-    rpc('login',['01710000113',SECRET],NOW+210_000),
-    rpc('login',['01710000111',SECRET],NOW+210_000),
-    rpc('login',['01710000105',SECRET],NOW+210_000),
-    rpc('login',['01710000110',SECRET],NOW+210_000),
-  ]);
+  // Keep fixture setup serialized; the actual assertions target current D1
+  // authority, not parallel login throttling or Workerd scheduler behavior.
+  const signins=[];
+  for(const phone of [
+    '01710000101','01710000113','01710000111','01710000105','01710000110'
+  ])signins.push(await rpc('login',[phone,SECRET],NOW+210_000));
   for(const r of signins)assert.equal(r.body.success,true);
   const [admin,editor,adder,viewer,deleter]=signins.map(r=>r.body.data.token);
   const deny={status:200,body:{eligible:false}};
