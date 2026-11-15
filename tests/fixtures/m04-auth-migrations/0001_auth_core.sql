@@ -128,6 +128,23 @@ BEGIN
   UPDATE auth_roles SET auth_version=OLD.auth_version+1 WHERE role_name=NEW.role_name;
 END;
 
+-- A role REPLACE can delete the existing row without normal DELETE
+-- triggers, then reset auth_version to 1 and revive old staff sessions.
+-- Allow genuinely new roles, never replace a role's authority identity.
+CREATE TRIGGER trg_auth_role_no_replace BEFORE INSERT ON auth_roles
+WHEN EXISTS (SELECT 1 FROM auth_roles r WHERE r.role_name=NEW.role_name)
+BEGIN
+  SELECT RAISE(ABORT,'role replacement forbidden');
+END;
+
+-- Frozen RoleManagement.gs refuses deleting roles assigned to ANY user.
+-- Do not let role deletion/recreation reset an active session's role epoch.
+CREATE TRIGGER trg_auth_role_assigned_no_delete BEFORE DELETE ON auth_roles
+WHEN EXISTS (SELECT 1 FROM auth_users u WHERE u.role_name=OLD.role_name)
+BEGIN
+  SELECT RAISE(ABORT,'assigned role cannot be deleted');
+END;
+
 CREATE TABLE auth_sessions (
   token_hash TEXT PRIMARY KEY
     CHECK (length(token_hash)=64 AND token_hash NOT GLOB '*[^0-9a-f]*'),
