@@ -516,3 +516,22 @@ test('real local D1 readback rejects forged INACTIVE Customer role backed by ACT
     /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
   assert.deepEqual(await counts(),before,'read-only D1 reconciliation must not write');
 });
+
+
+test('real local Workerd D1 readback rejects fractional in-memory physical source coordinate',async()=>{
+  const before=await counts();
+  const plan=structuredClone(compile().plan);
+  const customer=plan.links.find(x=>x.sourceGroup==='CUSTOMERS');
+  assert.equal(customer.legacySheetRow,2);
+  customer.legacySheetRow=2.5;
+  const report=await reconcilePartyIdentityD1({DB,plan});
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.ok(report.issues.some(x=>x.code==='PLAN_LINKAGE_INVALID'&&x.table==='plan'),
+    'a tampered original physical source row cannot certify identity parity');
+  assert.ok(report.issues.some(x=>x.code==='APPROVAL_REF_NOT_PERSISTED'),
+    'unchanged 0002 Party schema cannot persist reviewer approval_ref');
+  assert.doesNotMatch(JSON.stringify(report),
+    /CUS-001|SUP-001|REVIEW-001|admin-01|01700000000/);
+  assert.deepEqual(await counts(),before,'D1 readback must not write or mutate tables');
+});
