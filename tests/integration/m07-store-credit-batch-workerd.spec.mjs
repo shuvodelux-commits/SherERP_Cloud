@@ -257,16 +257,34 @@ test('concurrent batches for remaining same original units credit only once',asy
   assert.equal((await one("SELECT signed_due_paisa FROM m07_customer_signed_accounts WHERE customer_id='CUS-1'")).signed_due_paisa,5000);
 });
 
-test('Cash batch method cannot reuse Store Credit parent receipt and vice versa',async()=>{
+test('Cash batch refuses reused Store Credit parent IDs even for unrelated original invoices',async()=>{
   const {children}=await sources();
   const input=batch(children);
   assert.equal((await post().post(input)).status,'COMMITTED');
+  const a=await sale('C',{sku:'PIPE'}),b=await sale('D',{sku:'OTHER'});
+  const cashChildren=[
+    {...child(a,'C-00001'),refundPaisa:4000},
+    {...child(b,'D-00001'),refundPaisa:5000}
+  ].map(({creditPaisa,...c})=>c);
   const before=await snapshot();
+  const cash={...input,children:cashChildren};
+  // Existing Cash parent API reports DECLINED for a foreign-method receipt;
+  // in-DB ID guard prevents a second economic write without revealing it.
+  assert.equal((await createSyntheticD1CashBatchReturnContract(DB).post(cash)).status,'DECLINED');
+  assert.deepEqual(await snapshot(),before);
+});
+
+test('Store Credit parent reports CONFLICT on an already committed Cash batch ID',async()=>{
+  const {children}=await sources();
+  const input=batch(children);
   const cashChildren=children.map(({creditPaisa,...c})=>({...c,refundPaisa:creditPaisa}));
-  const cash={
+  assert.equal((await createSyntheticD1CashBatchReturnContract(DB).post({
     ...input,children:cashChildren
-  };
-  assert.equal((await createSyntheticD1CashBatchReturnContract(DB).post(cash)).status,'CONFLICT');
+  })).status,'COMMITTED');
+  const a=await sale('C',{sku:'PIPE'}),b=await sale('D',{sku:'OTHER'});
+  const before=await snapshot();
+  const creditChild=[child(a,'C-00001'),child(b,'D-00001')];
+  assert.equal((await post().post(batch(creditChild))).status,'CONFLICT');
   assert.deepEqual(await snapshot(),before);
 });
 
