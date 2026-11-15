@@ -24,7 +24,7 @@ export function originalDraftPayload(payload,{settings,bankAccounts}={}) {
   vm.runInContext(paymentSource,context,{filename:'SalePayments.gs',timeout:2000});
   vm.runInContext(draftSource,context,{filename:'DraftSales.gs',timeout:2000});
   try {
-    return {success:true,data:jsonClone(context.validateSalesDraftPayload_(jsonClone(payload)))};
+    return {success:true,data:jsonClone(context.validateSalesDraftPayload_(structuredClone(payload)))};
   } catch(error) {
     return {success:false,message:error.message};
   }
