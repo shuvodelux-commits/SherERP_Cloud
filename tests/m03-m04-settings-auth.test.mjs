@@ -29,7 +29,7 @@ function fixture(){
           ('Delete Confirmation Key','TOP_SECRET',4),
           ('Phone 1','01712345678',5)`);
   sqlite.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
-    VALUES('Cashier','Active','{"settings":{"edit":true}}','settings')`).run();
+    VALUES('Cashier','Active','{"settings":{"edit":true}}','')`).run();
   for(const [id,phone,role] of [
     ['ADMIN-A','01710000001','Administrator'],
     ['ADMIN-B','01710000002','Administrator'],
@@ -89,8 +89,7 @@ test('M04 Administrator session authorizes one CAS UPDATE, no separate JS permis
 test('active custom role with literal settings.edit true can CAS an existing row inside the same SQL guard',async()=>{
   const x=fixture();try{
     const before=records(x);
-    // The frozen GAS uses Permissions for authority; Allowed Modules is UI metadata.
-    x.sqlite.exec("UPDATE auth_roles SET allowed_modules='' WHERE role_name='Cashier'");
+    // Role metadata is empty from seed: changing it after login would invalidate the M04 session epoch.
     assert.deepEqual(await x.adapter.updateExisting_(call({
       token:C,newValue:'  Role-authorized shop  '
     })),{updated:true});
