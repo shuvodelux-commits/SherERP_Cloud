@@ -214,3 +214,117 @@ test('unavailable or malformed D1 results never disclose sensitive Settings',asy
   await assert.rejects(()=>createM04AuthorizedShellSettingsReadAdapter({DB})
     .getAppShellSettings_(req()),/NEEDS_REVIEW/i);
 });
+
+test('current M04 settings.view returns original raw Settings map without applying fallbacks or exposing it in shell',async()=>{
+  const x=fixture();try{
+    const expected=Object.assign(Object.create(null),{
+      'Shop Name':'নবাবী হার্ডওয়্যার','Currency Symbol':'৳',
+      'Phone 1':'01712345678','Delete Confirmation Key':'PRIVATE',
+      'Invoice Logo':'data:image/png;base64,SECRET'
+    });
+    assert.deepEqual(await x.read.getSettingsMap_(req()),expected);
+    assert.deepEqual(await x.read.getSettingsMap_(req({token:B})),expected);
+    assert.equal(Object.getPrototypeOf(await x.read.getSettingsMap_(req())),null);
+    assert.deepEqual(await x.read.getAppShellSettings_(req({token:B})),{
+      shopName:'নবাবী হার্ডওয়্যার',currencySymbol:'৳'
+    });
+    assert.equal(x.sql.length,4,'one D1 SELECT per requested projection; never a separate auth preflight');
+    assert.match(x.sql[0],/FROM auth_sessions/);
+    assert.match(x.sql[0],/auth_roles/);
+    assert.match(x.sql[0],/settings\.view/);
+    assert.match(x.sql[0],/LEFT JOIN settings/);
+    assert.match(x.sql[0],/LIMIT 257/);
+    assert.doesNotMatch(x.sql[0],/INSERT |UPDATE |DELETE /);
+  }finally{x.close();}
+});
+
+test('edit-only staff and invalidated role, bearer and clock cannot read complete private map',async()=>{
+  const x=fixture();try{
+    const refused=[
+      req({token:C}),req({token:D}),req({token:'f'.repeat(64)}),
+      req({token:B,nowMs:NOW+AUTH_POLICY.sessionIdleMs-60_000}),
+      req({token:B,nowMs:NOW+1_200_000}),
+      req({token:B,nowMs:NOW-300_001})
+    ];
+    for(const value of refused){
+      await assert.rejects(()=>x.read.getSettingsMap_(value),/Denied/i);
+    }
+    x.sqlite.exec(`UPDATE auth_roles SET permissions_json='{"settings":{"view":false}}'
+      WHERE role_name='Viewer'`);
+    x.sqlite.exec(`UPDATE auth_roles SET permissions_json='{"settings":{"view":true}}'
+      WHERE role_name='Viewer'`);
+    await assert.rejects(()=>x.read.getSettingsMap_(req({token:B})),/Denied/i);
+    assert.equal(x.sqlite.prepare("SELECT value FROM settings WHERE key='Delete Confirmation Key'").get().value,'PRIVATE');
+  }finally{x.close();}
+});
+
+test('authorized empty full Settings map is not confused with denied session or synthetic defaults',async()=>{
+  const x=fixture();try{
+    x.sqlite.exec('DELETE FROM settings');
+    const result=await x.read.getSettingsMap_(req({token:A}));
+    assert.deepEqual({...result},{});
+    assert.equal(Object.getPrototypeOf(result),null);
+    await assert.rejects(()=>x.read.getSettingsMap_(req({token:C})),/Denied/i);
+    x.sqlite.exec("INSERT INTO settings(key,value) VALUES('Shop Name','')");
+    assert.deepEqual({...await x.read.getSettingsMap_(req())},{'Shop Name':''});
+  }finally{x.close();}
+});
+
+test('complete Settings map enforces the same source-audited 256-row cap without silent truncation',async()=>{
+  const x=fixture();try{
+    x.sqlite.exec('DELETE FROM settings');
+    const insert=x.sqlite.prepare('INSERT INTO settings(key,value) VALUES(?,?)');
+    for(let i=0;i<256;i++)insert.run('Settings test '+i,String(i));
+    const map=await x.read.getSettingsMap_(req());
+    assert.equal(Object.keys(map).length,256);
+    assert.equal(map['Settings test 255'],'255');
+    insert.run('Settings test overflow','257');
+    await assert.rejects(()=>x.read.getSettingsMap_(req()),/NEEDS_REVIEW|limit|exceed/i);
+    assert.equal(x.sqlite.prepare('SELECT COUNT(*) AS n FROM settings').get().n,257);
+  }finally{x.close();}
+});
+
+test('Settings map rejects prototype keys, blank keys, invalid data and duplicates without returning partial results',async()=>{
+  for(const key of ['__proto__','constructor','prototype','']){
+    const x=fixture();try{
+      x.sqlite.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run(key,'FORGED');
+      await assert.rejects(()=>x.read.getSettingsMap_(req()),/NEEDS_REVIEW/i);
+      assert.equal(Object.prototype.FORGED,undefined);
+    }finally{x.close();}
+  }
+  for(const rows of [
+    [{key:'Shop Name',value:'A'},{key:'Shop Name',value:'B'}],
+    [{key:'Shop Name',value:23}],
+    [{key:null,value:null},{key:'Shop Name',value:'A'}],
+    [{key:'__proto__',value:'FORGED'}],
+    [{key:'',value:'x'}],
+    [{key:'Shop Name',value:'A'},null],
+    new Array(258).fill({key:'x',value:'y'})
+  ]){
+    const DB={prepare(){return {bind(){return {all:async()=>({success:true,results:rows})}}}}};
+    await assert.rejects(()=>createM04AuthorizedShellSettingsReadAdapter({DB})
+      .getSettingsMap_(req()),/NEEDS_REVIEW/i);
+  }
+});
+
+test('malformed D1 and illegal request descriptors cannot obtain full Settings map',async()=>{
+  for(const result of [undefined,null,{}, {success:false,results:[]},
+    {success:true,results:null}, {success:true,results:[]} ]){
+    const DB={prepare(){return {bind(){return {all:async()=>result}}}}};
+    const error=result?.success===true?'Denied':'NEEDS_REVIEW';
+    await assert.rejects(()=>createM04AuthorizedShellSettingsReadAdapter({DB})
+      .getSettingsMap_(req()),new RegExp(error));
+  }
+  const x=fixture();try{
+    for(const invalid of [
+      {},null,[],req({role:'Administrator'}),req({key:'Delete Confirmation Key'}),
+      req({token:'not-a-token'}),req({nowMs:'1800000000000'})
+    ]){
+      await assert.rejects(()=>x.read.getSettingsMap_(invalid),/Invalid/i);
+    }
+    const accessor=req();
+    Object.defineProperty(accessor,'token',{enumerable:true,get(){throw Error('getter')}});
+    await assert.rejects(()=>x.read.getSettingsMap_(accessor),/Invalid/i);
+    assert.equal(x.sql.length,0);
+  }finally{x.close();}
+});
