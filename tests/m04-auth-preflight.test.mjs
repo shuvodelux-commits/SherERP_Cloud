@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 
 const ORIGIN='https://shererp-preview.invalid';
+const LOGIN_UNAVAILABLE='Sign-in is unavailable because server authentication is not configured yet.';
 const AUTH_RPC_NAMES=[
   'login','logout','validateSession',
   'getUsersBootstrap','createUser','updateUser','resetPassword','setUserStatus','deleteUser',
@@ -21,8 +22,8 @@ test('every legacy M04 auth/user/role RPC remains disabled before D1-backed auth
   for(const name of AUTH_RPC_NAMES) {
     const values=name==='login'?['01700000000','example-secret']:['unauthorized-token'];
     const response=await call(name,values);
-    assert.equal(response.status,501,name);
-    assert.deepEqual(await response.json(),{success:false,message:'RPC method not migrated'},name);
+    assert.equal(response.status,name==='login'?503:501,name);
+    assert.deepEqual(await response.json(),{success:false,message:name==='login'?LOGIN_UNAVAILABLE:'RPC method not migrated'},name);
     assert.equal(response.headers.get('Cache-Control'),'no-store',name);
     assert.equal(response.headers.get('set-cookie'),null,name);
   }
@@ -32,7 +33,7 @@ test('authentication error never reflects passwords or tokens and does not acces
   const secret='never-echo-this-secret-password';
   const result=await call('login',['01700000000',secret]);
   const body=await result.text();
-  assert.equal(result.status,501);
+  assert.equal(result.status,503);
   assert.equal(body.includes(secret),false);
   assert.equal(body.includes('01700000000'),false);
 });

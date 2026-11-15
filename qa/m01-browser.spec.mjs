@@ -63,8 +63,8 @@ test('an unsuccessful login stays unauthenticated and shows a controlled failure
       r.request().postDataJSON()?.fnName==='login');
     await page.locator('#loginSubmitBtn').click();
     const rpc=await response;
-    assert.equal(rpc.status(),501);
-    await page.locator('#loginError').getByText('RPC method not migrated').waitFor();
+    assert.equal(rpc.status(),503);
+    await page.locator('#loginError').getByText('Sign-in is unavailable because server authentication is not configured yet.').waitFor();
     assert.equal(await page.locator('#loginOverlay').isVisible(),true);
     assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
     assert.equal(await page.locator('#loginSubmitBtn').isEnabled(),true);
