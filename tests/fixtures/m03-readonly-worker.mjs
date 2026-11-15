@@ -3,6 +3,7 @@ import {createCatalogReader} from '../../src/db/read-only-catalog.js';
 import {resolveLegacyPartyId} from '../../src/db/party-identity-read.js';
 import {createLegacyCatalogReadAdapter} from '../../src/db/legacy-catalog-read.js';
 import {createProductMasterOptionsReader} from '../../src/modules/product-master-options.js';
+import {createProductMasterCreatePreflight} from '../../src/modules/product-master-create-preflight.js';
 import {createReportsBootstrapD1Reader} from '../../src/modules/reports-bootstrap-d1-read.js';
 
 const json=(status, value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
@@ -23,6 +24,16 @@ export default {
       if(url.pathname==='/__m03_test__/reports-bootstrap') {
         // Trusted shop time is supplied by the test server, not request query params.
         return json(200,await createReportsBootstrapD1Reader(env).getBootstrap('2026-11-15'));
+      }
+      if(url.pathname==='/__m03_test__/category-create-preflight') {
+        // Fixed original name; reject external query/body input by ignoring it.
+        return json(200,await createProductMasterCreatePreflight(env).checkCategoryName_(' দড়ি '));
+      }
+      if(url.pathname==='/__m03_test__/unit-create-preflight') {
+        return json(200,await createProductMasterCreatePreflight(env).checkUnitName_('pCs'));
+      }
+      if(url.pathname==='/__m03_test__/new-category-create-preflight') {
+        return json(200,await createProductMasterCreatePreflight(env).checkCategoryName_('New Electric'));
       }
       if(url.pathname==='/__m03_test__/product-bootstrap-references') {
         return json(200,await createProductMasterOptionsReader(env).getBootstrapReferences());

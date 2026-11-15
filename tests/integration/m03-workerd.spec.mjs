@@ -142,6 +142,53 @@ test('Products bootstrap reference slice awaits actual D1 catalogs and Settings 
   assert.equal(live.includes('product-bootstrap-references'),false);
 });
 
+test('original ProductSettings creation preflight runs against real local D1 without mutating master rows',async()=>{
+  const before=await db.prepare(
+    'SELECT (SELECT COUNT(*) FROM product_categories) AS categories, '+
+    '(SELECT COUNT(*) FROM product_units) AS units, '+
+    '(SELECT COUNT(*) FROM settings) AS settings'
+  ).first();
+  assert.deepEqual(await query('/__m03_test__/category-create-preflight'),{
+    status:200,
+    body:{
+      canCreate:true,name:'দড়ি',cleanup:[
+        {sourceId:'CAT-2',rowIndex:3,name:'দড়ি',status:'Inactive'}
+      ]
+    }
+  });
+  assert.deepEqual(await query('/__m03_test__/unit-create-preflight'),{
+    status:200,
+    body:{
+      canCreate:false,message:'A unit with this name already exists.',
+      name:'pCs',cleanup:[]
+    }
+  });
+  assert.deepEqual(await query('/__m03_test__/new-category-create-preflight'),{
+    status:200,body:{canCreate:true,name:'New Electric',cleanup:[]}
+  });
+  assert.deepEqual(await query(
+    '/__m03_test__/category-create-preflight?name=SHOULD-BE-IGNORED&sheet=SETTINGS'
+  ),{
+    status:200,body:{
+      canCreate:true,name:'দড়ি',cleanup:[
+        {sourceId:'CAT-2',rowIndex:3,name:'দড়ি',status:'Inactive'}
+      ]
+    }
+  });
+  assert.deepEqual(await db.prepare(
+    'SELECT (SELECT COUNT(*) FROM product_categories) AS categories, '+
+    '(SELECT COUNT(*) FROM product_units) AS units, '+
+    '(SELECT COUNT(*) FROM settings) AS settings'
+  ).first(),before);
+  const stillThere=await db.prepare(
+    "SELECT category_name,status,legacy_sheet_row FROM product_categories WHERE category_id='CAT-2'"
+  ).first();
+  assert.deepEqual({...stillThere},{category_name:'দড়ি',status:'Inactive',legacy_sheet_row:3});
+  const live=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8')+
+    readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
+  assert.equal(live.includes('category-create-preflight'),false);
+});
+
 test('source-shaped test routes refuse Settings, other sheets and arbitrary columns without writes',async()=>{
   for(const key of ['SETTINGS','SALES','CUSTOMERS',"PRODUCT_CATEGORIES;DROP TABLE parties"]){
     assert.equal((await query('/__m03_test__/legacy-rows?sheet='+encodeURIComponent(key))).status,400);
