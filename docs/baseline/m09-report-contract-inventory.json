@@ -1,0 +1,223 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "methodology": "Direct lexical getAllRows_/activeRows_ reads and helper invocations; not transitive; not business/SQL parity proof",
+  "surfaces": [
+    {
+      "sourceFile": "Reports.gs",
+      "endpoints": [
+        {
+          "name": "getReportsBootstrap",
+          "permission": "reports:view",
+          "directReads": [],
+          "helpers": [
+            "fail_",
+            "formatDate_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_"
+          ]
+        },
+        {
+          "name": "getSalesReport",
+          "permission": "reports:view",
+          "directReads": [
+            "activeRows_:SALES_RETURN",
+            "getAllRows_:CUSTOMER_LEDGER",
+            "getAllRows_:SALES"
+          ],
+          "helpers": [
+            "activeSalesReturnItems_",
+            "assertUniqueSalesInvoiceIds_",
+            "customerInvoiceSettlementSnapshotFromState_",
+            "customerSettlementState_",
+            "economicReturnLineAmount_",
+            "fail_",
+            "inRange_",
+            "isDeleted_",
+            "logError_",
+            "ok_",
+            "reportRange_",
+            "roundMoney_",
+            "safeDateOnly_",
+            "sortedByDesc_"
+          ]
+        },
+        {
+          "name": "getPurchaseReport",
+          "permission": "reports:view",
+          "directReads": [
+            "activeRows_:PURCHASES",
+            "activeRows_:PURCHASE_RETURN",
+            "getAllRows_:SUPPLIER_LEDGER"
+          ],
+          "helpers": [
+            "activePurchaseReturnItems_",
+            "economicReturnLineAmount_",
+            "fail_",
+            "inRange_",
+            "logError_",
+            "ok_",
+            "reportRange_",
+            "roundMoney_",
+            "safeDateOnly_",
+            "sortedByDesc_",
+            "supplierPurchaseSettlementSnapshotFromState_",
+            "supplierSettlementState_"
+          ]
+        },
+        {
+          "name": "getStockReport",
+          "permission": "reports:view",
+          "directReads": [
+            "activeRows_:PRODUCTS",
+            "getAllRows_:STOCK_LOTS"
+          ],
+          "helpers": [
+            "fail_",
+            "logError_",
+            "ok_",
+            "sortedByDesc_"
+          ]
+        },
+        {
+          "name": "getCashBankReport",
+          "permission": "reports:view",
+          "directReads": [
+            "activeRows_:CASH_BOOK",
+            "getAllRows_:BANK_ACCOUNTS",
+            "getAllRows_:BANK_BOOK"
+          ],
+          "helpers": [
+            "fail_",
+            "logError_",
+            "ok_",
+            "reportRange_",
+            "roundMoney_",
+            "sortedByDesc_",
+            "tsDateOnly_"
+          ]
+        },
+        {
+          "name": "getProfitReport",
+          "permission": "reports:view",
+          "directReads": [],
+          "helpers": [
+            "computeProfit_",
+            "fail_",
+            "logError_",
+            "ok_",
+            "reportRange_"
+          ]
+        },
+        {
+          "name": "getBalanceSheetReport",
+          "permission": "reports:view",
+          "directReads": [
+            "getAllRows_:BANK_ACCOUNTS"
+          ],
+          "helpers": [
+            "fail_",
+            "formatDate_",
+            "getCashBalance_",
+            "getInventoryValueAtCost_",
+            "getOutstandingLoan_",
+            "getOwnerCapital_",
+            "logError_",
+            "ok_",
+            "sanitizeAccountType_"
+          ]
+        }
+      ]
+    },
+    {
+      "sourceFile": "Dashboard.gs",
+      "endpoints": [
+        {
+          "name": "getDashboardStats",
+          "permission": "dashboard:view",
+          "directReads": [
+            "activeRows_:CUSTOMERS",
+            "activeRows_:CUSTOMER_LEDGER",
+            "activeRows_:EXPENSES",
+            "activeRows_:FINANCE_TRANSACTIONS",
+            "activeRows_:PRODUCTS",
+            "activeRows_:PURCHASES",
+            "activeRows_:SALES",
+            "activeRows_:SUPPLIERS"
+          ],
+          "helpers": [
+            "assertUniqueSalesInvoiceIds_",
+            "dashboardTodayCollection_",
+            "dashboardTodayExpense_",
+            "dashboardTodayNetSales_",
+            "dashboardTodayPurchase_",
+            "fail_",
+            "financeBalanceSummary_",
+            "formatDate_",
+            "getCashBalance_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "roundMoney_",
+            "safeDateOnly_"
+          ]
+        }
+      ]
+    },
+    {
+      "sourceFile": "DayBook.gs",
+      "endpoints": [
+        {
+          "name": "getDayBookBootstrap",
+          "permission": "daybook:view",
+          "directReads": [],
+          "helpers": [
+            "fail_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_"
+          ]
+        },
+        {
+          "name": "getDayBookTransactions",
+          "permission": "daybook:view",
+          "directReads": [
+            "activeRows_:CASH_BOOK",
+            "getAllRows_:BANK_BOOK",
+            "getAllRows_:BANK_TRANSFERS",
+            "getAllRows_:CUSTOMER_LEDGER",
+            "getAllRows_:EXPENSES",
+            "getAllRows_:FINANCE_TRANSACTIONS",
+            "getAllRows_:PURCHASES",
+            "getAllRows_:PURCHASE_RETURN",
+            "getAllRows_:SALES",
+            "getAllRows_:SALES_RETURN",
+            "getAllRows_:STOCK_MOVEMENT",
+            "getAllRows_:SUPPLIER_LEDGER"
+          ],
+          "helpers": [
+            "assertUniqueSalesInvoiceIds_",
+            "dayBookPurchasePaymentMethod_",
+            "dayBookRow_",
+            "dayBookSalePaymentMethod_",
+            "dayBookTimeFromTs_",
+            "fail_",
+            "financeTransactionType_",
+            "isBankLikePaymentMethod_",
+            "isDeleted_",
+            "logError_",
+            "ok_",
+            "ownedReferences_",
+            "roundMoney_",
+            "safeDateOnly_",
+            "safeTimeOnly_",
+            "sanitizeInput_",
+            "settlementDiscountAmount_",
+            "settlementPaymentAmount_"
+          ]
+        }
+      ]
+    }
+  ]
+}
