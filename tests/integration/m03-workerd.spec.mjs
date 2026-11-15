@@ -101,3 +101,16 @@ test('source-shaped test routes refuse Settings, other sheets and arbitrary colu
   const count=await db.prepare('SELECT COUNT(*) AS n FROM product_categories').first();
   assert.equal(count.n,2);
 });
+
+test('product dropdown projection awaits actual Worker D1 and leaves catalog records untouched',async()=>{
+  const before=await db.prepare('SELECT (SELECT COUNT(*) FROM product_categories) AS categories, (SELECT COUNT(*) FROM product_units) AS units').first();
+  assert.deepEqual(await query('/__m03_test__/product-master-options'),{
+    status:200,
+    body:{
+      categories:[{id:'CAT-1',name:'Electrical'}],
+      units:[{id:'UNIT-1',name:'Pcs'},{id:'UNIT-2',name:'Feet'}]
+    }
+  });
+  const after=await db.prepare('SELECT (SELECT COUNT(*) FROM product_categories) AS categories, (SELECT COUNT(*) FROM product_units) AS units').first();
+  assert.deepEqual(after,before);
+});
