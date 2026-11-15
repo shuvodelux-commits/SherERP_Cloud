@@ -34,9 +34,13 @@ const SQL_CLAIM=`INSERT INTO m07_cash_returns(
    WHERE tenant_id=? AND lot_id=? AND sku=?)
  AND EXISTS(SELECT 1 FROM m06_owned_stock
    WHERE tenant_id=? AND sku=?)
+ AND NOT EXISTS(SELECT 1 FROM m07_credit_returns
+   WHERE tenant_id=? AND (operation_id=? OR return_id=?))
  ON CONFLICT DO NOTHING RETURNING return_id,operation_id,actor_id,intent_hash`;
 const SQL_RECEIPT=`SELECT return_id,operation_id,actor_id,intent_hash
- FROM m07_cash_returns WHERE tenant_id=? AND (return_id=? OR operation_id=?)`;
+ FROM m07_cash_returns WHERE tenant_id=? AND (return_id=? OR operation_id=?)
+ UNION ALL SELECT return_id,operation_id,actor_id,intent_hash
+ FROM m07_credit_returns WHERE tenant_id=? AND (return_id=? OR operation_id=?)`;
 const isPlain=value=>value!==null && typeof value==='object'&&!Array.isArray(value)&&
   (Object.getPrototypeOf(value)===Object.prototype||Object.getPrototypeOf(value)===null);
 function validate(input){
@@ -85,9 +89,10 @@ export function createSyntheticD1CashReturnContract(DB,{beforeBatch}={}){
             tenantId,invoiceId,originalHash,sku,units,refundPaisa,
             tenantId,invoiceId,sku,lotId,units,
             tenantId,lotId,sku,
-            tenantId,sku
+            tenantId,sku,
+            tenantId,operationId,returnId
           ),
-          DB.prepare(SQL_RECEIPT).bind(tenantId,returnId,operationId)
+          DB.prepare(SQL_RECEIPT).bind(tenantId,returnId,operationId,tenantId,returnId,operationId)
         ]);
       }catch{
         throw new Error('NEEDS_REVIEW: cash return outcome uncertain; reconcile original operation');
