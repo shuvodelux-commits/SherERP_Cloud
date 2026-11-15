@@ -386,7 +386,28 @@ test('partial roles directory honors stored D1 roles.view, revocation and exact 
   await db.prepare("INSERT INTO auth_roles (role_name,status) VALUES ('InactiveListingTest','Inactive')").run();
   const authorized=await roleDirectory(viewer.body.data.token);
   assert.equal(authorized.status,200);
-  assert.deepEqual(Object.keys(authorized.body),['authorized','partial','roles']);
+
+  // Full source role IDs/creation dates are still unavailable, but both
+  // static Roles bootstrap option arrays must now match frozen GAS exactly.
+  assert.deepEqual(Object.keys(authorized.body),
+    ['authorized','partial','roles','moduleOptions','deleteWindowOptions']);
+  assert.equal(authorized.body.moduleOptions.length,21);
+  assert.equal(authorized.body.deleteWindowOptions.length,8);
+  assert.deepEqual(authorized.body.moduleOptions.find(m=>m.key==='returns'),
+    {key:'returns',label:'Sales Return',permissionMode:''});
+  assert.deepEqual(authorized.body.moduleOptions.find(m=>m.key==='posCost'),
+    {key:'posCost',label:'POS Purchase Price',permissionMode:''});
+  for(const name of ['openingBalance','settlementDiscount']){
+    const module=authorized.body.moduleOptions.find(m=>m.key===name);
+    assert.equal(module.permissionMode,'editOnly');
+  }
+  assert.deepEqual(authorized.body.deleteWindowOptions,[
+    {key:'disabled',label:'Disabled'}, {key:'same',label:'Same Day'},
+    {key:'1',label:'1 Day'}, {key:'3',label:'3 Days'},
+    {key:'7',label:'7 Days'}, {key:'15',label:'15 Days'},
+    {key:'30',label:'30 Days'}, {key:'unlimited',label:'Unlimited'},
+  ]);
+
   assert.equal(authorized.body.authorized,true);
   assert.equal(authorized.body.partial,true,'missing source Role ID/Created At and UI options');
   assert.deepEqual(authorized.body.roles.map(x=>x.name),
