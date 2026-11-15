@@ -69,6 +69,17 @@ BEGIN
   DELETE FROM auth_legacy_credentials WHERE user_id=NEW.user_id;
 END;
 
+-- REPLACE deletes conflicting staff identities without ordinary DELETE
+-- triggers in some SQLite configurations. Refuse ID/phone-key collisions
+-- *before* any REPLACE delete can bypass last-admin or authority epochs.
+-- Standard INSERT already fails its UNIQUE constraint; new staff are allowed.
+CREATE TRIGGER trg_auth_staff_identity_no_replace BEFORE INSERT ON auth_users
+WHEN EXISTS (SELECT 1 FROM auth_users u
+  WHERE u.user_id=NEW.user_id OR u.phone_key=NEW.phone_key)
+BEGIN
+  SELECT RAISE(ABORT,'staff identity replacement forbidden');
+END;
+
 -- Active Administrator accounts are intrinsic, not managed through auth_roles.
 -- These triggers enforce "the final active Administrator cannot disappear"
 -- under SQLite's serialized writes; a JS preflight count alone never can.
