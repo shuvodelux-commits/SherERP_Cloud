@@ -229,3 +229,48 @@ test('credential version cannot decrease after a credential rotation',async()=>{
     .bind(id).first()).credential_version,latest);
   assert.deepEqual(await validate(issued.body.token,BASE+92_000),deny);
 });
+
+
+test('changing staff login phone invalidates old bearer and accepts only the new phone',async()=>{
+  const userId='USR-STAFF-PHONE-CHANGE',oldPhone='01720000014',newPhone='01720000016';
+  await seed(userId,oldPhone);
+  const issued=await login(oldPhone,BASE+100_000);
+  assert.equal(issued.body.authenticated,true);
+  const before=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  await DB.prepare('UPDATE auth_users SET phone_key=? WHERE user_id=?')
+    .bind(newPhone,userId).run();
+  const after=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  assert.equal(after.auth_version,before.auth_version+1);
+  assert.deepEqual(await validate(issued.body.token,BASE+101_000),deny);
+  assert.equal((await login(oldPhone,BASE+102_000)).body.authenticated,false);
+  const fresh=await login(newPhone,BASE+103_000);
+  assert.equal(fresh.body.authenticated,true);
+  assert.equal(fresh.body.user.id,userId);
+  assert.notEqual(fresh.body.token,issued.body.token);
+});
+
+test('staff full-name edits invalidate prior bearer but no-op profile writes preserve current authority',async()=>{
+  const userId='USR-STAFF-NAME-CHANGE',phone='01720000015',updatedName='Updated Synthetic Staff';
+  await seed(userId,phone);
+  const issued=await login(phone,BASE+110_000);
+  assert.equal(issued.body.authenticated,true);
+  const before=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  await DB.prepare('UPDATE auth_users SET full_name=? WHERE user_id=?')
+    .bind(updatedName,userId).run();
+  const after=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  assert.equal(after.auth_version,before.auth_version+1);
+  assert.deepEqual(await validate(issued.body.token,BASE+111_000),deny);
+  const fresh=await login(phone,BASE+112_000);
+  assert.equal(fresh.body.authenticated,true);
+  assert.equal(fresh.body.user.name,updatedName);
+  await DB.prepare('UPDATE auth_users SET full_name=full_name WHERE user_id=?')
+    .bind(userId).run();
+  const noop=await DB.prepare('SELECT auth_version FROM auth_users WHERE user_id=?')
+    .bind(userId).first();
+  assert.equal(noop.auth_version,after.auth_version);
+  assert.equal((await validate(fresh.body.token,BASE+113_000)).body.authenticated,true);
+});
