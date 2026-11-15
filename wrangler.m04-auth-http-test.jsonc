@@ -1,0 +1,14 @@
+{
+  "name": "shererp-m04-auth-http-local-only",
+  "main": "tests/fixtures/m04-auth-http-worker.mjs",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shererp-m04-auth-http-local-only",
+      "database_id": "00000000-0000-0000-0000-000000000019",
+      "migrations_dir": "tests/fixtures/m04-auth-migrations"
+    }
+  ]
+}
