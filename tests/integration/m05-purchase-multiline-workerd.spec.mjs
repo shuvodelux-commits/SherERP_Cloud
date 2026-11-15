@@ -388,29 +388,26 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     assert.deepEqual(await reversalState(),before);
   });
 
-  test('stale preview is rejected by SQL when lot becomes consumed or stock changes immediately before claim',async()=>{
-    for(const [id,sql] of [
-      ['OP-DEL-RACE-LOT',"UPDATE m05ml_lots SET remaining_qty=0 WHERE sku='SWITCH'"],
-      ['OP-DEL-RACE-STK',"UPDATE m05ml_products SET stock=1,version=version+1 WHERE sku='SWITCH'"]
-    ]){
-      assert.equal((await poster().post(input('OP-DELETE-0001'))).status,'COMMITTED');
-      const result=await deleter({beforeBatch:()=>DB.prepare(sql).run()})
-        .remove(deletionInput(id));
-      assert.equal(result.status,'DECLINED',id);
-      assert.equal(await count('m05ml_delete_receipts'),0);
-      assert.equal(await count('m05ml_delete_audit'),0);
-      assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,7200);
-      // Undo the test's concurrent mutation; no synthetic reversal was posted.
-      if(id.includes('LOT'))await DB.prepare("UPDATE m05ml_lots SET remaining_qty=qty WHERE sku='SWITCH'").run();
-      else await DB.prepare("UPDATE m05ml_products SET stock=5,version=2 WHERE sku='SWITCH'").run();
-      // Remove only fixture purchase state between attempts. Do not emulate real receipt deletion.
-      await DB.prepare('DROP TRIGGER m05ml_purchase_immutable_delete').run();
-      for(const table of ['m05ml_supplier_ledger','m05ml_cash_book','m05ml_movements','m05ml_lots','m05ml_items','m05ml_purchases'])
-        await DB.prepare('DELETE FROM '+table).run();
-      await DB.prepare("UPDATE m05ml_products SET stock=CASE sku WHEN 'PIPE' THEN 4 WHEN 'SWITCH' THEN 2 ELSE 0 END,version=1,sell_paisa=0").run();
-      await DB.prepare("UPDATE m05ml_suppliers SET payable_paisa=4000 WHERE supplier_id='SUP-1'").run();
-      await DB.prepare("CREATE TRIGGER m05ml_purchase_immutable_delete BEFORE DELETE ON m05ml_purchases BEGIN SELECT RAISE(ABORT,'m05ml-immutable-receipt'); END").run();
-    }
+  test('stale preview is rejected when a lot is consumed immediately before SQL claim',async()=>{
+    assert.equal((await poster().post(input('OP-DELETE-0001'))).status,'COMMITTED');
+    const result=await deleter({
+      beforeBatch:()=>DB.prepare("UPDATE m05ml_lots SET remaining_qty=0 WHERE sku='SWITCH'").run()
+    }).remove(deletionInput('OP-DEL-RACE-LOT'));
+    assert.equal(result.status,'DECLINED');
+    assert.equal(await count('m05ml_delete_receipts'),0);
+    assert.equal(await count('m05ml_delete_audit'),0);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,7200);
+  });
+
+  test('stale preview is rejected when product stock changes immediately before SQL claim',async()=>{
+    assert.equal((await poster().post(input('OP-DELETE-0001'))).status,'COMMITTED');
+    const result=await deleter({
+      beforeBatch:()=>DB.prepare("UPDATE m05ml_products SET stock=1,version=version+1 WHERE sku='SWITCH'").run()
+    }).remove(deletionInput('OP-DEL-RACE-STK'));
+    assert.equal(result.status,'DECLINED');
+    assert.equal(await count('m05ml_delete_receipts'),0);
+    assert.equal(await count('m05ml_delete_audit'),0);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,7200);
   });
 
   test('active Purchase Return or allocated Supplier settlement blocks delete until independently reversed',async()=>{
