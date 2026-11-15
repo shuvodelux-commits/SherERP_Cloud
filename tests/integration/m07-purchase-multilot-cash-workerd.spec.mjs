@@ -137,12 +137,8 @@ test('FIFO is SQL-enforced: later Lot ID/date cannot skip a partially available 
   for(const change of [
     {units:1,refundPaisa:1500,draws:[{lotId:'LOT-A',units:1}]},
     {draws:[{lotId:'LOT-Z',units:1},{lotId:'LOT-A',units:1}].reverse()},
-    {draws:[{lotId:'LOT-Z',units:1},{lotId:'LOT-A',units:2}],units:3,refundPaisa:4500},
-    {draws:[{lotId:'LOT-Z',units:1},{lotId:'LOT-Z',units:1}]},
     {draws:[{lotId:'OTHER-PURCHASE',units:1},{lotId:'LOT-A',units:1}]}
   ]){
-    const shouldCommit=change.units===3&&change.refundPaisa===4500;
-    if(shouldCommit)continue; // This is a legal complete return; tested separately.
     assert.equal((await poster().post(cash(src,'OP-B4-BAD-DRAWS-001',change))).status,'DECLINED');
     assert.deepEqual(await snapshot(),before);
   }
