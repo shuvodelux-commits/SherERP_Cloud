@@ -8,6 +8,8 @@ import {M05ML_DELETE_DDL} from '../fixtures/m05-purchase-delete-d1-schema.mjs';
 import {createSyntheticPurchaseDeleter} from '../fixtures/m05-purchase-delete-d1-contract.mjs';
 import {M05ML_EDIT_DDL} from '../fixtures/m05-purchase-edit-d1-schema.mjs';
 import {createSyntheticPurchaseEditor} from '../fixtures/m05-purchase-edit-d1-contract.mjs';
+import {M05ML_ADD_DDL} from '../fixtures/m05-purchase-add-line-d1-schema.mjs';
+import {createSyntheticPurchaseLineAdder} from '../fixtures/m05-purchase-add-line-d1-contract.mjs';
 
 // Synthetic local D1; NEVER the deployed Worker, main D1, or real shop data.
 const server=createTestHarness({workers:[{configPath:'./wrangler.m05-multiline-test.jsonc'}]});
@@ -25,6 +27,20 @@ const input=(operationId,overrides={})=>({
 const poster=options=>createSyntheticMultilinePurchasePoster(DB,options);
 const deleter=options=>createSyntheticPurchaseDeleter(DB,options);
 const editor=options=>createSyntheticPurchaseEditor(DB,options);
+const addLine=options=>createSyntheticPurchaseLineAdder(DB,options);
+const addLineInput=(operationId,overrides={})=>({
+  tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-ADD-00001',
+  operationId,reason:'Missed original purchased product',
+  sku:'BOLT',qty:4,unitPrice:'3.25',sellPrice:'4.10',expectedVersion:1,
+  ...overrides
+});
+const seedBolt=()=>DB.prepare("INSERT INTO m05ml_products VALUES('SHOP-A','BOLT',9,1,0,1,0,'Standard')").run();
+const addedState=async()=>({
+  original:await snapshot(),
+  receipts:await all('SELECT * FROM m05ml_add_receipts ORDER BY operation_id'),
+  movements:await all('SELECT * FROM m05ml_add_movements ORDER BY sku'),
+  audit:await all('SELECT * FROM m05ml_add_audit ORDER BY operation_id')
+});
 const editInput=(operationId,overrides={})=>({
   tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-EDIT-00001',
   operationId,reason:'Invoice quantity and cost correction',
@@ -75,17 +91,22 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     for(const sql of M05ML_DDL)await DB.prepare(sql).run();
     for(const sql of M05ML_DELETE_DDL)await DB.prepare(sql).run();
     for(const sql of M05ML_EDIT_DDL)await DB.prepare(sql).run();
+    for(const sql of M05ML_ADD_DDL)await DB.prepare(sql).run();
     for(const [sql,args] of M05ML_SEED)await DB.prepare(sql).bind(...args).run();
   });
   beforeEach(async()=>{
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_ledger').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_delete_audit').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_edit_audit').run();
+    await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_add_audit').run();
+    for(const table of ['m05ml_add_movements','m05ml_add_audit','m05ml_add_receipts'])
+      await DB.prepare('DELETE FROM '+table).run();
     for(const table of ['m05ml_edit_movements','m05ml_edit_audit','m05ml_edit_receipts'])
       await DB.prepare('DELETE FROM '+table).run();
     for(const t of ['m05ml_delete_movements','m05ml_delete_audit','m05ml_delete_receipts','m05ml_purchase_returns','m05ml_purchase_settlements'])
       await DB.prepare('DELETE FROM '+t).run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_purchase_immutable_delete').run();
+    await DB.prepare("DELETE FROM m05ml_products WHERE sku='BOLT'").run();
     for(const table of [
       'm05ml_supplier_ledger','m05ml_bank_book','m05ml_cash_book','m05ml_movements',
       'm05ml_lots','m05ml_items','m05ml_purchases'
@@ -680,6 +701,188 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
       const outcome=await editor().edit({...base,...inputChange}).catch(e=>({error:e.message}));
       assert.notEqual(outcome.status,'COMMITTED');
       assert.deepEqual(await editState(),original);
+    }
+  });
+
+
+  test('source new SKU insertion atomically adds supplier lot, stock and payable without altering original purchase and cash',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    assert.deepEqual(await addLine().add(addLineInput('OP-ADD-LINE-00001')),{
+      status:'COMMITTED',operationId:'OP-ADD-LINE-00001',
+      purchaseId:'PUR-OP-ADD-00001',newDuePaisa:4500,linesAdded:1
+    });
+    assert.deepEqual(await all("SELECT sku,stock,version FROM m05ml_products WHERE sku='BOLT'"),[
+      {sku:'BOLT',stock:13,version:2}
+    ]);
+    assert.deepEqual(await all("SELECT purchase_id,supplier_id,sku,purchase_date,qty,remaining_qty,cost_paisa,sell_paisa FROM m05ml_lots WHERE sku='BOLT'"),[
+      {purchase_id:'PUR-OP-ADD-00001',supplier_id:'SUP-1',sku:'BOLT',
+        purchase_date:'2026-11-10',qty:4,remaining_qty:4,cost_paisa:325,sell_paisa:410}
+    ]);
+    assert.deepEqual(await all("SELECT sku,qty,cost_paisa FROM m05ml_effective_add_items WHERE purchase_id='PUR-OP-ADD-00001' ORDER BY sku"),[
+      {sku:'BOLT',qty:4,cost_paisa:325},
+      {sku:'PIPE',qty:2,cost_paisa:1525},
+      {sku:'SWITCH',qty:3,cost_paisa:750}
+    ]);
+    assert.equal((await all("SELECT * FROM m05ml_items WHERE purchase_id='PUR-OP-ADD-00001'")).length,2,
+      'original source items remain immutable');
+    assert.equal((await one("SELECT due_paisa FROM m05ml_purchases WHERE purchase_id='PUR-OP-ADD-00001'")).due_paisa,3200,
+      'original source receipt retained');
+    assert.deepEqual(await one("SELECT purchase_id,debit_paisa FROM m05ml_effective_add_supplier_ledger WHERE purchase_id='PUR-OP-ADD-00001'"),{
+      purchase_id:'PUR-OP-ADD-00001',debit_paisa:4500
+    });
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,8500);
+    assert.equal((await one("SELECT customer_ar_paisa FROM m05ml_customer_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+    assert.equal((await one("SELECT debit_paisa FROM m05ml_cash_book")).debit_paisa,2000);
+    assert.equal(await count('m05ml_bank_book'),0);
+    assert.deepEqual(await one('SELECT sku,qty_in,balance_stock FROM m05ml_add_movements'),{
+      sku:'BOLT',qty_in:4,balance_stock:13
+    });
+  });
+
+  test('exact add-line replay, changed intent conflict, distinct operation rejection and no repeated stock or payable',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    const first=addLineInput('OP-ADD-REPLAY01');
+    assert.equal((await addLine().add(first)).status,'COMMITTED');
+    const original=await addedState();
+    assert.equal((await addLine().add(first)).status,'REPLAY');
+    for(const override of [{actorId:'USER-B'},{reason:'Changed reason'},{qty:5},
+      {unitPrice:'3.50'},{sellPrice:'4.20'},{purchaseId:'PUR-OTHER'}]){
+      assert.equal((await addLine().add({...first,...override})).status,'CONFLICT');
+    }
+    assert.equal((await addLine().add(addLineInput('OP-ADD-SECOND01'))).status,'DECLINED');
+    assert.deepEqual(await addedState(),original);
+  });
+
+  test('missing, deleted, inactive, Bundle and already purchased SKU cannot be added',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    for(const overrides of [
+      {sku:'UNKNOWN'}, {sku:'BUNDLE'}, {sku:'PIPE',expectedVersion:2},
+      {sku:'SWITCH',expectedVersion:2}
+    ]){
+      const before=await addedState();
+      assert.equal((await addLine().add(addLineInput('OP-ADD-REJECT01',overrides))).status,'DECLINED');
+      assert.deepEqual(await addedState(),before);
+    }
+    for(const [mutation,restore] of [
+      ["UPDATE m05ml_products SET active=0 WHERE sku='BOLT'",
+        "UPDATE m05ml_products SET active=1 WHERE sku='BOLT'"],
+      ["UPDATE m05ml_products SET deleted=1 WHERE sku='BOLT'",
+        "UPDATE m05ml_products SET deleted=0 WHERE sku='BOLT'"]
+    ]){
+      await DB.prepare(mutation).run();
+      const before=await addedState();
+      assert.equal((await addLine().add(addLineInput('OP-ADD-REJECT02'))).status,'DECLINED');
+      assert.deepEqual(await addedState(),before);
+      await DB.prepare(restore).run();
+    }
+  });
+
+  test('stale new product version right before SQL claim cannot add new lot or payable',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    const result=await addLine({beforeBatch:()=>DB.prepare(
+      "UPDATE m05ml_products SET stock=stock-1,version=version+1 WHERE sku='BOLT'").run()
+    }).add(addLineInput('OP-ADD-STALE001'));
+    assert.equal(result.status,'DECLINED');
+    assert.equal(await count('m05ml_add_receipts'),0);
+    assert.equal(await count('m05ml_add_movements'),0);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,7200);
+    assert.equal((await all("SELECT * FROM m05ml_lots WHERE sku='BOLT'")).length,0);
+  });
+
+  test('active Purchase Return, allocated Supplier settlement and later ledger refuse the addition',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    for(const [mutation,undo] of [
+      ["INSERT INTO m05ml_purchase_returns VALUES('SHOP-A','RET-ADD','PUR-OP-ADD-00001',1)",
+        "DELETE FROM m05ml_purchase_returns"],
+      ["INSERT INTO m05ml_purchase_settlements VALUES('SHOP-A','SET-ADD','PUR-OP-ADD-00001',100,1)",
+        "DELETE FROM m05ml_purchase_settlements"]
+    ]){
+      await DB.prepare(mutation).run();
+      const before=await addedState();
+      assert.equal((await addLine().add(addLineInput('OP-ADD-GATED01'))).status,'DECLINED');
+      assert.deepEqual(await addedState(),before);
+      await DB.prepare(undo).run();
+    }
+    // A subsequent original supplier payable ledger makes retroactive
+    // balance recomputation necessary; this isolated proof refuses it.
+    assert.equal((await poster().post(input('OP-ADD-LATER01',{
+      items:[line('PIPE',1,'5','6',2)],paidAmount:'0'
+    }))).status,'COMMITTED');
+    const before=await addedState();
+    assert.equal((await addLine().add(addLineInput('OP-ADD-LATER02'))).status,'DECLINED');
+    assert.deepEqual(await addedState(),before);
+  });
+
+  test('closed Cash Session, inactive Supplier and unreviewed Party source link fail closed',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    for(const [mutation,restore] of [
+      ["UPDATE m05ml_sessions SET state='Closed'","UPDATE m05ml_sessions SET state='Open'"],
+      ["UPDATE m05ml_suppliers SET active=0 WHERE supplier_id='SUP-1'","UPDATE m05ml_suppliers SET active=1 WHERE supplier_id='SUP-1'"],
+      ["UPDATE m05ml_party_links SET reviewed=0 WHERE source_id='SUP-1'","UPDATE m05ml_party_links SET reviewed=1 WHERE source_id='SUP-1'"]
+    ]){
+      await DB.prepare(mutation).run();
+      const before=await addedState();
+      assert.equal((await addLine().add(addLineInput('OP-ADD-GUARD001'))).status,'DECLINED');
+      assert.deepEqual(await addedState(),before);
+      await DB.prepare(restore).run();
+    }
+  });
+
+  test('late audit write failure rolls back new lot, SKU stock and Supplier payable in real D1',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    await DB.prepare("CREATE TRIGGER m05ml_inject_fail_add_audit BEFORE INSERT ON m05ml_add_audit BEGIN SELECT RAISE(ABORT,'forced-add-audit'); END").run();
+    const before=await addedState();
+    await assert.rejects(addLine().add(addLineInput('OP-ADD-ABORT001')),/NEEDS_REVIEW/);
+    assert.deepEqual(await addedState(),before);
+  });
+
+  test('parallel independent new-line operation IDs can commit source addition at most once',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    const results=await Promise.allSettled([
+      addLine().add(addLineInput('OP-ADD-CONC0001')),
+      addLine().add(addLineInput('OP-ADD-CONC0002'))
+    ]);
+    const statuses=results.map(x=>x.status==='fulfilled'?x.value.status:'NEEDS_REVIEW');
+    assert.equal(statuses.filter(x=>x==='COMMITTED').length,1);
+    assert.ok(statuses.every(x=>['COMMITTED','DECLINED','NEEDS_REVIEW'].includes(x)));
+    assert.equal(await count('m05ml_add_receipts'),1);
+    assert.equal(await count('m05ml_add_audit'),1);
+    assert.equal((await one("SELECT stock FROM m05ml_products WHERE sku='BOLT'")).stock,13);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,8500);
+  });
+
+  test('source edit or delete and new-line addition cannot race across distinct correction engines',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    assert.equal((await addLine().add(addLineInput('OP-ADD-LOCK0001'))).status,'COMMITTED');
+    const before=await addedState();
+    assert.equal((await editor().edit(editInput('OP-EDIT-ADDLOCK',{purchaseId:'PUR-OP-ADD-00001'}))).status,'DECLINED');
+    assert.equal((await deleter().remove(deletionInput('OP-DEL-ADDLOCK',{purchaseId:'PUR-OP-ADD-00001'}))).status,'DECLINED');
+    assert.deepEqual(await addedState(),before);
+  });
+
+  test('malformed exact-money, nonpositive quantity, bad operation IDs and tenant cannot add supplier lot',async()=>{
+    await seedBolt();
+    assert.equal((await poster().post(input('OP-ADD-00001'))).status,'COMMITTED');
+    const before=await addedState();
+    for(const overrides of [
+      {operationId:'too-short'},{tenantId:'UNKNOWN'},{actorId:''},
+      {reason:''},{sku:'BAD SKU'},{qty:0},{qty:-1},{qty:0.5},
+      {unitPrice:'1.001'},{unitPrice:'-1'},{unitPrice:4},
+      {sellPrice:'4.001'},{expectedVersion:0},{qty:999999999}
+    ]){
+      const result=await addLine().add(addLineInput('OP-ADD-INVALID1',overrides))
+        .catch(e=>({error:e.message}));
+      assert.notEqual(result.status,'COMMITTED');
+      assert.deepEqual(await addedState(),before);
     }
   });
 
