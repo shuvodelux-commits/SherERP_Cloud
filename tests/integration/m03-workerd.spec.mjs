@@ -24,6 +24,7 @@ import './m07-store-credit-workerd.spec.mjs'; // M07 signed Customer credit with
 import './m07-cash-batch-workerd.spec.mjs'; // M07 2–20 original-invoice Cash batch all-or-nothing local D1.
 import './m07-store-credit-batch-workerd.spec.mjs'; // M07 ordered signed Store Credit batch exact-once/rollback local D1.
 import './m07-purchase-cash-return-workerd.spec.mjs'; // M07 source-linked purchase Cash refund original-lot local D1 proof.
+import './m07-purchase-supplier-credit-workerd.spec.mjs'; // M07 signed Supplier Credit original-lot D1 ledger/reversal proof.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
