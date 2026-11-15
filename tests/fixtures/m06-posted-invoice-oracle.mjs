@@ -33,7 +33,15 @@ export function pinnedPostedInvoice(fixture){
     customerInvoiceSettlementSnapshot_:()=>fixture.settlement??null,
     resolveInvoiceLogoDataUri_:()=> '',
     isSettingEnabled_:(value,fallback)=>value==null||value===''?fallback:String(value).toLowerCase()==='true',
-    formatDate_:date=>new Date(date).toISOString().slice(0,10)
+    // Frozen Utils.gs::formatDate_ uses Utilities.formatDate with the
+    // Apps Script timezone; UTC ISO slicing shifts local-midnight dates.
+    formatDate_:date=>{
+      const parts=new Intl.DateTimeFormat('en-US',{
+        timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'
+      }).formatToParts(new Date(date));
+      const part=type=>parts.find(x=>x.type===type)?.value;
+      return part('year')+'-'+part('month')+'-'+part('day');
+    }
   };
   runInNewContext(nativePayments+'\n'+nativeInvoice,vm);
   // The shop branding is a separate authenticated Settings/Drive adapter.
