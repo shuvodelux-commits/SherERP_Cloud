@@ -79,6 +79,7 @@ test('Administrator preserves original unrestricted routes, POS V2 runtime alias
 test('cashier preserves authorized POS V2 but redirects unauthorized pages to Dashboard',()=>{
   const p=profile(['dashboard','pos','sales'],{pos:{add:true}});
   assert.equal(compare(p,'posv2').pageKey,'posv2');
+  assert.equal(compare(p,'pos').pageKey,'pos', 'original POS parent route is allowed even without a matching child');
   assert.equal(compare(p,'returns').pageKey,'dashboard');
   assert.equal(compare(p,'notARealRoute').pageKey,'dashboard');
   const sales=compare(p,'sales');
