@@ -73,7 +73,7 @@ test('source Version comparison accepts same numeric value as string',()=>{
   assert.equal(r.reply.draftId,'SD-1');
 });
 test('stale Version rejects without any planned update or audit',()=>{
-  for(const expected of [2,4,undefined,'oops']){
+  for(const expected of [2,4,null,'oops']){
     const r=parity('SD-1',expected,payload(),[row()],actor);
     assert.equal(r.success,false);
     assert.match(r.message,/draft was changed by another user/);
