@@ -1,7 +1,8 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
-import './m03-catalog-append-workerd.spec.mjs'; // CI executes both isolated Workers without workflow edits.
+import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
+import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
