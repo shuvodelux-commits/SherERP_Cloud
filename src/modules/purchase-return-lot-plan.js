@@ -18,6 +18,17 @@ function assertData(value){
 const numeric=value=>Number(value)||0;
 const validNonNegative=value=>Number.isFinite(Number(value))&&Number(value)>=0;
 const dateOnly=value=>value?String(value).slice(0,10):'';
+const DATE=/^\d{4}-\d{2}-\d{2}$/;
+const TIMESTAMP=/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d/;
+function normalizedDate(value,allowTime=false){
+  if(value===undefined||value===null||value==='')return true;
+  if(typeof value!=='string'||!(DATE.test(value)||(allowTime&&TIMESTAMP.test(value))))
+    return false;
+  const day=value.slice(0,10);
+  const date=new Date(day+'T00:00:00.000Z');
+  return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===day;
+}
+
 function compareFifo(a,b){
   const da=dateOnly(a['Purchase Date'])||dateOnly(a['Created At'])||'';
   const db=dateOnly(b['Purchase Date'])||dateOnly(b['Created At'])||'';
@@ -54,7 +65,9 @@ export function planPurchaseReturnLots(input){
       typeof lot['Purchase ID']!=='string'||
       typeof lot['Product ID']!=='string'||
       !Number.isFinite(Number(lot['Remaining Quantity']??0))||
-      !Number.isFinite(Number(lot['Purchase Price']??0)))
+      !Number.isFinite(Number(lot['Purchase Price']??0))||
+      !normalizedDate(lot['Purchase Date'])||
+      !normalizedDate(lot['Created At'],true))
       throw new TypeError('Invalid Purchase Return stock lot');
     if(seen.has(id))throw new Error('Duplicate Lot ID in Purchase Return source: '+id);
     seen.add(id);
