@@ -1,0 +1,26 @@
+name: M03 M04 atomic products.add actor-bound D1 (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  local-authorized-product-master:
+    name: Real local Workerd D1 staff-authorized PCAT/PUNT tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify pinned source and existing Node regression
+        run: npm test
+      - name: Install pinned isolated Wrangler
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Test same-statement staff authorization in actual local Workerd D1
+        run: node --test tests/integration/m03-m04-master-authority-workerd.spec.mjs
