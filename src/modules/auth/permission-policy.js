@@ -5,19 +5,55 @@
  * No session, D1 or client actor is trusted here.
  */
 export const STAFF_PERMISSION_MODULES = Object.freeze([
-  {key:'dashboard'}, {key:'pos'}, {key:'sales'}, {key:'returns'},
-  {key:'purchase'}, {key:'suppliers'}, {key:'vendors'}, {key:'products'},
-  {key:'customers'}, {key:'bank'}, {key:'expense'}, {key:'finance'},
-  {key:'daybook'}, {key:'cashReconciliation'}, {key:'reports'},
-  {key:'settings'}, {key:'users'}, {key:'roles'},
-  {key:'openingBalance', permissionMode:'editOnly'},
-  {key:'settlementDiscount', permissionMode:'editOnly'},
-  {key:'posCost'},
+  {key:'dashboard',label:'Dashboard'},
+  {key:'pos',label:'POS'},
+  {key:'sales',label:'Sales'},
+  {key:'returns',label:'Sales Return'},
+  {key:'purchase',label:'Purchases'},
+  {key:'suppliers',label:'Suppliers'},
+  {key:'vendors',label:'Vendor'},
+  {key:'products',label:'Products'},
+  {key:'customers',label:'Customers'},
+  {key:'bank',label:'Bank Accounts'},
+  {key:'expense',label:'Expenses'},
+  {key:'finance',label:'Business Finance'},
+  {key:'daybook',label:'Day Book'},
+  {key:'cashReconciliation',label:'Cash Reconciliation'},
+  {key:'reports',label:'Reports'},
+  {key:'settings',label:'Settings'},
+  {key:'users',label:'Users'},
+  {key:'roles',label:'Roles'},
+  {key:'openingBalance',label:'Opening Balance Edit',permissionMode:'editOnly'},
+  {key:'settlementDiscount',label:'Settlement Discount',permissionMode:'editOnly'},
+  {key:'posCost',label:'POS Purchase Price'},
 ].map((entry) => Object.freeze(entry)));
 
 export const PERMISSION_WINDOW_CODES = Object.freeze([
   'disabled','same','1','3','7','15','30','unlimited',
 ]);
+
+// Frozen Auth.gs::DELETE_WINDOW_OPTIONS UI labels, never authorization.
+const PERMISSION_WINDOW_LABELS=Object.freeze({
+  disabled:'Disabled',same:'Same Day',
+  '1':'1 Day','3':'3 Days','7':'7 Days','15':'15 Days',
+  '30':'30 Days',unlimited:'Unlimited',
+});
+
+/**
+ * Frozen RoleManagement.gs::getRolesBootstrap display choices. This is
+ * public metadata, NOT a permission decision. Return detached, JSON-safe
+ * copies rather than mutable shared constants.
+ */
+export function roleBootstrapOptions(){
+  return {
+    moduleOptions:STAFF_PERMISSION_MODULES.map(({key,label,permissionMode})=>({
+      key,label,permissionMode:permissionMode||'',
+    })),
+    deleteWindowOptions:PERMISSION_WINDOW_CODES.map(key=>({
+      key,label:PERMISSION_WINDOW_LABELS[key],
+    })),
+  };
+}
 
 const windows = new Set(PERMISSION_WINDOW_CODES);
 const management = new Set(['users','roles']);

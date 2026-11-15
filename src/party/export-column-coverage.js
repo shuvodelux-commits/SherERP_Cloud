@@ -75,7 +75,7 @@ export function validatePartyExportCompleteness({sourceRows,sourceHeaders}={}){
   for(const group of groups){
     const expected=columns[group],supplied=sourceHeaders[group];
     const headerMismatch=supplied.length!==expected.length ||
-      supplied.some((name,index)=>name!==expected[index]);
+      expected.some((name,index)=>supplied[index]!==name);
     if(headerMismatch){
       add(issues,group,'HEADER_MISMATCH',1);
       counts.headerIssues++;
