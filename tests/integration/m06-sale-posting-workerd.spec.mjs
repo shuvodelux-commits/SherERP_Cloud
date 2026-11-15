@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createSyntheticD1SalePostingContract} from '../fixtures/m06-sale-posting-contract.mjs';
-import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED} from '../fixtures/m06-sale-posting-schema.mjs';
+import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED,M06_CHILD_IMMUTABILITY_TABLES,M06_CHILD_IMMUTABILITY_DDL} from '../fixtures/m06-sale-posting-schema.mjs';
 
 const server=createTestHarness({workers:[{configPath:'./wrangler.m06-sale-posting-test.jsonc'}]});
 const worker=server.getWorker('shererp-m06-sale-workerd-test');
@@ -42,6 +42,11 @@ before(async()=>{
   for(const [sql,values] of M06_SALE_TEST_SEED)await DB.prepare(sql).bind(...values).run();
 });
 beforeEach(async()=>{
+  // Only the isolated test reset may remove the posting-child guards.
+  for(const table of M06_CHILD_IMMUTABILITY_TABLES){
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_update`).run();
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_delete`).run();
+  }
   for(const t of ['m06_fail_payment','m06_fail_bank','m06_fail_cash','m06_fail_due','m06_fail_draft_audit'])
     await DB.prepare('DROP TRIGGER IF EXISTS '+t).run();
   await DB.prepare('DROP TRIGGER m06_invoice_immutable_delete').run();
@@ -57,6 +62,7 @@ beforeEach(async()=>{
   await DB.prepare("DELETE FROM m06_cash_sessions WHERE tenant_id='SHOP-B'").run();
   for(const t of ['m06_owned_stock','m06_customer_accounts','m06_party_links','m06_supplier_accounts'])
     await DB.prepare(`DELETE FROM ${t} WHERE tenant_id='SHOP-B'`).run();
+  for(const sql of M06_CHILD_IMMUTABILITY_DDL)await DB.prepare(sql).run();
 });
 after(async()=>{await server.close();});
 
