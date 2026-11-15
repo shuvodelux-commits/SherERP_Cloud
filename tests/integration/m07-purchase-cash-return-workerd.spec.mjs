@@ -161,7 +161,7 @@ test('source lot depleted by earlier sale blocks return rather than borrowing an
   assert.deepEqual(await snapshot(),before);
 });
 
-test('forged refund price, over-original quantity, and unsupported fractional-cent discounts decline',async()=>{
+test('forged refund price and over-original quantity decline',async()=>{
   const src=await purchase(),before=await snapshot();
   for(const changes of [
     {refundPaisa:1600},{refundPaisa:1499},{units:3,refundPaisa:4500}
@@ -230,4 +230,25 @@ test('hostile amount, ID, reason and extra field inputs are rejected before SQL 
     {...good,operationId:'short'}, {...good,reason:''},{...good,sql:'DROP TABLE m05_lots'}
   ])await assert.rejects(()=>returns().post(bad),/Invalid|invalid/i);
   assert.deepEqual(await snapshot(),before);
+});
+
+test('source-specific lot cannot be substituted with a real lot from another purchase',async()=>{
+  const a=await purchase('A');
+  const b=await purchase('B',{expectedVersion:2});
+  const before=await snapshot();
+  assert.equal((await returns().post(cash(a,'OP-RETURN-FOREIGN-LOT-01',{
+    lotId:b.lotId,returnId:'PRET-FOREIGN-LOT'
+  }))).status,'DECLINED');
+  assert.deepEqual(await snapshot(),before);
+});
+
+test('fractional-cent net original purchase is declined, not silently rounded to a Cash refund',async()=>{
+  const src=await purchase('ODD',{discount:'0.49'});
+  const before=await snapshot();
+  for(const refundPaisa of [1500,1501]){
+    assert.equal((await returns().post(cash(src,'OP-RETURN-FRACTION-'+refundPaisa,{
+      refundPaisa,returnId:'PRET-FRACTION-'+refundPaisa
+    }))).status,'DECLINED');
+    assert.deepEqual(await snapshot(),before);
+  }
 });
