@@ -4,17 +4,9 @@
  */
 import {loginWithD1,validateSessionWithD1,revokeSessionWithD1} from '../../src/auth/d1-auth-core.js';
 import {createD1LegacyAuthRpc} from '../../src/auth/d1-legacy-rpc.js';
+import {normalizeLegacyStaffPhoneSearch} from '../../src/auth/staff-phone-identity.js';
 
 const json=(status,value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
-// Pure test fixture normalization only. Actual staging must use reviewed #39.
-const testPhone=value=>{
-  if(typeof value!=='string')return '';
-  const bn='০১২৩৪৫৬৭৮৯';
-  let digits=value.replace(/[০-৯]/g,d=>String(bn.indexOf(d))).replace(/\D/g,'');
-  if(/^8801[3-9]\d{8}$/.test(digits))digits='0'+digits.slice(3);
-  else if(/^1[3-9]\d{8}$/.test(digits))digits='0'+digits;
-  return digits;
-};
 export default {
   async fetch(request,env){
     if(request.method!=='POST') return json(405,{error:'Method forbidden'});
@@ -31,7 +23,7 @@ export default {
           return json(404,{error:'Not found'});
         if(!Array.isArray(raw.args) || raw.args.length!==(raw.fnName==='login'?2:1))
           return json(400,{error:'Invalid test RPC args'});
-        const adapter=createD1LegacyAuthRpc(env.DB,{now:()=>nowMs,normalizeMobile:testPhone});
+        const adapter=createD1LegacyAuthRpc(env.DB,{now:()=>nowMs,normalizeMobile:normalizeLegacyStaffPhoneSearch});
         return json(200,await adapter[raw.fnName](...raw.args));
       }
       if(path==='/__m04_test__/login')
