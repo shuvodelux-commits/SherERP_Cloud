@@ -180,3 +180,18 @@ test('missing or failed D1 binding cannot leak SQL errors or real Party details'
       !/SENSITIVE_NAME|01700000000/.test(error.message)
   );
 });
+
+test('reused human approval reference cannot create D1 writes for disjoint identities',async()=>{
+  const before=await counts();
+  const groups=reviewed();
+  groups.push({
+    members:[
+      {sourceGroup:'VENDORS',sourceId:'VEN-001'},
+      {sourceGroup:'EXPENSE_PAYEES',sourceId:'PAY-001'}
+    ],
+    reviewedBy:'admin-01',reviewedAt:'2026-11-14T12:00:00Z',
+    approvalRef:groups[0].approvalRef
+  });
+  assert.throws(()=>compile(source(),groups),/approval.*(reus|duplic)|(?:reus|duplic).*approval/i);
+  assert.deepEqual(await counts(),before);
+});
