@@ -1,0 +1,1372 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "limitations": "Parsed pinned GAS top-level functions. Direct call/permission/literal-group inventory only; not transitive, not D1 runtime, not SQL atomicity or source behavior parity proof.",
+  "financeTypes": [
+    {
+      "key": "Owner Investment",
+      "label": "Owner Credit",
+      "account": "owner",
+      "balanceEffect": 1,
+      "cashDirection": "in",
+      "role": "Owner",
+      "isOpening": false
+    },
+    {
+      "key": "Owner Withdrawal",
+      "label": "Owner Debit",
+      "account": "owner",
+      "balanceEffect": -1,
+      "cashDirection": "out",
+      "role": "Owner",
+      "isOpening": false
+    },
+    {
+      "key": "Loan Received",
+      "label": "Lender Credit",
+      "account": "loanPayable",
+      "balanceEffect": 1,
+      "cashDirection": "in",
+      "role": "Lender",
+      "isOpening": false
+    },
+    {
+      "key": "Loan Repayment",
+      "label": "Lender Debit",
+      "account": "loanPayable",
+      "balanceEffect": -1,
+      "cashDirection": "out",
+      "role": "Lender",
+      "isOpening": false
+    },
+    {
+      "key": "Borrower Loan",
+      "label": "Borrower Debit",
+      "account": "borrowerReceivable",
+      "balanceEffect": 1,
+      "cashDirection": "out",
+      "role": "Borrower",
+      "isOpening": false
+    },
+    {
+      "key": "Borrower Repayment",
+      "label": "Borrower Credit",
+      "account": "borrowerReceivable",
+      "balanceEffect": -1,
+      "cashDirection": "in",
+      "role": "Borrower",
+      "isOpening": false
+    },
+    {
+      "key": "Opening Owner Capital",
+      "label": "Opening Owner Capital",
+      "account": "owner",
+      "balanceEffect": 1,
+      "cashDirection": "none",
+      "role": "Owner",
+      "isOpening": true
+    },
+    {
+      "key": "Opening Loan",
+      "label": "Opening Loan",
+      "account": "loanPayable",
+      "balanceEffect": 1,
+      "cashDirection": "none",
+      "role": "Lender",
+      "isOpening": true
+    },
+    {
+      "key": "Opening Borrower Loan",
+      "label": "Opening Borrower Loan",
+      "account": "borrowerReceivable",
+      "balanceEffect": 1,
+      "cashDirection": "none",
+      "role": "Borrower",
+      "isOpening": true
+    }
+  ],
+  "ledgerKinds": {
+    "customer": {
+      "permission": "customers",
+      "masterSheet": "CUSTOMERS",
+      "ledgerSheet": "CUSTOMER_LEDGER",
+      "partyIdColumn": "Customer ID",
+      "partyNameColumn": "Customer Name",
+      "phoneColumn": "Phone",
+      "addressColumn": "Address",
+      "balanceColumn": "Current Due",
+      "sourceSheet": "SALES",
+      "sourceIdColumn": "Invoice ID"
+    },
+    "supplier": {
+      "permission": "suppliers",
+      "masterSheet": "SUPPLIERS",
+      "ledgerSheet": "SUPPLIER_LEDGER",
+      "partyIdColumn": "Supplier ID",
+      "partyNameColumn": "Supplier Name",
+      "phoneColumn": "Phone",
+      "addressColumn": "Address",
+      "balanceColumn": "Current Due",
+      "sourceSheet": "PURCHASES",
+      "sourceIdColumn": "Purchase ID"
+    }
+  },
+  "surfaces": [
+    {
+      "sourceFile": "FinanceModule.gs",
+      "endpoints": [
+        {
+          "name": "getFinanceBootstrap",
+          "directCalls": [
+            "activeRows_",
+            "fail_",
+            "financeBalanceSummary_",
+            "financePersonBalancesForUI_",
+            "formatDate_",
+            "getActiveBankAccountsForUI_",
+            "getActiveFinancePersonsForUI_",
+            "getAllFinancePersonsForUI_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "finance:view"
+          ],
+          "directReads": [
+            "activeRows_:FINANCE_TRANSACTIONS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "addFinancePerson",
+          "directCalls": [
+            "String",
+            "appendRow_",
+            "fail_",
+            "financeCanonicalRoles_",
+            "generateId_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "finance:add"
+          ],
+          "directReads": [
+            "getAllRows_:FINANCE_PERSONS"
+          ],
+          "directWrites": [
+            "appendRow_:FINANCE_PERSONS"
+          ]
+        },
+        {
+          "name": "updateFinancePerson",
+          "directCalls": [
+            "String",
+            "fail_",
+            "financeCanonicalRoles_",
+            "findFinancePerson_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "sanitizeInput_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "finance:edit"
+          ],
+          "directReads": [
+            "getAllRows_:FINANCE_PERSONS"
+          ],
+          "directWrites": [
+            "updateRowFields_:FINANCE_PERSONS"
+          ]
+        },
+        {
+          "name": "setFinancePersonRoles",
+          "directCalls": [
+            "fail_",
+            "financeCanonicalRoles_",
+            "findFinancePerson_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "finance:edit"
+          ],
+          "directReads": [],
+          "directWrites": [
+            "updateRowFields_:FINANCE_PERSONS"
+          ]
+        },
+        {
+          "name": "setFinancePersonStatus",
+          "directCalls": [
+            "fail_",
+            "findRowIndex_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "finance:edit"
+          ],
+          "directReads": [
+            "findRowIndex_:FINANCE_PERSONS"
+          ],
+          "directWrites": [
+            "updateRowFields_:FINANCE_PERSONS"
+          ]
+        },
+        {
+          "name": "addFinanceTransaction",
+          "directCalls": [
+            "Number",
+            "actorName_",
+            "appendRow_",
+            "fail_",
+            "financePersonHasRole_",
+            "financeTransactionType_",
+            "financeTypeHasMoneyMovement_",
+            "findFinancePerson_",
+            "generateId_",
+            "getOutstandingLoan_",
+            "getOwnerCapital_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "postFinanceTransactionMoney_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "resolveBankAccount_",
+            "resolveTransactionDate_",
+            "roundMoney_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "finance:add"
+          ],
+          "directReads": [],
+          "directWrites": [
+            "appendRow_:FINANCE_TRANSACTIONS"
+          ]
+        },
+        {
+          "name": "getFinanceLedger",
+          "directCalls": [
+            "Number",
+            "String",
+            "activeRows_",
+            "fail_",
+            "financeAccountLabel_",
+            "financeBalanceSummary_",
+            "financePersonNameAliasMap_",
+            "financeTransactionType_",
+            "financeTxnPersonKey_",
+            "getAllFinancePersonsForUI_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "roundMoney_",
+            "safeDateOnly_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "finance:view"
+          ],
+          "directReads": [
+            "activeRows_:FINANCE_TRANSACTIONS"
+          ],
+          "directWrites": []
+        }
+      ]
+    },
+    {
+      "sourceFile": "CashBook.gs",
+      "endpoints": []
+    },
+    {
+      "sourceFile": "BankBook.gs",
+      "endpoints": [
+        {
+          "name": "transferBetweenBankAccounts",
+          "directCalls": [
+            "Number",
+            "actorName_",
+            "addBankBookEntry_",
+            "appendRow_",
+            "fail_",
+            "generateId_",
+            "getAllRows_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "roundMoney_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "bank:add"
+          ],
+          "directReads": [
+            "getAllRows_:BANK_ACCOUNTS"
+          ],
+          "directWrites": [
+            "appendRow_:BANK_TRANSFERS"
+          ]
+        },
+        {
+          "name": "getBankTransferHistory",
+          "directCalls": [
+            "activeRows_",
+            "fail_",
+            "logError_",
+            "ok_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "bank:view"
+          ],
+          "directReads": [
+            "activeRows_:BANK_TRANSFERS"
+          ],
+          "directWrites": []
+        }
+      ]
+    },
+    {
+      "sourceFile": "BankAccounts.gs",
+      "endpoints": [
+        {
+          "name": "getBankAccountsBootstrap",
+          "directCalls": [
+            "fail_",
+            "getAllRows_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "sanitizeAccountType_"
+          ],
+          "permissions": [
+            "bank:view"
+          ],
+          "directReads": [
+            "getAllRows_:BANK_ACCOUNTS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "addBankAccount",
+          "directCalls": [
+            "Number",
+            "String",
+            "appendRow_",
+            "fail_",
+            "generateId_",
+            "getAllRows_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "sanitizeAccountType_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "bank:add"
+          ],
+          "directReads": [
+            "getAllRows_:BANK_ACCOUNTS"
+          ],
+          "directWrites": [
+            "appendRow_:BANK_ACCOUNTS"
+          ]
+        },
+        {
+          "name": "updateBankAccount",
+          "directCalls": [
+            "String",
+            "fail_",
+            "findRowIndex_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "sanitizeAccountType_",
+            "sanitizeInput_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "bank:edit"
+          ],
+          "directReads": [
+            "findRowIndex_:BANK_ACCOUNTS",
+            "getAllRows_:BANK_ACCOUNTS"
+          ],
+          "directWrites": [
+            "updateRowFields_:BANK_ACCOUNTS"
+          ]
+        },
+        {
+          "name": "setBankAccountStatus",
+          "directCalls": [
+            "fail_",
+            "findRowIndex_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "bank:edit"
+          ],
+          "directReads": [
+            "findRowIndex_:BANK_ACCOUNTS"
+          ],
+          "directWrites": [
+            "updateRowFields_:BANK_ACCOUNTS"
+          ]
+        }
+      ]
+    },
+    {
+      "sourceFile": "BankLedger.gs",
+      "endpoints": [
+        {
+          "name": "getBankLedgerBootstrap",
+          "directCalls": [
+            "Number",
+            "fail_",
+            "formatDate_",
+            "getAllRows_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "sanitizeAccountType_"
+          ],
+          "permissions": [
+            "bank:view"
+          ],
+          "directReads": [
+            "getAllRows_:BANK_ACCOUNTS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "getBankLedger",
+          "directCalls": [
+            "Number",
+            "String",
+            "fail_",
+            "formatDate_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "safeDateOnly_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "bank:view"
+          ],
+          "directReads": [
+            "getAllRows_:BANK_ACCOUNTS",
+            "getAllRows_:BANK_BOOK"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "addBankManualEntry",
+          "directCalls": [
+            "Number",
+            "addBankBookEntry_",
+            "addCashBookEntry_",
+            "bankManualType_",
+            "fail_",
+            "getAllRows_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "resolveTransactionDate_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "bank:add"
+          ],
+          "directReads": [
+            "getAllRows_:BANK_ACCOUNTS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "reverseBankEntry",
+          "directCalls": [
+            "Number",
+            "addBankBookEntry_",
+            "fail_",
+            "findRowIndex_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "sanitizeInput_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "bank:edit"
+          ],
+          "directReads": [
+            "findRowIndex_:BANK_BOOK",
+            "getAllRows_:BANK_BOOK"
+          ],
+          "directWrites": [
+            "updateRowFields_:BANK_BOOK"
+          ]
+        }
+      ]
+    },
+    {
+      "sourceFile": "CashSession.gs",
+      "endpoints": [
+        {
+          "name": "startCashSession",
+          "directCalls": [
+            "Number",
+            "activeRows_",
+            "addCashBookEntry_",
+            "appendRow_",
+            "fail_",
+            "formatDate_",
+            "generateId_",
+            "getActiveCashSession_",
+            "getAllRows_",
+            "getCashBalance_",
+            "getCashMismatch_",
+            "invalidateSheetCache_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "roundMoney_",
+            "sanitizeInput_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "pos:add"
+          ],
+          "directReads": [
+            "activeRows_:CASH_BOOK",
+            "getAllRows_:CASH_SESSIONS"
+          ],
+          "directWrites": [
+            "appendRow_:CASH_SESSIONS",
+            "updateRowFields_:CASH_SESSIONS"
+          ]
+        },
+        {
+          "name": "getCashSessionSummary",
+          "directCalls": [
+            "activeRows_",
+            "cashSessionSummaryFromRows_",
+            "fail_",
+            "getActiveCashSession_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "pos:view"
+          ],
+          "directReads": [
+            "activeRows_:CASH_BOOK",
+            "getAllRows_:CASH_SESSIONS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "closeCashSession",
+          "directCalls": [
+            "Number",
+            "activeRows_",
+            "cashSessionSummaryFromRows_",
+            "fail_",
+            "getActiveCashSession_",
+            "getAllRows_",
+            "invalidateSheetCache_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "roundMoney_",
+            "sanitizeInput_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "pos:add"
+          ],
+          "directReads": [
+            "activeRows_:CASH_BOOK",
+            "getAllRows_:CASH_SESSIONS"
+          ],
+          "directWrites": [
+            "updateRowFields_:CASH_SESSIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "sourceFile": "CashReconciliation.gs",
+      "endpoints": [
+        {
+          "name": "getCashReconciliationCandidates",
+          "directCalls": [
+            "Number",
+            "String",
+            "cashReconciliationFindBuiltRow_",
+            "cashReconciliationIsDeleted_",
+            "cashReconciliationIsSynthetic_",
+            "cashReconciliationLinkedUsage_",
+            "cashReconciliationParseIds_",
+            "cashReconciliationPhaseMeta_",
+            "cashReconciliationRowById_",
+            "cashReconciliationSigned_",
+            "cashReconciliationSortKey_",
+            "fail_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "roundMoney_",
+            "safeDateOnly_"
+          ],
+          "permissions": [
+            "cashReconciliation:view"
+          ],
+          "directReads": [
+            "getAllRows_:CASH_BOOK",
+            "getAllRows_:CASH_SESSIONS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "saveCashReconciliationExplanation",
+          "directCalls": [
+            "Number",
+            "String",
+            "cashReconciliationExplanationField_",
+            "cashReconciliationFindBuiltRow_",
+            "cashReconciliationFindSessionRow_",
+            "cashReconciliationIsDeleted_",
+            "cashReconciliationIsSynthetic_",
+            "cashReconciliationLinkedUsage_",
+            "cashReconciliationParseIds_",
+            "cashReconciliationPhaseMeta_",
+            "cashReconciliationRecalculateClosedSession_",
+            "cashReconciliationRetireLegacyAdjustment_",
+            "cashReconciliationRowById_",
+            "cashReconciliationSigned_",
+            "fail_",
+            "getAllRows_",
+            "logError_",
+            "ok_",
+            "requirePermission_",
+            "roundMoney_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "cashReconciliation:edit"
+          ],
+          "directReads": [
+            "getAllRows_:CASH_BOOK",
+            "getAllRows_:CASH_SESSIONS"
+          ],
+          "directWrites": [
+            "updateRowFields_:CASH_SESSIONS"
+          ]
+        },
+        {
+          "name": "getCashReconciliationRows",
+          "directCalls": [
+            "String",
+            "cashReconciliationBuildRows_",
+            "cashReconciliationSortKey_",
+            "fail_",
+            "getAllRows_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "cashReconciliation:view"
+          ],
+          "directReads": [
+            "getAllRows_:CASH_BOOK",
+            "getAllRows_:CASH_SESSIONS"
+          ],
+          "directWrites": []
+        }
+      ]
+    },
+    {
+      "sourceFile": "OpeningBalance.gs",
+      "endpoints": []
+    },
+    {
+      "sourceFile": "Customer.gs",
+      "endpoints": [
+        {
+          "name": "getCustomersBootstrap",
+          "directCalls": [
+            "activeRows_",
+            "fail_",
+            "getActiveBankAccountsForUI_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "customers:view"
+          ],
+          "directReads": [
+            "activeRows_:CUSTOMERS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "getCustomerDetail",
+          "directCalls": [
+            "String",
+            "assertCustomerSalesIntegrity_",
+            "fail_",
+            "getAllRows_",
+            "isDeleted_",
+            "logError_",
+            "ok_",
+            "partyLedgerBuildDisplayIndex_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "customers:view"
+          ],
+          "directReads": [
+            "getAllRows_:CUSTOMERS",
+            "getAllRows_:CUSTOMER_LEDGER"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "receivePayment",
+          "directCalls": [
+            "Number",
+            "actorName_",
+            "addBankBookEntry_",
+            "addCashBookEntry_",
+            "appendRow_",
+            "customerPaymentPreview_",
+            "fail_",
+            "findRowIndex_",
+            "generateId_",
+            "getAllRows_",
+            "isBankLikePaymentMethod_",
+            "isDeleted_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "resolveBankAccount_",
+            "resolveTransactionDate_",
+            "roundMoney_",
+            "sanitizeInput_",
+            "updateRowFields_",
+            "validateSettlementDiscount_"
+          ],
+          "permissions": [
+            "customers:edit"
+          ],
+          "directReads": [
+            "findRowIndex_:CUSTOMERS",
+            "getAllRows_:CUSTOMERS"
+          ],
+          "directWrites": [
+            "appendRow_:CUSTOMER_LEDGER",
+            "updateRowFields_:CUSTOMERS"
+          ]
+        },
+        {
+          "name": "refundCustomerAdvance",
+          "directCalls": [
+            "Number",
+            "actorName_",
+            "addBankBookEntry_",
+            "addCashBookEntry_",
+            "appendRow_",
+            "customerCreditRefundPreview_",
+            "customerSettlementState_",
+            "fail_",
+            "findRowIndex_",
+            "generateId_",
+            "getAllRows_",
+            "isBankLikePaymentMethod_",
+            "isDeleted_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "resolveBankAccount_",
+            "resolveTransactionDate_",
+            "roundMoney_",
+            "sanitizeInput_",
+            "updateRowFields_"
+          ],
+          "permissions": [
+            "customers:edit"
+          ],
+          "directReads": [
+            "findRowIndex_:CUSTOMERS",
+            "getAllRows_:CUSTOMERS"
+          ],
+          "directWrites": [
+            "appendRow_:CUSTOMER_LEDGER",
+            "updateRowFields_:CUSTOMERS"
+          ]
+        }
+      ]
+    },
+    {
+      "sourceFile": "Suppliers.gs",
+      "endpoints": [
+        {
+          "name": "getSuppliersBootstrap",
+          "directCalls": [
+            "activeRows_",
+            "fail_",
+            "getActiveBankAccountsForUI_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "suppliers:view"
+          ],
+          "directReads": [
+            "activeRows_:SUPPLIERS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "getSupplierDetail",
+          "directCalls": [
+            "fail_",
+            "getAllRows_",
+            "isDeleted_",
+            "logError_",
+            "ok_",
+            "recalculateLedgerBalancesForDisplay_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "suppliers:view"
+          ],
+          "directReads": [
+            "getAllRows_:SUPPLIERS",
+            "getAllRows_:SUPPLIER_LEDGER"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "paySupplier",
+          "directCalls": [
+            "Number",
+            "actorName_",
+            "addBankBookEntry_",
+            "addCashBookEntry_",
+            "appendRow_",
+            "fail_",
+            "findRowIndex_",
+            "generateId_",
+            "getAllRows_",
+            "isBankLikePaymentMethod_",
+            "isDeleted_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "resolveBankAccount_",
+            "resolveTransactionDate_",
+            "roundMoney_",
+            "sanitizeInput_",
+            "updateRowFields_",
+            "validateSettlementDiscount_"
+          ],
+          "permissions": [
+            "suppliers:edit"
+          ],
+          "directReads": [
+            "findRowIndex_:SUPPLIERS",
+            "getAllRows_:SUPPLIERS"
+          ],
+          "directWrites": [
+            "appendRow_:SUPPLIER_LEDGER",
+            "updateRowFields_:SUPPLIERS"
+          ]
+        }
+      ]
+    },
+    {
+      "sourceFile": "Vendors.gs",
+      "endpoints": [
+        {
+          "name": "getVendorsBootstrap",
+          "directCalls": [
+            "Number",
+            "activeRows_",
+            "fail_",
+            "getActiveBankAccountsForUI_",
+            "getAllVendorsForUI_",
+            "getSettingsMap_",
+            "logError_",
+            "ok_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "vendors:view"
+          ],
+          "directReads": [
+            "activeRows_:PRODUCTS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "getVendorDetail",
+          "directCalls": [
+            "Number",
+            "activeRows_",
+            "fail_",
+            "getAllRows_",
+            "getVendorOpenObligations_",
+            "isDeleted_",
+            "logError_",
+            "ok_",
+            "recalculateLedgerBalancesForDisplay_",
+            "requirePermission_"
+          ],
+          "permissions": [
+            "vendors:view"
+          ],
+          "directReads": [
+            "activeRows_:VENDOR_ISSUES",
+            "activeRows_:VENDOR_LEDGER",
+            "getAllRows_:VENDORS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "payVendor",
+          "directCalls": [
+            "Number",
+            "actorName_",
+            "addBankBookEntry_",
+            "addCashBookEntry_",
+            "fail_",
+            "getAllRows_",
+            "isBankLikePaymentMethod_",
+            "isDeleted_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "postVendorLedgerEntry_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "resolveBankAccount_",
+            "resolveTransactionDate_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "vendors:edit"
+          ],
+          "directReads": [
+            "getAllRows_:VENDORS"
+          ],
+          "directWrites": []
+        },
+        {
+          "name": "receiveVendorPayment",
+          "directCalls": [
+            "Number",
+            "actorName_",
+            "addBankBookEntry_",
+            "addCashBookEntry_",
+            "fail_",
+            "getAllRows_",
+            "isBankLikePaymentMethod_",
+            "isDeleted_",
+            "isValidNonNegativeNumber_",
+            "logError_",
+            "ok_",
+            "postVendorLedgerEntry_",
+            "requireActiveCashSession_",
+            "requirePermission_",
+            "resolveBankAccount_",
+            "resolveTransactionDate_",
+            "sanitizeInput_"
+          ],
+          "permissions": [
+            "vendors:edit"
+          ],
+          "directReads": [
+            "getAllRows_:VENDORS"
+          ],
+          "directWrites": []
+        }
+      ]
+    },
+    {
+      "sourceFile": "PartyLedger.gs",
+      "endpoints": [
+        {
+          "name": "getCustomerLedgerPage",
+          "directCalls": [
+            "fail_",
+            "getPartyLedgerPage_",
+            "logError_",
+            "ok_"
+          ],
+          "permissions": [],
+          "directReads": [],
+          "directWrites": []
+        },
+        {
+          "name": "getSupplierLedgerPage",
+          "directCalls": [
+            "fail_",
+            "getPartyLedgerPage_",
+            "logError_",
+            "ok_"
+          ],
+          "permissions": [],
+          "directReads": [],
+          "directWrites": []
+        },
+        {
+          "name": "getCustomerLedgerWorkspaceBootstrap",
+          "directCalls": [
+            "fail_",
+            "getPartyLedgerWorkspaceBootstrap_",
+            "logError_",
+            "ok_"
+          ],
+          "permissions": [],
+          "directReads": [],
+          "directWrites": []
+        },
+        {
+          "name": "getSupplierLedgerWorkspaceBootstrap",
+          "directCalls": [
+            "fail_",
+            "getPartyLedgerWorkspaceBootstrap_",
+            "logError_",
+            "ok_"
+          ],
+          "permissions": [],
+          "directReads": [],
+          "directWrites": []
+        },
+        {
+          "name": "getCustomerLedgerStatement",
+          "directCalls": [
+            "fail_",
+            "getPartyLedgerStatement_",
+            "logError_",
+            "ok_"
+          ],
+          "permissions": [],
+          "directReads": [],
+          "directWrites": []
+        },
+        {
+          "name": "getSupplierLedgerStatement",
+          "directCalls": [
+            "fail_",
+            "getPartyLedgerStatement_",
+            "logError_",
+            "ok_"
+          ],
+          "permissions": [],
+          "directReads": [],
+          "directWrites": []
+        }
+      ]
+    }
+  ],
+  "internal": [
+    {
+      "name": "addCashBookEntry_",
+      "sourceFile": "CashBook.gs",
+      "directCalls": [
+        "Number",
+        "appendRow_",
+        "generateId_",
+        "getCashBalance_",
+        "roundMoney_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": [
+        "appendRow_:CASH_BOOK"
+      ]
+    },
+    {
+      "name": "getCashBalance_",
+      "sourceFile": "CashBook.gs",
+      "directCalls": [
+        "Number",
+        "activeRows_",
+        "roundMoney_"
+      ],
+      "permissions": [],
+      "directReads": [
+        "activeRows_:CASH_BOOK"
+      ],
+      "directWrites": []
+    },
+    {
+      "name": "addBankBookEntry_",
+      "sourceFile": "BankBook.gs",
+      "directCalls": [
+        "Number",
+        "appendRow_",
+        "findRowIndex_",
+        "generateId_",
+        "getAllRows_",
+        "roundMoney_",
+        "updateRowFields_"
+      ],
+      "permissions": [],
+      "directReads": [
+        "findRowIndex_:BANK_ACCOUNTS",
+        "getAllRows_:BANK_ACCOUNTS"
+      ],
+      "directWrites": [
+        "appendRow_:BANK_BOOK",
+        "updateRowFields_:BANK_ACCOUNTS"
+      ]
+    },
+    {
+      "name": "getBankBalance_",
+      "sourceFile": "BankBook.gs",
+      "directCalls": [
+        "Number",
+        "getAllRows_",
+        "roundMoney_"
+      ],
+      "permissions": [],
+      "directReads": [
+        "getAllRows_:BANK_ACCOUNTS"
+      ],
+      "directWrites": []
+    },
+    {
+      "name": "postHistoricalOpeningCash_",
+      "sourceFile": "OpeningBalance.gs",
+      "directCalls": [
+        "addCashBookEntry_",
+        "historicalOpeningCashDirection_",
+        "historicalOpeningCashReference_",
+        "historicalOpeningCashRows_",
+        "parseSignedOpeningBalance_",
+        "roundMoney_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "replaceHistoricalOpeningCash_",
+      "sourceFile": "OpeningBalance.gs",
+      "directCalls": [
+        "historicalOpeningCashRows_",
+        "markRowDeleted_",
+        "postHistoricalOpeningCash_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": [
+        "markRowDeleted_:CASH_BOOK"
+      ]
+    },
+    {
+      "name": "reverseHistoricalOpeningCash_",
+      "sourceFile": "OpeningBalance.gs",
+      "directCalls": [
+        "historicalOpeningCashRows_",
+        "markRowDeleted_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": [
+        "markRowDeleted_:CASH_BOOK"
+      ]
+    },
+    {
+      "name": "postFinanceTransactionMoney_",
+      "sourceFile": "FinanceModule.gs",
+      "directCalls": [
+        "actorName_",
+        "addBankBookEntry_",
+        "addCashBookEntry_",
+        "financeTypeHasMoneyMovement_",
+        "isBankLikePaymentMethod_",
+        "postHistoricalOpeningCash_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "financeTypeHasMoneyMovement_",
+      "sourceFile": "FinanceModule.gs",
+      "directCalls": [],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "financeSignedBalances_",
+      "sourceFile": "FinanceModule.gs",
+      "directCalls": [
+        "Number",
+        "String",
+        "financeTransactionType_",
+        "financeTxnPersonKey_",
+        "roundMoney_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "financeBalanceSummary_",
+      "sourceFile": "FinanceModule.gs",
+      "directCalls": [
+        "financeSignedBalances_",
+        "roundMoney_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "cashSessionSummaryFromRows_",
+      "sourceFile": "CashSession.gs",
+      "directCalls": [
+        "Number",
+        "String",
+        "cashSessionLinkedReconciliationEntryIds_",
+        "getCashBalance_",
+        "getCashMismatch_",
+        "roundMoney_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "requireActiveCashSession_",
+      "sourceFile": "CashSession.gs",
+      "directCalls": [
+        "getActiveCashSession_"
+      ],
+      "permissions": [],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "getPartyLedgerPage_",
+      "sourceFile": "PartyLedger.gs",
+      "directCalls": [
+        "assertCustomerSalesIntegrity_",
+        "partyLedgerBuildDisplayIndex_",
+        "partyLedgerConfig_",
+        "partyLedgerPageFromAscending_",
+        "partyLedgerPageSize_",
+        "partyLedgerResolveCorrectionsMode_",
+        "requirePermission_",
+        "sanitizeInput_"
+      ],
+      "permissions": [
+        "<dynamic>"
+      ],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "getPartyLedgerWorkspaceBootstrap_",
+      "sourceFile": "PartyLedger.gs",
+      "directCalls": [
+        "assertCustomerSalesIntegrity_",
+        "getActiveBankAccountsForUI_",
+        "getSettingsMap_",
+        "partyLedgerBuildDisplayIndex_",
+        "partyLedgerConfig_",
+        "partyLedgerPageFromAscending_",
+        "partyLedgerPageSize_",
+        "partyLedgerResolveCorrectionsMode_",
+        "partyLedgerSelectedParty_",
+        "partyLedgerSelectorParties_",
+        "partyLedgerUserCanViewCorrections_",
+        "requirePermission_",
+        "sanitizeInput_"
+      ],
+      "permissions": [
+        "<dynamic>"
+      ],
+      "directReads": [],
+      "directWrites": []
+    },
+    {
+      "name": "getPartyLedgerStatement_",
+      "sourceFile": "PartyLedger.gs",
+      "directCalls": [
+        "Number",
+        "assertCustomerSalesIntegrity_",
+        "formatDateTime_",
+        "partyLedgerBuildDisplayIndex_",
+        "partyLedgerBusinessIdentity_",
+        "partyLedgerConfig_",
+        "partyLedgerNormalizeFullRows_",
+        "partyLedgerSelectedParty_",
+        "partyLedgerValidateStatementDates_",
+        "requirePermission_",
+        "roundMoney_",
+        "safeDateOnly_",
+        "sanitizeInput_"
+      ],
+      "permissions": [
+        "<dynamic>"
+      ],
+      "directReads": [],
+      "directWrites": []
+    }
+  ]
+}
