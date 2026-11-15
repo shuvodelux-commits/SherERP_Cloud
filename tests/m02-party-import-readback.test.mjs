@@ -358,3 +358,58 @@ test('source count audit continues to accept zero quarantined rows and flag posi
   assert.ok(codes(flagged).includes('QUARANTINED_SOURCE_ROWS'));
   assert.ok(!codes(flagged).includes('PLAN_COUNT_MISMATCH'));
 });
+
+test('a Finance-only source Party cannot claim a Supplier role in mirrored D1 parity',()=>{
+  const plan=planned();
+  const finance=plan.links.find(link=>link.sourceGroup==='FINANCE_PERSONS');
+  const forged=plan.roles.find(role=>role.partyId===finance.partyId&&role.role==='Owner');
+  assert.ok(forged);
+  forged.role='Supplier';
+  const readback=snapshot(plan,{approvalRef:true});
+  const before=structuredClone({plan,readback});
+  const report=audit(plan,readback);
+  assert.deepEqual(report.counts.expected,report.counts.actual);
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(report),/FIN-001|REVIEW-001|CUS-001|admin-01|01900000000/);
+  assert.deepEqual({plan,readback},before);
+});
+
+test('source Customer role cannot be removed or replaced by a Payee-only role',()=>{
+  const plan=planned();
+  const customer=plan.links.find(link=>link.sourceGroup==='CUSTOMERS');
+  const role=plan.roles.find(x=>x.partyId===customer.partyId&&x.role==='Customer');
+  assert.ok(role);
+  role.role='Payee';
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(report),/CUS-001|SUP-001|REVIEW-001|admin-01/);
+});
+
+test('unknown legacy source groups cannot be approved by self-consistent D1-shaped rows',()=>{
+  const plan=planned();
+  const link=plan.links.find(x=>x.sourceGroup==='FINANCE_PERSONS');
+  assert.ok(link);
+  link.sourceGroup='UNRECOGNIZED_LEGACY_TABLE';
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,false);
+  assert.equal(report.approvalEvidencePersistent,false);
+  assert.deepEqual(report.issues,[{code:'PLAN_LINKAGE_INVALID',table:'plan'}]);
+  assert.doesNotMatch(JSON.stringify(report),/FIN-001|CUS-001|SUP-001|REVIEW-001|admin-01/);
+});
+
+test('source-backed Customer+Supplier review and original Finance 3-role plan remain valid',()=>{
+  const plan=planned();
+  const rolesFor=id=>plan.roles.filter(role=>role.partyId===id).map(role=>role.role);
+  const reviewed=plan.links.find(x=>x.sourceGroup==='CUSTOMERS');
+  const finance=plan.links.find(x=>x.sourceGroup==='FINANCE_PERSONS');
+  assert.deepEqual(rolesFor(reviewed.partyId),['Customer','Supplier']);
+  assert.deepEqual(rolesFor(finance.partyId),['Owner','Lender','Borrower']);
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,true);
+  assert.equal(report.approvalEvidencePersistent,true);
+  assert.deepEqual(report.issues,[]);
+});
