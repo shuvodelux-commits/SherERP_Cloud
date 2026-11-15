@@ -317,3 +317,15 @@ test('SQL parent claim rejects any child whose return ID or operation ID aliases
     assert.deepEqual(await snapshot(),before);
   }
 });
+
+test('fully paid anonymous walk-in original invoice remains ineligible for a Customer Store Credit batch',async()=>{
+  const original=await sale('A',{sku:'PIPE'});
+  const walkIn=await sale('WALKIN',{sku:'OTHER',customerId:'',
+    payments:[{id:'CASH-WALKIN',method:'Cash',amount:'100'}]});
+  await initCustomerBalance();
+  const before=await snapshot();
+  assert.equal((await post().post(batch([
+    child(original,'A-00001'),child(walkIn,'WALKIN-00001')
+  ]))).status,'DECLINED');
+  assert.deepEqual(await snapshot(),before);
+});
