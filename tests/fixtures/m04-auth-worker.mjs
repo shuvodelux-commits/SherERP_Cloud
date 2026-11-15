@@ -8,13 +8,14 @@ import {normalizeLegacyStaffPhoneSearch} from '../../src/auth/staff-phone-identi
 import {handleRpc} from '../../src/rpc/handler.js';
 import {authorizeStaffReadWithD1} from '../../src/auth/d1-staff-read-gate.js';
 import {readStaffDirectoryPreviewWithD1} from '../../src/auth/d1-staff-directory.js';
+import {readRoleDirectoryPreviewWithD1} from '../../src/auth/d1-role-directory.js';
 
 const json=(status,value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 export default {
   async fetch(request,env){
     if(request.method!=='POST') return json(405,{error:'Method forbidden'});
     const path=new URL(request.url).pathname;
-    if(!['/__m04_test__/login','/__m04_test__/validate','/__m04_test__/logout','/__m04_test__/rpc','/__m04_test__/authorize','/__m04_test__/staff-directory'].includes(path))
+    if(!['/__m04_test__/login','/__m04_test__/validate','/__m04_test__/logout','/__m04_test__/rpc','/__m04_test__/authorize','/__m04_test__/staff-directory','/__m04_test__/role-directory'].includes(path))
       return json(404,{error:'Not found'});
     try {
       const raw=await request.json();
@@ -29,6 +30,12 @@ export default {
       // Local Workerd fixture only: not registered in public auth or RPC.
       if(path==='/__m04_test__/staff-directory')
         return json(200,await readStaffDirectoryPreviewWithD1(env.DB,{
+          token:raw.token,nowMs,
+        }));
+      // M04 synthetic Workerd/D1 route only, never deployed or exposed by
+      // the public Worker or RPC registry.
+      if(path==='/__m04_test__/role-directory')
+        return json(200,await readRoleDirectoryPreviewWithD1(env.DB,{
           token:raw.token,nowMs,
         }));
       if(path==='/__m04_test__/rpc'){
