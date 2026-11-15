@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createSettingsReadAdapter} from '../../src/db/settings-read.js';
+import {createGuardedShellSettingsUpdateAdapter} from '../../src/db/settings-update.js';
 
 const harness=createTestHarness({workers:[{configPath:'./wrangler.m03-settings-test.jsonc'}]});
 const worker=harness.getWorker('shererp-m03-settings-local-test');
@@ -137,4 +138,57 @@ test('synthetic Settings Worker never exposes settings, contact data or RPC rout
   const production=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8')+
     readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
   assert.equal(production.includes('settings-read'),false);
+});
+
+test('real Workerd/D1 guarded Settings update trims Shop Name and keeps physical source identity',async()=>{
+  await insert('Shop Name','Original Shop',2);
+  await insert('Currency Symbol','৳',3);
+  await insert('Phone 1','01712345678',4);
+  const before=await records();
+  const adapter=createGuardedShellSettingsUpdateAdapter({DB});
+  assert.deepEqual(await adapter.updateExisting_('Shop Name','  নবাবী হার্ডওয়্যার  ','Original Shop'),{updated:true});
+  const after=await records();
+  assert.deepEqual(after[0],{...before[0],value:'নবাবী হার্ডওয়্যার'});
+  assert.deepEqual(after.slice(1),before.slice(1));
+  assert.deepEqual(await reader().getAppShellSettings_(),{shopName:'নবাবী হার্ডওয়্যার',currencySymbol:'৳'});
+});
+
+test('real Workerd/D1 concurrent CAS updates cannot both overwrite the same preimage',async()=>{
+  await insert('Shop Name','Initial',2);
+  const adapter=createGuardedShellSettingsUpdateAdapter({DB});
+  const results=await Promise.allSettled([
+    adapter.updateExisting_('Shop Name','First','Initial'),
+    adapter.updateExisting_('Shop Name','Second','Initial')
+  ]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(results.filter(x=>x.status==='rejected').length,1);
+  assert.equal((await records())[0].value,results[0].status==='fulfilled'?'First':'Second');
+  assert.equal((await records()).length,1);
+});
+
+test('real Workerd/D1 stale preimage and absent key reject rather than upsert',async()=>{
+  const adapter=createGuardedShellSettingsUpdateAdapter({DB});
+  await insert('Shop Name','Initial',2);
+  await DB.prepare("UPDATE settings SET value='Newer' WHERE key='Shop Name'").run();
+  const prior=await records();
+  await assert.rejects(()=>adapter.updateExisting_('Shop Name','Stale','Initial'),/stale|missing|conflict/i);
+  await assert.rejects(()=>adapter.updateExisting_('Currency Symbol','৳',''),/stale|missing|conflict/i);
+  assert.deepEqual(await records(),prior);
+});
+
+test('real Workerd/D1 Currency Symbol can be cleared without exposing private settings',async()=>{
+  await insert('Currency Symbol','৳',2);
+  await insert('Delete Confirmation Key','SUPER_SECRET',3);
+  await insert('Phone 1','01712345678',4);
+  const adapter=createGuardedShellSettingsUpdateAdapter({DB});
+  assert.deepEqual(await adapter.updateExisting_('Currency Symbol','   ','৳'),{updated:true});
+  await assert.rejects(()=>adapter.updateExisting_('Delete Confirmation Key','attacker','SUPER_SECRET'),
+    /invalid|unsupported|key/i);
+  assert.equal((await records()).find(x=>x.key==='Delete Confirmation Key').value,'SUPER_SECRET');
+  assert.equal((await records()).find(x=>x.key==='Phone 1').value,'01712345678');
+  assert.equal((await reader().getAppShellSettings_()).currencySymbol,'');
+  assert.equal((await worker.fetch('http://settings.local/__m03_settings_update__',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({key:'Shop Name',value:'FORGED'})
+  })).status,404);
 });
