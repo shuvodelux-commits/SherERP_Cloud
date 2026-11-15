@@ -62,9 +62,9 @@ test('multiple standard products have independent FIFO plans and line totals',()
     productId:'WIRE',qty:1,priceMode:'auto',unitPrice:15
   })],3));
   assert.equal(result.subtotal,67); // PIPE 53 and WIRE 14
-  assert.equal(result.cogs,36); // PIPE 30 and WIRE 6
+  assert.equal(result.cogs,37); // PIPE 2 x 10 + 1 x 11, WIRE 1 x 6
   assert.equal(result.grandTotal,64);
-  assert.equal(result.profit,28);
+  assert.equal(result.profit,27);
 });
 
 test('manual unit price uses quantity while preserving original lot COGS',()=>{
