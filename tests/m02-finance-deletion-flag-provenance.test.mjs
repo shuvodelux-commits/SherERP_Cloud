@@ -69,7 +69,7 @@ test('two ambiguous Finance deletion flags are counted without revealing source 
 test('original blank/boolean/TRUE/FALSE soft-delete markers remain valid',()=>{
   for(const flag of ['', ' ', null, false, true,
     'TRUE',' true ','\tTrue\n','FALSE',' false ','\tfalse\n']){
-    const input=example(),before=structuredClone(input);
+    const input=example();
     input.sourceRows[0]['Is Deleted']=flag;
     const original=structuredClone(input);
     const result=inspect(input);
@@ -77,7 +77,6 @@ test('original blank/boolean/TRUE/FALSE soft-delete markers remain valid',()=>{
     assert.deepEqual(result.issues,[]);
     assert.equal(result.counts.unsafeValues,0);
     assert.deepEqual(input,original);
-    assert.notDeepEqual(input,before);
   }
 });
 
