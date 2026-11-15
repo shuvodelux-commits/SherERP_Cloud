@@ -130,7 +130,7 @@ test('concurrent operations cannot both spend the same product version',async()=
   assert.equal(status.filter(x=>x==='COMMITTED').length,1);
   assert.equal(status.every(x=>['COMMITTED','DECLINED','NEEDS_REVIEW'].includes(x)),true);
   assert.equal((await one('SELECT COUNT(*) AS n FROM m05_purchases')).n,1);
-  assert.equal((await one('SELECT stock FROM m05_products WHERE sku='PIPE'')).stock,5);
+  assert.equal((await one("SELECT stock FROM m05_products WHERE sku='PIPE'")).stock,5);
 });
 
 test('late ledger constraint failure rolls back receipt, lot, stock, cash and due in the same D1 transaction',async()=>{
