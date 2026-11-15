@@ -1,3 +1,4 @@
+import './m05-purchase-multiline-workerd.spec.mjs'; // M05 multi-line atomic purchase, separate synthetic Workerd/D1.
 import {describe,before,after,beforeEach,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
