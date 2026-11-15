@@ -12,6 +12,8 @@ import {M05ML_ADD_DDL} from '../fixtures/m05-purchase-add-line-d1-schema.mjs';
 import {createSyntheticPurchaseLineAdder} from '../fixtures/m05-purchase-add-line-d1-contract.mjs';
 import {M05ML_REMOVE_DDL} from '../fixtures/m05-purchase-remove-line-d1-schema.mjs';
 import {createSyntheticPurchaseLineRemover} from '../fixtures/m05-purchase-remove-line-d1-contract.mjs';
+import {M05ML_SUPPLIER_TRANSFER_DDL} from '../fixtures/m05-purchase-supplier-transfer-d1-schema.mjs';
+import {createSyntheticPurchaseSupplierTransfer} from '../fixtures/m05-purchase-supplier-transfer-d1-contract.mjs';
 
 // Synthetic local D1; NEVER the deployed Worker, main D1, or real shop data.
 const server=createTestHarness({workers:[{configPath:'./wrangler.m05-multiline-test.jsonc'}]});
@@ -31,6 +33,18 @@ const deleter=options=>createSyntheticPurchaseDeleter(DB,options);
 const editor=options=>createSyntheticPurchaseEditor(DB,options);
 const addLine=options=>createSyntheticPurchaseLineAdder(DB,options);
 const removeLine=options=>createSyntheticPurchaseLineRemover(DB,options);
+const moveSupplier=options=>createSyntheticPurchaseSupplierTransfer(DB,options);
+const transferInput=(operationId,overrides={})=>({
+  tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-TRANSFER-0001',
+  operationId,reason:'Original purchase recorded under wrong supplier',
+  sourceSupplierId:'SUP-1',targetSupplierId:'SUP-2',...overrides
+});
+const transferState=async()=>({
+  source:await snapshot(),
+  receipts:await all('SELECT * FROM m05ml_supplier_transfer_receipts ORDER BY operation_id'),
+  legs:await all('SELECT * FROM m05ml_supplier_transfer_legs ORDER BY leg_order'),
+  audit:await all('SELECT * FROM m05ml_supplier_transfer_audit ORDER BY operation_id')
+});
 const removeInput=(operationId,overrides={})=>({
   tenantId:'SHOP-A',actorId:'USER-A',purchaseId:'PUR-OP-REMOVE-0001',
   operationId,reason:'Wrong product on source purchase',
@@ -107,6 +121,7 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     for(const sql of M05ML_EDIT_DDL)await DB.prepare(sql).run();
     for(const sql of M05ML_ADD_DDL)await DB.prepare(sql).run();
     for(const sql of M05ML_REMOVE_DDL)await DB.prepare(sql).run();
+    for(const sql of M05ML_SUPPLIER_TRANSFER_DDL)await DB.prepare(sql).run();
     for(const [sql,args] of M05ML_SEED)await DB.prepare(sql).bind(...args).run();
   });
   beforeEach(async()=>{
@@ -115,6 +130,9 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_edit_audit').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_add_audit').run();
     await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_remove_audit').run();
+    await DB.prepare('DROP TRIGGER IF EXISTS m05ml_inject_fail_supplier_transfer_audit').run();
+    for(const table of ['m05ml_supplier_transfer_legs','m05ml_supplier_transfer_audit','m05ml_supplier_transfer_receipts'])
+      await DB.prepare('DELETE FROM '+table).run();
     for(const table of ['m05ml_remove_movements','m05ml_remove_audit','m05ml_remove_receipts'])
       await DB.prepare('DELETE FROM '+table).run();
     for(const table of ['m05ml_add_movements','m05ml_add_audit','m05ml_add_receipts'])
@@ -1069,6 +1087,207 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
         .catch(e=>({error:e.message}));
       assert.notEqual(v.status,'COMMITTED');
       assert.deepEqual(await removedState(),prior);
+    }
+  });
+
+
+  test('supplier reassignment transfers gross payable with two audit legs and preserves BOTH original lots, Cash and Customer AR',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    assert.deepEqual(await moveSupplier().transfer(transferInput('OP-TRANSFER-A01')),{
+      status:'COMMITTED',operationId:'OP-TRANSFER-A01',
+      purchaseId:'PUR-OP-TRANSFER-0001',targetSupplierId:'SUP-2',dueTransferredPaisa:3200
+    });
+    assert.deepEqual(await all('SELECT supplier_id,payable_paisa FROM m05ml_suppliers ORDER BY supplier_id'),[
+      {supplier_id:'SUP-1',payable_paisa:4000},{supplier_id:'SUP-2',payable_paisa:5200}
+    ]);
+    assert.deepEqual(await all('SELECT leg_order,supplier_id,debit_paisa,credit_paisa,balance_paisa FROM m05ml_supplier_transfer_legs ORDER BY leg_order'),[
+      {leg_order:1,supplier_id:'SUP-1',debit_paisa:0,credit_paisa:3200,balance_paisa:4000},
+      {leg_order:2,supplier_id:'SUP-2',debit_paisa:3200,credit_paisa:0,balance_paisa:5200}
+    ]);
+    assert.deepEqual(await all("SELECT sku,supplier_id,qty,remaining_qty,cost_paisa FROM m05ml_effective_transfer_lots ORDER BY sku"),[
+      {sku:'PIPE',supplier_id:'SUP-2',qty:2,remaining_qty:2,cost_paisa:1525},
+      {sku:'SWITCH',supplier_id:'SUP-2',qty:3,remaining_qty:3,cost_paisa:750}
+    ]);
+    assert.deepEqual(await all('SELECT sku,supplier_id FROM m05ml_lots ORDER BY sku'),[
+      {sku:'PIPE',supplier_id:'SUP-1'},{sku:'SWITCH',supplier_id:'SUP-1'}
+    ],'original lot provenance retained as immutable history');
+    assert.deepEqual(await one('SELECT supplier_id,debit_paisa FROM m05ml_effective_transfer_supplier_ledger'),{
+      supplier_id:'SUP-2',debit_paisa:3200
+    });
+    assert.deepEqual(await one('SELECT supplier_id,debit_paisa,balance_paisa FROM m05ml_supplier_ledger'),{
+      supplier_id:'SUP-1',debit_paisa:3200,balance_paisa:7200
+    },'original supplier ledger is immutable');
+    assert.equal((await one('SELECT supplier_id FROM m05ml_purchases')).supplier_id,'SUP-1');
+    assert.equal((await one('SELECT debit_paisa FROM m05ml_cash_book')).debit_paisa,2000);
+    assert.equal(await count('m05ml_bank_book'),0);
+    assert.equal((await one("SELECT customer_ar_paisa FROM m05ml_customer_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+    assert.deepEqual(await all("SELECT sku,stock,version FROM m05ml_products WHERE sku IN ('PIPE','SWITCH') ORDER BY sku"),[
+      {sku:'PIPE',stock:6,version:2},{sku:'SWITCH',stock:5,version:2}
+    ],'supplier-only correction does not change stock or versions');
+    assert.equal((await one('SELECT reason FROM m05ml_supplier_transfer_audit')).reason,
+      'Original purchase recorded under wrong supplier');
+  });
+
+  test('consumed original lot still changes effective supplier provenance without retroactive stock revaluation',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    await DB.prepare("UPDATE m05ml_lots SET remaining_qty=0 WHERE sku='PIPE'").run();
+    await DB.prepare("UPDATE m05ml_products SET stock=4,version=3 WHERE sku='PIPE'").run();
+    const before=await all("SELECT sku,stock,version FROM m05ml_products WHERE sku='PIPE'");
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-SOLD'))).status,'COMMITTED');
+    assert.deepEqual(await all("SELECT sku,remaining_qty,supplier_id FROM m05ml_effective_transfer_lots WHERE sku='PIPE'"),[
+      {sku:'PIPE',remaining_qty:0,supplier_id:'SUP-2'}
+    ]);
+    assert.deepEqual(await all("SELECT sku,stock,version FROM m05ml_products WHERE sku='PIPE'"),before);
+  });
+
+  test('Bank-paid purchase supplier reassignment keeps original Bank tender and unrelated Customer account untouched',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001',{paymentMethod:'Bank',bankAccountId:'BANK-1'}))).status,'COMMITTED');
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-BANK'))).status,'COMMITTED');
+    assert.equal(await count('m05ml_cash_book'),0);
+    assert.equal((await one('SELECT bank_account_id,debit_paisa FROM m05ml_bank_book')).debit_paisa,2000);
+    assert.equal((await one("SELECT customer_ar_paisa FROM m05ml_customer_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,4000);
+    assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-2'")).payable_paisa,5200);
+  });
+
+  test('one operation replays; changed actor/reason/source/target conflicts; second operation never double-transfers',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    const original=transferInput('OP-TRANSFER-REPLAY');
+    assert.equal((await moveSupplier().transfer(original)).status,'COMMITTED');
+    const saved=await transferState();
+    assert.equal((await moveSupplier().transfer(original)).status,'REPLAY');
+    for(const change of [
+      {actorId:'USER-B'},{reason:'Changed reason'},
+      {targetSupplierId:'SUP-1'},{sourceSupplierId:'SUP-2'},
+      {purchaseId:'PUR-OTHER'}
+    ])assert.equal((await moveSupplier().transfer({...original,...change})).status,'CONFLICT');
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-SECOND'))).status,'DECLINED');
+    assert.deepEqual(await transferState(),saved);
+  });
+
+  test('same supplier, inactive supplier, unreviewed source/target Party links or missing supplier cannot transfer',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    const saved=await transferState();
+    for(const change of [
+      {sourceSupplierId:'SUP-2'},{targetSupplierId:'SUP-1'},
+      {targetSupplierId:'UNKNOWN'}
+    ]){
+      assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-INVALID',change))).status,'DECLINED');
+      assert.deepEqual(await transferState(),saved);
+    }
+    for(const [mutation,restore] of [
+      ["UPDATE m05ml_suppliers SET active=0 WHERE supplier_id='SUP-1'",
+       "UPDATE m05ml_suppliers SET active=1 WHERE supplier_id='SUP-1'"],
+      ["UPDATE m05ml_suppliers SET active=0 WHERE supplier_id='SUP-2'",
+       "UPDATE m05ml_suppliers SET active=1 WHERE supplier_id='SUP-2'"],
+      ["UPDATE m05ml_party_links SET reviewed=0 WHERE source_id='SUP-1'",
+       "UPDATE m05ml_party_links SET reviewed=1 WHERE source_id='SUP-1'"],
+      ["UPDATE m05ml_party_links SET reviewed=0 WHERE source_id='SUP-2'",
+       "UPDATE m05ml_party_links SET reviewed=1 WHERE source_id='SUP-2'"],
+      ["UPDATE m05ml_sessions SET state='Closed'",
+       "UPDATE m05ml_sessions SET state='Open'"]
+    ]){
+      await DB.prepare(mutation).run();
+      const before=await transferState();
+      assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-GUARD'))).status,'DECLINED');
+      assert.deepEqual(await transferState(),before);
+      await DB.prepare(restore).run();
+    }
+  });
+
+  test('active Purchase Return or allocated Supplier settlement blocks payable transfer atomically',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    for(const [mutation,restore] of [
+      ["INSERT INTO m05ml_purchase_returns VALUES('SHOP-A','RET-TRANSFER','PUR-OP-TRANSFER-0001',1)",
+       "DELETE FROM m05ml_purchase_returns"],
+      ["INSERT INTO m05ml_purchase_settlements VALUES('SHOP-A','SET-TRANSFER','PUR-OP-TRANSFER-0001',100,1)",
+       "DELETE FROM m05ml_purchase_settlements"]
+    ]){
+      await DB.prepare(mutation).run();
+      const before=await transferState();
+      assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-LINKED'))).status,'DECLINED');
+      assert.deepEqual(await transferState(),before);
+      await DB.prepare(restore).run();
+    }
+  });
+
+  test('missing source lot or inconsistent old Supplier provenance rejects transfer',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    await DB.prepare("UPDATE m05ml_lots SET supplier_id='SUP-2' WHERE sku='PIPE'").run();
+    let before=await transferState();
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-WRONGLOT'))).status,'DECLINED');
+    assert.deepEqual(await transferState(),before);
+    await DB.prepare("UPDATE m05ml_lots SET supplier_id='SUP-1' WHERE sku='PIPE'").run();
+    await DB.prepare("DELETE FROM m05ml_lots WHERE sku='SWITCH'").run();
+    before=await transferState();
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-MISSLOT'))).status,'DECLINED');
+    assert.deepEqual(await transferState(),before);
+  });
+
+  test('later original or target Supplier purchase ledger blocks historical payable reassignment',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    assert.equal((await poster().post(input('OP-TRANSFER-LATE1',{items:[line('PIPE',1,'5','6',2)],paidAmount:'0'}))).status,'COMMITTED');
+    const before=await transferState();
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-LATER'))).status,'DECLINED');
+    assert.deepEqual(await transferState(),before);
+  });
+
+  test('source already corrected by add/edit/delete/remove blocks independent supplier transfer',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-TRANSFIRST',{purchaseId:'PUR-OP-TRANSFER-0001'}))).status,'COMMITTED');
+    const before=await transferState();
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-POSTRMV'))).status,'DECLINED');
+    assert.deepEqual(await transferState(),before);
+  });
+
+  test('transfer prevents later synthetic delete, item edit, add line or line remove correction',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    assert.equal((await moveSupplier().transfer(transferInput('OP-TRANSFER-LOCKS'))).status,'COMMITTED');
+    await seedBolt();
+    const before=await transferState();
+    assert.equal((await deleter().remove(deletionInput('OP-DEL-TRANSLOCK',{purchaseId:'PUR-OP-TRANSFER-0001'}))).status,'DECLINED');
+    assert.equal((await editor().edit(editInput('OP-EDIT-TRANSLOCK',{purchaseId:'PUR-OP-TRANSFER-0001'}))).status,'DECLINED');
+    assert.equal((await addLine().add(addLineInput('OP-ADD-TRANSLOCK',{purchaseId:'PUR-OP-TRANSFER-0001'}))).status,'DECLINED');
+    assert.equal((await removeLine().remove(removeInput('OP-RMV-TRANSLOCK',{purchaseId:'PUR-OP-TRANSFER-0001'}))).status,'DECLINED');
+    assert.deepEqual(await transferState(),before);
+  });
+
+  test('injected late audit failure rolls back BOTH supplier balances, accounting legs and transfer receipt',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    await DB.prepare("CREATE TRIGGER m05ml_inject_fail_supplier_transfer_audit BEFORE INSERT ON m05ml_supplier_transfer_audit BEGIN SELECT RAISE(ABORT,'forced-supplier-transfer-audit-fail'); END").run();
+    const before=await transferState();
+    await assert.rejects(moveSupplier().transfer(transferInput('OP-TRANSFER-FAIL')),/NEEDS_REVIEW/);
+    assert.deepEqual(await transferState(),before);
+  });
+
+  test('two simultaneous operation IDs commit supplier reassignment at most once',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    const results=await Promise.allSettled([
+      moveSupplier().transfer(transferInput('OP-TRANSFER-CONC1')),
+      moveSupplier().transfer(transferInput('OP-TRANSFER-CONC2'))
+    ]);
+    const statuses=results.map(r=>r.status==='fulfilled'?r.value.status:'NEEDS_REVIEW');
+    assert.equal(statuses.filter(x=>x==='COMMITTED').length,1);
+    assert.ok(statuses.every(x=>['COMMITTED','DECLINED','NEEDS_REVIEW'].includes(x)));
+    assert.equal(await count('m05ml_supplier_transfer_receipts'),1);
+    assert.equal(await count('m05ml_supplier_transfer_legs'),2);
+    assert.equal(await count('m05ml_supplier_transfer_audit'),1);
+    assert.deepEqual(await all('SELECT supplier_id,payable_paisa FROM m05ml_suppliers ORDER BY supplier_id'),[
+      {supplier_id:'SUP-1',payable_paisa:4000},{supplier_id:'SUP-2',payable_paisa:5200}
+    ]);
+  });
+
+  test('bad operation/actor/tenant/source/target and blank reason never transfer gross payable',async()=>{
+    assert.equal((await poster().post(input('OP-TRANSFER-0001'))).status,'COMMITTED');
+    const before=await transferState();
+    for(const change of [
+      {operationId:'short'},{actorId:''},{tenantId:'SHOP-B'},{reason:''},
+      {sourceSupplierId:'BAD ID'},{targetSupplierId:''},{purchaseId:'DOES-NOT-EXIST'}
+    ]){
+      const res=await moveSupplier().transfer(transferInput('OP-TRANSFER-BADID',change))
+        .catch(e=>({error:e.message}));
+      assert.notEqual(res.status,'COMMITTED');
+      assert.deepEqual(await transferState(),before);
     }
   });
 
