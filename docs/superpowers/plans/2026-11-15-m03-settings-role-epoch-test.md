@@ -23,3 +23,11 @@ Only `tests/m03-m04-settings-auth.test.mjs` and this plan. Never edit shared `sr
 ## Related security gate
 
 Old draft M04 PR #30 adds source-audited internal permission maps and Proxy fail-closed behavior. Its latest CI caught this independent preexisting test mismatch; it **must not** bypass the test or ship with failing CI. Once the M03 owner reviews and merges this test-only correction, rerun/update #30 CI before approving its integration.
+
+## RED real-Workerd integration regression discovered after the unit-test correction
+
+GitHub run `43698861024`, Workerd/D1 job `132765297484`, executed the original `tests/integration/m03-m04-settings-workerd.spec.mjs:86` test and reported **225 tests, 224 passed, 1 failed**. The identical old-session expectation was still present in its custom-role case: after `UPDATE auth_roles SET allowed_modules=''`, the old token `C` wrongly expected a successful Settings CAS, resulting in `Denied or stale Settings precondition` (correct protection). The rest of this actual Workerd/D1 suite passed.
+
+**Task:** Align this second, independent *real D1* acceptance test with role invalidation, without changing production code, test migration trigger or weakening any guard. Assert the original `C` session is denied and Settings unchanged. Read the newly incremented role epoch, insert a new **synthetic session** with a distinct token bound to that epoch and the same authenticated staff identity, then assert current literal `settings.edit=true` authorizes both guarded compare-and-set updates while `allowed_modules` remains blank. Keep subsequent tests' fixture state and unrelated live token values intact. Run Foundation + actual Workerd/D1 + browser + Cloudflare safety on the new head; require all workflows green before review/merge.
+
+**Additional file impact:** one more test-only file `tests/integration/m03-m04-settings-workerd.spec.mjs`; no SQL schema, runtime, auth, source, Cloudflare or remote data changes. Both RED failures are documented with Actions evidence.
