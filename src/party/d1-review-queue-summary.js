@@ -25,7 +25,7 @@ export async function summarizeOpenPartyIdentityReviews({DB}={}){
   try {
     const statement=DB.prepare(QUERY);
     const result=await statement.all();
-    if(!result || result.success===false || !Array.isArray(result.results))
+    if(!result || result.success!==true || !Array.isArray(result.results))
       throw new Error('Unexpected review count result');
     rows=result.results;
   } catch {
@@ -38,7 +38,7 @@ export async function summarizeOpenPartyIdentityReviews({DB}={}){
   const byReason=[];
   for(const row of rows){
     if(!row || !REASONS.has(row.reason) || seen.has(row.reason) ||
-      !Number.isSafeInteger(row.count) || row.count<0 ||
+      !Number.isSafeInteger(row.count) || row.count<=0 ||
       !Number.isSafeInteger(totalOpen+row.count))
       throw new Error('Invalid Party identity review summary');
     seen.add(row.reason);
