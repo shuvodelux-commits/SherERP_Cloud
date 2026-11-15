@@ -84,7 +84,9 @@ function project(snapshot){
 }
 function matchesSource(snapshot){
   const expected=oracle(snapshot);
-  const actual=project(snapshot);
+  // Both sides are compared as the JSON payload actually sent by serverCall.
+  // JSON omits undefined optional fields and serializes -0 as 0.
+  const actual=clone(project(snapshot));
   assert.deepEqual(actual,expected);
   assert.deepEqual(Object.keys(actual),Object.keys(expected));
   return actual;
