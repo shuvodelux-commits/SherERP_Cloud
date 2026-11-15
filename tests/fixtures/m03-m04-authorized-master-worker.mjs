@@ -22,7 +22,8 @@ const routes=Object.freeze({
   '/__m04_master__/staff-revoked':['createUnit_','staff','OP-REVOKED','Feet'],
   '/__m04_master__/admin-fault':['createCategory_','admin','OP-FAULT','Fault'],
   '/__m04_master__/race-a':['createCategory_','staff','OP-RACE-A','Latch'],
-  '/__m04_master__/race-b':['createCategory_','admin','OP-RACE-B','latch']
+  '/__m04_master__/race-b':['createCategory_','admin','OP-RACE-B','latch'],
+  '/__m04_master__/alternate-revoke-race':['createCategory_','alternate','OP-ALT-REVOCATION','Padlock']
 });
 const json=(status,data)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export default {
