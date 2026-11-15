@@ -51,7 +51,7 @@ function fixture(){
     db.prepare('INSERT INTO auth_sessions '+
       '(token_hash,user_id,user_auth_version,role_auth_version,credential_version,'+
       'created_at_ms,last_activity_at_ms,expires_at_ms) VALUES (?,?,1,?,1,?,?,?)')
-      .run(hash(token),id,epoch,NOW-90_000,NOW-30_000,NOW+1_000_000);
+      .run(hash(token),id,epoch,NOW-2_000_000,NOW-30_000,NOW+1_000_000);
   }
   const DB={prepare(sql){
     const p=db.prepare(sql);
@@ -108,10 +108,13 @@ test('revoked, expired, idle and stale authority epochs deny with no source ID e
       .run(NOW,hash(T.STAFF));
     x.db.exec("UPDATE auth_roles SET permissions_json='{}' WHERE role_name='Viewer'");
     x.db.exec("UPDATE auth_users SET credential_version=2 WHERE user_id='ALT'");
+    // An idle bearer must fail while its absolute expiry is still in the future.
+    x.db.prepare('UPDATE auth_sessions SET last_activity_at_ms=? WHERE token_hash=?')
+      .run(NOW-1_800_001,hash(T.ADMIN));
     const before=x.state();
     for(const [token,now,op] of [
       [T.STAFF,NOW,'OP-REVOKE'],[T.ADMIN,NOW+1_000_001,'OP-EXPIRE'],
-      [T.ADMIN,NOW+1_800_001,'OP-IDLE'],[T.DENY,NOW,'OP-ROLE'],
+      [T.ADMIN,NOW,'OP-IDLE'],[T.DENY,NOW,'OP-ROLE'],
       [T.ALT,NOW,'OP-CREDENTIAL']
     ]){
       await assert.rejects(()=>x.creator.createCategory_(req(token,op,'Tape',now)),
