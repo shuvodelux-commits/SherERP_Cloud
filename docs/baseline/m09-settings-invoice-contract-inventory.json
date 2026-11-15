@@ -1,0 +1,178 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "methodology": "Static lexical source inventory only; not D1, auth, asset upload, browser or print parity proof",
+  "settings": {
+    "editableKeys": [
+      "Shop Name",
+      "Shop Name Bangla",
+      "Shop Description",
+      "Address",
+      "Phone 1",
+      "Phone 2",
+      "Email",
+      "Currency Symbol",
+      "Currency Code",
+      "Tax Percent",
+      "Default Discount",
+      "Low Stock Threshold",
+      "Invoice Payment Methods",
+      "Invoice Terms",
+      "Invoice Payment Terms Days",
+      "Invoice Payment Terms Text",
+      "Invoice Footer",
+      "Invoice Proprietor Name",
+      "Invoice Proprietor Paragraph",
+      "Invoice Title",
+      "Invoice Show Bismillah",
+      "Invoice Bismillah Text",
+      "Invoice Show Signature",
+      "Drive Folder Id",
+      "Timezone",
+      "Receipt Size",
+      "Delete Confirmation Key",
+      "Day Book Editable Days",
+      "Default Bank Account",
+      "POS Show Purchase Price"
+    ],
+    "numericKeys": [
+      "Tax Percent",
+      "Default Discount",
+      "Low Stock Threshold",
+      "Day Book Editable Days",
+      "Invoice Payment Terms Days"
+    ],
+    "booleanKeys": [
+      "Invoice Show Bismillah",
+      "Invoice Show Signature",
+      "POS Show Purchase Price"
+    ],
+    "logo": {
+      "maxBytes": 1572864,
+      "allowedMime": [
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif"
+      ]
+    },
+    "endpoints": [
+      {
+        "name": "getSettingsBootstrap",
+        "permission": "settings:view",
+        "directReads": [
+          "getAllRows_:BANK_ACCOUNTS"
+        ]
+      },
+      {
+        "name": "updateSettings",
+        "permission": "settings:edit",
+        "directReads": [
+          "getAllRows_:BANK_ACCOUNTS"
+        ]
+      },
+      {
+        "name": "getInvoiceDesignBootstrap",
+        "permission": "settings:view",
+        "directReads": []
+      },
+      {
+        "name": "uploadInvoiceLogo",
+        "permission": "settings:edit",
+        "directReads": []
+      },
+      {
+        "name": "removeInvoiceLogo",
+        "permission": "settings:edit",
+        "directReads": []
+      }
+    ]
+  },
+  "pages": [
+    {
+      "sourceFile": "settings.html",
+      "rpcCalls": [
+        "getSettingsBootstrap",
+        "updateSettings"
+      ],
+      "elementIds": [
+        "setCurrencyCode",
+        "setCurrencySymbol",
+        "setDayBookDays",
+        "setDefaultBank",
+        "setDefaultDiscount",
+        "setDeleteKey",
+        "setDriveFolder",
+        "setEmail",
+        "setFormError",
+        "setLowStock",
+        "setPosShowCost",
+        "setSaveBtn",
+        "setShopName",
+        "setTaxPercent",
+        "setTimezone"
+      ]
+    },
+    {
+      "sourceFile": "invoiceDesign.html",
+      "rpcCalls": [
+        "getInvoiceDesignBootstrap",
+        "removeInvoiceLogo",
+        "updateSettings",
+        "uploadInvoiceLogo"
+      ],
+      "elementIds": [
+        "ivAddress",
+        "ivBismillahText",
+        "ivFooter",
+        "ivFormError",
+        "ivInvoiceTitle",
+        "ivLogoFile",
+        "ivLogoPlaceholder",
+        "ivLogoPreview",
+        "ivLogoPreviewWrap",
+        "ivLogoRemoveBtn",
+        "ivLogoUploadBtn",
+        "ivMfsAddBtn",
+        "ivMfsRows",
+        "ivPaymentTermsDays",
+        "ivPaymentTermsText",
+        "ivPhone1",
+        "ivPhone2",
+        "ivPreviewBtn",
+        "ivProprietorName",
+        "ivProprietorParagraph",
+        "ivReceiptSize",
+        "ivSaveBtn",
+        "ivShopDescription",
+        "ivShopNameBangla",
+        "ivShowBismillah",
+        "ivShowSignature",
+        "ivTermsAddBtn",
+        "ivTermsRows"
+      ]
+    }
+  ],
+  "invoiceRendererSettings": [
+    "Address",
+    "Currency Symbol",
+    "Invoice Bismillah Text",
+    "Invoice Footer",
+    "Invoice Payment Methods",
+    "Invoice Payment Terms Days",
+    "Invoice Payment Terms Text",
+    "Invoice Proprietor Name",
+    "Invoice Proprietor Paragraph",
+    "Invoice Show Bismillah",
+    "Invoice Show Signature",
+    "Invoice Terms",
+    "Invoice Title",
+    "Phone",
+    "Phone 1",
+    "Phone 2",
+    "Receipt Size",
+    "Shop Description",
+    "Shop Name",
+    "Shop Name Bangla"
+  ]
+}
