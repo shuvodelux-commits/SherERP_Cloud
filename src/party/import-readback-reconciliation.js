@@ -121,7 +121,12 @@ export function reconcilePartyImportReadback({plan,readback}={}){
         }
         if(!hasField||actual[field]!==row[field]){
           issues.push({code:'FIELD_MISMATCH',table,field});
-          if(field==='approval_ref')approvalEvidencePersistent=false;
+          // Human-reviewed links require the entire persisted proof tuple.
+          // A changed reviewer, timestamp or basis is also lost approval evidence.
+          if(field==='approval_ref' ||
+             (table==='party_legacy_links' && row.link_basis==='HUMAN_VERIFIED' &&
+              ['link_basis','reviewed_by','reviewed_at'].includes(field)))
+            approvalEvidencePersistent=false;
         }
       }
     }

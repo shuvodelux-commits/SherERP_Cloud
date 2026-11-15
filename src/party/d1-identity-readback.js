@@ -37,7 +37,7 @@ export async function reconcilePartyIdentityD1({DB,plan}={}){
     const prepared=reads.map(sql=>DB.prepare(sql));
     const results=await DB.batch(prepared);
     if(!Array.isArray(results) || results.length!==tables.length ||
-      results.some(row=>!row || row.success===false || !Array.isArray(row.results)))
+      results.some(row=>!row || row.success!==true || !Array.isArray(row.results)))
       throw new Error('Invalid D1 batch results');
 
     readback=Object.fromEntries(tables.map((table,index)=>[
