@@ -159,7 +159,7 @@ test('single contributing invoice, 21 invoice inputs and duplicate invoices fail
 
 test('walk-in and mixed Customer source invoices decline with zero effects',async()=>{
   const a=await sale('A',{sku:'PIPE',customerId:'CUS-1'});
-  const b=await sale('B',{sku:'OTHER',customerId:''});
+  const b=await sale('B',{sku:'OTHER',customerId:'',payments:[{id:'W1',method:'Cash',amount:'100'}]});
   const before=await snapshot();
   const result=await writer().post(batch([child(a,'A-00001'),child(b,'B-00001')]));
   assert.equal(result.status,'DECLINED');
