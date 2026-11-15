@@ -1,0 +1,1228 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+  "methodology": "Direct lexical literal RPC calls vs column-zero GAS definitions; not authorization, not a runtime, security, or transitive callgraph proof",
+  "counts": {
+    "frontendFiles": 37,
+    "backendFiles": 47,
+    "literalCallsites": 172,
+    "dynamicCallsites": 4,
+    "unresolvedNames": 0
+  },
+  "rpcs": [
+    {
+      "name": "addBankManualEntry",
+      "frontendFiles": [
+        "bank.html"
+      ],
+      "callCount": 1,
+      "backendFile": "BankLedger.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addCustomerChecked",
+      "frontendFiles": [
+        "customers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Customer.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addExpense",
+      "frontendFiles": [
+        "counter.html",
+        "expense.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Expense.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addExpenseCategory",
+      "frontendFiles": [
+        "counter.html",
+        "expense.html",
+        "expenseCategory.html"
+      ],
+      "callCount": 3,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addExpensePayee",
+      "frontendFiles": [
+        "counter.html",
+        "expense.html",
+        "expensePayees.html"
+      ],
+      "callCount": 3,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addFinancePerson",
+      "frontendFiles": [
+        "finance.html"
+      ],
+      "callCount": 2,
+      "backendFile": "FinanceModule.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addFinanceTransaction",
+      "frontendFiles": [
+        "finance.html"
+      ],
+      "callCount": 1,
+      "backendFile": "FinanceModule.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addProduct",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Products.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addSupplier",
+      "frontendFiles": [
+        "purchase.html",
+        "suppliers.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Suppliers.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "addVendor",
+      "frontendFiles": [
+        "pos.html",
+        "vendors.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "adjustStock",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Products.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "closeCashSession",
+      "frontendFiles": [
+        "pos.html"
+      ],
+      "callCount": 1,
+      "backendFile": "CashSession.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "completePurchaseReturn",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "completeReturn",
+      "frontendFiles": [
+        "returns.html"
+      ],
+      "callCount": 2,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "completeReturnBatch",
+      "frontendFiles": [
+        "returns.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "correctInternalStockLotCost",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "StockLots.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "correctInternalStockLotCosts",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "StockLots.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "createPurchase",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Purchase.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "createUser",
+      "frontendFiles": [
+        "users.html"
+      ],
+      "callCount": 1,
+      "backendFile": "UserManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "deleteCustomer",
+      "frontendFiles": [
+        "customers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Customer.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "deleteSalesDraft",
+      "frontendFiles": [
+        "draftSales.html",
+        "posv2.html"
+      ],
+      "callCount": 2,
+      "backendFile": "DraftSales.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "deleteSalesReturn",
+      "frontendFiles": [
+        "returnHistory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "deleteUser",
+      "frontendFiles": [
+        "users.html"
+      ],
+      "callCount": 1,
+      "backendFile": "UserManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "findInvoice",
+      "frontendFiles": [
+        "sales.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Invoice.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getAppShellData",
+      "frontendFiles": [
+        "javascript.html"
+      ],
+      "callCount": 1,
+      "backendFile": "UI.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCashReconciliationCandidates",
+      "frontendFiles": [
+        "cashReconciliation.html"
+      ],
+      "callCount": 1,
+      "backendFile": "CashReconciliation.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCashReconciliationRows",
+      "frontendFiles": [
+        "cashReconciliation.html"
+      ],
+      "callCount": 1,
+      "backendFile": "CashReconciliation.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCashSessionSummary",
+      "frontendFiles": [
+        "pos.html"
+      ],
+      "callCount": 3,
+      "backendFile": "CashSession.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCounterBootstrap",
+      "frontendFiles": [
+        "counter.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Counter.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCounterCustomers",
+      "frontendFiles": [
+        "counter.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Counter.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCounterSuppliers",
+      "frontendFiles": [
+        "counter.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Counter.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomerDetail",
+      "frontendFiles": [
+        "customers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Customer.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomerInvoicesForReturn",
+      "frontendFiles": [
+        "returns.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomerLedgerPage",
+      "frontendFiles": [
+        "customerLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PartyLedger.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomerLedgerStatement",
+      "frontendFiles": [
+        "customerLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PartyLedger.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomerLedgerWorkspaceBootstrap",
+      "frontendFiles": [
+        "customerLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PartyLedger.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomerPaymentContext",
+      "frontendFiles": [
+        "counter.html",
+        "customerLedger.html"
+      ],
+      "callCount": 2,
+      "backendFile": "CustomerSettlement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomerPaymentForEdit",
+      "frontendFiles": [
+        "customerLedger.html",
+        "customers.html"
+      ],
+      "callCount": 2,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getCustomersBootstrap",
+      "frontendFiles": [
+        "customers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Customer.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getDashboardStats",
+      "frontendFiles": [
+        "dashboard.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Dashboard.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getDayBookBootstrap",
+      "frontendFiles": [
+        "daybook.html"
+      ],
+      "callCount": 1,
+      "backendFile": "DayBook.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getDayBookTransactions",
+      "frontendFiles": [
+        "daybook.html"
+      ],
+      "callCount": 1,
+      "backendFile": "DayBook.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getExpenseBootstrap",
+      "frontendFiles": [
+        "expense.html",
+        "expenseList.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Expense.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getExpenseDetail",
+      "frontendFiles": [
+        "expenseList.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Expense.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getExpenseLedger",
+      "frontendFiles": [
+        "expenseList.html",
+        "expenseReport.html"
+      ],
+      "callCount": 3,
+      "backendFile": "Expense.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getExpensePayeesManagement",
+      "frontendFiles": [
+        "expense.html",
+        "expensePayees.html"
+      ],
+      "callCount": 2,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getExpenseSettingsBootstrap",
+      "frontendFiles": [
+        "expenseCategory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getFinanceBootstrap",
+      "frontendFiles": [
+        "finance.html",
+        "financeLedger.html",
+        "financePersonLedger.html"
+      ],
+      "callCount": 3,
+      "backendFile": "FinanceModule.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getFinanceLedger",
+      "frontendFiles": [
+        "financeLedger.html",
+        "financePersonLedger.html"
+      ],
+      "callCount": 2,
+      "backendFile": "FinanceModule.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getFinanceTransactionForEdit",
+      "frontendFiles": [
+        "financeLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getInvoiceDesignBootstrap",
+      "frontendFiles": [
+        "invoiceDesign.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Settings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getInvoiceForReturn",
+      "frontendFiles": [
+        "returns.html"
+      ],
+      "callCount": 2,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getInvoicePaymentContext",
+      "frontendFiles": [
+        "sales.html"
+      ],
+      "callCount": 1,
+      "backendFile": "CustomerSettlement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPosBootstrap",
+      "frontendFiles": [
+        "pos.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Sales.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getProductLots",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "StockLots.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getProductsBootstrap",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Products.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPurchaseBootstrap",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Purchase.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPurchaseDetail",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPurchaseForReturn",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPurchaseForUpdate",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPurchaseManagementList",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPurchaseReturnDetail",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getPurchaseReturnHistory",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getReturnBatchDetail",
+      "frontendFiles": [
+        "returnHistory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getReturnDetail",
+      "frontendFiles": [
+        "returnHistory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getReturnForEdit",
+      "frontendFiles": [
+        "returnHistory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getReturnHistory",
+      "frontendFiles": [
+        "returnHistory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSaleDetail",
+      "frontendFiles": [
+        "javascript.html",
+        "sales.html"
+      ],
+      "callCount": 2,
+      "backendFile": "SalesManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSaleForUpdate",
+      "frontendFiles": [
+        "daybook.html",
+        "sales.html"
+      ],
+      "callCount": 2,
+      "backendFile": "SalesManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSalesDraft",
+      "frontendFiles": [
+        "draftSales.html",
+        "posv2.html"
+      ],
+      "callCount": 2,
+      "backendFile": "DraftSales.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSalesDraftList",
+      "frontendFiles": [
+        "draftSales.html",
+        "pos.html",
+        "posv2.html"
+      ],
+      "callCount": 3,
+      "backendFile": "DraftSales.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSalesDraftPreview",
+      "frontendFiles": [
+        "draftSales.html",
+        "posv2.html"
+      ],
+      "callCount": 2,
+      "backendFile": "DraftSales.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSalesManagementBankAccounts",
+      "frontendFiles": [
+        "sales.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSalesManagementList",
+      "frontendFiles": [
+        "sales.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSettingsBootstrap",
+      "frontendFiles": [
+        "settings.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Settings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSupplierDetail",
+      "frontendFiles": [
+        "suppliers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Suppliers.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSupplierLedgerPage",
+      "frontendFiles": [
+        "supplierLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PartyLedger.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSupplierLedgerStatement",
+      "frontendFiles": [
+        "supplierLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PartyLedger.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSupplierLedgerWorkspaceBootstrap",
+      "frontendFiles": [
+        "supplierLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PartyLedger.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSupplierPaymentForEdit",
+      "frontendFiles": [
+        "supplierLedger.html",
+        "suppliers.html"
+      ],
+      "callCount": 2,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getSuppliersBootstrap",
+      "frontendFiles": [
+        "suppliers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Suppliers.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getUnpricedInternalStockLots",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "StockLots.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getUsersBootstrap",
+      "frontendFiles": [
+        "users.html"
+      ],
+      "callCount": 1,
+      "backendFile": "UserManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getVendorDetail",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getVendorIssueMemoForEdit",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "getVendorsBootstrap",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "giveProductsToVendor",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "login",
+      "frontendFiles": [
+        "javascript.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Auth.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "logout",
+      "frontendFiles": [
+        "javascript.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Auth.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "paySupplier",
+      "frontendFiles": [
+        "counter.html",
+        "supplierLedger.html",
+        "suppliers.html"
+      ],
+      "callCount": 3,
+      "backendFile": "Suppliers.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "payVendor",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "receivePayment",
+      "frontendFiles": [
+        "counter.html",
+        "customerLedger.html",
+        "customers.html",
+        "sales.html"
+      ],
+      "callCount": 4,
+      "backendFile": "Customer.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "receiveProductsFromVendor",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "receiveVendorPayment",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "refundCustomerAdvance",
+      "frontendFiles": [
+        "counter.html",
+        "customerLedger.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Customer.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "removeInvoiceLogo",
+      "frontendFiles": [
+        "invoiceDesign.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Settings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "resetPassword",
+      "frontendFiles": [
+        "users.html"
+      ],
+      "callCount": 1,
+      "backendFile": "UserManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "returnProductsToVendor",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "saveCashReconciliationExplanation",
+      "frontendFiles": [
+        "cashReconciliation.html"
+      ],
+      "callCount": 1,
+      "backendFile": "CashReconciliation.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "searchCustomersForReturn",
+      "frontendFiles": [
+        "returns.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "searchInvoicesForReturn",
+      "frontendFiles": [
+        "returns.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "searchPurchasesForReturn",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "setExpenseCategoryStatus",
+      "frontendFiles": [
+        "expenseCategory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "setExpensePayeeStatus",
+      "frontendFiles": [
+        "expense.html",
+        "expensePayees.html"
+      ],
+      "callCount": 2,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "setFinancePersonStatus",
+      "frontendFiles": [
+        "finance.html"
+      ],
+      "callCount": 1,
+      "backendFile": "FinanceModule.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "setProductStatus",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Products.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "setSupplierStatus",
+      "frontendFiles": [
+        "suppliers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Suppliers.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "setUserStatus",
+      "frontendFiles": [
+        "users.html"
+      ],
+      "callCount": 1,
+      "backendFile": "UserManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "setVendorStatus",
+      "frontendFiles": [
+        "pos.html",
+        "vendors.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "startCashSession",
+      "frontendFiles": [
+        "pos.html"
+      ],
+      "callCount": 1,
+      "backendFile": "CashSession.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "transferBetweenBankAccounts",
+      "frontendFiles": [
+        "counter.html"
+      ],
+      "callCount": 1,
+      "backendFile": "BankBook.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateCustomer",
+      "frontendFiles": [
+        "customers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Customer.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateCustomerPayment",
+      "frontendFiles": [
+        "customerLedger.html",
+        "customers.html"
+      ],
+      "callCount": 2,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateExpense",
+      "frontendFiles": [
+        "expenseList.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Expense.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateExpenseCategory",
+      "frontendFiles": [
+        "expenseCategory.html"
+      ],
+      "callCount": 1,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateExpensePayee",
+      "frontendFiles": [
+        "expense.html",
+        "expensePayees.html"
+      ],
+      "callCount": 2,
+      "backendFile": "ExpenseSettings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateFinancePerson",
+      "frontendFiles": [
+        "finance.html"
+      ],
+      "callCount": 1,
+      "backendFile": "FinanceModule.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateFinanceTransaction",
+      "frontendFiles": [
+        "financeLedger.html"
+      ],
+      "callCount": 1,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateProduct",
+      "frontendFiles": [
+        "products.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Products.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updatePurchase",
+      "frontendFiles": [
+        "purchase.html"
+      ],
+      "callCount": 1,
+      "backendFile": "PurchaseManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateSalesReturn",
+      "frontendFiles": [
+        "returns.html"
+      ],
+      "callCount": 1,
+      "backendFile": "SalesReturn.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateSettings",
+      "frontendFiles": [
+        "invoiceDesign.html",
+        "settings.html"
+      ],
+      "callCount": 2,
+      "backendFile": "Settings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateSupplier",
+      "frontendFiles": [
+        "suppliers.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Suppliers.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateSupplierPayment",
+      "frontendFiles": [
+        "supplierLedger.html",
+        "suppliers.html"
+      ],
+      "callCount": 2,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateUser",
+      "frontendFiles": [
+        "users.html"
+      ],
+      "callCount": 1,
+      "backendFile": "UserManagement.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateVendor",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Vendors.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "updateVendorIssueMemo",
+      "frontendFiles": [
+        "vendors.html"
+      ],
+      "callCount": 1,
+      "backendFile": "DeleteEngine.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "uploadInvoiceLogo",
+      "frontendFiles": [
+        "invoiceDesign.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Settings.gs",
+      "status": "DEFINED"
+    },
+    {
+      "name": "validateSession",
+      "frontendFiles": [
+        "javascript.html"
+      ],
+      "callCount": 1,
+      "backendFile": "Auth.gs",
+      "status": "DEFINED"
+    }
+  ],
+  "dynamicCallsites": [
+    {
+      "frontendFile": "products.html",
+      "line": 997
+    },
+    {
+      "frontendFile": "products.html",
+      "line": 1030
+    },
+    {
+      "frontendFile": "vendors.html",
+      "line": 1062
+    },
+    {
+      "frontendFile": "vendors.html",
+      "line": 1153
+    }
+  ]
+}
