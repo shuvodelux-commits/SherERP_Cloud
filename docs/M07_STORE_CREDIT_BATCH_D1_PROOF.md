@@ -29,3 +29,9 @@ The signed test account `m07_customer_signed_accounts` is a synthetic **oracle**
 ## Gaps / deployment gate / rollback
 
 Only internal local synthetic proof; M04 authenticated authority, M05 imported source lot provenance, M08 signed Party account writer, original Customer advance reconciliation, real Cash Session policy, source edit/delete and later settlements, 100-line and multi-unit batch, original dates/permission checks and UI/RPC remain unimplemented. No `src/**`, production `migrations/**`, original UI/source, Wrangler preview binding, secret or remote D1 data changes. Revert the PR to remove these isolated test-only files/imports, with no business write rollback required.
+
+## Additional database-level regression (2026-11-15)
+
+**RED:** A raw local D1 `INSERT INTO m07_credit_batches` with a child `operationId` equal to its own parent `operation_id` committed **17 affected rows** instead of being declined. The same invalid condition applies to a child `returnId` matching the parent `batch_id`. Relying on the JS input adapter alone would not guarantee unique financial identities.
+
+**GREEN:** Added an explicit `json_each(children_json)` self-alias check in the **BEFORE INSERT SQL trigger**, returning `RAISE(IGNORE)` before any parent/child effect. Raw-SQL assertions now demonstrate zero D1 changes and an identical stock/customer/ledger snapshot for both colliding identity patterns. New focused Workerd/D1 suite: **15/15 PASS** after patch `ade9d50`. No production source/schema changes.
