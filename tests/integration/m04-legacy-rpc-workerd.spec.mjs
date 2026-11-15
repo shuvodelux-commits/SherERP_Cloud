@@ -555,7 +555,10 @@ test('management add preflight checks independent stored D1 users.add and roles.
   const admin=await rpc('login',['01710000101',SECRET],NOW+190_000);
   const userAdder=await rpc('login',['01710000111',SECRET],NOW+190_000);
   const roleAdder=await rpc('login',['01710000112',SECRET],NOW+190_000);
-  const viewer=await rpc('login',['01710000108',SECRET],NOW+190_000);
+  // GuardReader was deliberately deactivated by an earlier RBAC regression.
+  // Reuse the still-active SourceRole viewer so this checks the missing
+  // add-preflight route, rather than failing during synthetic login setup.
+  const viewer=await rpc('login',['01710000105',SECRET],NOW+190_000);
   const roleDeleter=await rpc('login',['01710000110',SECRET],NOW+190_000);
   for(const result of [admin,userAdder,roleAdder,viewer,roleDeleter])
     assert.equal(result.body.success,true);
