@@ -260,3 +260,46 @@ test('a revoked session fingerprint cannot be resurrected by SQLite INSERT OR RE
   assert.deepEqual(await rpc('validate',{token:signed.body.token,nowMs:now+2000}),
     {status:200,body:{authenticated:false}});
 });
+
+
+test('physical DELETE cannot erase issued active or revoked session fingerprints',async()=>{
+  for(const [offset,revoke] of [[900_000,true],[920_000,false]]){
+    const now=BASE+offset;
+    const issued=await rpc('login',{phoneKey:'01710000001',password:PASSWORD,nowMs:now});
+    assert.equal(issued.body.authenticated,true);
+    const token=issued.body.token;
+    const hash=createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
+    if(revoke)
+      assert.deepEqual(await rpc('logout',{token,nowMs:now+1000}),
+        {status:200,body:{revoked:true}});
+    const original=await DB.prepare('SELECT * FROM auth_sessions WHERE token_hash=?')
+      .bind(hash).first();
+    assert.equal(original.revoked_at_ms===null,!revoke);
+    try{
+      await assert.rejects(
+        ()=>DB.prepare('DELETE FROM auth_sessions WHERE token_hash=?').bind(hash).run(),
+        /session|delet|immutable|forbidden|abort/i
+      );
+    }finally{
+      // In the RED phase SQLite permits this delete. Restore only our
+      // isolated synthetic row so other Workerd fixtures stay unchanged.
+      const existing=await DB.prepare('SELECT token_hash FROM auth_sessions WHERE token_hash=?')
+        .bind(hash).first();
+      if(!existing)
+        await DB.prepare(`INSERT INTO auth_sessions (
+          token_hash,user_id,user_auth_version,role_auth_version,credential_version,
+          created_at_ms,last_activity_at_ms,expires_at_ms,revoked_at_ms
+        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(
+          original.token_hash,original.user_id,original.user_auth_version,
+          original.role_auth_version,original.credential_version,
+          original.created_at_ms,original.last_activity_at_ms,
+          original.expires_at_ms,original.revoked_at_ms
+        ).run();
+    }
+    const after=await DB.prepare('SELECT * FROM auth_sessions WHERE token_hash=?')
+      .bind(hash).first();
+    assert.deepEqual(after,original);
+    const checked=await rpc('validate',{token,nowMs:now+2000});
+    assert.equal(checked.body.authenticated,!revoke);
+  }
+});
