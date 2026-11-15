@@ -178,3 +178,58 @@ export function projectSourceNavigationLayout(navItems,profile,currentPage){
 
   return {desktop,mobile:{primaryVisibleKeys,more,activeKey,activeMoreKey}};
 }
+
+/**
+ * Internal-only source goToPage projection for the frozen original UI.
+ * This models browser page selection; it does NOT authorize a server RPC.
+ * The existing projectSourceNavigation is the sole role-visibility model.
+ */
+export function resolveSourceNavigationRoute(navItems,profile,requestedKey){
+  const visible=projectSourceNavigation(navItems,profile);
+  const tabsByGroup=new Map(visible.groupTabs.map(group=>
+    [group.groupKey,group.children]
+  ));
+
+  // The original navGroupFor_ locates a parent in the complete source tree.
+  function groupFor(key){
+    for(const item of navItems){
+      if(item.key===key && !item.children)return item;
+      if((item.children||[]).some(child=>child.key===key))return item;
+      if(item.key===key)return item;
+    }
+    return null;
+  }
+
+  let pageKey=requestedKey;
+  if(profile.allowedModules!==null && pageKey!=='noAccess'){
+    const group=groupFor(pageKey);
+    let permitted=false;
+    if(group && !group.children){
+      permitted=visible.sidebarItems.some(item=>item.key===group.key);
+    }else if(group){
+      const children=tabsByGroup.get(group.key)||[];
+      permitted=children.some(child=>child.key===pageKey);
+      // Source goToPage constructs a synthetic {key:group.key} when the
+      // parent has no child with its own key (the original POS group).
+      if(!permitted && group.key===pageKey &&
+         !(group.children||[]).some(child=>child.key===pageKey)){
+        permitted=profile.allowedModules.includes(group.key);
+      }
+    }
+    if(!permitted)pageKey=visible.firstPageKey||'noAccess';
+  }
+
+  const group=groupFor(pageKey);
+  const pageTabs=group?(tabsByGroup.get(group.key)||[]):[];
+  return {
+    pageKey,
+    runtimeKey:pageKey==='posv2'?'pos':pageKey,
+    parentKey:group?group.key:pageKey,
+    moduleHeader:{
+      title:group?.label||(pageKey==='noAccess'?'No Access':pageKey),
+      bn:group?.bn||''
+    },
+    subTabs:pageTabs.length>=2?pageTabs:[],
+    posV2Active:pageKey==='posv2'
+  };
+}
