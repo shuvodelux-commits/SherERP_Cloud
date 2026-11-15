@@ -286,3 +286,34 @@ test('hostile shapes and unsupported HTTP POST never create a Supplier Credit re
     method:'POST',body:'{}'})).status,404);
   assert.deepEqual(await snapshot(),before);
 });
+
+test('cross-method identity guard separately rejects reused Return ID or Operation ID',async()=>{
+  const source=await purchase('MIXID',{paidAmount:'30.00'});
+  const prior=cashInput(source,'OP-CROSS-SEPARATE-001');
+  assert.equal((await cash().post(prior)).status,'COMMITTED');
+  const before=await snapshot();
+  for(const changes of [
+    {returnId:prior.returnId,operationId:'OP-NEW-CREDIT-001'},
+    {returnId:'PRET-NEW-CREDIT-001',operationId:prior.operationId}
+  ])assert.equal((await credit().post(input(source,'OP-OTHER-CREDIT-001',changes))).status,'CONFLICT');
+  assert.deepEqual(await snapshot(),before);
+});
+
+test('signed Supplier amount bound failure rolls back original lot and stock changes',async()=>{
+  const source=await purchase('ACCOUNTBOUND');
+  await DB.prepare("UPDATE m07_purchase_supplier_signed SET signed_due_paisa=-999999999000 WHERE supplier_id='SUP-1'").run();
+  const before=await snapshot();
+  await assert.rejects(()=>credit().post(input(source)),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),before);
+});
+
+test('duplicate Supplier Credit Return ID with another operation remains immutable conflict',async()=>{
+  const source=await purchase();
+  const prior=input(source);
+  assert.equal((await credit().post(prior)).status,'COMMITTED');
+  const before=await snapshot();
+  assert.equal((await credit().post(input(source,'OP-PUR-CREDIT-002',{
+    returnId:prior.returnId
+  }))).status,'CONFLICT');
+  assert.deepEqual(await snapshot(),before);
+});
