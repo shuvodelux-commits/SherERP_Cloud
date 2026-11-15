@@ -309,3 +309,115 @@ test('same operation ID across different synthetic tenants does not share stock,
   ]);
   assert.equal(await count('m06_cash_book'),2);
 });
+
+
+// M06 TDD: draft-to-sale consumption must be in the invoice's atomic D1
+// boundary, not a separate post-success cleanup or unversioned delete.
+const defaultDraftPayments=JSON.stringify([{
+  rowId:'C1',rowOrder:1,method:'Cash',accountId:'',
+  tenderPaisa:10000,appliedPaisa:10000,changePaisa:0
+}]);
+async function seedDraft(draftId,{
+  ownerId='USER-A',version=1,sku='PIPE',units=1,pricePaisa=10000,
+  discountPaisa=0,customerId='',paymentsJson=defaultDraftPayments,
+  paymentMode='Split'
+}={}){
+  await DB.prepare(`INSERT INTO m06_drafts(
+    tenant_id,draft_id,owner_id,version,sku,units,unit_price_paisa,
+    discount_paisa,customer_id,payments_json,payment_mode)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
+    'SHOP-A',draftId,ownerId,version,sku,units,pricePaisa,
+    discountPaisa,customerId,paymentsJson,paymentMode).run();
+}
+const fromDraft=(operationId,draftId,version=1,overrides={})=>
+  input(operationId,{sourceDraftId:draftId,sourceDraftVersion:version,...overrides});
+
+test('matching saved split-payment draft is consumed once in the same posting, with exactly one audit',async()=>{
+  await seedDraft('DRAFT-MATCH-1');
+  const result=await posting().post(fromDraft('OP-DRAFT-COMMIT1','DRAFT-MATCH-1'));
+  assert.equal(result.status,'COMMITTED');
+  assert.equal(await count('m06_drafts'),0);
+  assert.deepEqual(await all('SELECT draft_id,version,invoice_id,actor_id,action FROM m06_draft_audit'),[
+    {draft_id:'DRAFT-MATCH-1',version:1,invoice_id:'INV-OP-DRAFT-COMMIT1',actor_id:'USER-A',action:'POSTED'}
+  ]);
+  assert.equal(await count('m06_invoices'),1);
+  assert.equal(await count('m06_cash_book'),1);
+  assert.equal(await count('m06_stock_movements'),1);
+});
+
+test('stale draft version, unauthorized owner, stale line price and changed payment format decline before any sale write',async()=>{
+  const cases=[
+    {id:'DRAFT-ST-V',saved:{version:2},postedVersion:1},
+    {id:'DRAFT-ST-O',saved:{ownerId:'USER-B'},postedVersion:1},
+    {id:'DRAFT-ST-P',saved:{pricePaisa:9000},postedVersion:1},
+    {id:'DRAFT-ST-F',saved:{paymentMode:'Legacy'},postedVersion:1}
+  ];
+  for(const [i,c] of cases.entries()){
+    await seedDraft(c.id,c.saved);
+    const result=await posting().post(fromDraft('OP-DRAFT-DECL'+i,c.id,c.postedVersion));
+    assert.deepEqual(result,{status:'DECLINED',operationId:'OP-DRAFT-DECL'+i});
+    assert.equal(await count('m06_invoices'),0);
+    assert.equal(await count('m06_customer_ledger'),0);
+  }
+  assert.equal(await count('m06_drafts'),4);
+  assert.equal(await count('m06_draft_audit'),0);
+  assert.equal((await one("SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,2);
+});
+
+test('same stable operation ID replays consumed draft invoice; different operation ID cannot post it again',async()=>{
+  await seedDraft('DRAFT-ONCE-1');
+  const sale=fromDraft('OP-DRAFT-ONCE01','DRAFT-ONCE-1');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  const after=await snapshot();
+  assert.deepEqual(await posting().post({...sale,invoiceId:'UNTRUSTED-RETRY'}),{
+    status:'REPLAY',operationId:sale.operationId,invoiceId:sale.invoiceId
+  });
+  assert.deepEqual(await posting().post(fromDraft('OP-DRAFT-ONCE02','DRAFT-ONCE-1')),{
+    status:'DECLINED',operationId:'OP-DRAFT-ONCE02'
+  });
+  assert.deepEqual(await snapshot(),after);
+  assert.equal(await count('m06_drafts'),0);
+  assert.equal(await count('m06_draft_audit'),1);
+});
+
+test('draft audit failure after tender, stock and draft consumption rolls everything back',async()=>{
+  await seedDraft('DRAFT-FAIL-1');
+  await DB.prepare(`CREATE TRIGGER m06_fail_draft_audit BEFORE INSERT ON m06_draft_audit
+    BEGIN SELECT RAISE(ABORT,'injected-draft-audit-failure'); END`).run();
+  const before=await snapshot();
+  await assert.rejects(()=>posting().post(fromDraft('OP-DRAFT-FAIL01','DRAFT-FAIL-1')),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),before);
+  assert.equal(await count('m06_drafts'),1);
+  assert.equal(await count('m06_draft_audit'),0);
+});
+
+test('two concurrent operation IDs against the same saved draft cannot both sell even with two units on shelf',async()=>{
+  await seedDraft('DRAFT-RACE-1');
+  const results=await Promise.allSettled([
+    posting().post(fromDraft('OP-DRAFT-RACE01','DRAFT-RACE-1')),
+    posting().post(fromDraft('OP-DRAFT-RACE02','DRAFT-RACE-1'))
+  ]);
+  assert.equal(results.filter(r=>r.status==='fulfilled'&&r.value.status==='COMMITTED').length,1);
+  assert.equal(results.every(r=>r.status==='rejected'||
+    ['COMMITTED','DECLINED'].includes(r.value.status)),true);
+  assert.equal(await count('m06_invoices'),1);
+  assert.equal(await count('m06_cash_book'),1);
+  assert.equal(await count('m06_draft_audit'),1);
+  assert.equal(await count('m06_drafts'),0);
+  assert.equal((await one("SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,1);
+});
+
+test('draft version update after candidate preparation is refused by SQL CAS and original draft is retained',async()=>{
+  await seedDraft('DRAFT-UPDATE-1');
+  const p=createSyntheticD1SalePostingContract(DB,{
+    beforeBatch:async()=>{await DB.prepare(
+      "UPDATE m06_drafts SET version=2 WHERE draft_id='DRAFT-UPDATE-1'").run();}
+  });
+  assert.deepEqual(await p.post(fromDraft('OP-DRAFT-UPDATE','DRAFT-UPDATE-1')),{
+    status:'DECLINED',operationId:'OP-DRAFT-UPDATE'
+  });
+  assert.equal((await one("SELECT version FROM m06_drafts WHERE draft_id='DRAFT-UPDATE-1'")).version,2);
+  assert.equal(await count('m06_invoices'),0);
+  assert.equal(await count('m06_draft_audit'),0);
+  assert.equal((await one("SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,2);
+});
