@@ -599,3 +599,71 @@ test('null source positions and equal row numbers across distinct source groups 
   assert.equal(report.approvalEvidencePersistent,true);
   assert.deepEqual(report.issues,[]);
 });
+
+
+test('mirrored future D1 cannot certify malformed or fabricated per-group source counts',()=>{
+  const cases=[
+    ['missing-sourceGroups',plan=>{delete plan.summary.sourceGroups;}],
+    ['missing-group',plan=>{plan.summary.sourceGroups.pop();}],
+    ['invented-group',plan=>{plan.summary.sourceGroups[0].sourceGroup='UNKNOWN_GROUP';}],
+    ['duplicate-group',plan=>{plan.summary.sourceGroups[1].sourceGroup='CUSTOMERS';}],
+    ['missing-rows',plan=>{delete plan.summary.sourceGroups[0].rows;}],
+    ['negative-rows',plan=>{
+      plan.summary.sourceGroups[0].rows=-1;
+      plan.summary.sourceGroups[1].rows=3;
+    }],
+    ['fractional-rows',plan=>{
+      plan.summary.sourceGroups[0].rows=1.5;
+      plan.summary.sourceGroups[1].rows=0.5;
+    }],
+    ['string-rows',plan=>{plan.summary.sourceGroups[0].rows='1';}],
+    ['unsafe-rows',plan=>{plan.summary.sourceGroups[0].rows=Number.MAX_SAFE_INTEGER+1;}],
+    ['group-total-mismatch',plan=>{plan.summary.sourceGroups[0].rows=2;}],
+    ['less-than-linked-rows',plan=>{
+      // Keep the total unchanged; a Customer source group cannot contain
+      // zero source rows when a Customer legacy link exists.
+      plan.summary.sourceGroups[0].rows=0;
+      plan.summary.sourceGroups[1].rows=2;
+    }]
+  ];
+  for(const [name,change] of cases){
+    const plan=planned();
+    change(plan);
+    const readback=snapshot(plan,{approvalRef:true});
+    const before=structuredClone({plan,readback});
+    const report=audit(plan,readback);
+    assert.deepEqual(report.counts.expected,report.counts.actual,name);
+    assert.equal(report.identityRowsMatch,false,name);
+    assert.equal(report.approvalEvidencePersistent,true,name+' proof persistence stays separate');
+    assert.deepEqual(report.issues,[{code:'PLAN_COUNT_MISMATCH',table:'plan'}],name);
+    assert.doesNotMatch(JSON.stringify(report),
+      /CUS-001|SUP-001|VEN-001|FIN-001|PAY-001|REVIEW-001|admin-01/);
+    assert.deepEqual({plan,readback},before,'readback does not mutate '+name);
+  }
+});
+
+test('source group counts are independent of entry order and allow real zero groups',()=>{
+  const records=source();
+  records.VENDORS=[];
+  const plan=planPartyImport(records,approval());
+  plan.summary.sourceGroups.reverse();
+  assert.equal(plan.summary.sourceGroups.find(x=>x.sourceGroup==='VENDORS').rows,0);
+  const report=audit(plan,snapshot(plan,{approvalRef:true}));
+  assert.equal(report.identityRowsMatch,true);
+  assert.equal(report.approvalEvidencePersistent,true);
+  assert.deepEqual(report.issues,[]);
+});
+
+test('legitimate source quarantines retain correct per-group counts without false count mismatches',()=>{
+  const records=source();
+  records.CUSTOMERS.push({'Customer ID':'','Customer Name':'missing source ID','_rowIndex':3});
+  const plan=planPartyImport(records,[]);
+  assert.equal(plan.summary.quarantinedRows,1);
+  assert.equal(plan.summary.sourceGroups.find(x=>x.sourceGroup==='CUSTOMERS').rows,2);
+  const report=audit(plan,snapshot(plan));
+  assert.equal(report.identityRowsMatch,false,'quarantine still blocks import parity');
+  assert.ok(codes(report).includes('QUARANTINED_SOURCE_ROWS'));
+  assert.ok(codes(report).includes('PENDING_IDENTITY_REVIEW'));
+  assert.ok(!codes(report).includes('PLAN_COUNT_MISMATCH'),
+    'valid snapshot inventory remains consistent despite quarantine');
+});
