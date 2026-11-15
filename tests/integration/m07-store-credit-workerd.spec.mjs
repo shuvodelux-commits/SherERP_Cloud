@@ -117,9 +117,9 @@ test('due Store Credit changes selected signed Customer balance and ledger, not 
 test('fully paid original sale Store Credit creates a negative signed balance / advance',async()=>{
   const src=await seed({payments:[{id:'PAY1',method:'Cash',amount:'200'}]});
   const before=await snap();
-  assert.equal((await credit().post(request(src,'CREDIT-ADVANCE01',{creditPaisa:15000}))).status,'COMMITTED');
-  assert.equal((await one("SELECT signed_due_paisa FROM m07_customer_signed_accounts WHERE customer_id='CUS-1'")).signed_due_paisa,-15000);
-  assert.equal((await one('SELECT balance_paisa FROM m07_credit_ledger')).balance_paisa,-15000);
+  assert.equal((await credit().post(request(src,'CREDIT-ADVANCE01',{creditPaisa:7500}))).status,'COMMITTED');
+  assert.equal((await one("SELECT signed_due_paisa FROM m07_customer_signed_accounts WHERE customer_id='CUS-1'")).signed_due_paisa,-7500);
+  assert.equal((await one('SELECT balance_paisa FROM m07_credit_ledger')).balance_paisa,-7500);
   assert.deepEqual((await snap()).originalCash,before.originalCash);
   assert.deepEqual((await snap()).originalBank,before.originalBank);
   assert.deepEqual((await snap()).supplier,before.supplier);
