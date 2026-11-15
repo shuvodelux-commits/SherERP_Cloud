@@ -1,4 +1,4 @@
-import {before,after,beforeEach,test} from 'node:test';
+import {describe,before,after,beforeEach,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
 import {M05_PURCHASE_DDL,M05_PURCHASE_SEED} from '../fixtures/m05-purchase-d1-schema.mjs';
@@ -27,6 +27,7 @@ const snapshot=async()=>({
   products:await rows('SELECT * FROM m05_products ORDER BY sku'),
   suppliers:await rows('SELECT * FROM m05_suppliers ORDER BY supplier_id')
 });
+describe('M05 isolated local D1 purchase transaction',()=>{
 before(async()=>{
   await server.listen();
   ({DB}=await worker.getEnv());
@@ -35,9 +36,11 @@ before(async()=>{
 });
 beforeEach(async()=>{
   await DB.prepare('DROP TRIGGER IF EXISTS m05_inject_failure').run();
+  await DB.prepare('DROP TRIGGER IF EXISTS m05_receipt_delete_guard').run();
   for(const table of ['m05_supplier_ledger','m05_bank_book','m05_cash_book','m05_movements','m05_lots','m05_items','m05_purchases']) {
     await DB.prepare('DELETE FROM '+table).run();
   }
+  await DB.prepare("CREATE TRIGGER m05_receipt_delete_guard BEFORE DELETE ON m05_purchases BEGIN SELECT RAISE(ABORT,'m05-immutable-receipt'); END").run();
   await DB.prepare("UPDATE m05_products SET stock=CASE sku WHEN 'PIPE' THEN 3 ELSE 0 END,version=1,active=1,deleted=0,product_type=CASE sku WHEN 'BUNDLE' THEN 'Bundle' ELSE 'Standard' END WHERE tenant_id='SHOP-A'").run();
   await DB.prepare("UPDATE m05_suppliers SET payable_paisa=4000,active=1 WHERE tenant_id='SHOP-A'").run();
   await DB.prepare("UPDATE m05_party_links SET reviewed=1,party_id='PARTY-1' WHERE tenant_id='SHOP-A'").run();
@@ -155,4 +158,6 @@ test('uncertain response must not automatically repeat a new operation or claim 
   const beforeBatch=async()=>{throw new Error('network interrupted before commit');};
   await assert.rejects(poster({beforeBatch}).post(input('OP-UNKNOWN-01')),/network interrupted/);
   assert.equal((await one('SELECT COUNT(*) AS n FROM m05_purchases')).n,0);
+});
+
 });
