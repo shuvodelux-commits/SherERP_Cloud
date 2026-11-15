@@ -38,6 +38,7 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
   const candidates=[];
   const reviews=[];
   const byKey=new Map();
+  const unnamed=[];
   for(const group of groups){
     const spec=partyLegacyContracts[group];
     const seenSourceRows=new Set();
@@ -57,16 +58,17 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
         continue;
       }
       const key=sourceKey(group,id);
+      // Detect repeated source IDs even when one or both rows lack a name.
+      if(!byKey.has(key))byKey.set(key,[]);
+      byKey.get(key).push({group,id,legacySheetRow});
       const name=str(source[spec.nameColumn]);
       if(!name.trim()){
-        reviews.push({reviewId:reviewId('OTHER',key),sourceGroup:group,sourceId:id,legacySheetRow,reason:'OTHER',status:'OPEN'});
+        unnamed.push({group,id,key,legacySheetRow});
         continue;
       }
       const row={group,id,key,name,phone:str(source[spec.phoneColumn]),legacySheetRow,
         roles:rolesForLegacyRow(group,source),inactive:inactive(source)};
       candidates.push(row);
-      if(!byKey.has(key))byKey.set(key,[]);
-      byKey.get(key).push(row);
     }
   }
   const duplicateKeys=new Set([...byKey].filter(([,rows])=>rows.length>1).map(([key])=>key));
@@ -74,6 +76,11 @@ export function planPartyImport(sourceRows,approvedGroups=[]) {
     const row=byKey.get(key)[0];
     reviews.push({reviewId:reviewId('DUPLICATE_ID',key),sourceGroup:row.group,
       sourceId:row.id,legacySheetRow:row.legacySheetRow,reason:'DUPLICATE_ID',status:'OPEN'});
+  }
+  for(const row of unnamed){
+    if(!duplicateKeys.has(row.key))
+      reviews.push({reviewId:reviewId('OTHER',row.key),sourceGroup:row.group,
+        sourceId:row.id,legacySheetRow:row.legacySheetRow,reason:'OTHER',status:'OPEN'});
   }
   const valid=candidates.filter(row=>!duplicateKeys.has(row.key));
   const found=new Map(valid.map(row=>[row.key,row]));
