@@ -13,6 +13,30 @@ import {partyLegacyContracts} from './legacy-contracts.js';
 const tables=['parties','party_roles','party_legacy_links'];
 const validObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const validCount=value=>Number.isSafeInteger(value)&&value>=0;
+
+// The planner reports every source group, including empty ones. Reconcile
+// this inventory independently of D1 rows; quarantine allocation is unknown.
+function validSourceGroupSummary(plan){
+  const known=Object.keys(partyLegacyContracts);
+  const entries=plan.summary.sourceGroups;
+  if(!Array.isArray(entries)||entries.length!==known.length)return false;
+  const linked=new Map(known.map(group=>[group,0]));
+  for(const link of plan.links){
+    if(!linked.has(link.sourceGroup))return false;
+    linked.set(link.sourceGroup,linked.get(link.sourceGroup)+1);
+  }
+  const seen=new Set();
+  let total=0;
+  for(const entry of entries){
+    if(!validObject(entry)||!linked.has(entry.sourceGroup)||
+       seen.has(entry.sourceGroup)||!validCount(entry.rows)||
+       entry.rows<linked.get(entry.sourceGroup))return false;
+    seen.add(entry.sourceGroup);
+    total+=entry.rows;
+    if(!Number.isSafeInteger(total))return false;
+  }
+  return total===plan.summary.sourceRows;
+}
 const validMemberStatus=value=>value==='ACTIVE'||value==='INACTIVE';
 const validLegacyStatus=value=>value==='ACTIVE'||value==='RETIRED';
 const rowKey=(row,columns)=>{
@@ -199,6 +223,7 @@ export function reconcilePartyImportReadback({plan,readback}={}){
 
   if(!validCount(plan.summary.sourceRows)||
     !validCount(plan.summary.quarantinedRows)||
+    !validSourceGroupSummary(plan)||
     plan.summary.proposedParties!==counts.expected.parties||
     plan.summary.roleMemberships!==counts.expected.party_roles||
     plan.summary.legacyLinks!==counts.expected.party_legacy_links||
