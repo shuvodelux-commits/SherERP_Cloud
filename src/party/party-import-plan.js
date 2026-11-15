@@ -14,7 +14,10 @@ const missingIdFingerprint=row=>hash(JSON.stringify(Object.keys(row).sort().map(
 const entityId=(key)=>'PT-'+hash(key);
 const reviewId=(reason,key)=>'REV-'+hash(reason+'|'+key);
 const normName=(s)=>str(s).trim().replace(/\s+/g,' ').toLocaleLowerCase('en');
-const normPhone=(s)=>str(s).replace(/[^0-9]/g,'');
+const normPhone=s=>{
+  const digits=str(s).replace(/[^0-9]/g,'');
+  return /^8801\d{9}$/.test(digits)?'0'+digits.slice(3):digits;
+};
 const inactive=(row)=>String(row.Status||'').trim().toLowerCase()==='inactive'||
   String(row['Is Deleted']||'').trim().toLowerCase()==='true';
 const cite=(row)=>({sourceGroup:row.group,sourceId:row.id});
