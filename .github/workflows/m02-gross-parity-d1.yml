@@ -1,0 +1,24 @@
+name: M02 gross checkpoint parity on real local Workerd D1 (synthetic only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  m02-gross-local-d1:
+    name: Verify synthetic gross source/account readback on isolated Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler for ephemeral local Workerd D1 only
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Run synthetic gross checkpoint parity D1 integration tests
+        run: node --test tests/integration/m02-gross-parity-workerd.spec.mjs
