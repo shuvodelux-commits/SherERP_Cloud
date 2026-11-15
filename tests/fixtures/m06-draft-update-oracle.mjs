@@ -10,7 +10,7 @@ const sources=[
 ];
 const frozen=([name,sha])=>{
   const bytes=readFileSync(new URL('../../legacy/source/'+name,import.meta.url));
-  const found=createHash('sha1').update(`blob ${bytes.length}\\0`).update(bytes).digest('hex');
+  const found=createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
   if(found!==sha)throw new Error('Changed frozen GAS source: '+name);
   return bytes.toString('utf8');
 };
