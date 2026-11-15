@@ -252,3 +252,17 @@ test('fractional-cent net original purchase is declined, not silently rounded to
     assert.deepEqual(await snapshot(),before);
   }
 });
+
+test('source-verified Bank purchase payment is cash-backed eligibility, refund itself enters only Cash',async()=>{
+  const src=await purchase('BANK',{paymentMethod:'Bank',bankAccountId:'BANK-1'});
+  const before=await snapshot();
+  assert.equal((await returns().post(cash(src,'OP-RETURN-BANKPAID-001',{
+    returnId:'PRET-BANKPAID-001'
+  }))).status,'COMMITTED');
+  const afterSnapshot=await snapshot();
+  assert.deepEqual(afterSnapshot.originalBank,before.originalBank,
+    'refund must not reverse or duplicate the original Bank debit');
+  assert.equal(afterSnapshot.originalCash.length,0);
+  assert.deepEqual(afterSnapshot.cashIn.map(x=>x.credit_paisa),[1500]);
+  assert.deepEqual(afterSnapshot.suppliers,before.suppliers);
+});
