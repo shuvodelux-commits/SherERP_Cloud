@@ -19,7 +19,7 @@ async function state(){
 }
 async function call(path,body,method='POST'){
   const response=await worker.fetch('http://m03-atomic-master.local'+path,{
-    method,...(body===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    method,...(body===undefined || method==='GET' || method==='HEAD'?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
   });
   return {status:response.status,body:await response.json()};
 }
