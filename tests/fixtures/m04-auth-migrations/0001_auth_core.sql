@@ -6,6 +6,8 @@ CREATE TABLE auth_roles (
     CHECK (length(trim(role_name)) > 0 AND lower(trim(role_name)) <> 'administrator'),
   status TEXT NOT NULL CHECK (status IN ('Active','Inactive')),
   permissions_json TEXT NOT NULL DEFAULT '{}',
+  -- Source ROLES[Allowed Modules] display metadata; never an authorization proof.
+  allowed_modules TEXT NOT NULL DEFAULT '',
   auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1)
 ) STRICT;
 
