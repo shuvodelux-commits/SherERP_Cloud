@@ -106,6 +106,18 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
     assert.equal((await one("SELECT payable_paisa FROM m05ml_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,4000);
   });
 
+  test('source arithmetic clamps an over-tendered purchase payment to grand total without extra cash',async()=>{
+    const result=await poster().post(input('OP-ML-CLAMP-001',{
+      paidAmount:'9999',paymentMethod:'Cash'
+    }));
+    assert.equal(result.status,'COMMITTED');
+    assert.deepEqual(await all('SELECT grand_paisa,paid_paisa,due_paisa FROM m05ml_purchases'),[
+      {grand_paisa:5200,paid_paisa:5200,due_paisa:0}
+    ]);
+    assert.deepEqual(await all('SELECT debit_paisa FROM m05ml_cash_book'),[{debit_paisa:5200}]);
+    assert.equal(await count('m05ml_supplier_ledger'),0);
+  });
+
   test('same operation fingerprint replays once; modified line, actor and supplier cannot reuse its ID',async()=>{
     const purchase=input('OP-ML-000003');
     assert.equal((await poster().post(purchase)).status,'COMMITTED');
@@ -208,7 +220,7 @@ describe('M05 multiple SKU atomic purchase (isolated real Workerd D1)',()=>{
       {items:[line('PIPE',0,'1','2')]},
       {items:[line('PIPE',2,'1.001','2')]},
       {discount:'-1'},
-      {paidAmount:'9999'},
+      {paidAmount:'0.001'},
       {tenantId:'SHOP-NO-SESSION'}
     ];
     for(let i=0;i<variants.length;i++){
