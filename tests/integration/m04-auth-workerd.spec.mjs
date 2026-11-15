@@ -223,3 +223,40 @@ test('session absolute expiry cannot be extended by SQL after issuance',async()=
   assert.equal((await rpc('validate',{token:signed.body.token,nowMs:now+1000})).body.authenticated,true);
   assert.equal((await rpc('validate',{token:signed.body.token,nowMs:oldRow.expires_at_ms})).body.authenticated,false);
 });
+
+
+test('a revoked session fingerprint cannot be resurrected by SQLite INSERT OR REPLACE',async()=>{
+  const now=BASE+800_000;
+  const signed=await rpc('login',{phoneKey:'01710000001',password:PASSWORD,nowMs:now});
+  assert.equal(signed.body.authenticated,true);
+  const tokenHash=createHash('sha256').update(Buffer.from(signed.body.token,'hex')).digest('hex');
+  assert.deepEqual(await rpc('logout',{token:signed.body.token,nowMs:now+1000}),
+    {status:200,body:{revoked:true}});
+  const original=await DB.prepare('SELECT * FROM auth_sessions WHERE token_hash=?')
+    .bind(tokenHash).first();
+  assert.equal(original.revoked_at_ms,now+1000);
+  try {
+    await assert.rejects(()=>DB.prepare(`INSERT OR REPLACE INTO auth_sessions
+      (token_hash,user_id,user_auth_version,role_auth_version,credential_version,
+       created_at_ms,last_activity_at_ms,expires_at_ms,revoked_at_ms)
+      VALUES (?,?,?,?,?,?,?,?,NULL)`)
+      .bind(original.token_hash,original.user_id,original.user_auth_version,
+        original.role_auth_version,original.credential_version,original.created_at_ms,
+        original.last_activity_at_ms,original.expires_at_ms).run(),
+      /session|replacement|replace|constraint|abort/i);
+  } finally {
+    // In RED the attack can succeed; restore the revoked synthetic test row.
+    const current=await DB.prepare('SELECT revoked_at_ms FROM auth_sessions WHERE token_hash=?')
+      .bind(tokenHash).first();
+    if(current?.revoked_at_ms===null)
+      await DB.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
+        .bind(original.revoked_at_ms,tokenHash).run();
+  }
+  const after=await DB.prepare('SELECT revoked_at_ms,user_id,expires_at_ms FROM auth_sessions WHERE token_hash=?')
+    .bind(tokenHash).first();
+  assert.equal(after.revoked_at_ms,original.revoked_at_ms);
+  assert.equal(after.user_id,original.user_id);
+  assert.equal(after.expires_at_ms,original.expires_at_ms);
+  assert.deepEqual(await rpc('validate',{token:signed.body.token,nowMs:now+2000}),
+    {status:200,body:{authenticated:false}});
+});
