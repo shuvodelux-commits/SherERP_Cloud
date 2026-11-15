@@ -5,7 +5,8 @@ CREATE TABLE auth_roles (
   role_name TEXT PRIMARY KEY
     CHECK (length(trim(role_name)) > 0 AND lower(trim(role_name)) <> 'administrator'),
   status TEXT NOT NULL CHECK (status IN ('Active','Inactive')),
-  permissions_json TEXT NOT NULL DEFAULT '{}'
+  permissions_json TEXT NOT NULL DEFAULT '{}',
+  auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1)
 ) STRICT;
 
 CREATE TABLE auth_users (
@@ -25,7 +26,8 @@ CREATE TABLE auth_users (
     CHECK (length(password_salt)=48 AND password_salt NOT GLOB '*[^0-9a-f]*'),
   password_iterations INTEGER NOT NULL
     CHECK (password_iterations BETWEEN 210000 AND 1000000),
-  credential_version INTEGER NOT NULL DEFAULT 1 CHECK (credential_version>=1)
+  credential_version INTEGER NOT NULL DEFAULT 1 CHECK (credential_version>=1),
+  auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1)
 ) STRICT;
 
 -- Active Administrator accounts are intrinsic, not managed through auth_roles.
@@ -48,10 +50,39 @@ BEGIN
   SELECT RAISE(ABORT,'last active administrator');
 END;
 
+-- Trigger-owned authority epochs prevent disabled/re-enabled users or roles
+-- from resurrecting sessions created before the change. Nonrecursive because
+-- the UPDATE inside each trigger touches only auth_version.
+CREATE TRIGGER trg_auth_user_version AFTER UPDATE OF
+  status,role_name,password_algo,password_hash,password_salt,
+  password_iterations,credential_version ON auth_users
+WHEN OLD.status IS NOT NEW.status
+  OR OLD.role_name IS NOT NEW.role_name
+  OR OLD.password_algo IS NOT NEW.password_algo
+  OR OLD.password_hash IS NOT NEW.password_hash
+  OR OLD.password_salt IS NOT NEW.password_salt
+  OR OLD.password_iterations IS NOT NEW.password_iterations
+  OR OLD.credential_version IS NOT NEW.credential_version
+BEGIN
+  UPDATE auth_users SET auth_version=OLD.auth_version+1 WHERE user_id=NEW.user_id;
+END;
+
+CREATE TRIGGER trg_auth_role_version AFTER UPDATE OF
+  role_name,status,permissions_json ON auth_roles
+WHEN OLD.role_name IS NOT NEW.role_name
+  OR OLD.status IS NOT NEW.status
+  OR OLD.permissions_json IS NOT NEW.permissions_json
+BEGIN
+  UPDATE auth_roles SET auth_version=OLD.auth_version+1 WHERE role_name=NEW.role_name;
+END;
+
 CREATE TABLE auth_sessions (
   token_hash TEXT PRIMARY KEY
     CHECK (length(token_hash)=64 AND token_hash NOT GLOB '*[^0-9a-f]*'),
   user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE RESTRICT,
+  user_auth_version INTEGER NOT NULL CHECK (user_auth_version>=1),
+  role_auth_version INTEGER CHECK (role_auth_version IS NULL OR role_auth_version>=1),
+  credential_version INTEGER NOT NULL CHECK (credential_version>=1),
   created_at_ms INTEGER NOT NULL CHECK (created_at_ms>=0),
   last_activity_at_ms INTEGER NOT NULL CHECK (last_activity_at_ms>=created_at_ms),
   expires_at_ms INTEGER NOT NULL CHECK (expires_at_ms>created_at_ms),

@@ -58,11 +58,11 @@ test('last active Administrator can never be deleted, demoted or disabled by SQL
 test('SQL blocks raw session token, malformed salts, and duplicate session fingerprints',()=>{
   const db=setup(); addUser(db,'USR-1','01710000001');
   assert.throws(()=>db.prepare(`INSERT INTO auth_sessions
-   (token_hash,user_id,created_at_ms,last_activity_at_ms,expires_at_ms)
-   VALUES (?,?,?,?,?)`).run('raw-session-token','USR-1',1,1,2),/CHECK/);
+   (token_hash,user_id,created_at_ms,last_activity_at_ms,expires_at_ms,user_auth_version,credential_version)
+   VALUES (?,?,?,?,?,1,1)`).run('raw-session-token','USR-1',1,1,2),/CHECK/);
   const insert=db.prepare(`INSERT INTO auth_sessions
-   (token_hash,user_id,created_at_ms,last_activity_at_ms,expires_at_ms)
-   VALUES (?,?,?,?,?)`);
+   (token_hash,user_id,created_at_ms,last_activity_at_ms,expires_at_ms,user_auth_version,credential_version)
+   VALUES (?,?,?,?,?,1,1)`);
   insert.run('ef'.repeat(32),'USR-1',1,1,2);
   assert.throws(()=>insert.run('ef'.repeat(32),'USR-1',1,1,2),/UNIQUE/);
   assert.throws(()=>insert.run('ab'.repeat(32),'UNKNOWN',1,1,2),/FOREIGN KEY/);
