@@ -25,7 +25,7 @@ export async function summarizeOpenPartyIdentityReviews({DB}={}){
   try {
     const statement=DB.prepare(QUERY);
     const result=await statement.all();
-    if(!result || result.success===false || !Array.isArray(result.results))
+    if(!result || result.success!==true || !Array.isArray(result.results))
       throw new Error('Unexpected review count result');
     rows=result.results;
   } catch {
