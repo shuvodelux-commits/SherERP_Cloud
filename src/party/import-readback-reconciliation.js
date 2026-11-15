@@ -70,6 +70,7 @@ function validPlanLinkage(plan){
   const ids=new Set(plan.parties.map(p=>p.partyId));
   const anchors=new Map([...ids].map(id=>[id,0]));
   const activeSources=new Set();
+  const activeStaticRoles=new Set();
   const observedRoles=new Map([...ids].map(id=>[id,new Set()]));
   const allowedRoles=new Map([...ids].map(id=>[id,new Set()]));
   const requiredRoles=new Map([...ids].map(id=>[id,new Set()]));
@@ -87,6 +88,8 @@ function validPlanLinkage(plan){
     for(const role of spec.roles){
       requiredRoles.get(link.partyId).add(role);
       allowedRoles.get(link.partyId).add(role);
+      if(link.status==='ACTIVE')
+        activeStaticRoles.add(JSON.stringify([link.partyId,role]));
     }
     if(link.sourceGroup==='FINANCE_PERSONS'){
       financeLinked.add(link.partyId);
@@ -122,6 +125,14 @@ function validPlanLinkage(plan){
        [...requiredRoles.get(id)].some(role=>!actual.has(role)) ||
        (financeLinked.has(id) &&
         !partyLegacyContracts.FINANCE_PERSONS.financeRoles.some(role=>actual.has(role))))
+      return false;
+  }
+  // Static role statuses are derived from the original links supplying each
+  // role. Finance per-role status needs original row-level role membership.
+  for(const role of plan.roles){
+    if(requiredRoles.get(role.partyId).has(role.role) &&
+       (role.status==='ACTIVE')!==
+         activeStaticRoles.has(JSON.stringify([role.partyId,role.role])))
       return false;
   }
   // Source-only planner derives Party ACTIVE iff any original link is ACTIVE.
