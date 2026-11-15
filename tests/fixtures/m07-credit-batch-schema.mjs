@@ -26,6 +26,10 @@ export const M07_CREDIT_BATCH_TEST_DDL=[
     WHERE existing.tenant_id=NEW.tenant_id
     AND (existing.return_id=NEW.batch_id OR existing.operation_id=NEW.operation_id))
   THEN RAISE(IGNORE) END;
+ SELECT CASE WHEN EXISTS(SELECT 1 FROM json_each(NEW.children_json) child
+   WHERE json_extract(child.value,'$.returnId')=NEW.batch_id
+      OR json_extract(child.value,'$.operationId')=NEW.operation_id)
+  THEN RAISE(IGNORE) END;
  SELECT CASE WHEN json_array_length(NEW.children_json)<>NEW.child_count
   OR (SELECT COUNT(DISTINCT json_extract(j.value,'$.invoiceId'))
       FROM json_each(NEW.children_json) j)<>NEW.child_count
