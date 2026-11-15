@@ -56,6 +56,10 @@ before(async()=>{
     VALUES ('GuardReader','Active',?,'roles')`)
     .bind(JSON.stringify({roles:{view:true},users:{view:false}})).run();
   await seed('USR-RPC-GUARD','01710000108','GuardReader');
+  await db.prepare(`INSERT INTO auth_roles (role_name,status,permissions_json,allowed_modules)
+    VALUES ('DirectoryReader','Active',?,'users')`)
+    .bind(JSON.stringify({users:{view:true}})).run();
+  await seed('USR-RPC-DIRECTORY','01710000109','DirectoryReader');
 });
 after(async()=>{await harness.close();});
 
@@ -283,4 +287,72 @@ test('internal D1 staff read gate derives users/roles view from the session, not
   assert.equal((await authorizeRead('getRolesBootstrap',reissued.body.data.token,NOW+110_000)).body.authorized,true);
   await db.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='USR-RPC-GUARD'").run();
   assert.deepEqual(await authorizeRead('getRolesBootstrap',reissued.body.data.token,NOW+111_000),deny);
+});
+
+
+async function staffDirectory(token,nowMs=NOW+121_000,claims={}){
+  const response=await worker.fetch('http://m04.local/__m04_test__/staff-directory',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token,nowMs,...claims}),
+  });
+  return {status:response.status,body:await response.json()};
+}
+
+test('read-only partial staff directory uses current D1 users.view and never projects credentials',async()=>{
+  const source=readFileSync(new URL('../../legacy/source/UserManagement.gs',import.meta.url),'utf8');
+  assert.match(source,/function getUsersBootstrap\(token\)/);
+  assert.match(source,/requirePermission_\(token, 'users', 'view'\)/);
+  const admin=await rpc('login',['01710000101',SECRET],NOW+120_000);
+  const cashier=await rpc('login',['01710000105',SECRET],NOW+120_000);
+  const reader=await rpc('login',['01710000109',SECRET],NOW+120_000);
+  assert.equal(admin.body.success,true);
+  assert.equal(cashier.body.success,true);
+  assert.equal(reader.body.success,true);
+  const denied={status:200,body:{authorized:false}};
+  assert.deepEqual(await staffDirectory(cashier.body.data.token),denied);
+  assert.deepEqual(await staffDirectory(cashier.body.data.token,NOW+122_000,{
+    actor:{id:'USR-RPC-ADMIN',role:'Administrator'},
+    permissions:{users:{view:true}},allowedModules:['users'],
+  }),denied);
+  const valid=await staffDirectory(reader.body.data.token);
+  assert.equal(valid.status,200);
+  assert.equal(valid.body.authorized,true);
+  assert.equal(valid.body.partial,true,'schema is missing createdBy/createdAt/lastLogin');
+  assert.deepEqual(Object.keys(valid.body),['authorized','partial','users','roles']);
+  const user=valid.body.users.find(u=>u.id==='USR-RPC-DIRECTORY');
+  assert.deepEqual(user,{
+    id:'USR-RPC-DIRECTORY',name:'Fixture USR-RPC-DIRECTORY',
+    mobile:'01710000109',role:'DirectoryReader',status:'Active',
+  });
+  assert.equal(valid.body.users.length>=8,true);
+  assert.deepEqual(valid.body.users.map(u=>u.id),[...valid.body.users.map(u=>u.id)].sort());
+  assert.deepEqual(valid.body.roles.map(r=>r.name),[...valid.body.roles.map(r=>r.name)].sort());
+  assert.equal(valid.body.roles.some(r=>r.name==='DirectoryReader'),true);
+  assert.equal(valid.body.roles.some(r=>r.name==='Administrator'),false,'built-in admin is not a role row');
+  assert.deepEqual(valid.body.users.map(u=>Object.keys(u)).every(k=>
+    JSON.stringify(k)===JSON.stringify(['id','name','mobile','role','status'])),true);
+  assert.deepEqual(valid.body.roles.every(r=>Object.keys(r).join(',')==='name'),true);
+  const output=JSON.stringify(valid.body);
+  for(const secret of [SECRET,'password_hash','password_salt','legacy_hash',
+    'password_iterations','credential_version','auth_version','token_hash']){
+    assert.equal(output.includes(secret),false,'private value escaped: '+secret);
+  }
+  assert.deepEqual(await staffDirectory(admin.body.data.token),valid);
+  assert.deepEqual(await staffDirectory('not-a-token'),denied);
+
+  await rpc('logout',[reader.body.data.token],NOW+123_000);
+  assert.deepEqual(await staffDirectory(reader.body.data.token,NOW+124_000),denied);
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='DirectoryReader'")
+    .bind(JSON.stringify({users:{view:false}})).run();
+  const downgraded=await rpc('login',['01710000109',SECRET],NOW+125_000);
+  assert.equal(downgraded.body.success,true);
+  assert.deepEqual(await staffDirectory(downgraded.body.data.token,NOW+126_000),denied);
+  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='DirectoryReader'")
+    .bind(JSON.stringify({users:{view:true}})).run();
+  assert.deepEqual(await staffDirectory(downgraded.body.data.token,NOW+127_000),denied);
+  const restored=await rpc('login',['01710000109',SECRET],NOW+128_000);
+  assert.equal(restored.body.success,true);
+  assert.equal((await staffDirectory(restored.body.data.token,NOW+129_000)).body.authorized,true);
+  await db.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='USR-RPC-DIRECTORY'").run();
+  assert.deepEqual(await staffDirectory(restored.body.data.token,NOW+130_000),denied);
 });
