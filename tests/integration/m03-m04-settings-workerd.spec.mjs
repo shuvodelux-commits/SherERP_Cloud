@@ -49,7 +49,7 @@ before(async()=>{
       .bind(key,value,index).run();
   }
   await DB.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
-    VALUES('Cashier','Active','{"settings":{"edit":true}}','')`).run();
+    VALUES('Cashier','Active','{"settings":{"edit":true}}','settings')`).run();
   for(const [id,phone,role] of [
     ['ADMIN-A','01710000001','Administrator'],
     ['ADMIN-B','01710000002','Administrator'],
@@ -85,13 +85,31 @@ test('actual M04 session authorizes source-shaped D1 Settings CAS in same SQL st
 
 test('actual D1 custom-role session can update only with a current literal settings.edit grant',async()=>{
   const before=await records();
-  // Empty navigation metadata is seeded before M04 session issuance; its later edits invalidate epochs.
+  // Allowed Modules is UI metadata, but changing it revokes old role sessions.
+  await DB.prepare("UPDATE auth_roles SET allowed_modules='' WHERE role_name='Cashier'").run();
+  await assert.rejects(()=>update().updateExisting_(make({
+    token:C,expectedValue:'নবাবী হার্ডওয়্যার',newValue:'Stale staff update'
+  })),/Denied|stale|conflict/i);
+  assert.deepEqual(await records(),before);
+
+  // Model a newly issued, server-bound role session; never rewrite an old epoch.
+  const roleEpoch=(await DB.prepare(
+    "SELECT auth_version FROM auth_roles WHERE role_name='Cashier'").first()).auth_version;
+  assert.ok(roleEpoch>1);
+  const freshToken='d'.repeat(64);
+  await DB.prepare(`INSERT INTO auth_sessions
+    (token_hash,user_id,user_auth_version,role_auth_version,
+     credential_version,created_at_ms,last_activity_at_ms,expires_at_ms,revoked_at_ms)
+    VALUES(?,?,1,?,1,?,?,?,NULL)`).bind(
+    digest(freshToken),'STAFF-C',roleEpoch,NOW-1000,NOW-1000,NOW+60_000
+  ).run();
+  // Only the current settings.edit permission can authorize the SQL CAS.
   assert.deepEqual(await update().updateExisting_(make({
-    token:C,expectedValue:'নবাবী হার্ডওয়্যার',newValue:'Staff-authorized update'
+    token:freshToken,expectedValue:'নবাবী হার্ডওয়্যার',newValue:'Staff-authorized update'
   })),{updated:true});
   assert.equal((await records())[0].value,'Staff-authorized update');
   assert.deepEqual(await update().updateExisting_(make({
-    token:C,expectedValue:'Staff-authorized update',newValue:'নবাবী হার্ডওয়্যার'
+    token:freshToken,expectedValue:'Staff-authorized update',newValue:'নবাবী হার্ডওয়্যার'
   })),{updated:true});
   assert.deepEqual(await records(),before);
 });
