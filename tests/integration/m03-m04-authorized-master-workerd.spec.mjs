@@ -71,7 +71,7 @@ before(async()=>{
     assert.equal((await DB.prepare('INSERT INTO auth_users '+
       '(user_id,full_name,phone_key,role_name,status,password_hash,password_salt,password_iterations) '+
       "VALUES(?,?,?,?,'Active',?,?,210000)")
-      .bind(id,'Test '+id,phone,'ab'.repeat(32),'cd'.repeat(24)).run()).success,true);
+      .bind(id,'Test '+id,phone,role,'ab'.repeat(32),'cd'.repeat(24)).run()).success,true);
   }
   for(const [id,key,epoch] of [
     ['ADMIN',token.ADMIN,null],['STAFF',token.STAFF,1],
