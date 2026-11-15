@@ -105,15 +105,23 @@ const NAV_ITEMS = [
  * Settings rows or a module-level mutable response cache. A caller may edit
  * its own cloned nav tree, but cannot poison later read results.
  */
+/**
+ * Pure source-shaped response projection shared by the internal M03 reader
+ * and the separately M04-authorized D1 reader. Never use this to grant
+ * permissions: NAV_ITEMS describes presentation only.
+ */
+export function buildSourceAppShellData({shopName,currencySymbol}){
+  return {
+    success:true,
+    data:{shopName,currencySymbol,navItems:structuredClone(NAV_ITEMS)}
+  };
+}
+
 export function createSourceShapedAppShellReader(env){
   const settings=createSettingsReadAdapter(env);
   return Object.freeze({
     async getAppShellData(){
-      const {shopName,currencySymbol}=await settings.getAppShellSettings_();
-      return {
-        success:true,
-        data:{shopName,currencySymbol,navItems:structuredClone(NAV_ITEMS)}
-      };
+      return buildSourceAppShellData(await settings.getAppShellSettings_());
     }
   });
 }
