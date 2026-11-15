@@ -149,7 +149,7 @@ test('multi-payment switch requires literal source true; missing shop falls back
     delete input.settings['Shop Name'];
     const output=parity(input);
     assert.equal(output.multiPaymentEnabled,setting===true||String(setting).toLowerCase()==='true');
-    assert.equal(output.shopName,'SherERP');
+    assert.equal(output.shopName,'Hardware Store ERP');
   }
 });
 
