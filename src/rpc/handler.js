@@ -13,22 +13,93 @@ function validAuthArguments(name,args) {
   if(name==='login') return args[0].length<=64 && args[1].length<=1024;
   return args[0].length<=128;
 }
-function validAuthEnvelope(result) {
-  if(!result || typeof result!=='object' || Array.isArray(result) ||
-      (Object.getPrototypeOf(result)!==Object.prototype &&
-       Object.getPrototypeOf(result)!==null)) return false;
-  const keys=Reflect.ownKeys(result);
-  if(keys.length!==2 || typeof keys[0]!=='string' || typeof keys[1]!=='string') return false;
+// The trusted M04 bridge's response is not an arbitrary JSON payload:
+// a second guard keeps new/accidental private D1 columns out of HTTP.
+const AUTH_TOKEN=/^[0-9a-f]{64}$/;
+const AUTH_MOBILE=/^01[3-9][0-9]{8}$/;
+const AUTH_MODULES=new Set([
+  'dashboard','pos','sales','returns','purchase','suppliers','vendors',
+  'products','customers','bank','expense','finance','daybook',
+  'cashReconciliation','reports','settings','users','roles',
+  'openingBalance','settlementDiscount','posCost',
+]);
+const AUTH_DELETE_WINDOWS=new Set(['1','3','7','15','30','unlimited']);
+const AUTH_FAILURE_MESSAGES=new Set([
+  'Invalid mobile number or password.',
+  'Session expired. Please sign in again.',
+  'Sign-in role configuration is unavailable.',
+]);
+function plainRecord(value) {
+  return value && typeof value==='object' && !Array.isArray(value) &&
+    (Object.getPrototypeOf(value)===Object.prototype ||
+     Object.getPrototypeOf(value)===null);
+}
+function ownFields(value,fields) {
+  if(!plainRecord(value)) return false;
+  const keys=Reflect.ownKeys(value);
+  if(keys.length!==fields.length ||
+     keys.some(key=>typeof key!=='string'||!fields.includes(key))) return false;
+  return fields.every(key=>{
+    const descriptor=Object.getOwnPropertyDescriptor(value,key);
+    return descriptor?.enumerable===true && Object.hasOwn(descriptor,'value');
+  });
+}
+function validRoleMetadata(profile) {
+  if(profile.user.role==='Administrator')
+    return profile.allowedModules===null && profile.permissions===null;
+  const modules=profile.allowedModules;
+  const permissions=profile.permissions;
+  if(!Array.isArray(modules) || Object.getPrototypeOf(modules)!==Array.prototype ||
+     modules.length>AUTH_MODULES.size ||
+     Reflect.ownKeys(modules).length!==modules.length+1 ||
+     modules.some(name=>typeof name!=='string'||!AUTH_MODULES.has(name)) ||
+     new Set(modules).size!==modules.length || !plainRecord(permissions))
+    return false;
+  const moduleKeys=Reflect.ownKeys(permissions);
+  if(moduleKeys.length>AUTH_MODULES.size) return false;
+  for(const moduleName of moduleKeys){
+    if(typeof moduleName!=='string'||!AUTH_MODULES.has(moduleName)) return false;
+    const descriptor=Object.getOwnPropertyDescriptor(permissions,moduleName);
+    if(!descriptor?.enumerable || !Object.hasOwn(descriptor,'value')) return false;
+    const actions=descriptor.value;
+    if(!plainRecord(actions)) return false;
+    for(const action of Reflect.ownKeys(actions)){
+      if(typeof action!=='string')return false;
+      const d=Object.getOwnPropertyDescriptor(actions,action);
+      if(!d?.enumerable || !Object.hasOwn(d,'value'))return false;
+      if(action==='delete'){
+        if(!AUTH_DELETE_WINDOWS.has(d.value))return false;
+      }else if(['view','add','edit'].includes(action)){
+        if(typeof d.value!=='boolean')return false;
+      }else return false;
+    }
+  }
+  return true;
+}
+function validAuthProfile(data) {
+  if(!ownFields(data,['token','user','allowedModules','permissions']) ||
+     typeof data.token!=='string'||!AUTH_TOKEN.test(data.token) ||
+     !ownFields(data.user,['id','name','mobile','role'])) return false;
+  const user=data.user;
+  if(typeof user.id!=='string'||!user.id.trim()||user.id.length>128 ||
+     typeof user.name!=='string'||!user.name.trim()||user.name.length>256 ||
+     typeof user.mobile!=='string'||!AUTH_MOBILE.test(user.mobile) ||
+     typeof user.role!=='string'||!user.role.trim()||user.role.length>100)
+    return false;
+  return validRoleMetadata(data);
+}
+function validAuthEnvelope(result,method) {
+  if(!plainRecord(result))return false;
   const success=Object.getOwnPropertyDescriptor(result,'success');
-  if(!success || !Object.hasOwn(success,'value') ||
-      typeof success.value!=='boolean') return false;
-  const name=success.value?'data':'message';
-  const field=Object.getOwnPropertyDescriptor(result,name);
-  if(!field || !Object.hasOwn(field,'value')) return false;
-  if(success.value===false &&
-     (typeof field.value!=='string' || field.value.length===0 ||
-      field.value.length>256)) return false;
-  return keys.every(key=>key==='success'||key===name);
+  if(!success?.enumerable || !Object.hasOwn(success,'value') ||
+     typeof success.value!=='boolean')return false;
+  if(success.value===false){
+    return ownFields(result,['success','message']) &&
+      typeof result.message==='string' &&
+      AUTH_FAILURE_MESSAGES.has(result.message);
+  }
+  return ownFields(result,['success','data']) &&
+    (method==='logout' ? result.data==='logged out' : validAuthProfile(result.data));
 }
 
 function rpcError(status, message, headers = {}) {
@@ -86,7 +157,7 @@ export async function handleRpc(request, {authAdapter}={}) {
       if(typeof method!=='function')
         return rpcError(503,'Authentication backend unavailable');
       const result=await method(...payload.args);
-      if(!validAuthEnvelope(result))
+      if(!validAuthEnvelope(result,payload.fnName))
         return rpcError(503,'Authentication backend unavailable');
       return Response.json(result,{headers:{
         'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
