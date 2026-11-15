@@ -6,6 +6,7 @@
  * represented/reconciled by this M04 local schema; no public RPC may use it.
  */
 import {authorizeStaffReadWithD1} from './d1-staff-read-gate.js';
+import {roleBootstrapOptions} from '../modules/auth/permission-policy.js';
 
 const deny=()=>({authorized:false});
 
@@ -34,5 +35,6 @@ export async function readRoleDirectoryPreviewWithD1(db,{token,nowMs}={}){
     authorized:true,
     partial:true,
     roles:result.results.map(({name,status})=>({name,status})),
+    ...roleBootstrapOptions(),
   };
 }
