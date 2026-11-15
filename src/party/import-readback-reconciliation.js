@@ -70,6 +70,7 @@ function validPlanLinkage(plan){
   const ids=new Set(plan.parties.map(p=>p.partyId));
   const anchors=new Map([...ids].map(id=>[id,0]));
   const activeSources=new Set();
+  const physicalRowsByGroup=new Map();
   const activeStaticRoles=new Set();
   const observedRoles=new Map([...ids].map(id=>[id,new Set()]));
   const allowedRoles=new Map([...ids].map(id=>[id,new Set()]));
@@ -83,6 +84,16 @@ function validPlanLinkage(plan){
   for(const link of plan.links){
     if(!ids.has(link.partyId) || !validLegacyStatus(link.status) ||
        !Object.hasOwn(partyLegacyContracts,link.sourceGroup))return false;
+    // Preserve the planner's physical source-row coordinates: null means
+    // unavailable, otherwise each numbered row is unique per source group.
+    if(link.legacySheetRow!==null){
+      if(!Number.isSafeInteger(link.legacySheetRow)||link.legacySheetRow<2)return false;
+      if(!physicalRowsByGroup.has(link.sourceGroup))
+        physicalRowsByGroup.set(link.sourceGroup,new Set());
+      const positions=physicalRowsByGroup.get(link.sourceGroup);
+      if(positions.has(link.legacySheetRow))return false;
+      positions.add(link.legacySheetRow);
+    }
     if(link.status==='ACTIVE')activeSources.add(link.partyId);
     const spec=partyLegacyContracts[link.sourceGroup];
     for(const role of spec.roles){
