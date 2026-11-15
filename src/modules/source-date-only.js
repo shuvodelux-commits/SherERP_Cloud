@@ -1,7 +1,7 @@
 /**
  * Internal M03 port of frozen Utils.gs::safeDateOnly_ and formatDate_.
  *
- * Apps Script uses Session.getScriptTimeZone(); Workerd has no equivalent.
+ * Apps Script resolves a default shop timezone; Workerd has no equivalent.
  * The caller must supply a trusted business IANA zone, never user input.
  * Falsy inputs and invalid-date fallback retain the original source shape.
  *
