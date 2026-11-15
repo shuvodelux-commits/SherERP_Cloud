@@ -37,7 +37,7 @@ function economicReturnLineAmount(row,subtotal,grandTotal){
  * scoped to one uniquely identified invoice. Historical Bundle parents
  * have no physical FIFO lots: physical component rows provide the coverage.
  */
-function sourceProfitMetric(invoiceId,sale,saleItems,returnItems,snapshot){
+export function sourceProfitMetric(invoiceId,sale,saleItems,returnItems,snapshot){
   const soldQty=Object.create(null);
   const returnedQty=Object.create(null);
   const coveredQty=Object.create(null);
