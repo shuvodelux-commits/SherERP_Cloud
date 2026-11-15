@@ -244,3 +244,42 @@ test('real D1 OPEN review counts exclude confirmed/rejected and never change Par
     assert.equal(response.status,404,'review queue is never a public route');
   }
 });
+
+
+test('Party import real-D1 readback rejects ambiguous batch success flags without writes or data disclosure',async()=>{
+  const plan=compile().plan;
+  const original=await counts();
+  const rejected=[{label:'missing',value:undefined},{label:'null',value:null},
+    {label:'numeric zero',value:0},{label:'numeric one',value:1},
+    {label:'string true',value:'true'},{label:'explicit false',value:false}];
+  for(const variant of rejected){
+    const intercepted={
+      prepare(sql){return DB.prepare(sql);},
+      async batch(statements){
+        const readback=await DB.batch(statements);
+        assert.equal(readback.length,3);
+        return readback.map((entry,index)=>{
+          if(index!==1)return entry;
+          if(variant.label==='missing'){
+            const {success,...withoutSuccess}=entry;
+            return withoutSuccess;
+          }
+          return {...entry,success:variant.value};
+        });
+      }
+    };
+    await assert.rejects(
+      ()=>reconcilePartyIdentityD1({DB:intercepted,plan}),
+      error=>error instanceof Error &&
+        error.message==='Party D1 identity readback unavailable',
+      variant.label+' batch status must fail closed'
+    );
+  }
+  const valid=await reconcilePartyIdentityD1({DB,plan});
+  assert.deepEqual(valid.issues,[{
+    code:'APPROVAL_REF_NOT_PERSISTED',
+    table:'party_legacy_links',
+    field:'approval_ref'
+  }],'genuine successful readback must still block missing human approval evidence');
+  assert.deepEqual(await counts(),original,'readback must never mutate Party tables');
+});
