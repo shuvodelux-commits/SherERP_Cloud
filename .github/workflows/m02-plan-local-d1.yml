@@ -1,0 +1,24 @@
+name: M02 Party synthetic plan import rehearsal (local D1 only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  m02-party-plan-d1:
+    name: Reconcile offline Party proposal against isolated workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned app test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler in ephemeral local-only runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Run synthetic identity proposal roundtrip, rollback and replay tests
+        run: node --test tests/integration/m02-party-plan-workerd.spec.mjs
