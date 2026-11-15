@@ -1,6 +1,7 @@
 import test, {before, after} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
 import {chromium} from 'playwright';
 import {serveCompiledUi} from './serve-compiled-ui.mjs';
 
@@ -138,6 +139,9 @@ test('original JPG download emits named native Chromium JPEG without an auth RPC
     assert.ok(bytes.length>1500,'native JPG download must be nonempty');
     assert.deepEqual([...bytes.subarray(0,3)],[255,216,255],'native download encodes a JPEG');
     assert.deepEqual([...bytes.subarray(-2)],[255,217]);
+    const evidenceDir=join(process.cwd(),'test-results','m01-browser');
+    await mkdir(evidenceDir,{recursive:true});
+    await writeFile(join(evidenceDir,'original-source-jpg-export.jpg'),bytes);
     assert.equal(loginRequests,0,'JPG export is independent of public login/session RPC');
     assert.equal(await page.locator('#loginOverlay').isVisible(),true);
     assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
