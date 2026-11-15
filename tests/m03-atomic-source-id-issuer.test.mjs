@@ -55,7 +55,7 @@ test('operation ID, source family and canonical intent hash fail before any SQL'
 test('ambiguous D1 results refuse success even if an INSERT could have committed',async()=>{
   const cases=[
     {run:{success:false}},
-    {run:undefined},
+    {run:null},
     {receipt:null},
     {receipt:{intent_hash:HASH,issued_sequence:'17',prefix:'PCAT'}},
     {receipt:{intent_hash:HASH,issued_sequence:0,prefix:'PCAT'}},
