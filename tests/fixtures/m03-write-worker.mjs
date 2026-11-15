@@ -1,6 +1,7 @@
 /** Separate local-only M03 write-test Worker. NOT imported by src/index.js. */
 import {createLegacyCatalogAppendAdapter} from '../../src/db/legacy-catalog-append.js';
 import {createLegacyCatalogReadAdapter} from '../../src/db/legacy-catalog-read.js';
+import {createLegacyCatalogActivationAdapter} from '../../src/db/legacy-catalog-activation.js';
 
 const json=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 const FIXTURES=Object.freeze({
@@ -40,10 +41,24 @@ const FIXTURES=Object.freeze({
   })
 });
 
+// Only synthetic, immutable test actions; never accept client-selected IDs or SQL.
+const ACTIVATIONS=Object.freeze({
+  '/__m03_write_test__/activate-category-2':Object.freeze(['PRODUCT_CATEGORIES',3,'CAT-2','Inactive']),
+  '/__m03_write_test__/activate-unit-1':Object.freeze(['PRODUCT_UNITS',2,'UNIT-1','Inactive']),
+});
+
 export default {
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
     if(request.method==='POST') {
+      if(Object.hasOwn(ACTIVATIONS,path)) {
+        try {
+          const rowIndex=await createLegacyCatalogActivationAdapter(env).activate_(...ACTIVATIONS[path]);
+          return json(200,{rowIndex});
+        } catch {
+          return json(500,{error:'Synthetic D1 activation refused'});
+        }
+      }
       if(!Object.hasOwn(FIXTURES,path)) return json(405,{error:'Method unavailable'});
       const fixed=FIXTURES[path]; // only fixed synthetic values; never request body
       try {

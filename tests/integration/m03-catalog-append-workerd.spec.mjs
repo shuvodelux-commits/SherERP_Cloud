@@ -90,3 +90,27 @@ test('local Worker/D1 batch insert is ordered and duplicate replay rolls back ev
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM product_categories').first()).n,savedBefore.n+2);
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM product_categories WHERE category_id='CAT-W-BATCH-UNCOMMITTED'").first()).n,0);
 });
+
+test('real Workerd D1 guarded reactivation rejects stale replay and corrupt source row provenance',async()=>{
+  // Existing append tests intentionally remain first; this fixture uses only synthetic rows.
+  await db.prepare("UPDATE product_categories SET status='Inactive' WHERE category_id='CAT-2'").run();
+  const [a,b]=await Promise.all([
+    call('/__m03_write_test__/activate-category-2','POST'),
+    call('/__m03_write_test__/activate-category-2','POST')
+  ]);
+  assert.deepEqual([a.status,b.status].sort((x,y)=>x-y),[200,500]);
+  assert.deepEqual((a.status===200?a:b).body,{rowIndex:3});
+  const row=await db.prepare("SELECT status,legacy_sheet_row FROM product_categories WHERE category_id='CAT-2'").first();
+  assert.deepEqual(row,{status:'Active',legacy_sheet_row:3});
+  await db.prepare("UPDATE product_categories SET status='Inactive' WHERE category_id='CAT-2'").run();
+  await db.prepare("UPDATE product_categories SET legacy_sheet_row=12 WHERE category_id='CAT-1'").run();
+  assert.equal((await call('/__m03_write_test__/activate-category-2','POST')).status,500);
+  assert.equal((await db.prepare("SELECT status FROM product_categories WHERE category_id='CAT-2'").first()).status,'Inactive');
+  await db.prepare("UPDATE product_categories SET legacy_sheet_row=2 WHERE category_id='CAT-1'").run();
+
+  await db.prepare("UPDATE product_units SET legacy_sheet_row=2,status='Inactive' WHERE unit_id='UNIT-1'").run();
+  assert.deepEqual(await call('/__m03_write_test__/activate-unit-1','POST'),{status:200,body:{rowIndex:2}});
+  assert.equal((await db.prepare("SELECT status FROM product_units WHERE unit_id='UNIT-1'").first()).status,'Active');
+  assert.equal((await call('/__m03_write_test__/activate-unit-1','POST')).status,500);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM settings').first()).n,0);
+});
