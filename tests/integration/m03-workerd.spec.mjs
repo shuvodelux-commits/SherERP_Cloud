@@ -8,6 +8,7 @@ import './m03-intent-fingerprint-workerd.spec.mjs'; // Canonical SHA-256 intent 
 import './m03-receipt-workerd.spec.mjs'; // Read-only immutable receipt reconciliation against synthetic local D1.
 import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
+import './m03-exactly-one-workerd.spec.mjs'; // Internal atomic write guard on synthetic local D1.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
