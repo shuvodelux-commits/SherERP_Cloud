@@ -15,6 +15,7 @@ import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog wri
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
 import './m03-exactly-one-workerd.spec.mjs'; // Internal atomic write guard on synthetic local D1.
 import './m06-sale-posting-workerd.spec.mjs'; // M06 isolated synthetic sale/tender/Customer due atomic D1 proof.
+import './m07-cash-return-workerd.spec.mjs'; // M07 single-invoice Cash return exact-once/rollback proof on M06 source.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
