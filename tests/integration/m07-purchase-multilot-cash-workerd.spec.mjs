@@ -6,6 +6,7 @@ import {createSyntheticPurchasePoster} from '../fixtures/m05-purchase-d1-contrac
 import {M07_PURCHASE_CASH_DDL} from '../fixtures/m07-purchase-cash-schema.mjs';
 import {createSyntheticD1PurchaseCashReturnContract} from '../fixtures/m07-purchase-cash-contract.mjs';
 import {M07_PURCHASE_CREDIT_DDL} from '../fixtures/m07-purchase-supplier-credit-schema.mjs';
+import {createSyntheticD1PurchaseSupplierCreditContract} from '../fixtures/m07-purchase-supplier-credit-contract.mjs';
 import {M07_MULTI_CASH_DDL} from '../fixtures/m07-purchase-multilot-cash-schema.mjs';
 import {createSyntheticMultiLotPurchaseCashReturn} from '../fixtures/m07-purchase-multilot-cash-contract.mjs';
 
@@ -16,6 +17,7 @@ const all=async query=>(await DB.prepare(query).all()).results.map(x=>({...x}));
 const one=query=>DB.prepare(query).first();
 const poster=options=>createSyntheticMultiLotPurchaseCashReturn(DB,options);
 const originalCash=()=>createSyntheticD1PurchaseCashReturnContract(DB);
+const originalCredit=()=>createSyntheticD1PurchaseSupplierCreditContract(DB);
 
 async function purchase(key='A',patch={}){
   const input={
@@ -50,6 +52,17 @@ function cash(source,op='OP-B4-CASH-RETURN-001',patch={}){
     reason:'Original damaged',...patch
   };
 }
+const oldCredit=(src,op)=>({
+  tenantId:'SHOP-A',actorId:'CLERK-RETURN',operationId:op,
+  returnId:'PRET-'+op,purchaseId:src.purchaseId,
+  supplierId:src.supplierId,sku:src.sku,lotId:src.rootLot,
+  originalHash:src.originalHash,units:1,creditPaisa:1500,
+  reason:'Original damaged'
+});
+async function seedSignedSupplier(){
+  await DB.prepare('INSERT INTO m07_purchase_supplier_signed VALUES(?,?,?,?,1)')
+    .bind('SHOP-A','SUP-1','PARTY-1',4000).run();
+}
 const oldCash=(src,op)=>({
   tenantId:'SHOP-A',actorId:'CLERK-RETURN',operationId:op,
   returnId:'PRET-'+op,purchaseId:src.purchaseId,
@@ -73,7 +86,9 @@ async function snapshot(){
     originalBank:'SELECT * FROM m05_bank_book ORDER BY purchase_id',
     originalSupplierLedger:'SELECT * FROM m05_supplier_ledger ORDER BY purchase_id',
     oldCash:'SELECT * FROM m07_purchase_cash_returns ORDER BY return_id',
-    oldCredit:'SELECT * FROM m07_purchase_credit_returns ORDER BY return_id'
+    oldCredit:'SELECT * FROM m07_purchase_credit_returns ORDER BY return_id',
+    signedSupplier:'SELECT * FROM m07_purchase_supplier_signed ORDER BY supplier_id',
+    creditLedger:'SELECT * FROM m07_purchase_credit_ledger ORDER BY return_id'
   };
   const out={};for(const [k,sql] of Object.entries(queries))out[k]=await all(sql);
   return out;
@@ -94,7 +109,7 @@ beforeEach(async()=>{
     await DB.prepare('DROP TRIGGER IF EXISTS '+name).run();
   for(const name of [
     'm07b4_cash_inflows','m07b4_movements','m07b4_cash_returns','m07b4_lots',
-    'm07_purchase_credit_ledger','m07_purchase_credit_returns','m07_purchase_cash_inflows',
+    'm07_purchase_credit_ledger','m07_purchase_credit_returns','m07_purchase_supplier_signed','m07_purchase_cash_inflows',
     'm07_purchase_return_moves','m07_purchase_cash_returns','m07_purchase_lot_balances',
     'm05_supplier_ledger','m05_bank_book','m05_cash_book','m05_movements',
     'm05_lots','m05_items','m05_purchases'
@@ -255,4 +270,39 @@ test('reject malformed line data before any D1 claim; isolated worker exposes no
   ])await assert.rejects(()=>poster().post({...base,...patch}),/Invalid|Duplicate/);
   assert.equal((await one('SELECT COUNT(*) n FROM m07b4_cash_returns')).n,0);
   assert.equal((await worker.fetch('https://test.local/api/rpc')).status,404);
+});
+
+
+test('same-date original lots use Lot ID ascending for first eligible Cash refund',async()=>{
+  const src=await purchase('TIE');
+  await DB.prepare("UPDATE m07b4_lots SET purchase_date='2026-11-10' WHERE lot_id='LOT-Z'").run();
+  const before=await snapshot();
+  assert.equal((await poster().post(cash(src,'OP-B4-TIE-SKIP-001',{
+    units:1,refundPaisa:1500,draws:[{lotId:'LOT-Z',units:1}]
+  }))).status,'DECLINED');
+  assert.deepEqual(await snapshot(),before);
+  assert.equal((await poster().post(cash(src,'OP-B4-TIE-CORRECT-001',{
+    draws:[{lotId:'LOT-A',units:2}]
+  }))).status,'COMMITTED');
+  assert.deepEqual(await all('SELECT lot_id,remaining FROM m07b4_lots ORDER BY lot_id'),[
+    {lot_id:'LOT-A',remaining:0},{lot_id:'LOT-Z',remaining:1}
+  ]);
+});
+
+test('old signed Supplier Credit return blocks synthetic multi-lot Cash for same purchase',async()=>{
+  const src=await purchase('CREDITFIRST');
+  await seedSignedSupplier();
+  assert.equal((await originalCredit().post(oldCredit(src,'OP-B4-CREDIT-FIRST-001'))).status,'COMMITTED');
+  const before=await snapshot();
+  assert.equal((await poster().post(cash(src,'OP-B4-NEW-AFTER-CREDIT-001'))).status,'DECLINED');
+  assert.deepEqual(await snapshot(),before);
+});
+
+test('synthetic multi-lot Cash receipt blocks later old Supplier Credit, including unchanged signed due',async()=>{
+  const src=await purchase('CREDITLATER');
+  await seedSignedSupplier();
+  assert.equal((await poster().post(cash(src,'OP-B4-CASH-FIRST-001'))).status,'COMMITTED');
+  const before=await snapshot();
+  assert.equal((await originalCredit().post(oldCredit(src,'OP-B4-CREDIT-AFTER-001'))).status,'DECLINED');
+  assert.deepEqual(await snapshot(),before);
 });
