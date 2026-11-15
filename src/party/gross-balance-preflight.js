@@ -170,9 +170,18 @@ export function prepareGrossPartyBalances({sourceRows,approvedGroups=[],financeR
       issue('FINANCE_ROLE_NOT_MAPPED','FINANCE_PERSONS',personId);
       continue;
     }
+    // Master balance cells may be blank, but original finance transaction
+    // writers require a present and strictly positive Amount.
+    if(!Object.hasOwn(row,'Amount') || row['Amount']===null ||
+      row['Amount']===undefined ||
+      (typeof row['Amount']==='string' && !row['Amount'].trim())){
+      issue('FINANCE_AMOUNT_REQUIRED','FINANCE_TRANSACTIONS');
+      continue;
+    }
     const amount=toMinorUnits(row['Amount']);
-    if(amount<0){
-      issue('FINANCE_NEGATIVE_AMOUNT','FINANCE_TRANSACTIONS');
+    if(amount<=0){
+      issue(amount<0?'FINANCE_NEGATIVE_AMOUNT':'FINANCE_ZERO_AMOUNT',
+        'FINANCE_TRANSACTIONS');
       continue;
     }
     if(!perPerson.has(personId))
