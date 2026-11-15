@@ -19,6 +19,7 @@ import './m03-authorized-post-workerd.spec.mjs'; // Synthetic M04 authority chec
 import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
 import './m03-product-status-workerd.spec.mjs'; // M03 frozen ProductSettings status orchestration, fixed local D1 only.
+import './m03-master-atomic-workerd.spec.mjs'; // M03 source PCAT/PUNT, one-statement local D1 creation receipt/cleanup proof.
 import './m03-catalog-tail-delete-workerd.spec.mjs'; // Tail-only guarded deletes, isolated D1.
 import './m03-exactly-one-workerd.spec.mjs'; // Internal atomic write guard on synthetic local D1.
 import './m03-id-issuer-workerd.spec.mjs'; // M03 source IDs: isolated D1 receipt+counter trigger, replay and concurrency.
