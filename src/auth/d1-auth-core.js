@@ -6,6 +6,8 @@
  * Do not use a legacy SHA256 password as a PBKDF2 credential.
  * Do not accept the time or canonical phone directly from a browser.
  */
+import {verifyLegacyPassword} from './legacy-password.js';
+
 export const AUTH_POLICY=Object.freeze({
   passwordIterations:210_000,
   sessionMaxMs:12*60*60*1000,
@@ -135,8 +137,8 @@ export async function loginWithD1(db,{phoneKey,password,nowMs}={}){
   const phoneDigest=await sha256Hex(new TextEncoder().encode(phoneKey));
   if(await locked(db,phoneDigest,nowMs)) return denyLogin();
 
-  const row=await db.prepare(`SELECT user_id,full_name,role_name,
-     password_algo,password_hash,password_salt,password_iterations,credential_version,
+  let row=await db.prepare(`SELECT user_id,full_name,role_name,
+     credential_state,password_algo,password_hash,password_salt,password_iterations,credential_version,
      auth_version,
      (CASE WHEN role_name='Administrator' THEN NULL ELSE
        (SELECT r.auth_version FROM auth_roles r
@@ -146,7 +148,59 @@ export async function loginWithD1(db,{phoneKey,password,nowMs}={}){
        AND (role_name='Administrator' OR EXISTS (
          SELECT 1 FROM auth_roles r WHERE r.role_name=auth_users.role_name AND r.status='Active'))`)
      .bind(phoneKey).first();
-  if(!row || !await verifyStoredCredential(password,row)){
+  if(row?.credential_state==='LegacyPending'){
+    // The legacy SHA256 verifier is a one-time import compatibility step,
+    // never an alternative way to create an authenticated session.
+    const legacy=await db.prepare(`SELECT legacy_hash,legacy_salt
+      FROM auth_legacy_credentials WHERE user_id=?`).bind(row.user_id).first();
+    if(password.length<8 || !legacy ||
+       !await verifyLegacyPassword(password,legacy.legacy_hash,legacy.legacy_salt)){
+      await recordFailure(db,phoneDigest,nowMs);
+      return denyLogin();
+    }
+    const modern=await createOfflinePasswordCredential(password);
+    // This single UPDATE is the only permitted upgrade boundary. SQL
+    // triggers bump the account authority version AND erase the imported
+    // hash+salt atomically; a losing race may never issue a session.
+    const upgraded=await db.prepare(`UPDATE auth_users SET
+      password_hash=?,password_salt=?,password_iterations=?,
+      credential_version=credential_version+1,credential_state='Modern'
+      WHERE user_id=? AND phone_key=? AND status='Active'
+        AND credential_state='LegacyPending' AND role_name=?
+        AND password_hash=? AND password_salt=? AND password_iterations=?
+        AND credential_version=? AND auth_version=?
+        AND EXISTS (SELECT 1 FROM auth_legacy_credentials l
+          WHERE l.user_id=auth_users.user_id
+            AND l.legacy_hash=? AND l.legacy_salt=?)
+        AND (role_name='Administrator' OR EXISTS
+          (SELECT 1 FROM auth_roles r WHERE r.role_name=auth_users.role_name
+            AND r.status='Active' AND r.auth_version=?))
+        AND NOT EXISTS (SELECT 1 FROM auth_login_throttle t
+          WHERE t.login_hash=? AND t.reset_at_ms>? AND t.locked_until_ms>?)
+      RETURNING user_id,credential_state`)
+      .bind(modern.passwordHash,modern.passwordSalt,modern.iterations,
+        row.user_id,phoneKey,row.role_name,row.password_hash,row.password_salt,
+        row.password_iterations,row.credential_version,row.auth_version,
+        legacy.legacy_hash,legacy.legacy_salt,row.role_auth_version,
+        phoneDigest,nowMs,nowMs).first();
+    if(upgraded?.user_id!==row.user_id || upgraded.credential_state!=='Modern')
+      return denyLogin();
+    // After the credential replacement, always go through the complete
+    // modern verifier and existing authority-snapshot session INSERT.
+    row=await db.prepare(`SELECT user_id,full_name,role_name,
+      credential_state,password_algo,password_hash,password_salt,
+      password_iterations,credential_version,auth_version,
+      (CASE WHEN role_name='Administrator' THEN NULL ELSE
+        (SELECT r.auth_version FROM auth_roles r
+         WHERE r.role_name=auth_users.role_name AND r.status='Active') END)
+        AS role_auth_version
+      FROM auth_users WHERE user_id=? AND status='Active'
+        AND (role_name='Administrator' OR EXISTS
+          (SELECT 1 FROM auth_roles r WHERE r.role_name=auth_users.role_name
+           AND r.status='Active'))`).bind(row.user_id).first();
+  }
+  if(!row || row.credential_state!=='Modern' ||
+     !await verifyStoredCredential(password,row)){
     await recordFailure(db,phoneDigest,nowMs);
     return denyLogin();
   }
@@ -166,7 +220,7 @@ export async function loginWithD1(db,{phoneKey,password,nowMs}={}){
         (SELECT r.auth_version FROM auth_roles r
          WHERE r.role_name=u.role_name AND r.status='Active') END),
       u.credential_version FROM auth_users u
-    WHERE u.user_id=? AND u.status='Active'
+    WHERE u.user_id=? AND u.status='Active' AND u.credential_state='Modern'
       AND u.role_name=? AND u.password_hash=? AND u.password_salt=?
       AND u.password_iterations=? AND u.credential_version=?
       AND u.auth_version=?
