@@ -1,0 +1,24 @@
+name: M08 multi-entry reconciliation atomic local Workerd D1 (test-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  m08-multi-local-d1:
+    name: M08 multi-entry Cash reconciliation local D1 proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned test-only Wrangler
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Run real isolated local Workerd D1 multi-entry reconciliation tests
+        run: node --test tests/integration/m08-reconciliation-multi-workerd.spec.mjs
