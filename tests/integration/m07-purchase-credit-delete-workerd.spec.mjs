@@ -23,7 +23,7 @@ async function seed(id='A',{paidAmount='20.00'}={}){
   purchaseId:'PUR-'+id,operationId:'OP-PURCHASE-SUP-'+id+'-001',
   supplierId:'SUP-1',sku:'PIPE',qty:2,expectedVersion:1,
   unitPrice:'15.25',sellPrice:'18.00',discount:'0.50',
-  paidAmount,date:'2026-11-10',paymentMethod:paidAmount==='0'?'':'Cash',
+  paidAmount,date:'2026-11-10',paymentMethod:'Cash',
   bankAccountId:''};
  assert.equal((await createSyntheticPurchasePoster(DB).post(base)).status,'COMMITTED');
  const originalHash=(await DB.prepare('SELECT intent_hash FROM m05_purchases WHERE tenant_id=? AND purchase_id=?')
