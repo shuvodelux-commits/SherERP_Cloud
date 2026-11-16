@@ -5,10 +5,12 @@ import {join} from 'node:path';
 import {buildFrontend} from '../scripts/build-frontend.mjs';
 import {patchServerCall} from '../scripts/patch-rpc.mjs';
 import worker from '../src/index.js';
+import {handleRpc} from '../src/rpc/handler.js';
 
 /**
- * Local-only M01 browser fixture. All API requests use the actual inert
- * public Worker router; no D1 binding or trusted authentication adapter exists.
+ * Local-only M01 browser fixture. By default all API calls use the actual
+ * inert public Worker. Only an explicitly supplied test callback opts this
+ * loopback server into the existing reviewed Day Book HTTP handler and D1.
  */
 export async function serveCompiledUi({internalDayBookRpc}={}) {
   const temp=await mkdtemp(join(tmpdir(),'shererp-m01-browser-'));
@@ -31,22 +33,13 @@ export async function serveCompiledUi({internalDayBookRpc}={}) {
           const url=new URL(request.url,'http://127.0.0.1:'+server.address().port);
           const init={method:request.method,headers:request.headers};
           if(request.method!=='GET' && request.method!=='HEAD' && body.length) init.body=body;
-          // Opt-in QA-only bridge for one reviewed internal Day Book read.
-          // No runtime Worker, public registry or deployment path imports it.
-          let result;
-          if(path==='/api/rpc' && request.method==='POST' &&
-             typeof internalDayBookRpc==='function'){
-            let payload;
-            try{payload=JSON.parse(body.toString('utf8'));}catch{payload=null;}
-            if(payload?.fnName==='getDayBookBootstrap'){
-              const envelope=await internalDayBookRpc(payload);
-              result=Response.json(envelope,{
-                status:envelope.success===true?200:403,
-                headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}
-              });
-            }
-          }
-          if(!result)result=await worker.fetch(new Request(url,init),{});
+          // The opt-in test route must use exactly the reviewed HTTP
+          // protections: Origin, MIME, size, allowlist and payload validation.
+          // No deployable Worker or public RPC registry imports this callback.
+          const rpcRequest=new Request(url,init);
+          const result=path==='/api/rpc' && typeof internalDayBookRpc==='function'
+            ? await handleRpc(rpcRequest,{dayBookBridge:{invoke:internalDayBookRpc}})
+            : await worker.fetch(rpcRequest,{});
           response.writeHead(result.status,Object.fromEntries(result.headers));
           response.end(Buffer.from(await result.arrayBuffer()));
         }else if(path==='/' || path==='/index.html'){
