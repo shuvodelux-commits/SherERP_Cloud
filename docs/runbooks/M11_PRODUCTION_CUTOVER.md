@@ -223,3 +223,28 @@ node scripts/check-m11-incident-continuity.mjs \
 ```
 
 Statuses are `INSUFFICIENT_EVIDENCE`, `INCIDENT_HOLD`, `ESCALATE`, `OBSERVE` or `RECOVERY_REVIEWED`. **`RECOVERY_REVIEWED` is only a structurally complete review record, not an authenticated incident clearance or operational GO.** The CLI prints fixed diagnostic codes and explicitly sets `authorizesWriteResumption:false` and `authorizesTrafficSwitch:false` for every status. Real emergency write freezes, exact committed-write reconciliation, independent source and D1 verification, incident on-call coordination, permission and session checks, and a separate owner decision remain mandatory before restoring any authoritative writer.
+
+
+## M11-09 — Private post-cutover ERP workflow-smoke evidence
+
+**This is a metadata-only documentary preflight, not a test against live Workers/D1 and not an authorization to exercise, deploy, restore or resume business operations.** Only an authorized operator may run real production smoke under a separately approved cutover with verified M10 signoff, controlled transactions and independently preserved private business records. `scripts/check-m11-production-smoke.mjs` checks that the operator's report *mentions all expected workflows and reconciliation proofs*; it cannot authenticate submitted references.
+
+Save three JSON documents **outside GitHub**: the already-reviewed M11 release-evidence manifest (switch phase), the exact `activation` cutover event-order manifest, and a post-cutover smoke report. The smoke report has exact top-level keys `schemaVersion:1`, `releaseSha`, `sourceSha`, `sourceSnapshotSha256`, `deployment`, `reads`, `writes`, `postSmoke`, `writerBoundary`. The release, original source and final snapshot must match all three independently provided pins. Deployment metadata needs `status:"verified"`, a non-sensitive `record`, `releaseSha`, `deployedSha` matching the pinned release, `environment:"private-production"` and a separate production `workerName`, never a preview/staging/test Worker.
+
+`reads` requires individually reviewed `{status:"verified",record:"audit/private-reference",releaseSha:"<release-sha>"}` for exactly: `health-deployed`, `staff-login-logout`, `rbac-denial`, `products-stock-fifo`, `invoice-print`, `daybook-reports`, `settings-team`. Each reference is unique and points to separately retained private evidence.
+
+`writes` requires exactly: `pos-sale`, `split-payment`, `purchase`, `sales-return`, `purchase-return`, `cash-session`, `cash-bank`. Each entry has exact keys `status:"verified"`, `operationId`, `receiptRecord`, `verificationRecord`, `unexplainedDifferences:0` and `releaseSha`. Operation IDs and receipt/verification record references must be distinct across all paths. They must refer to reviewed **controlled** operations and their exact immutable receipts/reversals; the checker neither issues them nor touches any real operation. Do not record staff, customer, supplier or invoice details.
+
+`postSmoke` has `status:"verified"`, `record`, `releaseSha`, plus zero `unreconciledAcknowledgedOperations`, `grossPartyDiscrepancies`, `inventoryDiscrepancies`, `cashBankDiscrepancies`. `writerBoundary` has `status:"verified"`, `record`, `releaseSha`, `authority:"d1-only"`, `activeWriters:1`, `legacyWritesAfterFreeze:0`. These are assertions backed by independent, private evidence and cannot substitute for a real freeze check, failure injection, stock-lot parity, role denial or bookkeeping reconciliation.
+
+Run the structural check locally with **private** evidence files:
+
+```sh
+node scripts/check-m11-production-smoke.mjs \
+  /private/m11-postcutover-smoke.json \
+  /private/m11-activation-order.json \
+  /private/m11-release-evidence.json \
+  <reviewed-production-release-sha> <final-source-snapshot-sha256>
+```
+
+Outputs contain only fixed status, blocker codes and caution, never input contents. `DOCUMENTARY_COMPLETE` means the supplied shape passes consistency checks: it **does not** demonstrate that a real private production deployment exists, that the Worker is secure, that a receipt matches a real posted operation, that business parity holds, or that the owner approved launch. M10 reconciliation/recovery/auth/performance gates, separate production deployment authority, on-call evidence, and postlaunch owner acceptance remain independent and mandatory. Do not enable D1 on a public preview as a workaround.

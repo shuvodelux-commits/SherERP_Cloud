@@ -41,7 +41,19 @@ CREATE TABLE auth_users (
   password_iterations INTEGER NOT NULL
     CHECK (password_iterations BETWEEN 210000 AND 1000000),
   credential_version INTEGER NOT NULL DEFAULT 1 CHECK (credential_version>=1),
-  auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1)
+  auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1),
+  -- Test-only parity with reviewed 0004_auth_source_provenance.sql.
+  -- Null means missing source history; blank Last Login means never logged in.
+  source_created_by TEXT
+    CHECK (source_created_by IS NULL OR length(trim(source_created_by))>0),
+  source_created_at_iso TEXT
+    CHECK (source_created_at_iso IS NULL OR
+      (length(source_created_at_iso)=24 AND
+       strftime('%Y-%m-%dT%H:%M:%fZ',source_created_at_iso)=source_created_at_iso)),
+  source_last_login_iso TEXT
+    CHECK (source_last_login_iso IS NULL OR source_last_login_iso='' OR
+      (length(source_last_login_iso)=24 AND
+       strftime('%Y-%m-%dT%H:%M:%fZ',source_last_login_iso)=source_last_login_iso))
 ) STRICT;
 
 -- Offline import staging only: source SHA256 hashes are NEVER inserted into
