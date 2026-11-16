@@ -10,17 +10,20 @@ const HASH=createHash('sha256').update('SyntheticNotRealSecret!'+SALT).digest('h
 const admin=()=>({
   'User ID':'USR-SYNTH-1','Full Name':'Synthetic Administrator',
   'Mobile Number':'01700000101','Password Hash':HASH,'Password Salt':SALT,
-  'Role':'Administrator','Status':'Active'
+  'Role':'Administrator','Status':'Active',
+  'Created By':'First-run bootstrap','Created At':'2025-01-20T12:05:06.000Z',
+  'Last Login':'',
 });
 const cashier=()=>({
   ...admin(),'User ID':'USR-SYNTH-2','Full Name':'Synthetic Cashier',
-  'Mobile Number':1712345678,'Role':'Cashier'
+  'Mobile Number':1712345678,'Role':'Cashier',
+  'Created By':'Source actor display text','Last Login':'2025-06-30T08:09:10.000Z',
 });
 const role=()=>({
   'Role ID':'ROL-SYNTH-1','Role Name':'Cashier',
   'Allowed Modules':'products',
   'Permissions':JSON.stringify({products:{view:true,add:false,edit:false,delete:'disabled'}}),
-  'Status':'Active'
+  'Status':'Active','Created At':'2025-01-20T12:06:07.000Z',
 });
 const snapshot=()=>({users:[admin(),cashier()],roles:[role()]});
 
