@@ -25,7 +25,7 @@ test('classifies catalog, Party identity, local auth and unmapped data without c
   assert.equal(out.formatVersion,1);
   assert.equal(out.sourceCommit,sourceCommit);
   assert.deepEqual(out.summary,{
-    sourceGroups:4,catalogSchemaOnly:1,diagnosticSchemaOnly:0,auditSchemaOnly:0,partyIdentityOnly:1,
+    sourceGroups:4,catalogSchemaOnly:1,diagnosticSchemaOnly:0,auditSchemaOnly:0,productArchiveOnly:0,partyIdentityOnly:1,
     authLocalOnly:1,unmapped:1,fullyReconciled:0,asyncImpactedFunctions:394
   });
   assert.deepEqual(out.rows.map(x=>[x.sheetKey,x.status,x.targetTable]),[
@@ -58,12 +58,12 @@ test('rejects duplicate or malformed source groups, blank migration and invalid 
   }),/commit/i);
 });
 
-test('frozen 49-group Config inventory and eleven local migration files yield zero fully reconciled groups',()=>{
+test('frozen 49-group Config inventory and twelve local migration files yield zero fully reconciled groups',()=>{
   const current=inventorySchema(readFileSync(new URL('../legacy/source/Config.gs',import.meta.url),'utf8'));
   const baseline=JSON.parse(readFileSync(new URL('../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
   assert.deepEqual(current,baseline,'original source config must match frozen inventory');
   const files=readdirSync(new URL('../migrations/',import.meta.url)).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
-  assert.deepEqual(files.map(x=>x.slice(0,4)),['0001','0002','0003','0004','0005','0006','0007','0008','0009','0010','0011']);
+  assert.deepEqual(files.map(x=>x.slice(0,4)),['0001','0002','0003','0004','0005','0006','0007','0008','0009','0010','0011','0012']);
   const migrations=Object.fromEntries(files.map(x=>
     [x,readFileSync(new URL('../migrations/'+x,import.meta.url),'utf8')]));
   const closure=JSON.parse(readFileSync(new URL('../docs/baseline/m03-async-caller-closure.json',import.meta.url),'utf8'));
@@ -72,10 +72,15 @@ test('frozen 49-group Config inventory and eleven local migration files yield ze
     sourceCommit,asyncImpactedFunctions:closure.counts.impactedFunctions
   });
   assert.deepEqual(out.summary,{
-    sourceGroups:49,catalogSchemaOnly:4,diagnosticSchemaOnly:1,auditSchemaOnly:5,partyIdentityOnly:5,
-    authLocalOnly:3,unmapped:31,fullyReconciled:0,asyncImpactedFunctions:394
+    sourceGroups:49,catalogSchemaOnly:4,diagnosticSchemaOnly:1,auditSchemaOnly:5,productArchiveOnly:1,partyIdentityOnly:5,
+    authLocalOnly:3,unmapped:30,fullyReconciled:0,asyncImpactedFunctions:394
   });
   assert.equal(out.rows.length,49);
+  assert.deepEqual(out.rows.find(x=>x.sheetKey==='PRODUCTS'),{
+    sheetKey:'PRODUCTS',sheetName:'Products',sourceColumnCount:19,
+    status:'product-source-archive-only',targetTable:'legacy_product_snapshots',
+    sourceImportReconciled:false
+  });
   assert.ok(out.rows.every(x=>x.sourceImportReconciled===false));
 });
 
