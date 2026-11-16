@@ -214,7 +214,7 @@ test('source backdated/audit metadata, no notes fallback and no input mutation',
 
 test('reject incomplete, unsafe, accessor-based or financially corrupt trusted source snapshots',()=>{
   const bad=[
-    null,[],{},sample([],undefined),
+    null,[],{},{customerLedgerRows:[],supplierLedgerRows:undefined},
     {...sample(),unexpected:'external'},
     sample([customerPayment('CP-X'),customerPayment('CP-X')]),
     sample([customerPayment('__proto__')]),
