@@ -25,3 +25,9 @@
 - **Unchanged:** `src/index.js`, `src/rpc/**`, `wrangler*.jsonc`, existing M11-05 semantics, CI workflows, D1 schema/migrations, accounting kernel, legacy GAS/Sheets, live business data or Cloudflare resources.
 - **Risk:** A complete synthetic review remains self-reported and must not be treated as operational clearance; all outputs set `authorizesWriteResumption:false` and `authorizesTrafficSwitch:false`.
 - **Gate:** exact-head GitHub checks, no conflicts against latest main, owner review and merge before any next increment.
+
+## Integrated CI regression correction
+
+- The original M11-08 PR run reported 19/20 checks successful; the unrelated M03 local D1 workflow failed because the M07 unpaid-purchase synthetic fixture passed an empty input payment method to a contract that requires `Cash` or `Bank` and writes an empty stored method for zero paid.
+- The small test-only fixture fix was verified with 20/20 checks and merged as PR #390, merge `0e4dbd5c17f3e33077e1b81f7799a8d42c29758e`.
+- PR #375 has been synchronized with this exact merged main commit while retaining all four originally scoped M11 files and the associated tests. Exact-head CI must be rerun after integration; no live data, production configuration or posting kernel was changed.
