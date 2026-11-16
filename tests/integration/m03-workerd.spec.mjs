@@ -30,6 +30,7 @@ import './m03-id-post-workerd.spec.mjs'; // M03 source INV ID + synthetic stock/
 import './m05-purchase-posting-workerd.spec.mjs'; // M05 test-only atomic supplier purchase posting; local D1 only.
 import './m06-sale-posting-workerd.spec.mjs'; // M06 isolated synthetic sale/tender/Customer due atomic D1 proof.
 import './m07-cash-return-workerd.spec.mjs'; // M07 single-invoice Cash return exact-once/rollback proof on M06 source.
+import './m07-cash-delete-workerd.spec.mjs'; // M07 test-only original Cash Return deletion, exact-once stock/Cash undo with audit.
 import './m07-store-credit-workerd.spec.mjs'; // M07 signed Customer credit with no Cash/Bank and cross-method replay guard.
 import './m07-cash-batch-workerd.spec.mjs'; // M07 2–20 original-invoice Cash batch all-or-nothing local D1.
 import './m07-store-credit-batch-workerd.spec.mjs'; // M07 ordered signed Store Credit batch exact-once/rollback local D1.
