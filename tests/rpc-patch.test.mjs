@@ -155,3 +155,76 @@ test('generated authenticated shell restores login cover when app-shell metadata
   assert.equal(output.split('showLogin_();').length-1,1,
     'failed shell must insert one lock instruction, not multiple');
 });
+
+
+test('compiled login rejects malformed M04 profiles before assigning browser auth or opening shell',()=>{
+  const frozenLogin=[
+    '  function doLogin_() {',
+    "    var errEl = document.getElementById('loginError');",
+    "    var btn = document.getElementById('loginSubmitBtn');",
+    '  }'
+  ].join('\n');
+  const frozenShell=[
+    '  function loadAppShell_() {',
+    '    return getAppShellDataOnce_()',
+    '      .catch(function (err) {',
+    "        showToast(err.message || 'Could not load app settings.', 'error');",
+    '      });',
+    '  }'
+  ].join('\n');
+  const frozenAuth=[
+    '  function onAuthenticated_(payload) {',
+    '    authToken = payload.token;',
+    '    currentUser = payload.user;',
+    '    allowedModules = payload.allowedModules;   // null for Administrator',
+    '    userPermissions = payload.permissions || null;',
+    '    storeToken_(authToken);',
+    '    hideLogin_();',
+    '    return loadAppShell_();',
+    '  }'
+  ].join('\n');
+  const output=patchServerCall(
+    frozenLogin+'\n'+frozenShell+'\n'+frozenAuth+'\n'+legacy);
+  const start=output.indexOf('  function onAuthenticated_(payload) {');
+  // The synthetic legacy fixture has a literal BEFORE delimiter; do not
+  // evaluate it as JavaScript when extracting the authentication function.
+  const end=output.indexOf('\nBEFORE\n',start);
+  assert.ok(start>=0&&end>start);
+  const snippet=output.slice(start,end);
+  const stored=[],visible=[],shell=[];
+  const auth=runInNewContext(
+    'var authToken="",currentUser=null,allowedModules=null,userPermissions=null;\n'+
+    snippet+';\nonAuthenticated_',{
+      storeToken_:value=>stored.push(value),
+      hideLogin_:()=>visible.push(true),
+      loadAppShell_:()=>{shell.push(true);return Promise.resolve();}
+    });
+  const user={id:'SYNTHETIC',name:'Synthetic Clerk',
+    mobile:'01710000001',role:'Clerk'};
+  const valid={token:'f'.repeat(64),user,
+    allowedModules:['dashboard'],permissions:{dashboard:{view:true}}};
+  for(const bad of [
+    {...valid,token:'not-a-valid-M04-token'},
+    {...valid,user:null},
+    {...valid,allowedModules:null,permissions:null},
+    {token:valid.token,user,permissions:{dashboard:{view:true}}},
+    {...valid,user:{...user,role:'Administrator'}},
+    {...valid,permissions:null}
+  ]){
+    assert.throws(()=>auth(bad),/Invalid authentication response/,
+      'malformed M04 profile must not be accepted by original compiled client');
+    assert.deepEqual(stored,[],'no malformed token persisted');
+    assert.deepEqual(visible,[],'no malformed profile opens login overlay');
+    assert.deepEqual(shell,[],'no malformed profile requests protected shell');
+  }
+  assert.equal(typeof auth(valid)?.then,'function',
+    'source-shaped M04 staff payload remains accepted');
+  assert.deepEqual(stored,[valid.token]);
+  assert.equal(visible.length,1);
+  assert.equal(shell.length,1);
+  assert.equal(typeof auth({
+    token:'a'.repeat(64),
+    user:{...user,role:'Administrator'},
+    allowedModules:null,permissions:null
+  })?.then,'function','source-shaped Administrator payload remains accepted');
+});
