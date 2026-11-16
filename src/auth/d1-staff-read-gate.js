@@ -52,6 +52,15 @@ export async function authorizeStaffReadWithD1(db,{token,methodName,nowMs}={}){
   if(row.role_name!=='Administrator'){
     const role=roleMetadata(row);
     if(!role || !role.permissions)return deny();
+    // Frozen source derives Allowed Modules solely from view===true grants.
+    // Reject role metadata drift here too: staff bootstrap is an independent
+    // authorization path and must not trust a permission JSON contradiction.
+    const visible=Object.entries(role.permissions)
+      .filter(([,actions])=>actions.view===true)
+      .map(([module])=>module);
+    if(visible.length!==role.allowedModules.length ||
+       visible.some(module=>!role.allowedModules.includes(module)))
+      return deny();
     const entry=Object.getOwnPropertyDescriptor(role.permissions,READ_METHODS[methodName])?.value;
     if(!entry || Object.getOwnPropertyDescriptor(entry,'view')?.value!==true)
       return deny();

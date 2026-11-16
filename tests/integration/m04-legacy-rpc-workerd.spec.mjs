@@ -249,6 +249,9 @@ test('changing only role allowed_modules invalidates old sessions; no-op update 
   assert.deepEqual(await rpc('validateSession',[token],NOW+82000),{
     status:200,body:{success:false,message:'Session expired. Please sign in again.'}
   });
+  // Restore synthetic source-canonical navigation before subsequent
+  // legitimate role sign-ins. The original stale token stays revoked.
+  await db.prepare("UPDATE auth_roles SET allowed_modules='sales,roles' WHERE role_name='SourceRole'").run();
 });
 
 
@@ -293,13 +296,13 @@ test('internal D1 staff read gate derives users/roles view from the session, not
 
   // Stored role mutation revokes the already-issued authority snapshot,
   // including if the old permission is later restored.
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='GuardReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='GuardReader'")
     .bind(JSON.stringify({roles:{view:false},users:{view:false}})).run();
   assert.deepEqual(await authorizeRead('getRolesBootstrap',readerToken,NOW+105_000),deny);
   const downgraded=await rpc('login',['01710000108',SECRET],NOW+106_000);
   assert.equal(downgraded.body.success,true);
   assert.deepEqual(await authorizeRead('getRolesBootstrap',downgraded.body.data.token,NOW+107_000),deny);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='GuardReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='roles' WHERE role_name='GuardReader'")
     .bind(JSON.stringify({roles:{view:true},users:{view:false}})).run();
   assert.deepEqual(await authorizeRead('getRolesBootstrap',readerToken,NOW+108_000),deny);
   const reissued=await rpc('login',['01710000108',SECRET],NOW+109_000);
@@ -362,12 +365,12 @@ test('read-only partial staff directory uses current D1 users.view and never pro
 
   await rpc('logout',[reader.body.data.token],NOW+123_000);
   assert.deepEqual(await staffDirectory(reader.body.data.token,NOW+124_000),denied);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='DirectoryReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='DirectoryReader'")
     .bind(JSON.stringify({users:{view:false}})).run();
   const downgraded=await rpc('login',['01710000109',SECRET],NOW+125_000);
   assert.equal(downgraded.body.success,true);
   assert.deepEqual(await staffDirectory(downgraded.body.data.token,NOW+126_000),denied);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='DirectoryReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='users' WHERE role_name='DirectoryReader'")
     .bind(JSON.stringify({users:{view:true}})).run();
   assert.deepEqual(await staffDirectory(downgraded.body.data.token,NOW+127_000),denied);
   const restored=await rpc('login',['01710000109',SECRET],NOW+128_000);
@@ -608,13 +611,13 @@ test('management add preflight checks independent stored D1 users.add and roles.
 
   // New authority snapshot is needed after every role update. Re-enabling
   // a role cannot resurrect an old bearer even when permissions return.
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='RolesAdder'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='roles' WHERE role_name='RolesAdder'")
     .bind(JSON.stringify({roles:{add:false,view:true}})).run();
   assert.deepEqual(await addPreflight('addRole',tokenRole,NOW+195_000),deny);
   const demoted=await rpc('login',['01710000112',SECRET],NOW+196_000);
   assert.equal(demoted.body.success,true);
   assert.deepEqual(await addPreflight('addRole',demoted.body.data.token,NOW+197_000),deny);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='RolesAdder'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='RolesAdder'")
     .bind(JSON.stringify({roles:{add:true,view:false}})).run();
   assert.deepEqual(await addPreflight('addRole',tokenRole,NOW+198_000),deny);
   assert.deepEqual(await addPreflight('addRole',demoted.body.data.token,NOW+198_000),deny);
@@ -693,13 +696,13 @@ test('users.edit preflight requires live D1 action rights for update, reset pass
   await rpc('logout',[admin],NOW+213_000);
   assert.deepEqual(await usersEditPreflight('setUserStatus',admin,NOW+214_000),deny);
 
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='UsersEditor'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='users' WHERE role_name='UsersEditor'")
     .bind(JSON.stringify({users:{view:true,edit:false}})).run();
   assert.deepEqual(await usersEditPreflight('updateUser',editor,NOW+215_000),deny);
   const downgraded=await rpc('login',['01710000113',SECRET],NOW+216_000);
   assert.equal(downgraded.body.success,true);
   assert.deepEqual(await usersEditPreflight('resetPassword',downgraded.body.data.token,NOW+217_000),deny);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='UsersEditor'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='UsersEditor'")
     .bind(JSON.stringify({users:{edit:true}})).run();
   assert.deepEqual(await usersEditPreflight('updateUser',editor,NOW+218_000),deny);
   assert.deepEqual(await usersEditPreflight('updateUser',downgraded.body.data.token,NOW+218_000),deny);
@@ -722,4 +725,47 @@ test('users.edit preflight requires live D1 action rights for update, reset pass
   const response=JSON.stringify(allow('USR-RPC-USER-EDIT','UsersEditor'));
   for(const secret of [SECRET,'password_hash','password_salt','auth_version','token_hash'])
     assert.equal(response.includes(secret),false,'private field should never be returned');
+});
+
+test('source-stored D1 role navigation mismatch blocks sign-in, revokes minted token and permits corrected view-only navigation',async()=>{
+  const when=NOW+1_400_000;
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('VisibilityMismatch','Active',?,'products')`)
+    .bind(JSON.stringify({
+      sales:{view:true,edit:false},
+      products:{view:false,edit:true},
+    })).run();
+  await seed('USR-RPC-VIS-MISMATCH','01710000114','VisibilityMismatch');
+
+  // Frozen RoleManagement.gs computes visible modules only from view===true.
+  // This D1 row is structurally valid but fraudulently shows Products rather
+  // than the only view-authorized module, Sales.
+  const denied=await rpc('login',['01710000114',SECRET],when);
+  assert.deepEqual(denied,{
+    status:200,
+    body:{success:false,message:'Sign-in role configuration is unavailable.'}
+  });
+  const revoked=await db.prepare(`SELECT COUNT(*) AS n FROM auth_sessions
+    WHERE user_id='USR-RPC-VIS-MISMATCH'
+      AND revoked_at_ms=?`).bind(when).first();
+  assert.equal(revoked.n,1,'any minted session for corrupted role must be revoked');
+
+  // A corrected source-derived visible set is acceptable. An edit-only grant
+  // for a nonvisible Products module must not fabricate navigation visibility.
+  await db.prepare(`UPDATE auth_roles SET allowed_modules='sales'
+    WHERE role_name='VisibilityMismatch'`).run();
+  const ok=await rpc('login',['01710000114',SECRET],when+1000);
+  assert.equal(ok.status,200);
+  assert.equal(ok.body.success,true);
+  assert.deepEqual(ok.body.data.allowedModules,['sales']);
+  assert.deepEqual(ok.body.data.permissions,{
+    sales:{view:true,edit:false},
+    products:{view:false,edit:true}
+  });
+  const restored=await rpc('validateSession',[ok.body.data.token],when+2000);
+  assert.equal(restored.body.success,true);
+  assert.deepEqual(await rpc('logout',[ok.body.data.token],when+3000),{
+    status:200,body:{success:true,data:'logged out'}
+  });
 });

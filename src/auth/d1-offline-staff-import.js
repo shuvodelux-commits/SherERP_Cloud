@@ -45,15 +45,18 @@ function captureRows(rows,fields){
       if(!row || typeof row!=='object' || Array.isArray(row))return null;
       const prototype=Object.getPrototypeOf(row);
       if(prototype!==Object.prototype && prototype!==null)return null;
-      for(const key of Reflect.ownKeys(row)){
-        if(typeof key!=='string')return null;
-        const descriptor=Object.getOwnPropertyDescriptor(row,key);
-        if(!descriptor || !Object.hasOwn(descriptor,'value'))return null;
-      }
+      // Frozen Config.gs headers are the entire approved protected export
+      // contract. Do not quietly discard future/unreviewed columns, hidden
+      // properties or symbols before a reviewer updates the D1 schema plan.
+      const keys=Reflect.ownKeys(row);
+      if(keys.length!==fields.length ||
+         keys.some(key=>typeof key!=='string'||!fields.includes(key)))
+        return null;
       const output=Object.create(null);
       for(const field of fields){
         const descriptor=Object.getOwnPropertyDescriptor(row,field);
-        if(!descriptor || !Object.hasOwn(descriptor,'value'))return null;
+        if(!descriptor?.enumerable || !Object.hasOwn(descriptor,'value'))
+          return null;
         output[field]=descriptor.value;
       }
       captured.push(output);

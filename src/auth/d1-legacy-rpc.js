@@ -96,6 +96,19 @@ async function sourceProfile(db,token,nowMs){
     return null;
   const role=roleMetadata(row);
   if(!role) return null;
+  if(row.role_name!=='Administrator'){
+    // Frozen RoleManagement.gs derives Allowed Modules *only* from
+    // permissions[module].view === true. This is a fresh D1-role integrity
+    // check at each source-shaped profile read, not an authorization grant.
+    // The protected offline staff import validates the same source relation,
+    // but later local role edits/drift must also fail closed at login.
+    const visible=Object.entries(role.permissions)
+      .filter(([,actions])=>actions.view===true)
+      .map(([module])=>module);
+    if(visible.length!==role.allowedModules.length ||
+       visible.some(module=>!role.allowedModules.includes(module)))
+      return null;
+  }
   return {
     token,
     user:{id:row.user_id,name:row.full_name,mobile:row.phone_key,role:row.role_name},

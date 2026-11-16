@@ -508,3 +508,18 @@ test('replay of consumed draft requires the matching exact posted draft audit ro
   assert.equal(await count('m06_invoices'),1);
   assert.equal(await count('m06_drafts'),0);
 });
+
+test('replay refuses a consumed draft reappearing with the same tenant and ID, without writing a second sale',async()=>{
+  const sale=fromDraft('OP-DRAFT-GHOST01','DRAFT-GHOST-1');
+  await seedDraft('DRAFT-GHOST-1');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  assert.equal(await count('m06_drafts'),0);
+  assert.equal(await count('m06_draft_audit'),1);
+  // Simulate a stale import/recreation after posting; immutable audit survives.
+  await seedDraft('DRAFT-GHOST-1');
+  const before=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),before);
+  assert.equal(await count('m06_drafts'),1);
+  assert.equal(await count('m06_draft_audit'),1);
+});

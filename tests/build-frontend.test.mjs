@@ -44,3 +44,21 @@ test('fails on unexpanded Google template instructions', async (t) => {
   await writeFile(join(sourceDir,'index.html'), '<div><?!= unsafeExpression ?></div>');
   await assert.rejects(buildFrontend({sourceDir,outputDir}),/unsupported/i);
 });
+
+
+test('rejects repeated sibling includes rather than duplicating generated DOM and scripts', async (t) => {
+  const {sourceDir,outputDir}=await fixture(t);
+  await writeFile(join(sourceDir,'index.html'), "<?!= include('style'); ?><?!= include('style'); ?>");
+  await writeFile(join(sourceDir,'style.html'), '<style>body{margin:0}</style>');
+  await assert.rejects(buildFrontend({sourceDir,outputDir}),/duplicate include.*style/i);
+  await assert.rejects(readFile(join(outputDir,'index.html'),'utf8'),{code:'ENOENT'});
+});
+
+test('rejects duplicate transitive includes reached through different partials', async (t) => {
+  const {sourceDir,outputDir}=await fixture(t);
+  await writeFile(join(sourceDir,'index.html'), "<?!= include('first'); ?><?!= include('second'); ?>");
+  await writeFile(join(sourceDir,'first.html'), "<?!= include('shared'); ?>");
+  await writeFile(join(sourceDir,'second.html'), "<?!= include('shared'); ?>");
+  await writeFile(join(sourceDir,'shared.html'), '<script>window.shared=1</script>');
+  await assert.rejects(buildFrontend({sourceDir,outputDir}),/duplicate include.*shared/i);
+});

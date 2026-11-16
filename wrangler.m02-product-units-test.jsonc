@@ -1,0 +1,14 @@
+{
+  "name": "shererp-m02-product-units-import-local-only",
+  "main": "tests/fixtures/m02-product-units-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shererp-m02-product-units-import-local",
+      "database_id": "00000000-0000-0000-0000-000000000091",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

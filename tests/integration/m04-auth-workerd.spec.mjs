@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential,loginWithD1} from '../../src/auth/d1-auth-core.js';
+import {authorizeStaffReadWithD1} from '../../src/auth/d1-staff-read-gate.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
 const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-test.jsonc'}]});
@@ -305,4 +306,42 @@ test('physical DELETE cannot erase issued active or revoked session fingerprints
     const checked=await rpc('validate',{token,nowMs:now+2000});
     assert.equal(checked.body.authenticated,!revoke);
   }
+});
+
+test('M04 staff read refuses a D1 role whose source visible modules contradict view rights',async()=>{
+  const now=BASE+1_100_000;
+  // The frozen source derives Allowed Modules from permissions[*].view=true.
+  // A contradictory row must never authorize users bootstrap independently
+  // of the login profile's existing source-role integrity check.
+  const permissions=JSON.stringify({
+    users:{view:true,add:false,edit:false,delete:false},
+    sales:{view:true,add:false,edit:false,delete:'disabled'},
+  });
+  await DB.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('M04ReadDrift','Active',?,'sales'),
+           ('M04ReadConsistent','Active',?,'users,sales')`)
+    .bind(permissions,permissions).run();
+  await seed('USR-M04-READ-DRIFT','01710000010','M04ReadDrift');
+  await seed('USR-M04-READ-CONSISTENT','01710000011','M04ReadConsistent');
+  const drift=await rpc('login',{
+    phoneKey:'01710000010',password:PASSWORD,nowMs:now
+  });
+  assert.equal(drift.body.authenticated,true);
+  const inconsistent=await authorizeStaffReadWithD1(DB,{
+    token:drift.body.token,methodName:'getUsersBootstrap',nowMs:now+1000
+  });
+  assert.deepEqual(inconsistent,{authorized:false},
+    'source-inconsistent role must not authorize a staff bootstrap read');
+
+  const valid=await rpc('login',{
+    phoneKey:'01710000011',password:PASSWORD,nowMs:now
+  });
+  assert.equal(valid.body.authenticated,true);
+  const consistent=await authorizeStaffReadWithD1(DB,{
+    token:valid.body.token,methodName:'getUsersBootstrap',nowMs:now+1000
+  });
+  assert.deepEqual(consistent,{
+    authorized:true,actor:{id:'USR-M04-READ-CONSISTENT',role:'M04ReadConsistent'}
+  },'valid source-consistent staff role retains existing view permission');
 });
