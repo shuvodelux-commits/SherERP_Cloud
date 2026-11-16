@@ -9,6 +9,7 @@ test('versioned M02/M04 auth migration has five concrete guarded auth tables, ne
   const migrations=readdirSync(new URL('migrations/',root)).filter(s=>s.endsWith('.sql')).sort();
   assert.deepEqual(migrations,[
     '0001_core_catalog.sql','0002_party_identity.sql','0003_auth_core.sql',
+    '0004_auth_staff_provenance.sql',
   ]);
   const sql=file('migrations/0003_auth_core.sql');
   for(const table of ['auth_roles','auth_users','auth_legacy_credentials','auth_sessions','auth_login_throttle']){
