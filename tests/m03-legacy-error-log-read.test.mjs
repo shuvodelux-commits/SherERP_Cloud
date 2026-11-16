@@ -32,7 +32,7 @@ test('frozen original Config.gs LOGS has exactly three source headers and no Log
   assert.equal(HEADERS.includes('Log ID'),false);
   const m02=readFileSync(new URL('../migrations/0006_legacy_error_logs.sql',import.meta.url),'utf8');
   assert.match(m02,/row_id INTEGER PRIMARY KEY AUTOINCREMENT/);
-  assert.match(m02,/No source Log ID exists|NO\s*stable Log ID|NO\s*stable Log ID|NO\s*stable/i);
+  assert.match(m02,/with NO\s*\n--\s*stable Log ID\./);
 });
 
 test('source-shaped LOGS read retains full duplicate rows, blanks, physical indexes and original text',async()=>{
@@ -82,7 +82,7 @@ test('unknown source groups and source column names fail before SQL; writes neve
 });
 
 test('empty LOGS archive returns empty arrays, null matches, and -1 missing positions',async()=>{
-  const a=createLegacyErrorLogReadAdapter(mockDB({success:true,results:[]}).DB);
+  const a=createLegacyErrorLogReadAdapter({DB:mockDB({success:true,results:[]}).DB});
   assert.deepEqual(await a.getAllRows_('LOGS'),[]);
   assert.deepEqual(await a.findRows_('LOGS','Timestamp',''),[]);
   assert.equal(await a.findFirstRow_('LOGS','Timestamp',''),null);
@@ -97,7 +97,7 @@ test('missing, NULL, unsafe or gapped physical row provenance fails rather than 
     [records()[0],{...records()[1],legacy_sheet_row:2**53}],
     [records()[0],{...records()[1],legacy_sheet_row:2.5}]
   ]){
-    const a=createLegacyErrorLogReadAdapter(mockDB({success:true,results:item}).DB);
+    const a=createLegacyErrorLogReadAdapter({DB:mockDB({success:true,results:item}).DB});
     await assert.rejects(()=>a.getAllRows_('LOGS'),/invalid|source|physical|row/i);
   }
 });
@@ -106,7 +106,7 @@ test('a 1001st LOGS event must fail rather than silently truncate',async()=>{
   const large=Array.from({length:1001},(_,i)=>({
     legacy_sheet_row:i+2,timestamp_text:'',context:'dup',message:'same'
   }));
-  const a=createLegacyErrorLogReadAdapter(mockDB({success:true,results:large}).DB);
+  const a=createLegacyErrorLogReadAdapter({DB:mockDB({success:true,results:large}).DB});
   await assert.rejects(()=>a.getAllRows_('LOGS'),/invalid|limit|1000|archive/i);
 });
 
@@ -125,7 +125,7 @@ test('malformed D1, extra private fields, getters or nontext values are rejected
     {success:true,results:[{...valid,legacy_sheet_row:undefined}]}
   ];
   for(const response of cases){
-    const a=createLegacyErrorLogReadAdapter(mockDB(response).DB);
+    const a=createLegacyErrorLogReadAdapter({DB:mockDB(response).DB});
     let error;
     try{await a.getAllRows_('LOGS')}catch(e){error=e;}
     assert(error instanceof Error,'expected fail-closed invalid D1');
