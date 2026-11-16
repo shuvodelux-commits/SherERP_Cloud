@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential} from '../../src/auth/d1-auth-core.js';
+import {createD1LegacyAuthRpc,tokenFingerprint} from '../../src/auth/d1-legacy-rpc.js';
+import {normalizeLegacyStaffPhoneSearch} from '../../src/auth/staff-phone-identity.js';
 
 const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-test.jsonc'}]});
 const worker=harness.getWorker('shererp-m04-auth-workerd-local-only');
@@ -768,4 +770,61 @@ test('source-stored D1 role navigation mismatch blocks sign-in, revokes minted t
   assert.deepEqual(await rpc('logout',[ok.body.data.token],when+3000),{
     status:200,body:{success:true,data:'logged out'}
   });
+});
+
+test('source-profile SELECT must reject a session made idle between validation and profile read',async()=>{
+  const start=NOW+3_000_000;
+  let clock=start;
+  await seed('USR-RPC-IDLE-DRIFT','01710000117');
+  const bridge=createD1LegacyAuthRpc(db,{
+    now:()=>clock,normalizeMobile:normalizeLegacyStaffPhoneSearch,
+  });
+  const signed=await bridge.login('01710000117',SECRET);
+  assert.equal(signed.success,true);
+  const token=signed.data.token;
+  const digest=await tokenFingerprint(token);
+  clock=start+1_000_000;
+  assert.equal((await bridge.validateSession(token)).success,true,
+    'a genuine intermediate D1 heartbeat remains within the idle window');
+
+  // This trusted test adapter simulates another D1 write AFTER the core's
+  // positive session heartbeat but BEFORE its separate source-profile SELECT.
+  // Without a second independent idle predicate, profile data leaks through.
+  clock=start+2_000_000;
+  let injected=0;
+  const interleaved={
+    prepare(sql){
+      const stmt=db.prepare(sql);
+      if(!sql.includes('SELECT u.user_id,u.full_name,u.phone_key,u.role_name,'))
+        return stmt;
+      return {
+        bind(...values){
+          const bound=stmt.bind(...values);
+          return {
+            async first(){
+              injected++;
+              await db.prepare(
+                'UPDATE auth_sessions SET last_activity_at_ms=? WHERE token_hash=?'
+              ).bind(start,digest).run();
+              return bound.first();
+            },
+          };
+        },
+      };
+    },
+  };
+  const racing=createD1LegacyAuthRpc(interleaved,{
+    now:()=>clock,normalizeMobile:normalizeLegacyStaffPhoneSearch,
+  });
+  const result=await racing.validateSession(token);
+  assert.equal(injected,1,'the synthetic drift occurred at the intended real D1 read boundary');
+  assert.deepEqual(result,{
+    success:false,message:'Session expired. Please sign in again.'
+  });
+  const persisted=await db.prepare(
+    'SELECT last_activity_at_ms FROM auth_sessions WHERE token_hash=?'
+  ).bind(digest).first();
+  assert.equal(persisted.last_activity_at_ms,start);
+  assert.equal((await bridge.validateSession(token)).success,false,
+    'a later ordinary core session check also refuses the stale heartbeat');
 });
