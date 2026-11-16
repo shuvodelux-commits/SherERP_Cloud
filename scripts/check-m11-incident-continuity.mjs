@@ -84,6 +84,11 @@ export function assessM11IncidentContinuity(manifest,options={}) {
       rev.throughWindow<=precedingThroughWindow||
       reviews.has(rev.throughWindow)){
       fail('M11_INCIDENT_REVIEW_INVALID');
+      // A same-window "recovery" cannot be applied even if it claims review.
+      if(isObject(rev)&&safeIndex(rev.incidentWindow)&&
+        safeIndex(rev.throughWindow)&&rev.throughWindow<=rev.incidentWindow){
+        fail('M11_INCIDENT_REVIEW_NOT_APPLICABLE');
+      }
       continue;
     }
     reviews.set(rev.throughWindow,rev);
