@@ -18,6 +18,9 @@ const permissionJSON=JSON.stringify({
 const user=(id,phone,role)=>({
   'User ID':id,'Full Name':'Synthetic '+id,'Mobile Number':phone,
   'Password Hash':HASH,'Password Salt':SALT,'Role':role,'Status':'Active',
+  'Created By':role==='Administrator'?'First-run bootstrap':'Source actor display',
+  'Created At':'2025-01-20T12:05:06.000Z',
+  'Last Login':role==='Administrator'?'':'2025-06-30T08:09:10.000Z',
 });
 const source=()=>({
   users:[
@@ -27,6 +30,7 @@ const source=()=>({
   roles:[{
     'Role ID':'ROL-IMPORT-CASH','Role Name':'Cashier',
     'Allowed Modules':'products','Permissions':permissionJSON,'Status':'Active',
+    'Created At':'2025-01-20T12:06:07.000Z',
   }],
 });
 let DB;
