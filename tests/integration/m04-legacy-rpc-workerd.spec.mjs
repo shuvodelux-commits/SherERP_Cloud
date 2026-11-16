@@ -365,12 +365,12 @@ test('read-only partial staff directory uses current D1 users.view and never pro
 
   await rpc('logout',[reader.body.data.token],NOW+123_000);
   assert.deepEqual(await staffDirectory(reader.body.data.token,NOW+124_000),denied);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='DirectoryReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='DirectoryReader'")
     .bind(JSON.stringify({users:{view:false}})).run();
   const downgraded=await rpc('login',['01710000109',SECRET],NOW+125_000);
   assert.equal(downgraded.body.success,true);
   assert.deepEqual(await staffDirectory(downgraded.body.data.token,NOW+126_000),denied);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='DirectoryReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='users' WHERE role_name='DirectoryReader'")
     .bind(JSON.stringify({users:{view:true}})).run();
   assert.deepEqual(await staffDirectory(downgraded.body.data.token,NOW+127_000),denied);
   const restored=await rpc('login',['01710000109',SECRET],NOW+128_000);
@@ -611,13 +611,13 @@ test('management add preflight checks independent stored D1 users.add and roles.
 
   // New authority snapshot is needed after every role update. Re-enabling
   // a role cannot resurrect an old bearer even when permissions return.
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='RolesAdder'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='roles' WHERE role_name='RolesAdder'")
     .bind(JSON.stringify({roles:{add:false,view:true}})).run();
   assert.deepEqual(await addPreflight('addRole',tokenRole,NOW+195_000),deny);
   const demoted=await rpc('login',['01710000112',SECRET],NOW+196_000);
   assert.equal(demoted.body.success,true);
   assert.deepEqual(await addPreflight('addRole',demoted.body.data.token,NOW+197_000),deny);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='RolesAdder'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='RolesAdder'")
     .bind(JSON.stringify({roles:{add:true,view:false}})).run();
   assert.deepEqual(await addPreflight('addRole',tokenRole,NOW+198_000),deny);
   assert.deepEqual(await addPreflight('addRole',demoted.body.data.token,NOW+198_000),deny);
@@ -696,13 +696,13 @@ test('users.edit preflight requires live D1 action rights for update, reset pass
   await rpc('logout',[admin],NOW+213_000);
   assert.deepEqual(await usersEditPreflight('setUserStatus',admin,NOW+214_000),deny);
 
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='UsersEditor'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='users' WHERE role_name='UsersEditor'")
     .bind(JSON.stringify({users:{view:true,edit:false}})).run();
   assert.deepEqual(await usersEditPreflight('updateUser',editor,NOW+215_000),deny);
   const downgraded=await rpc('login',['01710000113',SECRET],NOW+216_000);
   assert.equal(downgraded.body.success,true);
   assert.deepEqual(await usersEditPreflight('resetPassword',downgraded.body.data.token,NOW+217_000),deny);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='UsersEditor'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='UsersEditor'")
     .bind(JSON.stringify({users:{edit:true}})).run();
   assert.deepEqual(await usersEditPreflight('updateUser',editor,NOW+218_000),deny);
   assert.deepEqual(await usersEditPreflight('updateUser',downgraded.body.data.token,NOW+218_000),deny);
