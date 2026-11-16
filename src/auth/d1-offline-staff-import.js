@@ -62,14 +62,29 @@ function captureRows(rows,fields){
   }
 }
 
-function captureVerifiedSnapshot({users,roles}={}){
+function captureVerifiedSnapshot(source){
+  // Never read a root getter or Proxy-controlled property as source data.
+  let users,roles;
+  try {
+    if(!source || typeof source!=='object' || Array.isArray(source))
+      throw rejected();
+    const u=Object.getOwnPropertyDescriptor(source,'users');
+    const r=Object.getOwnPropertyDescriptor(source,'roles');
+    if(!u || !r || !Object.hasOwn(u,'value') || !Object.hasOwn(r,'value'))
+      throw rejected();
+    users=u.value;
+    roles=r.value;
+  } catch {
+    throw rejected();
+  }
   const capturedUsers=captureRows(users,USER_FIELDS);
   const capturedRoles=captureRows(roles,ROLE_FIELDS);
   if(!capturedUsers || !capturedRoles)throw rejected();
   const report=auditLegacyStaffRoleAuthority(capturedUsers,capturedRoles);
   if(!report.preflightPass)throw rejected();
   if(capturedRoles.some(row=>row['Role ID']!==row['Role ID'].trim() ||
-     row['Role ID'].length>128))
+     row['Role ID'].length>128 ||
+     row['Role Name']==='__m04_offline_staff_import_guard__'))
     throw rejected();
   return {users:capturedUsers,roles:capturedRoles};
 }
@@ -179,6 +194,20 @@ export async function importLegacyStaffSnapshotWithD1(db,source){
       throw error('Offline staff import store not empty');
 
     const statements=[];
+    // SQL-authoritative clean-store claim INSIDE the same D1.batch:
+    // a stale JS preflight cannot permit a second concurrent import.
+    // If any identity/session/throttle row exists, a NULL primary key
+    // deliberately fails SQLite constraints and rolls back the batch.
+    statements.push(db.prepare(`INSERT INTO auth_roles
+      (role_name,status,permissions_json,allowed_modules)
+      SELECT CASE WHEN
+        NOT EXISTS(SELECT 1 FROM auth_roles) AND
+        NOT EXISTS(SELECT 1 FROM auth_users) AND
+        NOT EXISTS(SELECT 1 FROM auth_legacy_credentials) AND
+        NOT EXISTS(SELECT 1 FROM auth_sessions) AND
+        NOT EXISTS(SELECT 1 FROM auth_login_throttle)
+        THEN ? ELSE NULL END, 'Inactive','{}',''`)
+      .bind('__m04_offline_staff_import_guard__'));
     for(const role of roles){
       statements.push(db.prepare(`INSERT INTO auth_roles
         (role_name,source_role_id,status,allowed_modules,permissions_json)
@@ -206,6 +235,11 @@ export async function importLegacyStaffSnapshotWithD1(db,source){
         user['User ID'],user['Password Hash'],user['Password Salt']
       ));
     }
+
+    // The claim has no staff assignment and must disappear atomically
+    // before the import is visible to any other D1 reader.
+    statements.push(db.prepare(`DELETE FROM auth_roles WHERE role_name=?`)
+      .bind('__m04_offline_staff_import_guard__'));
 
     const results=await db.batch(statements);
     if(!Array.isArray(results) || results.length!==statements.length ||
