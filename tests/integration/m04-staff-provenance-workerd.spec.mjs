@@ -61,6 +61,20 @@ test('source Created By and UTC dates round-trip without inventing a Party ident
   });
 });
 
+test('original nonempty Last Login and blank Created By are retained exactly in source history',async()=>{
+  await DB.prepare(`INSERT INTO auth_users
+    (user_id,full_name,phone_key,role_name,status,password_hash,password_salt,password_iterations)
+    VALUES ('USR-PROV-02','Synthetic Second','01790000922','Administrator','Inactive',?,?,210000)`)
+    .bind('c'.repeat(64),'d'.repeat(48)).run();
+  await DB.prepare(`INSERT INTO auth_user_source_provenance
+    (user_id,source_created_by,source_created_at_iso,source_last_login_at_iso)
+    VALUES ('USR-PROV-02','',?,?)`).bind(PREV,NOW).run();
+  assert.deepEqual(await DB.prepare(`SELECT source_created_by,source_created_at_iso,
+    source_last_login_at_iso FROM auth_user_source_provenance WHERE user_id='USR-PROV-02'`).first(),{
+    source_created_by:'',source_created_at_iso:PREV,source_last_login_at_iso:NOW,
+  });
+});
+
 test('invalid, ambiguous and offset timestamps cannot enter source-history tables',async()=>{
   for(const invalid of [
     '2026-11-16T10:00:00+06:00',
