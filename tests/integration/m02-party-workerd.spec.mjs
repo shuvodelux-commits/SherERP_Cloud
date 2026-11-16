@@ -27,13 +27,13 @@ before(async()=>{
 });
 after(async()=>{await harness.close();});
 
-test('four versioned migrations and exactly seven identity/catalog core tables apply on real workerd D1',async()=>{
+test('five versioned migrations retain the initial seven identity/catalog tables on real workerd D1',async()=>{
   const rows=await DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review') ORDER BY name").all();
   assert.deepEqual(rows.results.map(x=>x.name),[
     'parties','party_identity_review','party_legacy_links','party_roles','product_categories','product_units','settings'
   ]);
   const n=await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first();
-  assert.equal(n.n,4);
+  assert.equal(n.n,5);
   const triggers=await DB.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_party_%' ORDER BY name").all();
   assert.deepEqual(triggers.results.map(x=>x.name),[
     'trg_party_cross_source_verification','trg_party_legacy_identity_immutable',
@@ -127,4 +127,19 @@ test('test-only Worker exposes no RPC, no staging routes, and no D1 methods',asy
   const response=await worker.fetch('http://local-only.test/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   assert.equal(response.status,404);
   assert.equal((await worker.fetch('http://local-only.test/')).status,404);
+});
+
+test('expense master category schema enforces stable source identity on real local Workerd/D1',async()=>{
+  const names=await DB.prepare("PRAGMA table_info('expense_categories')").all();
+  assert.deepEqual(names.results.map(x=>x.name),[
+    'row_id','legacy_sheet_row','category_id','category_name','description','status','created_at'
+  ]);
+  const sql='INSERT INTO expense_categories (legacy_sheet_row,category_id,category_name,description,status,created_at) VALUES(?,?,?,?,?,?)';
+  await DB.prepare(sql).bind(2,'EXP-D1-001','দোকান ভাড়া','মাসিক','Active','').run();
+  const row=await DB.prepare('SELECT category_name,description,status FROM expense_categories WHERE category_id=?').bind('EXP-D1-001').first();
+  assert.deepEqual(row,{category_name:'দোকান ভাড়া',description:'মাসিক',status:'Active'});
+  await assert.rejects(()=>DB.prepare(sql).bind(3,'EXP-D1-001','Other','','Active','').run(),/unique|constraint/i);
+  await assert.rejects(()=>DB.prepare(sql).bind(2,'EXP-D1-002','Other','','Active','').run(),/unique|constraint/i);
+  await assert.rejects(()=>DB.prepare(sql).bind(4,'EXP-D1-002','Other','','Deleted','').run(),/check|constraint/i);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM expense_categories').first()).n,1);
 });

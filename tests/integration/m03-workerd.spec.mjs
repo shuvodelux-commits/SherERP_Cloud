@@ -74,10 +74,10 @@ async function query(path){
   return {status:response.status,body:await response.json()};
 }
 
-test('workerd applies actual M02 migrations to its isolated D1 binding',async()=>{
-  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
-  assert.equal(result.applied_migrations,4);
-  assert.equal(result.application_tables,7);
+test('workerd applies all five M02/core migrations including isolated expense master',async()=>{
+  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
+  assert.equal(result.applied_migrations,5);
+  assert.equal(result.application_tables,8);
 });
 
 test('Cloudflare Worker runtime executes the real catalog adapter via local D1',async()=>{

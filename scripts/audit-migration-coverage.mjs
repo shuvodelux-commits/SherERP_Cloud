@@ -11,7 +11,8 @@ import {inventorySchema} from './inventory-schema.mjs';
 const CATALOG=Object.freeze({
   SETTINGS:'settings',
   PRODUCT_CATEGORIES:'product_categories',
-  PRODUCT_UNITS:'product_units'
+  PRODUCT_UNITS:'product_units',
+  EXPENSE_CATEGORIES:'expense_categories'
 });
 const PARTY_IDENTITY=Object.freeze({
   CUSTOMERS:'party_legacy_links',
@@ -125,9 +126,9 @@ async function main() {
   // Explicit current-baseline gate; adding future migrations/groups requires
   // source/schema review, not silent promotion to a production-ready status.
   const s=report.summary;
-  if(files.length!==4||s.sourceGroups!==49||s.catalogSchemaOnly!==3||
+  if(files.length!==5||s.sourceGroups!==49||s.catalogSchemaOnly!==4||
      s.partyIdentityOnly!==5||s.authLocalOnly!==3||
-     s.unmapped!==38||s.fullyReconciled!==0||
+     s.unmapped!==37||s.fullyReconciled!==0||
      s.asyncImpactedFunctions!==394)
     throw new Error('M02/M03 coverage baseline changed; review source/schema mapping');
   if(mode==='--json')process.stdout.write(JSON.stringify(report,null,2)+'\n');
