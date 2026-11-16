@@ -60,11 +60,19 @@ test('changing original Expense Category ID affects both digests even when categ
   assert.notEqual(after.idDigest,before.idDigest);
 });
 
-test('duplicate original IDs, missing rows, wrong positions and non-source fields fail closed',()=>{
+test('a truncated but self-consistent snapshot changes count and both digests',()=>{
+  const complete=digest(source());
+  const shortened=digest(source().slice(0,2));
+  assert.equal(complete.rowCount,3);
+  assert.equal(shortened.rowCount,2);
+  assert.notEqual(shortened.rowDigest,complete.rowDigest);
+  assert.notEqual(shortened.idDigest,complete.idDigest);
+});
+
+test('duplicate original IDs, wrong positions and non-source fields fail closed',()=>{
   const bad=[
     [],
     source().slice().reverse(),
-    source().slice(0,2),
     source().map((r,i)=>i===1?{...r,_rowIndex:5}:r),
     source().map((r,i)=>i===1?{...r,'Category ID':'EXCAT-001'}:r),
     source().map((r,i)=>i===1?{...r,'Description':null}:r),
