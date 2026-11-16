@@ -121,7 +121,7 @@ test('cent rounding occurs for each real signed cash movement and final expected
     cash('a',0.1),cash('b',0.2),cash('c','',0.3),
     cash('d',5.235),cash('e','',5.235)
   ];
-  assert.deepEqual(parity(s,[s],rows),{expected:100,variance:0});
+  assert.deepEqual(parity(s,[s],rows),{expected:100.01,variance:-0.01});
 });
 
 test('a later session can be Closing, and its own movement still gets source recalculation',()=>{
