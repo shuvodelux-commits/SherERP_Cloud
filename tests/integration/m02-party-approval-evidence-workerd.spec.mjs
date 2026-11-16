@@ -55,11 +55,11 @@ test('base source migration lacks approval_ref and new strict reader fails close
 
 test('test-only ALTER adds synthetic approval_ref column without migrating production',async()=>{
   const n=await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first();
-  assert.equal(n.n,4,'authentication/provenance migrations must not add Party approval_ref');
+  assert.equal(n.n,4,'authentication/provenance/expense migrations must not add Party approval_ref');
   await DB.prepare('ALTER TABLE party_legacy_links ADD COLUMN approval_ref TEXT').run();
   const rows=await DB.prepare('PRAGMA table_info(party_legacy_links)').all();
   assert.equal(rows.results.filter(row=>row.name==='approval_ref').length,1);
-  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n,4);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n,5);
 });
 
 test('local readback with empty human approval column reports redacted missing evidence',async()=>{
