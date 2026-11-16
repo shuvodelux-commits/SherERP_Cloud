@@ -1,0 +1,11 @@
+{
+ "name":"shererp-m07-purchase-credit-delete-workerd-test",
+ "main":"tests/fixtures/m07-purchase-supplier-credit-worker.mjs",
+ "compatibility_date":"2026-11-14",
+ "workers_dev":false,
+ "d1_databases":[{
+  "binding":"DB",
+  "database_name":"shererp-m07-purchase-credit-delete-synthetic-local",
+  "database_id":"00000000-0000-0000-0000-000000000035"
+ }]
+}
