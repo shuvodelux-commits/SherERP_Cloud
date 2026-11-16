@@ -8,7 +8,7 @@
  * NOT registered in the public Worker RPC allowlist.
  */
 import {AUTH_POLICY,validateSessionWithD1} from './d1-auth-core.js';
-import {roleMetadata,tokenFingerprint} from './d1-legacy-rpc.js';
+import {roleMetadata,roleNavigationConsistent,tokenFingerprint} from './d1-legacy-rpc.js';
 
 const ADD_METHODS=Object.freeze(Object.assign(Object.create(null),{
   createUser:'users',
@@ -49,7 +49,7 @@ export async function previewManagementAddWithD1(db,{token,methodName,nowMs}={})
 
   if(row.role_name!=='Administrator'){
     const role=roleMetadata(row);
-    if(!role || !role.permissions)return deny();
+    if(!role || !role.permissions || !roleNavigationConsistent(role))return deny();
     const rights=Object.getOwnPropertyDescriptor(role.permissions,ADD_METHODS[methodName])?.value;
     if(!rights || Object.getOwnPropertyDescriptor(rights,'add')?.value!==true)
       return deny();

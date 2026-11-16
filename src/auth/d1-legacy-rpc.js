@@ -62,6 +62,21 @@ export function roleMetadata(row){
   return {allowedModules:entries,permissions};
 }
 
+/**
+ * Strict role navigation consistency for internal D1 permission gates.
+ * Keep schema parsing separate: the protected staff-import auditor must
+ * report navigation mismatch instead of permission-schema corruption.
+ */
+export function roleNavigationConsistent(role){
+  if(!role || !role.permissions || !Array.isArray(role.allowedModules))
+    return false;
+  const visible=Object.entries(role.permissions)
+    .filter(([,actions])=>actions.view===true)
+    .map(([module])=>module);
+  return visible.length===role.allowedModules.length &&
+    visible.every(module=>role.allowedModules.includes(module));
+}
+
 function tokenToBytes(token){
   const bytes=new Uint8Array(32);
   for(let i=0;i<32;i++)bytes[i]=parseInt(token.slice(i*2,i*2+2),16);

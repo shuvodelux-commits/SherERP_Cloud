@@ -8,7 +8,7 @@
  * NOT wired to the public Worker RPC registry.
  */
 import {AUTH_POLICY,validateSessionWithD1} from './d1-auth-core.js';
-import {roleMetadata,tokenFingerprint} from './d1-legacy-rpc.js';
+import {roleMetadata,roleNavigationConsistent,tokenFingerprint} from './d1-legacy-rpc.js';
 
 const USER_EDIT_METHODS=new Set([
   'updateUser','resetPassword','setUserStatus',
@@ -48,7 +48,7 @@ export async function previewUsersEditWithD1(db,{token,methodName,nowMs}={}){
 
   if(row.role_name!=='Administrator'){
     const role=roleMetadata(row);
-    if(!role || !role.permissions)return deny();
+    if(!role || !role.permissions || !roleNavigationConsistent(role))return deny();
     const rights=Object.getOwnPropertyDescriptor(role.permissions,'users')?.value;
     if(!rights || Object.getOwnPropertyDescriptor(rights,'edit')?.value!==true)
       return deny();
