@@ -618,6 +618,7 @@ test('synthetic successful login with malformed role data must not unlock origin
       assert.equal((await loginReply).status(),200,'malformed response is HTTP success');
       await page.locator('#loginError').getByText(
         'Invalid authentication response').waitFor({timeout:3000});
+      await page.locator('#loginSubmitBtn:not([disabled])').waitFor();
       assert.equal(await page.locator('#loginOverlay').isVisible(),true,
         'malformed login '+index+' cannot reveal private navigation');
       assert.equal(await page.locator('#app').evaluate(
