@@ -1,3 +1,5 @@
+import {assessM10SourceFreeze} from './m10-source-freeze.js';
+
 /**
  * M10-01: a REDACTED, OFFLINE comparison of *supplied* rehearsal evidence.
  * This is NOT a source exporter, D1 reader or approval to import/cut over.
@@ -70,7 +72,7 @@ function grossMatched(gross){
  * strings; fixed diagnostic codes and counts are all that may leave memory.
  */
 export function assessM10RehearsalEvidence({
-  inventory,coverage,sourceSummary,d1Summary,grossParity,pendingIdentityReviews
+  inventory,coverage,sourceSummary,d1Summary,grossParity,pendingIdentityReviews,sourceFreeze
 }={}){
   const {keys,reconciled}=checkedInventory(inventory,coverage);
   const issues=new Map();
@@ -88,6 +90,22 @@ export function assessM10RehearsalEvidence({
 
   if(sourceSummary===undefined)add('SOURCE_SNAPSHOT_MISSING');
   if(d1Summary===undefined)add('D1_READBACK_MISSING');
+
+  // A single apparent source/D1 match is not stable-source evidence.
+  // Two separately captured source summaries plus the final compared source
+  // must agree before even offline candidate parity can be considered.
+  let freeze;
+  try{
+    freeze=assessM10SourceFreeze({
+      inventory,
+      firstPass:sourceFreeze?.firstPass,
+      secondPass:sourceFreeze?.secondPass,
+      finalSourceSummary:sourceSummary
+    });
+  }catch{
+    fail(); // Never reveal a source row or private snapshot metadata.
+  }
+  for(const {code,count} of freeze.issues)add(code,count);
 
   let complete=false,matched=false;
   if(sourceSummary!==undefined&&d1Summary!==undefined){
@@ -114,7 +132,7 @@ export function assessM10RehearsalEvidence({
       keys.every(k=>source.index.has(k)&&d1.index.has(k));
     matched=complete&&![...issues.keys()].some(k=>k.startsWith('GROUP_'));
   }
-  const candidateDataParity=matched&&reconciled===49&&partyPass&&
+  const candidateDataParity=matched&&freeze.stable&&reconciled===49&&partyPass&&
     pendingIdentityReviews===0;
   return {
     formatVersion:1,phase:'M10_OFFLINE_PREFLIGHT',

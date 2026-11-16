@@ -19,9 +19,15 @@ const gross=()=>({
   offlineCheckpointParity:true,issues:[],
   counts:{expectedCurrent:7,observedCurrent:7,expectedOpening:2,observedOpening:2}
 });
+const sourceFreeze=()=>({
+  firstPass:{snapshotId:'OFFLINE-PASS-001',capturedAt:'2026-11-16T10:00:00.000Z',
+    sourceCommit,groups:groups()},
+  secondPass:{snapshotId:'OFFLINE-PASS-002',capturedAt:'2026-11-16T10:01:00.000Z',
+    sourceCommit,groups:groups()}
+});
 const evidence=()=>({
   inventory,coverage:coverage(),sourceSummary:groups(),d1Summary:groups(),
-  grossParity:gross(),pendingIdentityReviews:0
+  grossParity:gross(),pendingIdentityReviews:0,sourceFreeze:sourceFreeze()
 });
 const issue=(report,code)=>report.issues.find(item=>item.code===code)?.count||0;
 
