@@ -1,0 +1,27 @@
+name: M02 Legacy deletion audit schema/import real local Workerd D1
+# This workflow is a PR-only synthetic local D1 proof; no remote credentials.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  delete-log-local-d1:
+    name: Verify frozen deletion history and append-only D1 import
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install isolated fixed Wrangler
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Test frozen source and SQLite STRICT append-only audit contract
+        run: node --test tests/m02-delete-log-schema.test.mjs tests/m02-delete-log-import.test.mjs
+      - name: Test source import against isolated Workerd D1
+        run: node --test tests/integration/m02-delete-log-import-workerd.spec.mjs
