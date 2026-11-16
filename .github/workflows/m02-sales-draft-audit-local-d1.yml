@@ -1,0 +1,26 @@
+name: M02 Sales draft historical audit real local Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  draft-audit-local-d1:
+    name: Verify frozen draft audit contract and atomic D1 import
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install baseline dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install isolated pinned Wrangler
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify frozen source, SQLite STRICT and preflight
+        run: node --test tests/m02-sales-draft-audit-schema.test.mjs tests/m02-sales-draft-audit-import.test.mjs
+      - name: Verify real isolated Workerd/D1 atomic audit import
+        run: node --test tests/integration/m02-sales-draft-audit-workerd.spec.mjs
