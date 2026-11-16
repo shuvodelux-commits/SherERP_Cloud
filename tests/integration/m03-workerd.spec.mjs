@@ -18,6 +18,7 @@ import './m03-m04-receipt-workerd.spec.mjs'; // Actual proposed M04 session sche
 import './m03-authorized-post-workerd.spec.mjs'; // Synthetic M04 authority checked inside atomic D1 receipt/post claim.
 import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
 import './m02-product-unit-import-workerd.spec.mjs'; // M02 frozen Product Units source import / real D1 rollback, local-only.
+import './m02-product-category-import-workerd.spec.mjs'; // M02 frozen Product Categories source import / real D1 rollback, local-only.
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
 import './m03-product-status-workerd.spec.mjs'; // M03 frozen ProductSettings status orchestration, fixed local D1 only.
 import './m03-master-atomic-workerd.spec.mjs'; // M03 source PCAT/PUNT, one-statement local D1 creation receipt/cleanup proof.
