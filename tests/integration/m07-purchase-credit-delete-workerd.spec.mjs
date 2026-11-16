@@ -23,7 +23,7 @@ async function seed(id='A',{paidAmount='20.00'}={}){
   purchaseId:'PUR-'+id,operationId:'OP-PURCHASE-SUP-'+id+'-001',
   supplierId:'SUP-1',sku:'PIPE',qty:2,expectedVersion:1,
   unitPrice:'15.25',sellPrice:'18.00',discount:'0.50',
-  paidAmount,date:'2026-11-10',paymentMethod:paidAmount==='0'?'':'Cash',
+  paidAmount,date:'2026-11-10',paymentMethod:'Cash',
   bankAccountId:''};
  assert.equal((await createSyntheticPurchasePoster(DB).post(base)).status,'COMMITTED');
  const originalHash=(await DB.prepare('SELECT intent_hash FROM m05_purchases WHERE tenant_id=? AND purchase_id=?')
@@ -148,6 +148,9 @@ test('negative signed Supplier advance after fully-paid source is restored to ze
 
 test('unpaid original purchase Supplier Credit correction never creates Cash entry',async()=>{
  const s=await seed('UNPAID',{paidAmount:'0'}),before=await snapshot();
+ assert.equal(before.purchases.length,1);
+ assert.equal(before.purchases[0].paid_paisa,0);
+ assert.equal(before.purchases[0].payment_method,'');
  assert.equal(before.originalCash.length,0);
  assert.equal((await deletion().post(request(s))).status,'COMMITTED');
  assert.equal((await first("SELECT signed_due_paisa FROM m07_purchase_supplier_signed WHERE supplier_id='SUP-1'")).signed_due_paisa,7000);
