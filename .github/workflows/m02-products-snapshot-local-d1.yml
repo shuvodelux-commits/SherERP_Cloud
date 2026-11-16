@@ -1,0 +1,24 @@
+name: M02 Products original/optional source snapshots real local Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  products-snapshot-d1:
+    name: Original product IDs and optional unit-source archive atomicity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify frozen source contract and SQLite STRICT migration
+        run: node --test tests/m02-products-snapshot-schema.test.mjs
+      - name: Verify actual isolated local Workerd D1 batch and readback
+        run: node --test tests/integration/m02-products-snapshot-workerd.spec.mjs
