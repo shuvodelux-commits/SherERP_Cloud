@@ -102,11 +102,13 @@ test('real HTTP rejects unauthorized and unknown session or RPC name without pri
     assert.equal(r.cache,'no-store');
     assert.equal(r.nosniff,'nosniff');
   }
-  for(const name of ['getDayBookTransactions','getSettingsMap_','completeSale','login']){
+  for(const name of ['getDayBookTransactions','getSettingsMap_','completeSale']){
     const r=await rpc(name,[STAFF]);
     assert.equal(r.status,501,name);
     assert.equal(r.body.success,false);
   }
+  assert.equal((await rpc('login',[STAFF])).status,503,
+    'existing auth-unconfigured fallback must stay intact');
 });
 
 test('same-origin/POST/JSON and source arity/role injection protections precede D1',async()=>{
