@@ -1,0 +1,26 @@
+name: M02 Invoice edit historical audit real local Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  invoice-edit-audit-local-d1:
+    name: Verify original invoice edit history and D1 immutable import
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install baseline dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install fixed Wrangler in isolated PR job
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Check frozen source, SQLite STRICT table and preflight safety
+        run: node --test tests/m02-invoice-edit-audit-schema.test.mjs tests/m02-invoice-edit-audit-import.test.mjs
+      - name: Prove exact source import and rollback on real local Workerd D1
+        run: node --test tests/integration/m02-invoice-edit-audit-workerd.spec.mjs
