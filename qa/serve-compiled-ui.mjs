@@ -9,10 +9,11 @@ import {handleRpc} from '../src/rpc/handler.js';
 
 /**
  * Local-only M01 browser fixture. By default all API calls use the actual
- * inert public Worker. Only an explicitly supplied test callback opts this
- * loopback server into the existing reviewed Day Book HTTP handler and D1.
+ * inert public Worker. Only explicitly supplied test callbacks opt this
+ * loopback server into the existing reviewed M03 Day Book or M04 auth HTTP
+ * handlers and isolated D1. The deployed Worker never imports this fixture.
  */
-export async function serveCompiledUi({internalDayBookRpc}={}) {
+export async function serveCompiledUi({internalDayBookRpc,internalAuthAdapter}={}) {
   const temp=await mkdtemp(join(tmpdir(),'shererp-m01-browser-'));
   let server;
   try {
@@ -37,8 +38,15 @@ export async function serveCompiledUi({internalDayBookRpc}={}) {
           // protections: Origin, MIME, size, allowlist and payload validation.
           // No deployable Worker or public RPC registry imports this callback.
           const rpcRequest=new Request(url,init);
-          const result=path==='/api/rpc' && typeof internalDayBookRpc==='function'
-            ? await handleRpc(rpcRequest,{dayBookBridge:{invoke:internalDayBookRpc}})
+          const hasDayBook=typeof internalDayBookRpc==='function';
+          const hasAuth=internalAuthAdapter!==undefined;
+          // Both options are trusted, test-provided dependencies only.
+          // The request body cannot activate either one.
+          const localOptions={};
+          if(hasDayBook)localOptions.dayBookBridge={invoke:internalDayBookRpc};
+          if(hasAuth)localOptions.authAdapter=internalAuthAdapter;
+          const result=path==='/api/rpc' && (hasDayBook||hasAuth)
+            ? await handleRpc(rpcRequest,localOptions)
             : await worker.fetch(rpcRequest,{});
           response.writeHead(result.status,Object.fromEntries(result.headers));
           response.end(Buffer.from(await result.arrayBuffer()));
