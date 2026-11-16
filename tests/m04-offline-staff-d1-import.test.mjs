@@ -59,3 +59,18 @@ test('readback report is a fixed, redacted envelope and cannot expose source sec
     return true;
   });
 });
+
+test('a root snapshot getter never executes or escapes its private error',async()=>{
+  let invoked=0,sql=0;
+  const source={roles:[]};
+  Object.defineProperty(source,'users',{
+    enumerable:true,get(){invoked++;throw Error('PRIVATE-SNAPSHOT-ERROR');},
+  });
+  const db={prepare(){sql++;throw Error('SQL CALLED');},batch(){sql++;throw Error('SQL CALLED');}};
+  await assert.rejects(()=>importLegacyStaffSnapshotWithD1(db,source),e=>{
+    assert.equal(e.message,'Offline staff import rejected');
+    return true;
+  });
+  assert.equal(invoked,0);
+  assert.equal(sql,0);
+});
