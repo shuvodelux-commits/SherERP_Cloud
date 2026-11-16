@@ -40,6 +40,12 @@ export const M07_CASH_PRICE_EDIT_DDL=[
  FROM m07_cash_returns r WHERE NOT EXISTS(
   SELECT 1 FROM m07_cash_delete_receipts d
   WHERE d.tenant_id=r.tenant_id AND d.return_id=r.return_id)`,
+`CREATE TRIGGER m07_cash_delete_guard_prior_price_edit
+ BEFORE INSERT ON m07_cash_delete_receipts BEGIN
+ SELECT CASE WHEN EXISTS(SELECT 1 FROM m07_cash_price_edit_receipts e
+  WHERE e.tenant_id=NEW.tenant_id AND e.return_id=NEW.return_id)
+ THEN RAISE(IGNORE) END;
+ END`,
 `CREATE TRIGGER m07_cash_price_edit_commit
  AFTER INSERT ON m07_cash_price_edit_receipts BEGIN
  INSERT INTO m07_return_edit_versions(tenant_id,return_id,edit_version)
