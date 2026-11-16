@@ -1,0 +1,28 @@
+name: M02 Expense Categories offline import real Workerd D1 (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  expense-category-local-d1:
+    name: Validate Expense Categories full-snapshot import against local D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install baseline dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler for isolated CI runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Run source-contract regression tests
+        run: node --test tests/m02-expense-category-import.test.mjs
+      - name: Run real isolated Workerd D1 atomic import and readback tests
+        run: node --test tests/integration/m02-expense-category-import-workerd.spec.mjs
