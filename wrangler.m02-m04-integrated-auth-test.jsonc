@@ -1,0 +1,12 @@
+{
+  "name": "shererp-m02-m04-integrated-auth-local-test",
+  "main": "tests/fixtures/m02-m04-integrated-auth-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-m02-m04-integrated-local-only",
+    "database_id": "00000000-0000-0000-0000-000000000021",
+    "migrations_dir": "migrations"
+  }]
+}

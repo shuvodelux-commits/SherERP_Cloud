@@ -74,7 +74,7 @@ async function query(path){
 
 test('workerd applies actual M02 migrations to its isolated D1 binding',async()=>{
   const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
-  assert.equal(result.applied_migrations,2);
+  assert.equal(result.applied_migrations,3);
   assert.equal(result.application_tables,7);
 });
 
