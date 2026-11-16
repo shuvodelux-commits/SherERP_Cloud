@@ -24,3 +24,7 @@
 - [ ] Add RED/GREEN runs and counts, exact changed-file inventory, no schema/RPC/production writes, rollback, incomplete adapter/role/tenant gates and status of open PR #369.
 - [ ] Compare to newest main; leave PR draft/unmerged and require owner approval.
 - [ ] Follow-up: Expense, Finance, Bank Transfer and Stock Adjustment Day Book read models, then complete authenticated D1 source adapter and financial reconciliation.
+
+## Shared M07 Workerd D1 check unblock (2026-11-16)
+
+Historical M03 D1 integration failed solely on `unpaid original purchase Supplier Credit correction never creates Cash entry` (485/486 passing): an M07 synthetic test supplied a blank **input** payment method despite the purchase writer requiring `Cash` or `Bank`. The original business rule remains that **zero paid amount persists no tender method and posts no Cash/Bank entry**. The independent source-compatible repair is owner-merged [#390](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/390) (20/20 checks at fix SHA `5a586e75d86cd40bcef3da739179ad70ace5f46d`). This branch now merges `main@0e4dbd5c17f3e33077e1b81f7799a8d42c29758e`, with the M07 fixture fix and all four original M09 files preserved. No M09 projector/financial writer was changed for this CI issue. **Verify fresh exact-head M03 Workerd/D1 and all PR checks before treating this PR as GREEN.**
