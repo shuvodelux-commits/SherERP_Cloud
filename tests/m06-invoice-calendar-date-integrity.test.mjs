@@ -8,7 +8,7 @@ function invoice(date,terms=5){
       'Invoice ID':'INV-DATE-01','Date':date,'Time':'09:00:00',
       'Customer ID':'','Paid Amount':100,'Due Amount':0,
       'Grand Total':100,'Subtotal':100,'Discount':0,
-      'Payment Detail Version':'1','Payment Type':'Cash',
+      'Payment Detail Version':'','Payment Method':'Cash','Payment Type':'Cash',
       'Payment Status':'Paid','Is Deleted':'FALSE'
     }],
     items:[],products:[],customers:[],paymentRows:[],
