@@ -104,7 +104,7 @@ test('accessors and proxy failures never execute source getters or leak their er
 
 test('pure source-freeze helper never uses D1, fetch, console or public RPC wiring',()=>{
   const helper=readFileSync(new URL('../src/auth/two-pass-source-freeze.js',import.meta.url),'utf8');
-  assert.doesNotMatch(helper,/\\.prepare\\(|\\.batch\\(|\\bfetch\\(|\\bconsole\\.|\\bgetAppShellData\\b/);
+  assert.doesNotMatch(helper,/\.prepare\(|\.batch\(|\bfetch\(|\bconsole\.|\bgetAppShellData\b/);
   const publicFiles=readFileSync(new URL('../src/index.js',import.meta.url),'utf8')+
     readFileSync(new URL('../src/rpc/registry.js',import.meta.url),'utf8');
   assert.doesNotMatch(publicFiles,/two-pass-source-freeze|auditStableLegacyStaffFreeze/);
