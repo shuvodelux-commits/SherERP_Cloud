@@ -15,7 +15,7 @@ const CATALOG=Object.freeze({
   EXPENSE_CATEGORIES:'expense_categories'
 });
 const DIAGNOSTIC=Object.freeze({LOGS:'legacy_error_logs'});
-const HISTORICAL_AUDIT=Object.freeze({DELETE_LOG:'legacy_delete_log'});
+const HISTORICAL_AUDIT=Object.freeze({DELETE_LOG:'legacy_delete_log',SALES_DRAFT_AUDIT:'legacy_sales_draft_audit'});
 const PARTY_IDENTITY=Object.freeze({
   CUSTOMERS:'party_legacy_links',
   SUPPLIERS:'party_legacy_links',
@@ -134,10 +134,10 @@ async function main() {
   // Explicit current-baseline gate; adding future migrations/groups requires
   // source/schema review, not silent promotion to a production-ready status.
   const s=report.summary;
-  if(files.length!==7||s.sourceGroups!==49||s.catalogSchemaOnly!==4||
-     s.diagnosticSchemaOnly!==1||s.auditSchemaOnly!==1||
+  if(files.length!==8||s.sourceGroups!==49||s.catalogSchemaOnly!==4||
+     s.diagnosticSchemaOnly!==1||s.auditSchemaOnly!==2||
      s.partyIdentityOnly!==5||s.authLocalOnly!==3||
-     s.unmapped!==35||s.fullyReconciled!==0||
+     s.unmapped!==34||s.fullyReconciled!==0||
      s.asyncImpactedFunctions!==394)
     throw new Error('M02/M03 coverage baseline changed; review source/schema mapping');
   if(mode==='--json')process.stdout.write(JSON.stringify(report,null,2)+'\n');
