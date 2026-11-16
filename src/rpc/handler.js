@@ -7,6 +7,16 @@ const RPC_NAME = /^[A-Za-z][A-Za-z0-9_]{0,79}$/;
 // Internal opt-in only: these are the entire reviewed legacy auth transport
 // surface. The public Worker never passes an authAdapter.
 const AUTH_ARGS = Object.freeze({login:2,validateSession:1,logout:1});
+
+const DAY_BOOK_RPC='getDayBookBootstrap';
+const DAY_BOOK_TOKEN=/^[0-9a-f]{64}$/;
+const DAY_BOOK_UNAVAILABLE='Day Book is unavailable or access denied.';
+const DAY_BOOK_MODULES=Object.freeze([
+  'Sales','Sales Return','Purchase','Purchase Return',
+  'Customer Payment','Customer Advance Refund','Supplier Payment','Expense','Finance',
+  'Bank','Bank Transfer','Stock Adjustment'
+]);
+
 function validAuthArguments(name,args) {
   if(args.length!==AUTH_ARGS[name]) return false;
   if(args.some(value=>typeof value!=='string' || value.length===0)) return false;
@@ -108,6 +118,33 @@ function validAuthEnvelope(result,method) {
     (method==='logout' ? result.data==='logged out' : validAuthProfile(result.data));
 }
 
+/**
+ * A second transport-side output guard deliberately rejects accidental
+ * extra D1 columns, getters and Promises even from a trusted bridge. The
+ * 12 source DAY_BOOK_MODULES are presentation labels, not auth grants.
+ */
+function validDayBookEnvelope(result) {
+  if(!ownFields(result,['success','data']) || result.success!==true ||
+     !ownFields(result.data,['currencySymbol','editableDays','modules','isAdmin']))
+    return false;
+  const data=result.data;
+  if(typeof data.currencySymbol!=='string' || data.currencySymbol.length>32 ||
+     typeof data.editableDays!=='number' || !Number.isFinite(data.editableDays) ||
+     typeof data.isAdmin!=='boolean')
+    return false;
+  const modules=data.modules;
+  if(!Array.isArray(modules) ||
+     Object.getPrototypeOf(modules)!==Array.prototype ||
+     modules.length!==DAY_BOOK_MODULES.length ||
+     Reflect.ownKeys(modules).length!==DAY_BOOK_MODULES.length+1)
+    return false;
+  return DAY_BOOK_MODULES.every((module,i)=>{
+    const field=Object.getOwnPropertyDescriptor(modules,String(i));
+    return field?.enumerable===true && Object.hasOwn(field,'value') &&
+      field.value===module;
+  });
+}
+
 function rpcError(status, message, headers = {}) {
   return Response.json({success:false, message}, {status, headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 }
@@ -135,7 +172,7 @@ async function boundedBody(request) {
   return new TextDecoder('utf-8',{fatal:true}).decode(full);
 }
 
-export async function handleRpc(request, {authAdapter}={}) {
+export async function handleRpc(request, {authAdapter,dayBookBridge}={}) {
   if (request.method !== 'POST') return rpcError(405,'POST required',{'Allow':'POST'});
   const origin=request.headers.get('Origin');
   if (origin && origin!==new URL(request.url).origin) return rpcError(403,'Cross-origin RPC forbidden');
@@ -171,6 +208,29 @@ export async function handleRpc(request, {authAdapter}={}) {
     } catch {
       // Never expose credentials, D1 errors, SQL, or exception messages.
       return rpcError(503,'Authentication backend unavailable');
+    }
+  }
+
+  if(dayBookBridge!==undefined && payload.fnName===DAY_BOOK_RPC) {
+    // A trusted server-only opt-in. src/index.js never supplies this
+    // bridge; passing dayBookBridge/actor/nowMs in JSON cannot activate it.
+    if(!ownFields(payload,['fnName','args']) || payload.args.length!==1 ||
+       typeof payload.args[0]!=='string' ||
+       !DAY_BOOK_TOKEN.test(payload.args[0]))
+      return rpcError(400,'Invalid RPC arguments');
+    try {
+      const method=Object.getOwnPropertyDescriptor(dayBookBridge,'invoke')?.value;
+      if(typeof method!=='function')
+        return rpcError(503,DAY_BOOK_UNAVAILABLE);
+      const result=await method.call(dayBookBridge,payload);
+      if(!validDayBookEnvelope(result))
+        return rpcError(503,DAY_BOOK_UNAVAILABLE);
+      return Response.json(result,{headers:{
+        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
+      }});
+    }catch{
+      // SQL, underlying exceptions and raw credential material never leak.
+      return rpcError(503,DAY_BOOK_UNAVAILABLE);
     }
   }
   if (!Object.hasOwn(rpcRegistry,payload.fnName)) {
