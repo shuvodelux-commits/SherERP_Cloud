@@ -126,7 +126,7 @@ test('original Chromium frontend reads authorized Day Book from isolated D1 and 
       {
         name:'malformed-json',
         headers:{'Content-Type':'application/json'},
-        data:'{bad-json',status:400,message:'Invalid JSON'
+        data:Buffer.from('{bad-json','utf8'),status:400,message:'Invalid JSON'
       }
     ];
     for(const probe of probes){
