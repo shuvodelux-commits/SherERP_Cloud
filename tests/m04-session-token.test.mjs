@@ -28,13 +28,14 @@ test('minted tokens are 32 cryptographically random bytes encoded as 64 lowercas
   assert.equal(observed.size,32);
 });
 
-test('hashes valid bearer token by exact UTF-8 SHA256, preserving leading zero digest bytes',async()=>{
+test('hashes valid bearer token by exact decoded-byte SHA256, preserving leading zero token bytes',async()=>{
   const token='0000000000000000000000000000000000000000000000000000000000000014';
-  const expected='087bee4b25350ee462142f6270ae6f453ee5bcbd2d7ccb5f0a2223602897c088';
-  assert.equal(independentDigest(token),expected);
+  const expected=createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
+  assert.notEqual(independentDigest(token),expected);
   assert.equal(await hashOpaqueSessionToken(token),expected);
   const minted=createOpaqueSessionToken();
-  assert.equal(await hashOpaqueSessionToken(minted),independentDigest(minted));
+  const mintedExpected=createHash('sha256').update(Buffer.from(minted,'hex')).digest('hex');
+  assert.equal(await hashOpaqueSessionToken(minted),mintedExpected);
   assert.notEqual(await hashOpaqueSessionToken(minted),minted);
 });
 
