@@ -42,9 +42,9 @@ before(async()=>{
 });
 after(async()=>harness.close());
 
-test('real core migrations 0001–0009 coexist with 5 guarded auth tables and no financial schemas',async()=>{
+test('real core migrations 0001–0010 coexist with 5 guarded auth tables and no financial schemas',async()=>{
   const count=await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first();
-  assert.equal(count.n,9);
+  assert.equal(count.n,10);
   const rows=await DB.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN
     ('settings','product_categories','product_units','parties','party_roles','party_legacy_links',
      'party_identity_review','auth_roles','auth_users','auth_legacy_credentials','auth_sessions',

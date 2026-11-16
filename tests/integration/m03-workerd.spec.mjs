@@ -40,6 +40,7 @@ import './m07-purchase-cash-delete-workerd.spec.mjs'; // M07 source-specific Pur
 import './m07-purchase-supplier-credit-workerd.spec.mjs'; // M07 signed Supplier Credit original-lot D1 ledger/reversal proof.
 import './m07-purchase-credit-delete-workerd.spec.mjs'; // M07 Supplier Credit Purchase Return source-bound deletion, local D1 only.
 import './m07-purchase-multilot-cash-workerd.spec.mjs'; // M07-B4A isolated multi-lot Cash receipt real Workerd/D1 atomic proof.
+import './m08-reconciliation-atomic-workerd.spec.mjs'; // M08 single closing-entry atomicity, local D1 only; no public writer.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
@@ -78,10 +79,10 @@ async function query(path){
   return {status:response.status,body:await response.json()};
 }
 
-test('workerd applies all nine M02/core migrations including isolated expense, LOGS, DELETE_LOG, SALES_DRAFT_AUDIT and INVOICE_EDIT_LOG histories',async()=>{
-  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','legacy_error_logs','legacy_delete_log','legacy_sales_draft_audit','legacy_invoice_edit_audit','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
-  assert.equal(result.applied_migrations,9);
-  assert.equal(result.application_tables,12);
+test('workerd applies all ten M02/core migrations including isolated expense, LOGS, DELETE_LOG, SALES_DRAFT_AUDIT, INVOICE_EDIT_LOG and OPENING_BALANCE_EDIT_LOG histories',async()=>{
+  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','legacy_error_logs','legacy_delete_log','legacy_sales_draft_audit','legacy_invoice_edit_audit','legacy_opening_balance_edit_audit','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
+  assert.equal(result.applied_migrations,10);
+  assert.equal(result.application_tables,13);
 });
 
 test('Cloudflare Worker runtime executes the real catalog adapter via local D1',async()=>{

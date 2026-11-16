@@ -1,0 +1,20 @@
+# M08 — Single-entry Cash Reconciliation D1 atomicity proof (TEST-ONLY)
+
+**Frozen source:** Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2 `CashReconciliation.gs:saveCashReconciliationExplanation`, `cashReconciliationRetireLegacyAdjustment_`, `cashReconciliationRecalculateClosedSession_`. Existing merged M08 read projections validate general source behavior separately.
+
+## Decision
+
+The production schema, real Cash Book migration, per-tenant M04 permission service and full session transaction kernel are not approved, so enabling a production finance writer would be unsafe. Instead, prove **one narrow atomic SQL invariant in real local Workerd/D1**, using disposable `m08_test_*` tables and a test-only helper. A single *closing* discrepancy, one existing real Cash Book entry, one synthetic `Day Close Adjustment`, and exact cent-integer amounts. Multi-entry, opening explanation, mixed historical movement, source transaction auditing, Party relationship accounts, and the real imported schema are **not represented**. The test-only worker returns 404 on every request; integration tests call its D1 binding directly. No secrets, production binding, remote D1, public RPC, legacy edits, UI changes or migration files.
+
+## Controlled contract
+
+- `createSyntheticD1CashReconciliationContract(DB).post(input)` with fixture-owned `{tenantId,actorId,tokenHash,operationId,sessionId,realEntryId,legacyEntryId,revision,now}`. All fields are validated and intent hash calculated by existing canonical operation fingerprint.
+- **One SQL INSERT statement** conditionally creates an immutable receipt only when source-shaped closing discrepancy, exact candidate signed Cash movement, currently active actor/role/session permission+version, stable revision, unclaimed real entry, nondeleted real vs synthetic types, and matching nonzero legacy adjustment all hold **inside D1**. A stale JS preflight is not authority. Uses bound parameters; no dynamic SQL.
+- SQL `AFTER INSERT` trigger does the complete mutation within the same SQLite statement: blanks legacy debit/credit, appends original audit text, inserts unique real-entry link, sets new expected/variance based on *this deliberately simplified one-entry model*, increments session revision, and inserts immutable audit event. Every required row count is asserted with `RAISE(ABORT)`. Injected late audit failure must roll back **all** changes including the receipt and legacy zeroing. This does not purport to model original multi-entry/positional expected-cash calculation.
+- `(tenant_id,operation_id)` unique receipt gives `COMMITTED/REPLAY/CONFLICT/DECLINED` without second changes. Authenticated readback happens in same `DB.batch` transaction and cannot expose a different actor's result; uncertain D1 failures raise `NEEDS_REVIEW`, never pretend retry under a new ID is safe.
+- Per-tenant link uniqueness on source real Entry ID and session+phase prevents double attribution. Session revision check prevents concurrent/stale calculations. Committed receipts, links and audit rows are immutable (test-only triggers).
+- Revocation, expired sessions and role/user version mismatch reject inside the SQL operation; two concurrent final claims yield at most one commit. Synthetic historical opening and Party roles remain unrelated to Cash Book operations.
+
+## Scope and acceptance
+
+Create test-only schema, contract, local nondeployable worker/config, Workerd integration suite, Node RED import test, this spec and plan, and one import in the existing M03 local Workerd integration index. Follow GitHub branch/PR and Superpowers RED→GREEN→verification. Confirm actual GitHub CI `npm test`, source and frontend checks and real Workerd suite. No production financial operation is enabled; this merely proves a narrow pattern and unblocks later owner-reviewed design of the actual M08 writer. Real M02/M03/M04 schemas, source-parity multi-entry validation, trusted actor/tenant request handling, Cash Session policy, actual data import, reconciliation/backup, rollback and end-to-end UI remain critical gates.
