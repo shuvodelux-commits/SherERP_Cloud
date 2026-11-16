@@ -249,6 +249,9 @@ test('changing only role allowed_modules invalidates old sessions; no-op update 
   assert.deepEqual(await rpc('validateSession',[token],NOW+82000),{
     status:200,body:{success:false,message:'Session expired. Please sign in again.'}
   });
+  // Restore synthetic source-canonical navigation before subsequent
+  // legitimate role sign-ins. The original stale token stays revoked.
+  await db.prepare("UPDATE auth_roles SET allowed_modules='sales,roles' WHERE role_name='SourceRole'").run();
 });
 
 
@@ -293,13 +296,13 @@ test('internal D1 staff read gate derives users/roles view from the session, not
 
   // Stored role mutation revokes the already-issued authority snapshot,
   // including if the old permission is later restored.
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='GuardReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='GuardReader'")
     .bind(JSON.stringify({roles:{view:false},users:{view:false}})).run();
   assert.deepEqual(await authorizeRead('getRolesBootstrap',readerToken,NOW+105_000),deny);
   const downgraded=await rpc('login',['01710000108',SECRET],NOW+106_000);
   assert.equal(downgraded.body.success,true);
   assert.deepEqual(await authorizeRead('getRolesBootstrap',downgraded.body.data.token,NOW+107_000),deny);
-  await db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='GuardReader'")
+  await db.prepare("UPDATE auth_roles SET permissions_json=?,allowed_modules='roles' WHERE role_name='GuardReader'")
     .bind(JSON.stringify({roles:{view:true},users:{view:false}})).run();
   assert.deepEqual(await authorizeRead('getRolesBootstrap',readerToken,NOW+108_000),deny);
   const reissued=await rpc('login',['01710000108',SECRET],NOW+109_000);
