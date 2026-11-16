@@ -1,0 +1,24 @@
+name: M02 Stock lot cost historical audit real local Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  stock-cost-audit-local-d1:
+    name: Frozen stock lot cost history and immutable local D1 import
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Validate original stock lot audit and SQLite STRICT requirements
+        run: node --test tests/m02-stock-lot-cost-audit-schema.test.mjs tests/m02-stock-lot-cost-audit-import.test.mjs
+      - name: Validate atomic isolated local D1 import, readback and immutability
+        run: node --test tests/integration/m02-stock-lot-cost-audit-workerd.spec.mjs
