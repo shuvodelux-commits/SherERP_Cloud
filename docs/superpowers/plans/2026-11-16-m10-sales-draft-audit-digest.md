@@ -1,3 +1,10 @@
+## CI dependency correction, 2026-11-16
+
+- Earlier PR #374 CI failed only the independent M07 unpaid purchase test due to a test fixture requesting an empty payment method. The M10-07 Foundation and dedicated Workerd/D1 digest jobs passed on the previous head.
+- Source-backed synthetic M05 request validation deliberately allows only requested `Cash` or `Bank` methods. With zero paid, the stored `payment_method` is `''`; never weaken the input guard or create a cash posting.
+- Approved M07 test-only correction PR #390 is now verified **MERGED to main**. This documentation-only commit re-triggers the entire exact-head PR merge CI for M10-07 against the merged fix. Do not copy M07 test files or touch live financial accounts.
+- Recheck complete GitHub matrix including the long Workerd/D1 adapters, and leave the PR draft for owner merge after zero failures.
+
 # M10-07 — Draft invoice audit ID/row digest implementation plan
 
 > **Execution:** Superpowers RED → verify CI failure → minimal GREEN → all exact-head GitHub CI → owner review, no auto-merge.
