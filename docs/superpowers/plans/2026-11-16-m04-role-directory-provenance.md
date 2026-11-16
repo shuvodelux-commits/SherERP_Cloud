@@ -33,3 +33,10 @@
 - [ ] Commit minimal SQL projection and narrow conditional mapping.
 - [ ] Confirm all M04 tests and repository-wide CI on fresh exact head.
 - [ ] Check parallel changes to affected files, reconcile main safely, leave draft for owner review.
+
+
+## Cross-workstream CI repair and merge evidence (2026-11-16)
+- Original M04 GREEN candidate `f4c2ee13a356680deb736099b807cf15270fe5d6` passed 19/20 GitHub Actions. The sole failing check was M03's unrelated M07 synthetic unpaid Supplier Credit purchase fixture: `seed('UNPAID',{paidAmount:'0'})` supplied an empty *input* payment method even though the M05 poster requires Cash or Bank and canonicalizes zero paid to an empty *persisted* method.
+- Owner-merged PR #390 repaired the M07 test only, without relaxing M05 validation. Its exact-head M03 real Workerd/D1 run passed 486/486 tests; all 20 PR checks passed before its merge.
+- The M04 branch was reconciled on `ea961f004e665c29b13974cf769d1795617618de` with `main@0e4dbd5c17f3e33077e1b81f7799a8d42c29758e` after PR #390 merged, confirming no overlapping M04 code/fixture changes. The PR still changes only this plan, `src/auth/d1-role-directory.js`, `tests/fixtures/m04-auth-migrations/0001_auth_core.sql`, and `tests/integration/m04-provenance-workerd.spec.mjs`.
+- The old failed M03 run remains historical evidence for the old SHA. Do not declare the current combined head green or merge until fresh exact-head CI verifies the upstream M07 fix and M04 provenance regression together.
