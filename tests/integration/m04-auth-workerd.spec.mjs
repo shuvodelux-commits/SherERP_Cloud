@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential,loginWithD1} from '../../src/auth/d1-auth-core.js';
 import {authorizeStaffReadWithD1} from '../../src/auth/d1-staff-read-gate.js';
+import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
 const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-test.jsonc'}]});
 const worker=harness.getWorker('shererp-m04-auth-workerd-local-only');
@@ -50,6 +51,8 @@ test('real Workerd+D1 issues random opaque tokens and persists only SHA-256 fing
   const digest=createHash('sha256').update(Buffer.from(a.body.token,'hex')).digest('hex');
   const persisted=await DB.prepare('SELECT token_hash,user_id,expires_at_ms FROM auth_sessions WHERE token_hash=?').bind(digest).first();
   assert.equal(persisted.token_hash,digest);
+  assert.equal(await hashOpaqueSessionToken(a.body.token),persisted.token_hash);
+  assert.notEqual(createHash('sha256').update(a.body.token,'utf8').digest('hex'),persisted.token_hash);
   assert.equal(persisted.user_id,'USR-ADMIN');
   assert.equal(persisted.expires_at_ms,BASE+12*60*60*1000);
   assert.equal(await DB.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE token_hash=?').bind(a.body.token).first().then(r=>r.n),0);
