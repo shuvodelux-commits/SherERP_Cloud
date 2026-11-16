@@ -132,6 +132,15 @@ export function auditMultiUnitPurchaseSnapshot(preflight){
       }
     }
 
+    // Quantity is independently reviewable even when the parallel pricing
+    // component identity disagrees. Do not suppress a base-quantity drift
+    // simply because the same line has a second snapshot discrepancy.
+    if(unit.unitSnapshot.every(component=>positive(component.factor)&&
+      positive(component.qty)) && Number.isFinite(quantity) &&
+      (!positive(line.qty)||Math.abs(quantity-line.qty)>TOLERANCE)){
+      issue('BASE_QUANTITY_MISMATCH',index,productId);
+    }
+
     if(!nonnegative(unit.lineTotal)){
       issue('INVALID_UNIT_LINE_TOTAL',index,productId);
       componentsValid=false;
@@ -147,9 +156,6 @@ export function auditMultiUnitPurchaseSnapshot(preflight){
       summary.auditedBaseQuantity+=quantity;
       summary.auditedUnitLineTotal+=expectedTotal;
       runningSubtotal+=expectedTotal;
-      if(!positive(line.qty)||Math.abs(quantity-line.qty)>TOLERANCE){
-        issue('BASE_QUANTITY_MISMATCH',index,productId);
-      }
       if(Math.abs(expectedTotal-unit.lineTotal)>TOLERANCE){
         issue('UNIT_LINE_TOTAL_MISMATCH',index,productId);
       }
