@@ -44,6 +44,17 @@ function dateOnly(value){
     calendar.getUTCDate()!==day){
     throw new TypeError('Invalid canonical posted-invoice date');
   }
+  // An imported ISO-shaped Date must also carry a real clock/UTC offset.
+  // Keep the calendar day as stored; never shift invoice dates by timezone.
+  const timestamp=value.match(/T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/);
+  if(timestamp){
+    const [,hour,minute,second,offset]=timestamp;
+    const invalidClock=Number(hour)>23||Number(minute)>59||Number(second)>59;
+    const invalidOffset=offset&&offset!=='Z'&&
+      (Number(offset.slice(1,3))>23||Number(offset.slice(-2))>59);
+    if(invalidClock||invalidOffset)
+      throw new TypeError('Invalid canonical posted-invoice date');
+  }
   return value.slice(0,10);
 }
 

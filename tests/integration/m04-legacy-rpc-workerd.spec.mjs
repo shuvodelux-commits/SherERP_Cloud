@@ -882,3 +882,80 @@ test('management previews deny contradictory view-derived role navigation while 
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first()).n,
     countsBefore.n,'previews must never mutate the staff directory');
 });
+
+async function rolesEditPreflight(methodName,token,nowMs,claims={}){
+  const response=await worker.fetch('http://m04.local/__m04_test__/roles-edit-preflight',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({methodName,token,nowMs,...claims}),
+  });
+  return {status:response.status,body:await response.json()};
+}
+
+test('roles.edit eligibility preview enforces source action separately from view/add/delete on real D1',async()=>{
+  const source=readFileSync(new URL('../../legacy/source/RoleManagement.gs',import.meta.url),'utf8');
+  assert.match(source,/function updateRole\(token, roleId, payload\)[\s\S]*?requirePermission_\(token, 'roles', 'edit'\)/);
+  assert.match(source,/function setRoleStatus\(token, roleId, status\)[\s\S]*?requirePermission_\(token, 'roles', 'edit'\)/);
+  const at=NOW+5_000_000;
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,allowed_modules,permissions_json)
+    VALUES ('M04RoleEditor','Active','',?),
+      ('M04RoleViewer','Active','roles',?),
+      ('M04RoleNavDrift','Active','sales',?)`)
+    .bind(
+      JSON.stringify({roles:{view:false,add:false,edit:true,delete:false}}),
+      JSON.stringify({roles:{view:true,add:true,edit:false,delete:true}}),
+      JSON.stringify({roles:{view:false,add:false,edit:true,delete:false}}),
+    ).run();
+  await seed('USR-RPC-ROLE-EDITOR','01710000119','M04RoleEditor');
+  await seed('USR-RPC-ROLE-VIEWER','01710000120','M04RoleViewer');
+  await seed('USR-RPC-ROLE-DRIFT','01710000121','M04RoleNavDrift');
+
+  const editor=await rpc('login',['01710000119',SECRET],at);
+  const viewer=await rpc('login',['01710000120',SECRET],at);
+  const admin=await rpc('login',['01710000101',SECRET],at);
+  for(const result of [editor,viewer,admin])
+    assert.equal(result.body.success,true,'setup must produce a genuine D1 source-shaped session');
+  const drift=await loginWithD1(db,{
+    phoneKey:'01710000121',password:SECRET,nowMs:at,
+  });
+  assert.equal(drift.authenticated,true,
+    'core token is needed to isolate the independent preview from profile checks');
+
+  const before=await db.prepare(`SELECT COUNT(*) AS n FROM auth_roles`).first();
+  const no={status:200,body:{eligible:false}};
+  const yes=(id,role)=>({status:200,body:{eligible:true,actor:{id,role}}});
+  for(const method of ['updateRole','setRoleStatus']){
+    assert.deepEqual(await rolesEditPreflight(method,editor.body.data.token,at+1_000),
+      yes('USR-RPC-ROLE-EDITOR','M04RoleEditor'),method+' requires roles.edit, not roles.view');
+    assert.deepEqual(await rolesEditPreflight(method,admin.body.data.token,at+1_000),
+      yes('USR-RPC-ADMIN','Administrator'),'active Administrator retains source rights');
+    assert.deepEqual(await rolesEditPreflight(method,viewer.body.data.token,at+1_000),
+      no,'view/add/delete do not grant edit');
+    assert.deepEqual(await rolesEditPreflight(method,drift.token,at+1_000),
+      no,'contradictory view-derived role navigation must fail closed');
+    assert.deepEqual(await rolesEditPreflight(method,'bad-session',at+1_000),
+      no,'invalid bearer must fail closed');
+  }
+  for(const invalidMethod of ['createUser','deleteRole','updateRole ','constructor','__proto__',null]){
+    assert.deepEqual(await rolesEditPreflight(invalidMethod,admin.body.data.token,at+2_000),
+      no,'unknown methods must be denied');
+  }
+  assert.deepEqual(await rolesEditPreflight('updateRole',viewer.body.data.token,at+3_000,{
+    actor:{id:'USR-RPC-ADMIN',role:'Administrator'},
+    permissions:{roles:{edit:true}},allowedModules:['roles'],
+  }),no,'browser-supplied role or permissions cannot escalate privileges');
+
+  // D1 triggers advance role authority: a formerly eligible token cannot
+  // survive a role edit even if the actor still appears on the old screen.
+  await db.prepare(`UPDATE auth_roles SET permissions_json=?
+    WHERE role_name='M04RoleEditor'`)
+    .bind(JSON.stringify({roles:{view:false,add:false,edit:false,delete:false}})).run();
+  assert.deepEqual(await rolesEditPreflight('setRoleStatus',editor.body.data.token,at+4_000),
+    no,'an old token is invalid after a D1 role authority-version update');
+  const refreshed=await rpc('login',['01710000119',SECRET],at+5_000);
+  assert.equal(refreshed.body.success,true);
+  assert.deepEqual(await rolesEditPreflight('updateRole',refreshed.body.data.token,at+6_000),
+    no,'new session still lacks the revoked roles.edit grant');
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM auth_roles').first()).n,
+    before.n,'eligibility preview must never write roles');
+});

@@ -26,3 +26,5 @@ jobs:
         run: node --test tests/integration/m10-expense-category-digest-workerd.spec.mjs
       - name: Verify id-less original LOGS source-position provenance against isolated D1
         run: node --test tests/integration/m10-idless-logs-workerd.spec.mjs
+      - name: Prove immutable DELETE_LOG original Log ID and full-row checksums against isolated D1
+        run: node --test tests/integration/m10-delete-log-digest-workerd.spec.mjs
