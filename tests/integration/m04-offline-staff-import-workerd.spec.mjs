@@ -18,6 +18,9 @@ const permissionJSON=JSON.stringify({
 const user=(id,phone,role)=>({
   'User ID':id,'Full Name':'Synthetic '+id,'Mobile Number':phone,
   'Password Hash':HASH,'Password Salt':SALT,'Role':role,'Status':'Active',
+  'Created By':role==='Administrator'?'First-run bootstrap':'Source actor display',
+  'Created At':'2025-01-20T12:05:06.000Z',
+  'Last Login':role==='Administrator'?'':'2025-06-30T08:09:10.000Z',
 });
 const source=()=>({
   users:[
@@ -27,6 +30,7 @@ const source=()=>({
   roles:[{
     'Role ID':'ROL-IMPORT-CASH','Role Name':'Cashier',
     'Allowed Modules':'products','Permissions':permissionJSON,'Status':'Active',
+    'Created At':'2025-01-20T12:06:07.000Z',
   }],
 });
 let DB;
@@ -64,6 +68,22 @@ test('invalid or ambiguous permissions cannot cause a single D1 operation',async
   assert.deepEqual(await counts(),ZERO);
 });
 
+test('incomplete or invalid historical source metadata cannot write to real local D1',async()=>{
+  const missing=source();
+  delete missing.users[0]['Created By'];
+  await assert.rejects(()=>importLegacyStaffSnapshotWithD1(DB,missing),
+    /Offline staff import rejected/);
+  const invalid=source();
+  invalid.users[1]['Last Login']='2025-06-30';
+  await assert.rejects(()=>importLegacyStaffSnapshotWithD1(DB,invalid),
+    /Offline staff import rejected/);
+  const wrongRole=source();
+  wrongRole.roles[0]['Created At']='2025-02-30T12:06:07.000Z';
+  await assert.rejects(()=>importLegacyStaffSnapshotWithD1(DB,wrongRole),
+    /Offline staff import rejected/);
+  assert.deepEqual(await counts(),ZERO);
+});
+
 test('real D1 batch rolls back roles, users and legacy secrets on a late user insert failure',async()=>{
   const ddl=`CREATE TRIGGER test_import_late_abort
     BEFORE INSERT ON auth_users WHEN NEW.user_id='USR-IMPORT-CASH'
@@ -98,6 +118,9 @@ test('one-shot local import preserves exact legacy IDs, source role and separate
   assert.deepEqual(role,{
     role_name:'Cashier',source_role_id:'ROL-IMPORT-CASH',permissions_json:permissionJSON,
   });
+  assert.equal((await DB.prepare(`SELECT source_created_at_iso
+    FROM auth_roles WHERE source_role_id='ROL-IMPORT-CASH'`).first()).source_created_at_iso,
+    '2025-01-20T12:06:07.000Z');
   const stored=await DB.prepare(`SELECT user_id,phone_key,role_name,credential_state,
     password_algo,password_hash,password_salt,password_iterations
     FROM auth_users WHERE user_id='USR-IMPORT-CASH'`).first();
@@ -105,6 +128,18 @@ test('one-shot local import preserves exact legacy IDs, source role and separate
   assert.equal(stored.phone_key,'01790000602','Sheets integer mobile restored with leading zero');
   assert.equal(stored.role_name,'Cashier');
   assert.equal(stored.credential_state,'LegacyPending');
+  assert.deepEqual(await DB.prepare(`SELECT source_created_by,source_created_at_iso,
+    source_last_login_iso FROM auth_users WHERE user_id='USR-IMPORT-CASH'`).first(),{
+    source_created_by:'Source actor display',
+    source_created_at_iso:'2025-01-20T12:05:06.000Z',
+    source_last_login_iso:'2025-06-30T08:09:10.000Z',
+  });
+  assert.deepEqual(await DB.prepare(`SELECT source_created_by,source_created_at_iso,
+    source_last_login_iso FROM auth_users WHERE user_id='USR-IMPORT-ADMIN'`).first(),{
+    source_created_by:'First-run bootstrap',
+    source_created_at_iso:'2025-01-20T12:05:06.000Z',
+    source_last_login_iso:'',
+  });
   assert.equal(stored.password_algo,'pbkdf2-sha256');
   assert.equal(stored.password_iterations,210000);
   assert.match(stored.password_hash,/^[a-f0-9]{64}$/);
@@ -153,6 +188,28 @@ test('post-import role and password-verifier drift is detected without leaking s
   assert.equal((await reconcileLegacyStaffSnapshotWithD1(DB,source())).match,true);
 });
 
+test('readback denies altered source history without disclosing actor or timestamp',async()=>{
+  const actorChanged=source();
+  actorChanged.users[1]['Created By']='Alternate source actor';
+  const actorReport=await reconcileLegacyStaffSnapshotWithD1(DB,actorChanged);
+  assert.equal(actorReport.match,false);
+  assert.ok(actorReport.issues.some(x=>x.code==='USER_PROVENANCE_MISMATCH'));
+  assert.doesNotMatch(JSON.stringify(actorReport),/Alternate source actor|USR-IMPORT|017900|Password/);
+
+  const timeChanged=source();
+  timeChanged.users[0]['Last Login']='2025-07-01T08:09:10.000Z';
+  const timeReport=await reconcileLegacyStaffSnapshotWithD1(DB,timeChanged);
+  assert.equal(timeReport.match,false);
+  assert.ok(timeReport.issues.some(x=>x.code==='USER_PROVENANCE_MISMATCH'));
+
+  const roleChanged=source();
+  roleChanged.roles[0]['Created At']='2025-01-21T12:06:07.000Z';
+  const roleReport=await reconcileLegacyStaffSnapshotWithD1(DB,roleChanged);
+  assert.equal(roleReport.match,false);
+  assert.ok(roleReport.issues.some(x=>x.code==='ROLE_PROVENANCE_MISMATCH'));
+  assert.equal((await reconcileLegacyStaffSnapshotWithD1(DB,source())).match,true);
+});
+
 test('legacy first-login upgrade is guarded by existing auth core, not by the importer',async()=>{
   const first=await loginWithD1(DB,{
     phoneKey:'01790000602',password:'bad password',nowMs:1_801_200_000_000,
@@ -172,4 +229,10 @@ test('legacy first-login upgrade is guarded by existing auth core, not by the im
   assert.notEqual(modern.password_hash,HASH);
   assert.equal((await DB.prepare(`SELECT COUNT(*) AS n FROM auth_legacy_credentials
     WHERE user_id='USR-IMPORT-CASH'`).first()).n,0);
+  assert.deepEqual(await DB.prepare(`SELECT source_created_by,source_created_at_iso,
+    source_last_login_iso FROM auth_users WHERE user_id='USR-IMPORT-CASH'`).first(),{
+    source_created_by:'Source actor display',
+    source_created_at_iso:'2025-01-20T12:05:06.000Z',
+    source_last_login_iso:'2025-06-30T08:09:10.000Z',
+  });
 });
