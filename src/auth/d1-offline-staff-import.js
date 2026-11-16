@@ -8,6 +8,7 @@
  * Not authorization to import live users or activate public login.
  */
 import {auditLegacyStaffProvenance} from './staff-provenance-preflight.js';
+import {auditStableLegacyStaffFreeze} from './two-pass-source-freeze.js';
 import {normalizeLegacyStaffPhoneSearch} from './staff-phone-identity.js';
 import {AUTH_POLICY} from './d1-auth-core.js';
 
@@ -266,4 +267,51 @@ export async function importLegacyStaffSnapshotWithD1(db,source){
   const proof=await reconcileLegacyStaffSnapshotWithD1(db,source);
   if(!proof.match)throw error('Offline staff import reconciliation failed');
   return {imported:true,counts:proof.counts,readbackMatch:true};
+}
+
+/**
+ * Synthetic offline rehearsal with an explicit source-freeze gate.
+ *
+ * The two source snapshots must be independently acquired by the trusted
+ * operator; equality of their values cannot prove independent capture.
+ * Capture once into private plain objects BEFORE any DB work so caller
+ * changes cannot be observed by a later await. Existing D1.batch remains
+ * the only staff write boundary; public RPC is never wired to this helper.
+ */
+/**
+ * Reject shared source collections or row objects without dereferencing
+ * attacker-controlled getters. Two aliases of one snapshot are not two reads.
+ */
+function aliasesSourceSnapshotRows(first,confirmation){
+  try{
+    for(const key of ['users','roles']){
+      const a=Object.getOwnPropertyDescriptor(first,key);
+      const b=Object.getOwnPropertyDescriptor(confirmation,key);
+      if(!a || !b || !Object.hasOwn(a,'value') || !Object.hasOwn(b,'value') ||
+         !Array.isArray(a.value) || !Array.isArray(b.value))return true;
+      if(a.value===b.value)return true;
+      const al=Object.getOwnPropertyDescriptor(a.value,'length')?.value;
+      const bl=Object.getOwnPropertyDescriptor(b.value,'length')?.value;
+      if(!Number.isSafeInteger(al) || !Number.isSafeInteger(bl))return true;
+      for(let i=0;i<Math.min(al,bl);i++){
+        const ar=Object.getOwnPropertyDescriptor(a.value,String(i));
+        const br=Object.getOwnPropertyDescriptor(b.value,String(i));
+        if(ar && br && Object.hasOwn(ar,'value') && Object.hasOwn(br,'value') &&
+           ar.value===br.value)return true;
+      }
+    }
+    return false;
+  }catch{
+    return true;
+  }
+}
+
+export async function rehearseFrozenLegacyStaffImportWithD1(db,first,confirmation){
+  if(first===confirmation || aliasesSourceSnapshotRows(first,confirmation))
+    throw rejected();
+  const firstCaptured=captureVerifiedSnapshot(first);
+  const secondCaptured=captureVerifiedSnapshot(confirmation);
+  const report=auditStableLegacyStaffFreeze(firstCaptured,secondCaptured);
+  if(!report.freezeMatch)throw rejected();
+  return importLegacyStaffSnapshotWithD1(db,firstCaptured);
 }

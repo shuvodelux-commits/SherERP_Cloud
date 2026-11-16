@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
-import {importLegacyStaffSnapshotWithD1,reconcileLegacyStaffSnapshotWithD1} from
+import {importLegacyStaffSnapshotWithD1,reconcileLegacyStaffSnapshotWithD1,
+  rehearseFrozenLegacyStaffImportWithD1} from
   '../../src/auth/d1-offline-staff-import.js';
 import {loginWithD1} from '../../src/auth/d1-auth-core.js';
 
@@ -84,6 +85,21 @@ test('incomplete or invalid historical source metadata cannot write to real loca
   assert.deepEqual(await counts(),ZERO);
 });
 
+test('source freeze-gated rehearsal rejects distinct drift and aliased snapshots before real D1 calls',async()=>{
+  const first=source();
+  await assert.rejects(()=>rehearseFrozenLegacyStaffImportWithD1(DB,first,first),
+    /Offline staff import rejected/);
+  const second=structuredClone(first);
+  second.roles[0]['Permissions']='{}';
+  await assert.rejects(()=>rehearseFrozenLegacyStaffImportWithD1(DB,first,second),
+    /Offline staff import rejected/);
+  const altered=structuredClone(first);
+  altered.users[0]['Last Login']='2025-01-21T12:05:06.000Z';
+  await assert.rejects(()=>rehearseFrozenLegacyStaffImportWithD1(DB,first,altered),
+    /Offline staff import rejected/);
+  assert.deepEqual(await counts(),ZERO);
+});
+
 test('real D1 batch rolls back roles, users and legacy secrets on a late user insert failure',async()=>{
   const ddl=`CREATE TRIGGER test_import_late_abort
     BEFORE INSERT ON auth_users WHEN NEW.user_id='USR-IMPORT-CASH'
@@ -104,7 +120,7 @@ test('real D1 batch rolls back roles, users and legacy secrets on a late user in
 test('one-shot local import preserves exact legacy IDs, source role and separate pending verifiers',async()=>{
   const expected=source();
   const before=structuredClone(expected);
-  const result=await importLegacyStaffSnapshotWithD1(DB,expected);
+  const result=await rehearseFrozenLegacyStaffImportWithD1(DB,expected,structuredClone(expected));
   assert.deepEqual(result,{
     imported:true,
     counts:{users:2,roles:1,legacyCredentials:2},
