@@ -40,6 +40,7 @@ import './m07-purchase-cash-delete-workerd.spec.mjs'; // M07 source-specific Pur
 import './m07-purchase-supplier-credit-workerd.spec.mjs'; // M07 signed Supplier Credit original-lot D1 ledger/reversal proof.
 import './m07-purchase-credit-delete-workerd.spec.mjs'; // M07 Supplier Credit Purchase Return source-bound deletion, local D1 only.
 import './m07-purchase-multilot-cash-workerd.spec.mjs'; // M07-B4A isolated multi-lot Cash receipt real Workerd/D1 atomic proof.
+import './m03-delete-log-audit-read-workerd.spec.mjs'; // M03 private frozen DELETE_LOG M02 import-to-read Workerd/D1 parity.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
