@@ -1,4 +1,5 @@
 name: M02 Legacy deletion audit schema/import real local Workerd D1
+# This workflow is a PR-only synthetic local D1 proof; no remote credentials.
 
 on:
   pull_request:

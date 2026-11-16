@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareSourceDeleteLog} from '../src/db/delete-log-import.js';
+import {prepareSourceDeleteLog,importSourceDeleteLogWithD1} from '../src/db/delete-log-import.js';
 
 const source=()=>[
   {'Log ID':'DEL-01',Date:'2026-11-15',Time:'13:03',Module:'SALES',
@@ -47,4 +47,23 @@ test('rejects getters, symbols, and non-plain objects without evaluating sensiti
   assert.throws(()=>prepareSourceDeleteLog(t),/source|invalid/i);
   const u=source();Object.setPrototypeOf(u[0],new (class Unsafe {})());
   assert.throws(()=>prepareSourceDeleteLog(u),/source|invalid/i);
+});
+
+test('postcommit readback mismatch signals NEEDS_REVIEW rather than reporting a rollback',async()=>{
+  let batches=0;
+  // Pure deterministic D1 boundary stub: real atomicity is covered in Workerd.
+  const DB={
+    prepare(sql){
+      if(sql.startsWith('SELECT legacy_sheet_row,log_id,date_text'))return {
+        bind(){return {all:async()=>({success:true,results:[]})};}
+      };
+      return {bind(){return {};}};
+    },
+    async batch(statements){
+      batches++;
+      return statements.map(()=>({success:true}));
+    }
+  };
+  await assert.rejects(()=>importSourceDeleteLogWithD1({DB,sourceRows:source()}),/NEEDS_REVIEW/);
+  assert.equal(batches,1,'a committed batch is never misreported as rolled back');
 });

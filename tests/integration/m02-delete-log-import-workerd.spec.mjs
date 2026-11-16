@@ -57,9 +57,9 @@ test('replay and changed source cannot rewrite immutable audit history',async()=
   await assert.rejects(()=>DB.prepare("DELETE FROM legacy_delete_log WHERE log_id='DEL-01'").run(),/immutable|audit|forbidden/i);
   assert.deepEqual(await read(),before);
 });
-test('postcommit readback corruption reports NEEDS_REVIEW, not a fake rollback',async()=>{
-  // Inject a corrupted response *after* a real immutable D1 batch has committed.
-  // This tests the failure envelope without weakening audit-history triggers.
+test('nonempty D1 target aborts replay before any untrusted readback layer is accessed',async()=>{
+  // Inject a misleading reader. Existing audit rows must reject replay before
+  // any readback is consulted, preserving the immutable audit history.
   const realPrepare=DB.prepare.bind(DB);
   const facade={
     prepare(sql){
