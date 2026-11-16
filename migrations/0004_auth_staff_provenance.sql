@@ -15,11 +15,13 @@ CREATE TABLE auth_user_source_provenance (
     CHECK (length(source_created_by)<=1024),
   source_created_at_iso TEXT NOT NULL
     CHECK (length(source_created_at_iso)=24
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',source_created_at_iso) IS NOT NULL
       AND strftime('%Y-%m-%dT%H:%M:%fZ',source_created_at_iso)
           =source_created_at_iso),
   source_last_login_at_iso TEXT
     CHECK (source_last_login_at_iso IS NULL OR
       (length(source_last_login_at_iso)=24
+       AND strftime('%Y-%m-%dT%H:%M:%fZ',source_last_login_at_iso) IS NOT NULL
        AND strftime('%Y-%m-%dT%H:%M:%fZ',source_last_login_at_iso)
            =source_last_login_at_iso))
 ) STRICT;
@@ -29,6 +31,7 @@ CREATE TABLE auth_role_source_provenance (
     REFERENCES auth_roles(source_role_id) ON DELETE RESTRICT,
   source_created_at_iso TEXT NOT NULL
     CHECK (length(source_created_at_iso)=24
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',source_created_at_iso) IS NOT NULL
       AND strftime('%Y-%m-%dT%H:%M:%fZ',source_created_at_iso)
           =source_created_at_iso)
 ) STRICT;
