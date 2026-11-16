@@ -9,7 +9,7 @@ test('fourth source-provenance D1 migration adds original staff and role history
   const sqls=readdirSync(new URL('migrations/',root)).filter(n=>n.endsWith('.sql')).sort();
   assert.deepEqual(sqls,[
     '0001_core_catalog.sql','0002_party_identity.sql',
-    '0003_auth_core.sql','0004_auth_source_provenance.sql','0005_expense_categories.sql','0006_legacy_error_logs.sql','0007_legacy_delete_log.sql','0008_legacy_sales_draft_audit.sql','0009_legacy_invoice_edit_audit.sql','0010_legacy_opening_balance_edit_audit.sql','0011_legacy_stock_lot_cost_corrections.sql','0012_legacy_product_snapshots.sql',
+    '0003_auth_core.sql','0004_auth_source_provenance.sql','0005_expense_categories.sql','0006_legacy_error_logs.sql','0007_legacy_delete_log.sql','0008_legacy_sales_draft_audit.sql','0009_legacy_invoice_edit_audit.sql','0010_legacy_opening_balance_edit_audit.sql','0011_legacy_stock_lot_cost_corrections.sql','0012_legacy_product_snapshots.sql','0013_product_catalog_revisions.sql',
   ]);
   const sql=file('migrations/0004_auth_source_provenance.sql');
   for(const [table,column] of [
