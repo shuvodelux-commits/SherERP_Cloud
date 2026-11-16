@@ -2,7 +2,7 @@
 import {readFile, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 
-/** Patch legacy RPC and pending-login safeguards in generated HTML. Original source stays byte-identical. */
+/** Patch original RPC and login/shell fail-closed safeguards in generated HTML; frozen source stays byte-identical. */
 export function patchServerCall(html) {
   const startMarker = '  function serverCall(fnName) {';
   const endMarker = '  // ---------------- 6. Shared across every page ----------------';
@@ -58,8 +58,26 @@ export function patchServerCall(html) {
   if (!compiled.includes(loginMarker)) {
     throw new Error('Original login handler changed; refusing unchecked guard');
   }
-  return compiled.replace(loginMarker,loginMarker+
+  const withLoginGuard=compiled.replace(loginMarker,loginMarker+
     '    if (btn && btn.disabled) return;\n');
+
+  // When source getAppShellData fails after login, the original handler
+  // displays a toast but leaves the protected shell uncovered. Re-lock only
+  // the compiled UI, preserving the bearer for a later valid session retry.
+  const shellName='  function loadAppShell_() {';
+  if (!withLoginGuard.includes(shellName)) return withLoginGuard;
+  if (withLoginGuard.indexOf(shellName,withLoginGuard.indexOf(shellName)+1)!==-1) {
+    throw new Error('Multiple original application shell handlers');
+  }
+  const shellCatch="      .catch(function (err) {\n"+
+    "        showToast(err.message || 'Could not load app settings.', 'error');\n"+
+    "      });";
+  if (!withLoginGuard.includes(shellCatch) ||
+      withLoginGuard.indexOf(shellCatch,withLoginGuard.indexOf(shellCatch)+1)!==-1) {
+    throw new Error('Original application shell failure boundary changed');
+  }
+  return withLoginGuard.replace(shellCatch,
+    shellCatch.replace("        showToast(", "        showLogin_();\n        showToast("));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pathname) {

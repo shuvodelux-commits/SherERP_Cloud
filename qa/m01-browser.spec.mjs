@@ -497,3 +497,71 @@ test('rapid Enter while sign-in is pending sends only one RPC and permits retry 
     await page.close();
   }
 });
+
+
+test('a successful original login never exposes a partial app if shell metadata fails',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const token='d'.repeat(64);
+  const requests=[];
+  try{
+    await page.route('**/api/rpc',async route=>{
+      const request=route.request().postDataJSON();
+      requests.push(request.fnName);
+      if(request.fnName==='getAppShellData'){
+        return route.fulfill({
+          status:503,contentType:'application/json',
+          body:JSON.stringify({success:false,message:'Synthetic app shell unavailable'})
+        });
+      }
+      if(request.fnName==='login'){
+        return route.fulfill({
+          status:200,contentType:'application/json',
+          body:JSON.stringify({success:true,data:{
+            token,user:{id:'M01-SYNTHETIC',name:'Synthetic Test User',
+              mobile:'01710000999',role:'Clerk'},
+            allowedModules:['dashboard'],permissions:{dashboard:{view:true}}
+          }})
+        });
+      }
+      return route.continue();
+    });
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.waitForFunction(()=>appShellDataPromise_===null,
+      null,{timeout:5000});
+    assert.equal(requests.filter(n=>n==='getAppShellData').length,1,
+      'original pre-login branding must first fail safely');
+    await page.locator('#loginMobile').fill('01710000999');
+    await page.locator('#loginPassword').fill('synthetic-no-real-password');
+    const loginReply=page.waitForResponse(response=>
+      response.url().endsWith('/api/rpc') &&
+      response.request().postDataJSON()?.fnName==='login');
+    await page.locator('#loginPassword').press('Enter');
+    assert.equal((await loginReply).status(),200);
+    await page.locator('#toast').getByText('Synthetic app shell unavailable').waitFor();
+    assert.equal(requests.filter(n=>n==='getAppShellData').length,2,
+      'original source retries app-shell metadata after login');
+    assert.equal(await page.locator('#loginOverlay').isVisible(),true,
+      'if app metadata is unavailable, restore locked login overlay');
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),
+      'hidden','never reveal partially initialized business navigation');
+    assert.equal(await page.locator('#navList .nav-item').count(),0);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),
+      token,'transient shell failure must not orphan a valid server session');
+
+    // Public Worker must still reject subsequent validation; the original
+    // bootstrap clears its stale test token on reload.
+    const validate=page.waitForResponse(response=>
+      response.url().endsWith('/api/rpc') &&
+      response.request().postDataJSON()?.fnName==='validateSession');
+    await page.reload({waitUntil:'domcontentloaded'});
+    assert.equal((await validate).status(),501);
+    await page.waitForFunction(()=>
+      localStorage.getItem('hwerp.session.token')===null);
+    assert.equal(await page.locator('#loginOverlay').isVisible(),true);
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),
+      'hidden');
+  }finally{
+    await page.close();
+  }
+});
