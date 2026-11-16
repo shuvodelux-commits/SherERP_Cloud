@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
 import {createSyntheticD1SalePostingContract} from '../fixtures/m06-sale-posting-contract.mjs';
 import {createSyntheticD1CashReturnContract} from '../fixtures/m07-cash-return-contract.mjs';
-import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED} from '../fixtures/m06-sale-posting-schema.mjs';
+import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED,M06_CHILD_IMMUTABILITY_TABLES,M06_CHILD_IMMUTABILITY_DDL} from '../fixtures/m06-sale-posting-schema.mjs';
 import {M07_CASH_TEST_DDL} from '../fixtures/m07-cash-return-schema.mjs';
 import {M07_CASH_BATCH_TEST_DDL} from '../fixtures/m07-cash-batch-schema.mjs';
 import {createSyntheticD1CashBatchReturnContract} from '../fixtures/m07-cash-batch-contract.mjs';
@@ -81,6 +81,11 @@ before(async()=>{
   for(const [sql,values] of M06_SALE_TEST_SEED)await DB.prepare(sql).bind(...values).run();
 });
 beforeEach(async()=>{
+  // Drop test-only posting guards before fixture cleanup; restore immediately after.
+  for(const table of M06_CHILD_IMMUTABILITY_TABLES){
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_update`).run();
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_delete`).run();
+  }
   for(const t of ['m07_fail_batch_refund','m07_fail_batch_move'])
     await DB.prepare('DROP TRIGGER IF EXISTS '+t).run();
   for(const t of ['m07_cash_batches','m07_cash_returns','m06_invoices'])
@@ -98,6 +103,7 @@ beforeEach(async()=>{
     "CREATE TRIGGER m07_receipt_immutable_delete BEFORE DELETE ON m07_cash_returns BEGIN SELECT RAISE(ABORT,'immutable-return'); END",
     "CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices BEGIN SELECT RAISE(ABORT,'immutable-invoice'); END"
   ])await DB.prepare(sql).run();
+  for(const ddl of M06_CHILD_IMMUTABILITY_DDL)await DB.prepare(ddl).run();
   await DB.prepare("UPDATE m06_owned_stock SET available=CASE sku WHEN 'PIPE' THEN 2 ELSE 4 END").run();
   await DB.prepare('UPDATE m06_customer_accounts SET due_paisa=0').run();
   await DB.prepare("UPDATE m06_cash_sessions SET state='Open'").run();

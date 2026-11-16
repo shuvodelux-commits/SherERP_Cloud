@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createSyntheticD1SalePostingContract} from '../fixtures/m06-sale-posting-contract.mjs';
-import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED} from '../fixtures/m06-sale-posting-schema.mjs';
+import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED,M06_CHILD_IMMUTABILITY_TABLES,M06_CHILD_IMMUTABILITY_DDL} from '../fixtures/m06-sale-posting-schema.mjs';
 
 const server=createTestHarness({workers:[{configPath:'./wrangler.m06-sale-posting-test.jsonc'}]});
 const worker=server.getWorker('shererp-m06-sale-workerd-test');
@@ -42,6 +42,11 @@ before(async()=>{
   for(const [sql,values] of M06_SALE_TEST_SEED)await DB.prepare(sql).bind(...values).run();
 });
 beforeEach(async()=>{
+  // Only the isolated test reset may remove the posting-child guards.
+  for(const table of M06_CHILD_IMMUTABILITY_TABLES){
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_update`).run();
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_delete`).run();
+  }
   for(const t of ['m06_fail_payment','m06_fail_bank','m06_fail_cash','m06_fail_due','m06_fail_draft_audit'])
     await DB.prepare('DROP TRIGGER IF EXISTS '+t).run();
   await DB.prepare('DROP TRIGGER m06_invoice_immutable_delete').run();
@@ -57,6 +62,7 @@ beforeEach(async()=>{
   await DB.prepare("DELETE FROM m06_cash_sessions WHERE tenant_id='SHOP-B'").run();
   for(const t of ['m06_owned_stock','m06_customer_accounts','m06_party_links','m06_supplier_accounts'])
     await DB.prepare(`DELETE FROM ${t} WHERE tenant_id='SHOP-B'`).run();
+  for(const sql of M06_CHILD_IMMUTABILITY_DDL)await DB.prepare(sql).run();
 });
 after(async()=>{await server.close();});
 
@@ -421,4 +427,34 @@ test('draft version update after candidate preparation is refused by SQL CAS and
   assert.equal(await count('m06_invoices'),0);
   assert.equal(await count('m06_draft_audit'),0);
   assert.equal((await one("SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,2);
+});
+
+
+// RED: once a posted invoice is committed, every source-linked child row must
+// be write-once; native corrections must create separate audited reversal rows.
+test('posted sale child rows reject SQL UPDATE and DELETE without changing invoice or money',async()=>{
+  const posted=await posting().post(input('OP-CHILD-IMMUT1',{
+    customerId:'CUS-1',payments:[
+      account('B1','40','Bank'),{id:'C1',method:'Cash',amount:'10'}
+    ]
+  }));
+  assert.equal(posted.status,'COMMITTED');
+  const immutableTables=[
+    'm06_sale_items','m06_stock_movements','m06_payment_children',
+    'm06_cash_book','m06_bank_book','m06_customer_ledger'
+  ];
+  const saved=await snapshot();
+  for(const table of immutableTables){
+    const row=await one(`SELECT rowid AS id FROM ${table} LIMIT 1`);
+    assert.ok(row,`Expected posted row in ${table}`);
+    await assert.rejects(
+      ()=>DB.prepare(`UPDATE ${table} SET tenant_id=tenant_id WHERE rowid=?`).bind(row.id).run(),
+      /m06-immutable-child/,`${table}: UPDATE must fail closed`
+    );
+    await assert.rejects(
+      ()=>DB.prepare(`DELETE FROM ${table} WHERE rowid=?`).bind(row.id).run(),
+      /m06-immutable-child/,`${table}: DELETE must fail closed`
+    );
+  }
+  assert.deepEqual(await snapshot(),saved);
 });

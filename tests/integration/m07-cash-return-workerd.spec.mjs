@@ -2,7 +2,7 @@ import {before,after,beforeEach,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
 import {createSyntheticD1SalePostingContract} from '../fixtures/m06-sale-posting-contract.mjs';
-import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED} from '../fixtures/m06-sale-posting-schema.mjs';
+import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED,M06_CHILD_IMMUTABILITY_TABLES,M06_CHILD_IMMUTABILITY_DDL} from '../fixtures/m06-sale-posting-schema.mjs';
 import {M07_CASH_TEST_DDL} from '../fixtures/m07-cash-return-schema.mjs';
 import {createSyntheticD1CashReturnContract} from '../fixtures/m07-cash-return-contract.mjs';
 
@@ -60,6 +60,11 @@ before(async()=>{
   for(const [sql,params] of M06_SALE_TEST_SEED)await DB.prepare(sql).bind(...params).run();
 });
 beforeEach(async()=>{
+  // Drop test-only posting guards before fixture cleanup; restore immediately after.
+  for(const table of M06_CHILD_IMMUTABILITY_TABLES){
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_update`).run();
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_delete`).run();
+  }
   for(const t of ['m07_fail_refund','m07_fail_movement'])await DB.prepare('DROP TRIGGER IF EXISTS '+t).run();
   await DB.prepare('DROP TRIGGER m07_receipt_immutable_delete').run();
   for(const table of ['m07_cash_refunds','m07_return_movements','m07_cash_returns','m07_lot_stock','m07_source_lots'])
@@ -72,6 +77,7 @@ beforeEach(async()=>{
     await DB.prepare('DELETE FROM '+table).run();
   await DB.prepare(`CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices
     BEGIN SELECT RAISE(ABORT,'m06-immutable-invoice'); END`).run();
+  for(const ddl of M06_CHILD_IMMUTABILITY_DDL)await DB.prepare(ddl).run();
   await DB.prepare("UPDATE m06_owned_stock SET available=CASE sku WHEN 'PIPE' THEN 2 ELSE 4 END").run();
   await DB.prepare("UPDATE m06_customer_accounts SET due_paisa=0").run();
   await DB.prepare("UPDATE m06_cash_sessions SET state='Open'").run();
