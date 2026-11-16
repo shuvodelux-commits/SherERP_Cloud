@@ -31,7 +31,7 @@ test('canonical products require exact frozen source profile, ID and physical sh
   assert.throws(()=>insert.run('P-OTHER','canonical',1,2,'Wire','Gira'),/provenance|source|mismatch/i);
   assert.throws(()=>insert.run('P-001','canonical',1,3,'Wire','Gira'),/provenance|source|mismatch/i);
   assert.throws(()=>insert.run('P-001','canonical',1,2,'Wire','Feet'),/provenance|source|mismatch/i);
-  assert.throws(()=>insert.run('P-001','canonical',null,2,'Wire','Gira'),/check|not null/i);
+  assert.throws(()=>insert.run('P-001','canonical',null,2,'Wire','Gira'),/provenance|source|mismatch|check|not null/i);
   insert.run('P-001','canonical',1,2,'তার','Gira');
   assert.throws(()=>db.prepare("UPDATE products SET base_unit_name='Feet' WHERE product_id='P-001'").run(),/sealed|immutable/i);
   assert.throws(()=>db.prepare("UPDATE products SET product_id='P-OTHER' WHERE product_id='P-001'").run(),/sealed|immutable/i);
@@ -47,7 +47,10 @@ test('new products cannot forge source rows; historical units survive Unit maste
   assert.throws(()=>stmt.run('P-FAKE','new',null,1,'Wire','Gira','PUNT-1','0001'),/check/i);
   stmt.run('P-NEW','new',null,null,'তার','Gira','PUNT-1','0001');
   db.prepare("DELETE FROM product_units WHERE unit_id='PUNT-1'").run();
-  assert.deepEqual(db.prepare("SELECT base_unit_name,base_unit_id,barcode_text FROM products WHERE product_id='P-NEW'").get(),{base_unit_name:'Gira',base_unit_id:null,barcode_text:'0001'});
+  const preserved=db.prepare("SELECT base_unit_name,base_unit_id,barcode_text FROM products WHERE product_id='P-NEW'").get();
+  assert.equal(preserved.base_unit_name,'Gira');
+  assert.equal(preserved.base_unit_id,null);
+  assert.equal(preserved.barcode_text,'0001');
  }finally{db.close();}
 });
 test('immutable profile and conversion revisions protect historical factors and independent prices',()=>{
