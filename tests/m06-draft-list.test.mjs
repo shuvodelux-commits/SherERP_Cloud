@@ -106,3 +106,26 @@ test('trusted actor identity and explicit sales.edit-derived boolean are mandato
   assert.throws(()=>projectSaleDraftList(rows,{actorId:'U-A',manageAll:'yes'}),/trusted/i);
   assert.throws(()=>projectSaleDraftList(null,owner),/trusted/i);
 });
+
+
+test('tenant duplicate Draft ID across different staff owners fails closed before staff-only filtering',()=>{
+  const duplicate=[
+    row('SD-COLLISION',{'Created By ID':'U-A','Updated At':'2026-11-15T11:00:00'}),
+    row('SD-COLLISION',{'Created By ID':'U-B','Updated At':'2026-11-15T12:00:00'})
+  ];
+  for(const access of [owner,manager]){
+    assert.throws(()=>projectSaleDraftList(duplicate,access),
+      /NEEDS_REVIEW: duplicate Sales Draft ID in tenant snapshot/,
+      access.manageAll?'manager':'owner');
+  }
+});
+
+test('same Draft No or Customer across two different draft IDs retains source list parity',()=>{
+  const different=[
+    row('SD-SOURCE-1',{'Draft No':'DRAFT-AMBIGUOUS','Created By ID':'U-A'}),
+    row('SD-SOURCE-2',{'Draft No':'DRAFT-AMBIGUOUS','Created By ID':'U-B'})
+  ];
+  assert.deepEqual(verify(different,manager).map(x=>x.draftId),
+    ['SD-SOURCE-1','SD-SOURCE-2']);
+  assert.deepEqual(verify(different,owner).map(x=>x.draftId),['SD-SOURCE-1']);
+});
