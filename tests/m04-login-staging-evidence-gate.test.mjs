@@ -164,6 +164,17 @@ test('unknown, private and getter-bearing fields are refused without executing s
   assert.doesNotMatch(JSON.stringify(result),/SECRET_SOURCE_EXPORT/);
 });
 
+test('untrusted getters in nested staging config fail closed without throwing or leaking',()=>{
+  const input=sample();
+  Object.defineProperty(input.staging,'d1_databases',{
+    enumerable:true,get(){throw Error('PRIVATE_D1_SECRET')}
+  });
+  const result=assess(input);
+  assert.equal(result.documentaryComplete,false);
+  has(result,'M04_CONFIG_ISOLATION_INVALID');
+  assert.doesNotMatch(JSON.stringify(result),/PRIVATE_D1_SECRET/);
+});
+
 test('CLI with no private manifest fails closed with redacted usage and no remote write',()=>{
   const cli=fileURLToPath(new URL('../scripts/check-m04-login-staging.mjs',import.meta.url));
   const r=spawnSync(process.execPath,[cli],{
