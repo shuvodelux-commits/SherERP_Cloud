@@ -4,7 +4,7 @@ import {createTestHarness} from 'wrangler';
 import {createSyntheticD1SalePostingContract} from '../fixtures/m06-sale-posting-contract.mjs';
 import {createSyntheticD1CashReturnContract} from '../fixtures/m07-cash-return-contract.mjs';
 import {createSyntheticD1StoreCreditContract} from '../fixtures/m07-store-credit-contract.mjs';
-import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED} from '../fixtures/m06-sale-posting-schema.mjs';
+import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED,M06_CHILD_IMMUTABILITY_TABLES,M06_CHILD_IMMUTABILITY_DDL} from '../fixtures/m06-sale-posting-schema.mjs';
 import {M07_CASH_TEST_DDL} from '../fixtures/m07-cash-return-schema.mjs';
 
 const server=createTestHarness({workers:[{configPath:'./wrangler.m07-store-credit-test.jsonc'}]});
@@ -72,6 +72,11 @@ before(async()=>{
   for(const [sql,values] of M06_SALE_TEST_SEED)await DB.prepare(sql).bind(...values).run();
 });
 beforeEach(async()=>{
+  // Drop test-only posting guards before fixture cleanup; restore immediately after.
+  for(const table of M06_CHILD_IMMUTABILITY_TABLES){
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_update`).run();
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_delete`).run();
+  }
   await DB.prepare('DROP TRIGGER IF EXISTS m07_fail_credit_ledger').run();
   await DB.prepare('DROP TRIGGER IF EXISTS m07_fail_credit_stock').run();
   await DB.prepare('DROP TRIGGER m07_credit_immutable_delete').run();
@@ -88,6 +93,7 @@ beforeEach(async()=>{
     'm06_stock_movements','m06_sale_items','m06_invoices'])await DB.prepare('DELETE FROM '+t).run();
   await DB.prepare(`CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices
     BEGIN SELECT RAISE(ABORT,'m06-immutable-invoice'); END`).run();
+  for(const ddl of M06_CHILD_IMMUTABILITY_DDL)await DB.prepare(ddl).run();
   await DB.prepare("UPDATE m06_owned_stock SET available=CASE WHEN sku='PIPE' THEN 2 ELSE 4 END").run();
   await DB.prepare('UPDATE m06_customer_accounts SET due_paisa=0').run();
   await DB.prepare("UPDATE m06_cash_sessions SET state='Open'").run();
