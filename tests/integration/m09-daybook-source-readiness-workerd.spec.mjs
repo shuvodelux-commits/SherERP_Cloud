@@ -135,10 +135,27 @@ test('even twelve dummy physical table names never certify complete source rows 
 });
 
 test('current role permission revocation denies without metadata even after successful read',async()=>{
-  assert.equal((await reader({DB}).inspect(request(VIEWER))).ready,false);
+  // The preceding inactive -> Active transition revokes the original viewer
+  // session by incrementing the M04 user_auth_version. Do NOT resurrect it.
+  await assert.rejects(reader({DB}).inspect(request(VIEWER)),/denied|unavailable/i);
+  // Issue a *new* synthetic session reflecting the now-current user and role
+  // epochs, exactly as a fresh login would; never alter the production gate.
+  const freshToken='9'.repeat(64);
+  const user=await DB.prepare(
+    "SELECT auth_version,credential_version FROM auth_users WHERE user_id='VIEWER'"
+  ).first();
+  const role=await DB.prepare(
+    "SELECT auth_version FROM auth_roles WHERE role_name='Clerk'"
+  ).first();
+  await DB.prepare('INSERT INTO auth_sessions '+
+    '(token_hash,user_id,user_auth_version,role_auth_version,credential_version,'+
+    'created_at_ms,last_activity_at_ms,expires_at_ms) VALUES (?,?,?,?,?,?,?,?)')
+    .bind(digest(freshToken),'VIEWER',user.auth_version,role.auth_version,
+      user.credential_version,NOW-300000,NOW-60000,NOW+1200000).run();
+  assert.equal((await reader({DB}).inspect(request(freshToken))).ready,false);
   await DB.prepare("UPDATE auth_roles SET permissions_json='{\"daybook\":{\"view\":false}}' "+
     "WHERE role_name='Clerk'").run();
-  await assert.rejects(reader({DB}).inspect(request(VIEWER)),/denied|unavailable/i);
+  await assert.rejects(reader({DB}).inspect(request(freshToken)),/denied|unavailable/i);
 });
 
 test('malformed source inspection input, forged role, missing DB, unexpected getters and inherited request all fail',async()=>{
