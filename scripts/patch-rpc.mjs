@@ -37,7 +37,23 @@ export function patchServerCall(html) {
   }
 
 `;
-  return html.slice(0, start) + replacement + html.slice(end);
+  // The original Enter-key handler calls doLogin_ even while its button is
+  // disabled by setLoginPending_. Make the compiled UI single-flight without
+  // modifying frozen javascript.html or its existing pending/retry lifecycle.
+  const compiled=html.slice(0, start) + replacement + html.slice(end);
+  const loginName='  function doLogin_() {';
+  if (!compiled.includes(loginName)) return compiled; // Small RPC-only test fixtures.
+  if (compiled.indexOf(loginName,compiled.indexOf(loginName)+1)!==-1) {
+    throw new Error('Multiple original login handlers');
+  }
+  const loginMarker=loginName+"\n"+
+    "    var errEl = document.getElementById('loginError');\n"+
+    "    var btn = document.getElementById('loginSubmitBtn');\n";
+  if (!compiled.includes(loginMarker)) {
+    throw new Error('Original login handler changed; refusing unchecked guard');
+  }
+  return compiled.replace(loginMarker,loginMarker+
+    '    if (btn && btn.disabled) return;\n');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
