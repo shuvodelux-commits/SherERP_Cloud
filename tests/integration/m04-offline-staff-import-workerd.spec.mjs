@@ -85,6 +85,25 @@ test('incomplete or invalid historical source metadata cannot write to real loca
   assert.deepEqual(await counts(),ZERO);
 });
 
+test('real isolated D1 importer refuses an unreviewed USERS/ROLES column without writing staff or legacy verifiers',async()=>{
+  for(const patch of [
+    s=>{s.users[0]['Unreviewed New Source Column']='synthetic';},
+    s=>{s.roles[0]['Unreviewed Permission Column']='synthetic';},
+    s=>Object.defineProperty(s.roles[0],'Hidden Sheet Column',{value:'synthetic',enumerable:false}),
+    s=>Object.defineProperty(s.users[0],'Created By',{
+      value:s.users[0]['Created By'],enumerable:false
+    }),
+  ]){
+    const s=source();
+    patch(s);
+    await assert.rejects(()=>importLegacyStaffSnapshotWithD1(DB,s),err=>{
+      assert.equal(err.message,'Offline staff import rejected');
+      return true;
+    });
+    assert.deepEqual(await counts(),ZERO,'unreviewed export shape must not write any D1 records');
+  }
+});
+
 test('source freeze-gated rehearsal rejects distinct drift and aliased snapshots before real D1 calls',async()=>{
   const first=source();
   await assert.rejects(()=>rehearseFrozenLegacyStaffImportWithD1(DB,first,first),

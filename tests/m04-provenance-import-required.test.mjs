@@ -84,3 +84,42 @@ test('import remains disconnected from public Worker, preview D1 and arbitrary R
   const remote=readFileSync(new URL('../.github/workflows/remote-d1-staging.yml',import.meta.url),'utf8');
   assert.match(remote,/EXPECTED_REMOTE_MIGRATION_COUNT=2/);
 });
+
+test('protected source export rejects unknown, hidden, symbol and non-enumerable user/role header fields before D1',async()=>{
+  const variants=[
+    s=>{s.users[0]['Unexpected Future Column']='synthetic';},
+    s=>{s.roles[0]['Unexpected Permissions Column']='synthetic';},
+    s=>Object.defineProperty(s.users[1],'unreviewedPrivateValue',{
+      enumerable:false,value:'SYNTHETIC_PRIVATE_VALUE'
+    }),
+    s=>{s.roles[0][Symbol('unexpected')]='synthetic';},
+    s=>Object.defineProperty(s.users[0],'User ID',{
+      enumerable:false,value:s.users[0]['User ID']
+    }),
+    s=>Object.defineProperty(s.roles[0],'Created At',{
+      enumerable:false,value:s.roles[0]['Created At']
+    }),
+    s=>Object.defineProperty(s.roles[0],'futureSecret',{
+      enumerable:true,get(){throw Error('PRIVATE_GETTER_EXECUTED');}
+    })
+  ];
+  for(const mutate of variants){
+    const s=snapshot();
+    mutate(s);
+    await expectNoWrite(s);
+  }
+});
+
+test('malformed protected extra field cannot be accepted by readback reconciliation',async()=>{
+  const {reconcileLegacyStaffSnapshotWithD1}=await import('../src/auth/d1-offline-staff-import.js');
+  const s=snapshot();
+  s.users[0]['New Source Permission']='not in pinned Config.gs';
+  let queries=0;
+  const db={prepare(){queries++;throw Error('PRIVATE SQL CALL');}};
+  await assert.rejects(()=>reconcileLegacyStaffSnapshotWithD1(db,s),err=>{
+    assert.equal(err.message,'Offline staff import rejected');
+    assert.doesNotMatch(err.message,/Permission|PRIVATE|User ID|017/);
+    return true;
+  });
+  assert.equal(queries,0);
+});
