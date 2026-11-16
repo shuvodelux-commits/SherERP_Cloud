@@ -1,7 +1,7 @@
 /**
  * M09 INTERNAL, READ-ONLY standalone Bank Book Day Book row projection.
  * Pinned source: Mohim_ERP DayBook.gs::ownedReferences_,
- * getDayBookTransactions (Standalone bank activity) and dayBookRow_.
+ * getDayBookTransactions — Standalone bank activity and dayBookRow_.
  *
  * Caller MUST supply complete already-authorized/source-filtered document
  * arrays, full Bank Book and dates normalized to business YYYY-MM-DD.
