@@ -1,5 +1,5 @@
 /**
- * M10-02 — pure, OFFLINE digest for the two reviewed catalog masters only.
+ * M10-02/M10-04 — pure, OFFLINE digest for three reviewed masters only.
  *
  * Inputs must be original Config.gs source-shaped rows, independently
  * captured by source and D1 readers. No source access, D1 access, public RPC,
@@ -9,6 +9,8 @@ import {createHash} from 'node:crypto';
 import {verifyCatalogMapping} from '../db/catalog-mapping.js';
 import {prepareSourceProductCategories} from '../db/product-category-source-import.js';
 import {prepareSourceProductUnits} from '../db/product-unit-source-import.js';
+import {verifyExpenseCategoryMapping} from '../db/expense-category-mapping.js';
+import {prepareSourceExpenseCategories} from '../db/expense-category-source-import.js';
 
 const INVALID='M10 catalog digest invalid';
 const hash=bytes=>createHash('sha256').update(bytes,'utf8').digest('hex');
@@ -23,6 +25,11 @@ const GROUPS=Object.freeze({
     prepare:prepareSourceProductUnits,
     id:'unit_id',
     fields:Object.freeze(['unit_id','unit_name','status','created_at'])
+  }),
+  EXPENSE_CATEGORIES:Object.freeze({
+    prepare:prepareSourceExpenseCategories,
+    id:'category_id',
+    fields:Object.freeze(['category_id','category_name','description','status','created_at'])
   })
 });
 
@@ -39,6 +46,7 @@ export function summarizeM10Catalog({inventory,sheetKey,rows}={}){
        !Array.isArray(inventory.tables)||inventory.tables.length!==49)
       throw new Error('unreviewed source inventory');
     verifyCatalogMapping(inventory);
+    if(sheetKey==='EXPENSE_CATEGORIES')verifyExpenseCategoryMapping(inventory);
     if(typeof sheetKey!=='string'||!Object.hasOwn(GROUPS,sheetKey))
       throw new Error('unsupported source group');
 
