@@ -68,3 +68,46 @@ Do not commit the private manifest, snapshots, salts, password hashes, customer/
 ## Final owner handover
 
 Capture approved live Worker URL, exact deployed SHA, D1 database ID (privately), backup/restore SOP, incident contacts, freeze/resume procedure, monitoring dashboard, smoke-test evidence, reconciled starting balances and support runbook. Mark M11 DONE **only** after source preservation, recovery rehearsal, production business workflow evidence and owner handover are independently verified. Until then, this document is an operational design, not proof of launch.
+
+
+## M11-02 — Offline post-cutover write-delta completeness review
+
+**This is an evidence-review aid, not a replay engine or switch permission.** A restoration of D1 or routing back to GAS after even one committed Worker/D1 write could silently lose sales, return movements, cash and bank entries, or stock changes. Before any such decision, an authorized operator must privately extract a D1 committed-operation journal and independently capture acknowledged request IDs. Neither private payload nor any identifying values belong in GitHub.
+
+**Metadata-only schema (synthetic illustrative values, never customer/source data):**
+
+```json
+{
+  "schemaVersion": 1,
+  "releaseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceSnapshotSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "mode": "resume-legacy",
+  "freeze": {
+    "legacy": {"status":"verified","record":"audit/legacy-freeze","releaseSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+    "d1": {"status":"verified","record":"audit/d1-freeze","releaseSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+  },
+  "checkpoints": {
+    "committed": {"count":1,"record":"audit/d1-commit-log","releaseSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+    "acknowledged": {"count":1,"record":"audit/client-acks","releaseSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+  },
+  "writes": [
+    {"operationId":"synthetic/001","canonicalDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
+  ],
+  "acknowledgments": ["synthetic/001"],
+  "dispositions": [
+    {"operationId":"synthetic/001","action":"replayed-to-legacy","canonicalDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","record":"audit/replay-one"}
+  ]
+}
+```
+
+Save real metadata **only in a private, access-controlled location** with separate source journal and reconciliation evidence. Run:
+
+```sh
+node scripts/check-m11-write-delta.mjs /private/m11-delta.json <release-commit-sha> <final-source-snapshot-sha256>
+```
+
+- Both legacy and Worker/D1 writes must already be frozen, separately verified and pinned to the release commit. The submitted checkpoints must come from operator-reviewed committed and acknowledged journals.
+- A committed operation requires **exactly one** disposition and a matching canonical operation digest; missing IDs, duplicate operation IDs, unknown acknowledgments, mismatched counts and changed digests block the review.
+- `mode: "resume-legacy"` requires every operation classified `replayed-to-legacy` with private evidence of **actual confirmed replay**, per-account/stock reconciliation and safe idempotency; `mode: "roll-forward"` requires every operation classified `retained-on-d1` while legacy remains read-only.
+- A zero-write delta requires a verified independent zero-count committed checkpoint, zero-count acknowledged checkpoint and both freeze records, rather than a blank manifest.
+- The structural validator does **not** query source/D1, verify the journal is complete, compare actual replay effects, check a live backup, prove source permission safety or authenticate an owner. A green result is **not** authorization to switch routes, resume writes or restore D1. Require a real rehearsal, separate M10/M11 owner approval and human review of the private artifacts before any operational step.
