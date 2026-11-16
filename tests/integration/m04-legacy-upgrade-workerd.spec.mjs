@@ -37,7 +37,9 @@ before(async()=>{
   await harness.listen();
   await worker.applyD1Migrations('DB');
   ({DB}=await worker.getEnv());
-  await DB.prepare("INSERT INTO auth_roles (role_name,status,permissions_json,allowed_modules) VALUES ('Cashier','Active','{}','sales'),('Suspended','Inactive','{}','sales')").run();
+  // Frozen RoleManagement.gs derives Allowed Modules from view-true rights.
+  await DB.prepare("INSERT INTO auth_roles (role_name,status,permissions_json,allowed_modules) VALUES ('Cashier','Active',?,'sales'),('Suspended','Inactive','{}','')")
+    .bind(JSON.stringify({sales:{view:true}})).run();
   await seedLegacy('L-ADMIN','01710000201');
   await seedLegacy('L-BAD','01710000202');
   await seedLegacy('L-SHORT','01710000203',{password:'short'});
@@ -140,7 +142,7 @@ test('native login adapter upgrades an imported legacy Cashier on first real ses
     id:'L-ADAPTER',name:'Legacy Fixture L-ADAPTER',mobile:'01710000209',role:'Cashier',
   });
   assert.deepEqual(out.body.data.allowedModules,['sales']);
-  assert.deepEqual(out.body.data.permissions,{});
+  assert.deepEqual(out.body.data.permissions,{sales:{view:true}});
   assert.match(out.body.data.token,/^[0-9a-f]{64}$/);
   assert.equal((await DB.prepare("SELECT COUNT(*) AS n FROM auth_legacy_credentials WHERE user_id='L-ADAPTER'").first()).n,0);
   const restore=await rpc('rpc',{fnName:'validateSession',args:[out.body.data.token],nowMs:BASE+16000});
