@@ -59,6 +59,27 @@ test('real core migrations 0001/0002/0003 coexist with 5 guarded auth tables and
   assert.equal(protections.results.length,7);
 });
 
+test('original ROLES Role ID remains unique and immutable through direct D1 writes and REPLACE',async()=>{
+  await DB.prepare(`INSERT INTO auth_roles (role_name,source_role_id,status)
+    VALUES ('ImportedSourceRole','ROL-00051','Active')`).run();
+  const original=await DB.prepare(`SELECT role_name,source_role_id FROM auth_roles
+    WHERE source_role_id='ROL-00051'`).first();
+  assert.deepEqual(original,{role_name:'ImportedSourceRole',source_role_id:'ROL-00051'});
+  await assert.rejects(()=>DB.prepare(`INSERT OR REPLACE INTO auth_roles
+    (role_name,source_role_id,status) VALUES('ReplacementRole','ROL-00051','Active')`).run(),
+    /source role id replacement forbidden/i);
+  await assert.rejects(()=>DB.prepare(`UPDATE auth_roles SET source_role_id='ROL-OTHER'
+    WHERE role_name='ImportedSourceRole'`).run(),/source role id immutable/i);
+  await assert.rejects(()=>DB.prepare(`UPDATE auth_roles SET source_role_id=NULL
+    WHERE role_name='ImportedSourceRole'`).run(),/source role id immutable/i);
+  await assert.rejects(()=>DB.prepare(`INSERT INTO auth_roles (role_name,source_role_id,status)
+    VALUES ('BlankSourceRole','','Active')`).run(),/constraint|check/i);
+  assert.deepEqual(await DB.prepare(`SELECT role_name,source_role_id FROM auth_roles
+    WHERE source_role_id='ROL-00051'`).first(),original);
+  assert.equal((await DB.prepare(`SELECT COUNT(*) AS n FROM auth_roles
+    WHERE role_name='ReplacementRole'`).first()).n,0);
+});
+
 test('trusted internal HTTP bridge logs in against real migrated D1 then revokes a hashed session',async()=>{
   const login=await rpc('login',[ADMIN_PHONE,PASSWORD]);
   assert.equal(login.status,200);
