@@ -38,7 +38,8 @@ export function inspectUiContracts(html) {
   }
 
   const css = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)]
-    .map((match) => match[1]).join('\n');
+    .map((match) => match[1]).join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
   if (!/@media\s*\(\s*max-width\s*:\s*860px\s*\)/i.test(css)) {
     errors.push('860px mobile breakpoint missing');
   }
