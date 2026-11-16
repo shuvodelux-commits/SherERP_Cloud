@@ -32,13 +32,26 @@ function parseGroups(rows,expected,add){
   if(!Array.isArray(rows))fail();
   const map=new Map();
   for(const row of rows){
-    if(!exact(row,['sheetKey','rowCount','rowDigest','idDigest'])||
-      typeof row.sheetKey!=='string'||!GROUP.test(row.sheetKey)||
-      !nonnegative(row.rowCount)||typeof row.rowDigest!=='string'||!HASH.test(row.rowDigest)||
-      typeof row.idDigest!=='string'||!HASH.test(row.idDigest))fail();
-    if(!expected.has(row.sheetKey)){add('SOURCE_FREEZE_UNREVIEWED_GROUP');continue;}
-    if(map.has(row.sheetKey)){add('SOURCE_FREEZE_DUPLICATE_GROUP');continue;}
-    map.set(row.sheetKey,row);
+    // LOGS has no original Log ID: only its physical source-row position is
+    // authentic provenance. Examine the property descriptor before deciding
+    // which exact schema to require (never run a caller-supplied getter).
+    const keyDescriptor=object(row)?
+      Object.getOwnPropertyDescriptor(row,'sheetKey'):null;
+    const key=keyDescriptor&&Object.hasOwn(keyDescriptor,'value')?
+      keyDescriptor.value:null;
+    if(typeof key!=='string'||!GROUP.test(key))fail();
+    const positional=key==='LOGS';
+    const fields=positional?
+      ['sheetKey','rowCount','rowDigest','positionDigest','identityKind']:
+      ['sheetKey','rowCount','rowDigest','idDigest'];
+    if(!exact(row,fields)||!nonnegative(row.rowCount)||
+      typeof row.rowDigest!=='string'||!HASH.test(row.rowDigest)||
+      (positional?row.identityKind!=='SOURCE_ROW_POSITION_ONLY'||
+        typeof row.positionDigest!=='string'||!HASH.test(row.positionDigest):
+        typeof row.idDigest!=='string'||!HASH.test(row.idDigest)))fail();
+    if(!expected.has(key)){add('SOURCE_FREEZE_UNREVIEWED_GROUP');continue;}
+    if(map.has(key)){add('SOURCE_FREEZE_DUPLICATE_GROUP');continue;}
+    map.set(key,row);
   }
   for(const key of expected)if(!map.has(key))add('SOURCE_FREEZE_INCOMPLETE_GROUPS');
   return map;
@@ -82,14 +95,18 @@ export function assessM10SourceFreeze({
       if(a&&b){
         if(a.rowCount!==b.rowCount)add('SOURCE_FREEZE_ROW_COUNT_CHANGED');
         if(a.rowDigest!==b.rowDigest)add('SOURCE_FREEZE_ROW_DIGEST_CHANGED');
-        if(a.idDigest!==b.idDigest)add('SOURCE_FREEZE_ID_DIGEST_CHANGED');
+        if(key==='LOGS'){
+          if(a.positionDigest!==b.positionDigest)
+            add('SOURCE_FREEZE_POSITION_PROVENANCE_CHANGED');
+        }else if(a.idDigest!==b.idDigest)add('SOURCE_FREEZE_ID_DIGEST_CHANGED');
       }
     }
   }
   if(second&&final)for(const key of expected){
     const b=second.groups.get(key),c=final.get(key);
     if(b&&c&&(b.rowCount!==c.rowCount||b.rowDigest!==c.rowDigest||
-      b.idDigest!==c.idDigest))add('SOURCE_FREEZE_FINAL_SOURCE_MISMATCH');
+      (key==='LOGS'?b.positionDigest!==c.positionDigest:
+        b.idDigest!==c.idDigest)))add('SOURCE_FREEZE_FINAL_SOURCE_MISMATCH');
   }
   const full=m=>m!==null&&m.size===49;
   const comparisonsComplete=full(first?.groups??null)&&full(second?.groups??null)&&full(final);
