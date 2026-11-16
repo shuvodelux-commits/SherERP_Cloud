@@ -59,6 +59,14 @@ export function roleMetadata(row){
       } else return null;
     }
   }
+  // Source navigation is exactly the set of view===true role grants.
+  // Centralize integrity here so independent management previews cannot
+  // accept contradictory stored role metadata after core authentication.
+  const visible=Object.entries(permissions)
+    .filter(([,actions])=>actions.view===true)
+    .map(([module])=>module);
+  if(visible.length!==entries.length ||
+     visible.some(module=>!unique.has(module)))return null;
   return {allowedModules:entries,permissions};
 }
 
