@@ -723,3 +723,46 @@ test('users.edit preflight requires live D1 action rights for update, reset pass
   for(const secret of [SECRET,'password_hash','password_salt','auth_version','token_hash'])
     assert.equal(response.includes(secret),false,'private field should never be returned');
 });
+
+test('source-stored D1 role navigation mismatch blocks sign-in, revokes minted token and permits corrected view-only navigation',async()=>{
+  const when=NOW+1_400_000;
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('VisibilityMismatch','Active',?,'products')`)
+    .bind(JSON.stringify({
+      sales:{view:true,edit:false},
+      products:{view:false,edit:true},
+    })).run();
+  await seed('USR-RPC-VIS-MISMATCH','01710000114','VisibilityMismatch');
+
+  // Frozen RoleManagement.gs computes visible modules only from view===true.
+  // This D1 row is structurally valid but fraudulently shows Products rather
+  // than the only view-authorized module, Sales.
+  const denied=await rpc('login',['01710000114',SECRET],when);
+  assert.deepEqual(denied,{
+    status:200,
+    body:{success:false,message:'Sign-in role configuration is unavailable.'}
+  });
+  const revoked=await db.prepare(`SELECT COUNT(*) AS n FROM auth_sessions
+    WHERE user_id='USR-RPC-VIS-MISMATCH'
+      AND revoked_at_ms=?`).bind(when).first();
+  assert.equal(revoked.n,1,'any minted session for corrupted role must be revoked');
+
+  // A corrected source-derived visible set is acceptable. An edit-only grant
+  // for a nonvisible Products module must not fabricate navigation visibility.
+  await db.prepare(`UPDATE auth_roles SET allowed_modules='sales'
+    WHERE role_name='VisibilityMismatch'`).run();
+  const ok=await rpc('login',['01710000114',SECRET],when+1000);
+  assert.equal(ok.status,200);
+  assert.equal(ok.body.success,true);
+  assert.deepEqual(ok.body.data.allowedModules,['sales']);
+  assert.deepEqual(ok.body.data.permissions,{
+    sales:{view:true,edit:false},
+    products:{view:false,edit:true}
+  });
+  const restored=await rpc('validateSession',[ok.body.data.token],when+2000);
+  assert.equal(restored.body.success,true);
+  assert.deepEqual(await rpc('logout',[ok.body.data.token],when+3000),{
+    status:200,body:{success:true,data:'logged out'}
+  });
+});
