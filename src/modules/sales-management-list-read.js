@@ -11,6 +11,7 @@
  * This projection does NOT grant permission to edit/post transactions.
  */
 import {sourceProfitMetric} from './sales-management-detail-read.js';
+import {salePaymentPaisa_} from './sale-payments.js';
 
 const plain=value=>value!==null && typeof value==='object' &&
   !Array.isArray(value) &&
@@ -94,6 +95,19 @@ export function projectSalesManagementList(snapshot,{canViewSales,canViewProfit}
   if(canViewSales!==true)throw new Error('Permission denied: sales.view');
   assertPlain(snapshot,'snapshot');
   const sales=rows(snapshot,'sales').filter(active);
+  // The original checkout is immutable financial history. Never silently
+  // coerce a corrupt imported header to zero or mix later collections into it.
+  for(const sale of sales){
+    try{
+      const grand=salePaymentPaisa_(field(sale,'Grand Total'),'Grand total',false);
+      const paid=salePaymentPaisa_(field(sale,'Paid Amount'),'Paid amount',false);
+      const due=salePaymentPaisa_(field(sale,'Due Amount'),'Due amount',false);
+      if(!Number.isSafeInteger(paid+due)||paid+due!==grand)
+        throw new Error('Unreconciled original checkout');
+    }catch{
+      throw new Error('NEEDS_REVIEW: Sales list original checkout totals mismatch');
+    }
+  }
   const items=rows(snapshot,'items');
   const returns=rows(snapshot,'returnItems');
   const sessions=rows(snapshot,'sessions');
