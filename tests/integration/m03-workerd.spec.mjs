@@ -43,6 +43,7 @@ import './m07-return-edit-read-workerd.spec.mjs'; // M07 source-shaped getReturn
 import './m07-purchase-multilot-cash-workerd.spec.mjs'; // M07-B4A isolated multi-lot Cash receipt real Workerd/D1 atomic proof.
 import './m08-reconciliation-atomic-workerd.spec.mjs'; // M08 single closing-entry atomicity, local D1 only; no public writer.
 
+import './m03-delete-log-audit-read-workerd.spec.mjs'; // M03 private frozen DELETE_LOG M02 import-to-read Workerd/D1 parity.
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
 const server=createTestHarness({workers:[{configPath:'./wrangler.m03-test.jsonc'}]});
