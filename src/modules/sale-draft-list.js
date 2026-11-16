@@ -14,6 +14,17 @@ export function projectSaleDraftList(draftRows, {actorId, manageAll} = {}) {
     throw new TypeError('Trusted draft list rows, actor identity and manageAll authority are required.');
   }
 
+  // Inspect the complete trusted tenant snapshot before staff filtering:
+  // a colliding ID owned by someone else must not be hidden from this guard.
+  const draftIds=new Set();
+  for(const row of draftRows){
+    const id=String(row['Draft ID']||'');
+    if(id && draftIds.has(id)){
+      throw new Error('NEEDS_REVIEW: duplicate Sales Draft ID in tenant snapshot');
+    }
+    if(id)draftIds.add(id);
+  }
+
   return draftRows
     .filter(row => manageAll || String(row['Created By ID']) === String(actorId))
     .sort((a, b) => new Date(b['Updated At']) - new Date(a['Updated At']))
