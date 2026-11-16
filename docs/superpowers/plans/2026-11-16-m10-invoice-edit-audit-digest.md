@@ -2,7 +2,7 @@
 
 - The first M10-08 exact-head run passed its own Foundation and local D1 parity gates, but the unrelated M07 read-only adapter suite failed in the *unchanged* unpaid-purchase fixture. The required source guard rejects an input paymentMethod of `''`, and the durable ledger method is intended to be `''` **only after** a zero-paid Cash request is normalized.
 - Reviewed M07 PR #390 (`fix/m07-unpaid-purchase-tender-test-a01`) has 21/21 green checks and provides a proper test-only fix; PR #387 is a redundant competing fix and is not merged.
-- Temporarily stack M10-08 PR #391 onto #390's branch to test the exact combined merge via GitHub Actions without copying M07 files into this M10 branch. Keep this PR draft, verify green exact-merge CI, then restore `main` as its base **after #390 is owner-merged** and recheck before owner merges #391.
+- PR #390 was confirmed **merged into main** (source M07 regression fix). PR #391 is now retargeted to `main` and this scoped documentation commit triggers a fresh exact-head GitHub PR merge check. The M10 branch still contains no M07 files. Verify new Foundation, dedicated M10 Workerd/D1 and adapter check success before owner merges #391.
 - Never modify source data, public Workerd bindings or production D1 to resolve CI fixture problems.
 
 # M10-08 — Invoice edit audit original source-ID parity plan
