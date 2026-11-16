@@ -34,7 +34,11 @@ export async function hashOpaqueSessionToken(token) {
   if(!subtle || typeof subtle.digest!=='function')
     throw new Error('Web Crypto SHA-256 verification unavailable');
 
-  const input=new TextEncoder().encode(token);
+  // D1 login and validation hash the decoded 32 random bytes, NOT the
+  // printable 64-character hexadecimal transport representation.
+  const input=new Uint8Array(SESSION_TOKEN_BYTES);
+  for(let i=0;i<input.length;i++)
+    input[i]=Number.parseInt(token.slice(i*2,i*2+2),16);
   const bytes=new Uint8Array(await subtle.digest('SHA-256',input));
   if(bytes.length!==SESSION_TOKEN_BYTES)
     throw new Error('Invalid SHA-256 token digest length');
