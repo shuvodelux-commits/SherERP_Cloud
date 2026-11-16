@@ -45,6 +45,10 @@ test('two wrapper objects sharing source USERS or ROLES arrays are not independe
   await mustRejectWithoutD1(first,sharedUsers);
   const sharedRoles={users:structuredClone(first.users),roles:first.roles};
   await mustRejectWithoutD1(first,sharedRoles);
+  const reusedUserRows={users:[...first.users],roles:structuredClone(first.roles)};
+  await mustRejectWithoutD1(first,reusedUserRows);
+  const reusedRoleRows={users:structuredClone(first.users),roles:[...first.roles]};
+  await mustRejectWithoutD1(first,reusedRoleRows);
 });
 
 test('freeze-gated importer rejects added, removed or reordered staff before touching D1',async()=>{
