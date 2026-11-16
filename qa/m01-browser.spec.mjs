@@ -565,3 +565,79 @@ test('a successful original login never exposes a partial app if shell metadata 
     await page.close();
   }
 });
+
+
+test('synthetic successful login with malformed role data must not unlock original Chromium shell',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const user={id:'USR-M01-PROFILE',name:'Synthetic Clerk',
+    mobile:'01710000009',role:'Clerk'};
+  const token='f'.repeat(64);
+  const normal={token,user,allowedModules:['dashboard'],
+    permissions:{dashboard:{view:true}}};
+  const candidates=[
+    {...normal,allowedModules:null,permissions:null},
+    {token,user,permissions:{dashboard:{view:true}}},
+    {...normal,user:{...user,role:'Administrator'}},
+    {...normal,token:'malformed-session'}
+  ];
+  const shell={
+    shopName:'Synthetic Browser Shell',currencySymbol:'৳',
+    navItems:[{key:'dashboard',label:'Dashboard',
+      icon:'dashboard',sidebarGroup:0,sidebarOrder:1},
+      {key:'bank',label:'Bank Accounts',icon:'bank',
+      sidebarGroup:4,sidebarOrder:2}]
+  };
+  let next=normal,logins=0,shellReads=0;
+  try{
+    await page.route('**/api/rpc',async route=>{
+      const payload=route.request().postDataJSON();
+      if(payload.fnName==='login'){
+        logins++;
+        return route.fulfill({status:200,contentType:'application/json',
+          body:JSON.stringify({success:true,data:next})});
+      }
+      if(payload.fnName==='getAppShellData'){
+        shellReads++;
+        return route.fulfill({status:200,contentType:'application/json',
+          body:JSON.stringify({success:true,data:shell})});
+      }
+      return route.continue();
+    });
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.waitForFunction(()=>
+      document.getElementById('loginShopName')?.textContent==='Synthetic Browser Shell');
+    for(const [index,candidate] of candidates.entries()){
+      next=candidate;
+      await page.locator('#loginMobile').fill('01710000009');
+      await page.locator('#loginPassword').fill('synthetic-never-real');
+      const loginReply=page.waitForResponse(response=>
+        response.url().endsWith('/api/rpc') &&
+        response.request().postDataJSON()?.fnName==='login');
+      await page.locator('#loginPassword').press('Enter');
+      assert.equal((await loginReply).status(),200,'malformed response is HTTP success');
+      await page.locator('#loginError').getByText(
+        'Invalid authentication response').waitFor({timeout:3000});
+      assert.equal(await page.locator('#loginOverlay').isVisible(),true,
+        'malformed login '+index+' cannot reveal private navigation');
+      assert.equal(await page.locator('#app').evaluate(
+        el=>getComputedStyle(el).visibility),'hidden');
+      assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),
+        null,'invalid profile cannot persist a token');
+      assert.equal(await page.locator('#navList .nav-item').count(),0);
+    }
+    assert.equal(logins,candidates.length);
+    assert.equal(shellReads,1,'prelogin branding is reused, not leaked on invalid login');
+    next=normal;
+    await page.locator('#loginPassword').fill('synthetic-never-real');
+    await page.locator('#loginPassword').press('Enter');
+    await page.waitForFunction(()=>document.getElementById('loginOverlay')?.hidden===true);
+    await page.locator('#navList .nav-item[data-page="dashboard"]').waitFor();
+    assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),token);
+    assert.equal(await page.locator('#navList .nav-item[data-page="bank"]').count(),0,
+      'valid Clerk role must retain source role-filtered navigation');
+    assert.equal(shellReads,1);
+  }finally{
+    await page.close();
+  }
+});
