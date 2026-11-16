@@ -1,0 +1,12 @@
+{
+  "name": "shererp-m02-legacy-logs-local-only",
+  "main": "tests/fixtures/m02-legacy-logs-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-m02-legacy-logs-local",
+    "database_id": "00000000-0000-0000-0000-000000000094",
+    "migrations_dir": "migrations"
+  }]
+}
