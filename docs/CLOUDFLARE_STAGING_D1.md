@@ -15,8 +15,8 @@ Adding a Wrangler file to a Git repository does **not** by itself attach a bindi
 `.github/workflows/staging-d1-local.yml` runs on PRs without Cloudflare credentials. It:
 1. Runs source tests, validates the expected staging database identity and enforces Worker separation.
 2. Builds the original static frontend and bundles the staging Worker via `wrangler deploy --dry-run`.
-3. Applies `0001_core_catalog.sql` and `0002_party_identity.sql` via `wrangler d1 migrations apply shererp-staging-db --local` with isolated GitHub runner persistence.
-4. Queries **local** SQLite/D1 and expects seven application tables, two migration records and four Party history triggers.
+3. Applies `0001_core_catalog.sql`, `0002_party_identity.sql` and proposed `0003_auth_core.sql` via `wrangler d1 migrations apply shererp-staging-db --local` with isolated GitHub runner persistence.
+4. Queries **local** SQLite/D1 and expects seven core tables, five auth tables, three migration records, four Party history triggers and three auth session guards.
 
 It contains no `--remote`, account/token secrets or actual Worker deploy step. CI creates only temporary local state.
 
@@ -33,10 +33,12 @@ npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --local --conf
 npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --local --config wrangler.staging.jsonc --persist-to .wrangler/shererp-d1-local --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
 ```
 
-Seven application tables: `settings`, `product_categories`, `product_units`, `parties`, `party_roles`, `party_legacy_links`, `party_identity_review`. Other original legacy data/financial tables are not migrated.
+Seven existing core application tables (plus five separate auth tables): `settings`, `product_categories`, `product_units`, `parties`, `party_roles`, `party_legacy_links`, `party_identity_review`. Other original legacy data/financial tables are not migrated.
 
-## Future remote staging gate (not authorized by this PR)
+## Future remote staging gate (M04 migration NOT authorized for remote apply)
 
 After reviewing local-D1 CI, confirm the D1 database name/UUID from Cloudflare Dashboard, review backup and rollback, then separately approve a **remote staging-only** migration. Implement M03 D1 access and M04 authentication before deploying a publicly accessible staging Worker. Continue protecting cash/stock/ledger atomicity, Party role-account separation and optional manually approved noncash offsets.
 
 Do not paste Cloudflare API tokens into chat, files, commits or build logs; do not run production migrations.
+
+The proposed third M04 SQL migration is exercised only in temporary local D1 and is not approved for remote application. The manual remote staging workflow refuses apply if the SQL count differs from the two previously approved core migrations; a separate owner review and staff-data cutover plan are required before that guard can be changed. The public Worker remains D1-free with no registered business RPCs.
