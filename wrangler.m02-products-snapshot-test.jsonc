@@ -1,0 +1,12 @@
+{
+  "name": "shererp-m02-products-snapshot-local-only",
+  "main": "tests/fixtures/m02-products-snapshot-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [{
+    "binding":"DB",
+    "database_name":"shererp-m02-products-snapshot-local",
+    "database_id":"00000000-0000-0000-0000-000000000120",
+    "migrations_dir":"migrations"
+  }]
+}

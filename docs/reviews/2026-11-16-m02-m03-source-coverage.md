@@ -1,6 +1,6 @@
 # M02/M03 — Frozen 49-Group Source-to-D1 Coverage Review (2026-11-16)
 
-**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; eleven existing *local-versioned* migrations `0001`–`0011` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
+**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; twelve existing *local-versioned* migrations `0001`–`0012` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
 
 ## Readiness summary
 
@@ -10,7 +10,8 @@
 - **1** has *diagnostic DDL only*: LOGS, preserving text and source-row provenance without a unique source Log ID. Synthetic offline import proof is not live source reconciliation.
 - **5** have *Party identity only*: CUSTOMERS, SUPPLIERS, VENDORS, FINANCE_PERSONS and EXPENSE_PAYEES. `party_legacy_links` is **not** a money/account/ledger table.
 - **3** have *local auth schema only*: USERS, ROLES and SESSIONS. They are **not** a live public RPC or approved source-data import.
-- **31** have **no source-specific target in versioned candidate migrations** (synthetic Workerd/D1 tests may exist for certain operations; they do not change this release classification).
+- **1** has *isolated source archive DDL only*: frozen canonical PRODUCTS plus a separately identified older multi-unit PRODUCTS/PRODUCT_UNIT_CONVERSIONS snapshot, with original IDs and source-text evidence, not active stock/price writer or live reconciled import.
+- **30** have **no source-specific target in versioned candidate migrations** (synthetic Workerd/D1 tests may exist for certain operations; they do not change this release classification).
 - **0 of 49** groups have a verified complete source snapshot import and financial/row-by-row reconciliation in this audit. **394** source GAS functions are identified as async-impacted by the separate conservative M03 call graph, not necessarily unported.
 - Original GAS and private live Sheets were **not** queried, exported or modified to construct this report. Exact staff source exports and production remote migrations remain separately gated.
 
@@ -18,7 +19,7 @@
 
 | Original source group | Source headers | Current versioned evidence | Narrow D1 candidate |
 | --- | ---: | --- | --- |
-| `PRODUCTS` | 19 | No source-specific DDL | — |
+| `PRODUCTS` | 19 | Isolated canonical/older source-profile immutable product snapshots; optional older conversions are not a canonical data group; no live stock/price writer or production-data reconciliation | `legacy_product_snapshots` |
 | `BUNDLE_COMPONENTS` | 7 | No source-specific DDL | — |
 | `SALE_BUNDLE_COMPONENTS` | 9 | No source-specific DDL | — |
 | `SUPPLIERS` | 13 | Party identity only | `party_legacy_links` |
@@ -70,7 +71,7 @@
 
 ## Next conversion milestones
 
-1. Review every one of the 31 unmapped source groups by dependencies and lock a single schema/posting owner. Use source IDs, original row provenance, gross Party account directions, FIFO and cash-session relationships; do not infer data identity by phone/name.
+1. Review every one of the 30 unmapped source groups by dependencies and lock a single schema/posting owner. Use source IDs, original row provenance, gross Party account directions, FIFO and cash-session relationships; do not infer data identity by phone/name.
 2. For the next safe source-backed M02/M03 vertical slice, require versioned schema, deterministic offline fixture import with original-ID/readback reconciliation, awaited repo adapter, source-shaped RPC response proof and real isolated Workerd/D1 tests. Do not deploy it automatically.
 3. Separately complete protected M04 source/auth/staging policy; maintain the empty production RPC allowlist until specific authorized functions pass real D1 acceptance.
 4. Promote a status **only** on reviewed merge evidence of full source data correctness, not because one synthetic SQL table or unit test exists.
