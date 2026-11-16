@@ -76,10 +76,10 @@ async function query(path){
   return {status:response.status,body:await response.json()};
 }
 
-test('workerd applies all seven M02/core migrations including isolated expense, LOGS and DELETE_LOG histories',async()=>{
-  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','legacy_error_logs','legacy_delete_log','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
-  assert.equal(result.applied_migrations,7);
-  assert.equal(result.application_tables,10);
+test('workerd applies all eight M02/core migrations including isolated expense, LOGS, DELETE_LOG and SALES_DRAFT_AUDIT histories',async()=>{
+  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','legacy_error_logs','legacy_delete_log','legacy_sales_draft_audit','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
+  assert.equal(result.applied_migrations,8);
+  assert.equal(result.application_tables,11);
 });
 
 test('Cloudflare Worker runtime executes the real catalog adapter via local D1',async()=>{
