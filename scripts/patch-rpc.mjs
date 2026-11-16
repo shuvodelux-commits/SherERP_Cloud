@@ -76,8 +76,46 @@ export function patchServerCall(html) {
       withLoginGuard.indexOf(shellCatch,withLoginGuard.indexOf(shellCatch)+1)!==-1) {
     throw new Error('Original application shell failure boundary changed');
   }
-  return withLoginGuard.replace(shellCatch,
+  const withLockedShell=withLoginGuard.replace(shellCatch,
     shellCatch.replace("        showToast(", "        showLogin_();\n        showToast("));
+
+  // M04 validates its private HTTP envelope. Retain a minimal browser guard:
+  // malformed synthetic/stale responses must not store a token or grant an
+  // Administrator-looking nav when allowedModules is absent/null for staff.
+  const authName='  function onAuthenticated_(payload) {';
+  if (!withLockedShell.includes(authName)) return withLockedShell;
+  if (withLockedShell.indexOf(authName,withLockedShell.indexOf(authName)+1)!==-1) {
+    throw new Error('Multiple original authenticated handlers');
+  }
+  const authMarker=authName+'\n'+'    authToken = payload.token;\n';
+  if (!withLockedShell.includes(authMarker)) {
+    throw new Error('Original authenticated profile boundary changed');
+  }
+  const guard=String.raw`    if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        typeof payload.token !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(payload.token) ||
+        !payload.user || typeof payload.user !== 'object' ||
+        Array.isArray(payload.user) ||
+        typeof payload.user.id !== 'string' || !payload.user.id.trim() ||
+        typeof payload.user.name !== 'string' || !payload.user.name.trim() ||
+        typeof payload.user.mobile !== 'string' ||
+        !/^01[3-9][0-9]{8}$/.test(payload.user.mobile) ||
+        typeof payload.user.role !== 'string' || !payload.user.role.trim() ||
+        !Object.prototype.hasOwnProperty.call(payload, 'allowedModules') ||
+        !Object.prototype.hasOwnProperty.call(payload, 'permissions') ||
+        (payload.user.role === 'Administrator'
+          ? payload.allowedModules !== null || payload.permissions !== null
+          : !Array.isArray(payload.allowedModules) ||
+            payload.allowedModules.some(function (name) {
+              return typeof name !== 'string' || !name.trim();
+            }) ||
+            !payload.permissions || typeof payload.permissions !== 'object' ||
+            Array.isArray(payload.permissions))) {
+      throw new Error('Invalid authentication response');
+    }
+`;
+  return withLockedShell.replace(authMarker,
+    authName+'\n'+guard+'    authToken = payload.token;\n');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
