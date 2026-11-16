@@ -8,7 +8,7 @@ const file=(name)=>readFileSync(new URL(name,root),'utf8');
 test('versioned M02/M04 auth migration has five concrete guarded auth tables, never an import fixture',()=>{
   const migrations=readdirSync(new URL('migrations/',root)).filter(s=>s.endsWith('.sql')).sort();
   assert.deepEqual(migrations,[
-    '0001_core_catalog.sql','0002_party_identity.sql','0003_auth_core.sql','0004_auth_source_provenance.sql','0005_expense_categories.sql',
+    '0001_core_catalog.sql','0002_party_identity.sql','0003_auth_core.sql','0004_auth_source_provenance.sql','0005_expense_categories.sql','0006_legacy_error_logs.sql',
   ]);
   const sql=file('migrations/0003_auth_core.sql');
   for(const table of ['auth_roles','auth_users','auth_legacy_credentials','auth_sessions','auth_login_throttle']){

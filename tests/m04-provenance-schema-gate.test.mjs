@@ -9,7 +9,7 @@ test('fourth source-provenance D1 migration adds original staff and role history
   const sqls=readdirSync(new URL('migrations/',root)).filter(n=>n.endsWith('.sql')).sort();
   assert.deepEqual(sqls,[
     '0001_core_catalog.sql','0002_party_identity.sql',
-    '0003_auth_core.sql','0004_auth_source_provenance.sql','0005_expense_categories.sql',
+    '0003_auth_core.sql','0004_auth_source_provenance.sql','0005_expense_categories.sql','0006_legacy_error_logs.sql',
   ]);
   const sql=file('migrations/0004_auth_source_provenance.sql');
   for(const [table,column] of [
