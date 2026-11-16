@@ -2,7 +2,7 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
-import {createOfflinePasswordCredential,loginWithD1} from '../../src/auth/d1-auth-core.js';
+import {createOfflinePasswordCredential,loginWithD1,validateSessionWithD1} from '../../src/auth/d1-auth-core.js';
 import {authorizeStaffReadWithD1} from '../../src/auth/d1-staff-read-gate.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
@@ -344,4 +344,54 @@ test('M04 staff read refuses a D1 role whose source visible modules contradict v
   assert.deepEqual(consistent,{
     authorized:true,actor:{id:'USR-M04-READ-CONSISTENT',role:'M04ReadConsistent'}
   },'valid source-consistent staff role retains existing view permission');
+});
+
+test('core second session SELECT rejects activity rewound after the heartbeat',async()=>{
+  const start=BASE+1_500_000;
+  const issued=await loginWithD1(DB,{
+    phoneKey:'01710000001',password:PASSWORD,nowMs:start,
+  });
+  assert.equal(issued.authenticated,true);
+  const digest=createHash('sha256').update(Buffer.from(issued.token,'hex')).digest('hex');
+  const heartbeat=await validateSessionWithD1(DB,{
+    token:issued.token,nowMs:start+1_000_000,
+  });
+  assert.equal(heartbeat.authenticated,true,'fresh session heartbeats normally succeed');
+  const checkAt=start+2_000_000;
+  let injected=0;
+  // The core UPDATE succeeds and stamps checkAt. Simulate a concurrent
+  // database write to this one synthetic session before the subsequent
+  // actor SELECT; this adapter is local to the test and never deployed.
+  const interleavedD1={
+    prepare(sql){
+      const stmt=DB.prepare(sql);
+      if(!sql.includes('SELECT u.user_id,u.full_name,u.role_name FROM auth_sessions s'))
+        return stmt;
+      return {
+        bind(...params){
+          const query=stmt.bind(...params);
+          return {
+            async first(){
+              injected++;
+              await DB.prepare('UPDATE auth_sessions SET last_activity_at_ms=? WHERE token_hash=?')
+                .bind(start,digest).run();
+              return query.first();
+            },
+          };
+        },
+      };
+    },
+  };
+  const raced=await validateSessionWithD1(interleavedD1,{
+    token:issued.token,nowMs:checkAt,
+  });
+  assert.equal(injected,1,'rewind happened between the two real D1 statements');
+  assert.deepEqual(raced,{authenticated:false},
+    'the second actor lookup must not accept a session outside the idle window');
+  const persisted=await DB.prepare('SELECT last_activity_at_ms FROM auth_sessions WHERE token_hash=?')
+    .bind(digest).first();
+  assert.equal(persisted.last_activity_at_ms,start);
+  assert.deepEqual(await validateSessionWithD1(DB,{
+    token:issued.token,nowMs:checkAt+1000,
+  }),{authenticated:false},'ordinary future validation also refuses the stale session');
 });
