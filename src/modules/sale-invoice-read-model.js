@@ -9,7 +9,7 @@
  *
  * This is NOT a publicly exposed findInvoice implementation.
  */
-import {readSalePaymentBreakdown_} from './sale-payments.js';
+import {readSalePaymentBreakdown_,salePaymentPaisa_} from './sale-payments.js';
 
 const record=value=>value!==null && typeof value==='object' &&
   !Array.isArray(value) &&
@@ -102,6 +102,18 @@ export function projectPostedSaleInvoice(invoiceId,untrustedSnapshot){
   const sale=matches[0];
   if(String(sale['Is Deleted']||'').toUpperCase()==='TRUE'){
     throw new Error('Invoice not found or has been deleted.');
+  }
+
+  // Validate immutable checkout totals separately from later collections,
+  // credits and returns. Never correct an imported invoice while printing.
+  try{
+    const grand=salePaymentPaisa_(sale['Grand Total'],'Original grand total',false);
+    const paid=salePaymentPaisa_(sale['Paid Amount'],'Original paid amount',false);
+    const due=salePaymentPaisa_(sale['Due Amount'],'Original due amount',false);
+    if(!Number.isSafeInteger(paid+due)||paid+due!==grand)
+      throw new Error('Unreconciled original checkout');
+  }catch{
+    throw new Error('NEEDS_REVIEW: posted invoice original checkout totals mismatch');
   }
 
   const saleDate=dateOnly(sale['Date']);

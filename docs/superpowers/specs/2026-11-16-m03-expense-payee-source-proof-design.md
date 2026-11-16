@@ -1,0 +1,24 @@
+# M03 — Original Expense Payees Snapshot and Display Contract (design)
+
+**Date:** 2026-11-16 · **M03 issue:** #22 · **Pinned source:** `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2` · **Predecessor:** merged #358
+
+## Source behavior and need
+
+Original `Config.gs::HEADERS.EXPENSE_PAYEES` has **ten** fields in fixed order: `Payee ID`, `Payee Name`, `Phone`, `Notes`, `Status`, `Created At`, `Is Deleted`, `Deleted By`, `Deleted At`, `Delete Reason`; `Database.gs::getAllRows_` adds physical `_rowIndex` starting at 2. `DeleteEngine.gs::isDeleted_` considers boolean true or string whose uppercase form is `TRUE` deleted; `activeRows_` hides only deleted rows, not inactive rows. `ExpenseSettings.gs::getExpensePayeesManagement` displays every nondeleted payee, including inactive, sorted by name with source `localeCompare`, and produces exactly `{id,name,phone,notes,status}` where anything but `Inactive` is `Active`. `Expense.gs::getExpensePayeesForUI_` excludes deleted and inactive, sorts by name, and returns exactly `{id,name,phone}`. `ExpenseSettings.gs::getExpenseSettingsBootstrap` receives **full nondeleted source rows**, but must not be publicly exposed until current `expense.view` authentication and payee source D1 reconciliation exist.
+
+M02-P `0002_party_identity.sql` already allows source group `EXPENSE_PAYEES` in `party_legacy_links` and descriptive Payee role; there is **no approved payee master data table or payee source importer in D1 yet**. Party identity is separate from staff authorization. A Payee role alone does not create an account or debt; phone/name coincidence cannot auto-link people. This increment prepares a strict source-snapshot and display projection, **not** a pretend D1 payee database read.
+
+## Options and decision
+
+1. **Directly add `expense_payees` production D1 schema and live import now:** rejected; M02/M02-P source identity/soft-delete provenance and authorized migration gates would be skipped.
+2. **Use `parties` as a substitute for original payee master rows:** rejected; erases legacy IDs, physical source row and deletion audit fields, and can auto-merge different source identities by name/phone.
+3. **Chosen:** implement one pure, deterministic internal source snapshot validator and source-compatible display projections under `src/modules/expense-payee-source-projection.js`. Validate complete original ten headers and `_rowIndex`, stable unique original payee IDs, no accessors/extra/missing fields, original textual Phone including zeros, original deletion marker, and source physical order. Return copied records without touching source, SQL, public transport or cash/financial accounts. Separately verify against isolated Workerd D1 that an `EXPENSE_PAYEES` Party legacy link resolves by **exact original source ID** and cannot be created from name/phone coincidences.
+
+## Acceptance
+
+- Empty payee snapshot accepted; more than 1000 rows **explicitly** refused (no silent truncation). Full source row exports must contain all ten headers and `_rowIndex=index+2` with safe integers and unique nonblank IDs. Missing, extra, symbol/getter, nonplain or unexpected value types refuse the entire snapshot **without printing private records**.
+- No automatic casefold/trim of names or phone normalization; source Phone is text, even when blank. Duplicate names/phones with different Payee IDs persist independently.
+- `Is Deleted` value `true` or case-insensitive string `TRUE` marks a deleted payee, matching original `isDeleted_`; preserve the raw marker and all four delete-audit fields in `allRows`. For compatibility accept blank, `FALSE` and boolean false as nondeleted, and reject other ambiguous marker text. Never resurrect deleted rows or remove original tombstones from `allRows`.
+- Return `{allRows,settingsPayees,activeUiPayees,managementPayees}`: all includes tombstones in physical order; settings includes full nondeleted rows (including inactive); active UI includes only nondeleted and status !== Inactive with id/name/phone, sorted; management includes all nondeleted with id/name/phone/notes/normalized status, sorted. Clones must not alias input or each other.
+- Node tests source freeze original `Config.gs`, `ExpenseSettings.gs`, `Expense.gs`, `DeleteEngine.gs` contract and verify failures/safety. Actual isolated D1 test checks `resolveLegacyPartyId({DB},'EXPENSE_PAYEES',sourceId)` for a reviewed exact link, similar names/phones but distinct Party records, and that projection **does not write** or create a Party link.
+- No new SQL/table, import, RPC, auth adapter, public D1 route, original source/HTML changes, production DB access, ledger/cash writes or identity auto-merge. No changes to M02-owned import/schema or original branch. Future M02 Payee schema/source importer, reviewed identity decisions, M04 expense.view in atomic D1, full Expense Settings bootstrap and source data cutover remain separate approvals.
