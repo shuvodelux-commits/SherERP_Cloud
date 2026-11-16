@@ -11,13 +11,14 @@ import {readStaffDirectoryPreviewWithD1} from '../../src/auth/d1-staff-directory
 import {readRoleDirectoryPreviewWithD1} from '../../src/auth/d1-role-directory.js';
 import {previewManagementDeleteWithD1} from '../../src/auth/d1-management-delete-preflight.js';
 import {previewManagementAddWithD1} from '../../src/auth/d1-management-add-preflight.js';
+import {previewUsersEditWithD1} from '../../src/auth/d1-management-users-edit-preflight.js';
 
 const json=(status,value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 export default {
   async fetch(request,env){
     if(request.method!=='POST') return json(405,{error:'Method forbidden'});
     const path=new URL(request.url).pathname;
-    if(!['/__m04_test__/login','/__m04_test__/validate','/__m04_test__/logout','/__m04_test__/rpc','/__m04_test__/authorize','/__m04_test__/staff-directory','/__m04_test__/role-directory','/__m04_test__/delete-preflight','/__m04_test__/add-preflight'].includes(path))
+    if(!['/__m04_test__/login','/__m04_test__/validate','/__m04_test__/logout','/__m04_test__/rpc','/__m04_test__/authorize','/__m04_test__/staff-directory','/__m04_test__/role-directory','/__m04_test__/delete-preflight','/__m04_test__/add-preflight','/__m04_test__/users-edit-preflight'].includes(path))
       return json(404,{error:'Not found'});
     try {
       const raw=await request.json();
@@ -48,6 +49,11 @@ export default {
       // Nondeployable M04 Workerd fixture only; no public creation.
       if(path==='/__m04_test__/add-preflight')
         return json(200,await previewManagementAddWithD1(env.DB,{
+          token:raw.token,methodName:raw.methodName,nowMs,
+        }));
+      // Synthetic Workerd-only nonbinding staff users.edit eligibility.
+      if(path==='/__m04_test__/users-edit-preflight')
+        return json(200,await previewUsersEditWithD1(env.DB,{
           token:raw.token,methodName:raw.methodName,nowMs,
         }));
       if(path==='/__m04_test__/rpc'){
