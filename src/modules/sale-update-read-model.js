@@ -119,8 +119,13 @@ export function projectSaleForUpdate(invoiceId,snapshot,{canEditSales}={}){
   const bundleDefs=bundleSnapshots(invoiceId,snapshot.bundleComponents);
   const vendorByProduct=Object.create(null);
   snapshot.vendorSourcing.forEach(row=>{
-    if(String(row['Invoice ID'])===invoiceId && !deleted(row))
-      vendorByProduct[row['Product ID']]=row;
+    if(String(row['Invoice ID'])===invoiceId && !deleted(row)){
+      const productId=row['Product ID'];
+      if(Object.hasOwn(vendorByProduct,productId)){
+        throw new Error('NEEDS_REVIEW: ambiguous historical vendor sourcing for Sales Update Mode');
+      }
+      vendorByProduct[productId]=row;
+    }
   });
   return {
     invoiceId:sale['Invoice ID'],date:dateOnly(sale['Date']),time:timeOnly(sale['Time']),
