@@ -82,10 +82,10 @@ async function query(path){
   return {status:response.status,body:await response.json()};
 }
 
-test('workerd applies all twelve M02/core migrations including isolated expense, LOGS, DELETE_LOG, SALES_DRAFT_AUDIT, INVOICE_EDIT_LOG, OPENING_BALANCE_EDIT_LOG and STOCK_LOT_COST_CORRECTIONS histories',async()=>{
-  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','legacy_error_logs','legacy_delete_log','legacy_sales_draft_audit','legacy_invoice_edit_audit','legacy_opening_balance_edit_audit','legacy_stock_lot_cost_corrections','legacy_product_snapshots','legacy_product_unit_conversion_snapshots','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
-  assert.equal(result.applied_migrations,12);
-  assert.equal(result.application_tables,16);
+test('workerd applies all thirteen M02/core migrations including isolated expense, LOGS, DELETE_LOG, SALES_DRAFT_AUDIT, INVOICE_EDIT_LOG, OPENING_BALANCE_EDIT_LOG and STOCK_LOT_COST_CORRECTIONS histories',async()=>{
+  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','legacy_error_logs','legacy_delete_log','legacy_sales_draft_audit','legacy_invoice_edit_audit','legacy_opening_balance_edit_audit','legacy_stock_lot_cost_corrections','legacy_product_snapshots','legacy_product_unit_conversion_snapshots','products','product_unit_profiles','product_unit_conversions','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
+  assert.equal(result.applied_migrations,13);
+  assert.equal(result.application_tables,19);
 });
 
 test('Cloudflare Worker runtime executes the real catalog adapter via local D1',async()=>{
