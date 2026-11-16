@@ -523,3 +523,42 @@ test('replay refuses a consumed draft reappearing with the same tenant and ID, w
   assert.equal(await count('m06_drafts'),1);
   assert.equal(await count('m06_draft_audit'),1);
 });
+
+test('posted Bank and Mobile invoices replay after account deactivation without new tender, stock or due',async()=>{
+  const bank=input('OP-HIST-BANK-0001',{
+    payments:[account('B1','60','Bank'),{id:'C1',method:'Cash',amount:'40'}]
+  });
+  const mobile=input('OP-HIST-MOB-0001',{
+    payments:[account('M1','100','Mobile Banking')]
+  });
+  assert.equal((await posting().post(bank)).status,'COMMITTED');
+  assert.equal((await posting().post(mobile)).status,'COMMITTED');
+  await DB.prepare("UPDATE m06_bank_accounts SET active=0 WHERE tenant_id='SHOP-A'").run();
+  const before=await snapshot();
+  for(const sale of [bank,mobile]){
+    assert.deepEqual(await posting().post({...sale,invoiceId:'INV-CLIENT-RETRY'}),{
+      status:'REPLAY',operationId:sale.operationId,invoiceId:sale.invoiceId
+    });
+    assert.deepEqual(await snapshot(),before);
+  }
+  // An existing operation does not confer authority to change actor or intent.
+  assert.deepEqual(await posting().post({...bank,actorId:'USER-B'}),{
+    status:'CONFLICT',operationId:bank.operationId
+  });
+  assert.deepEqual(await posting().post({...mobile,sku:'OTHER'}),{
+    status:'CONFLICT',operationId:mobile.operationId
+  });
+  assert.deepEqual(await snapshot(),before);
+});
+
+test('fresh Bank and Mobile operations still refuse inactive payment accounts without effects',async()=>{
+  await DB.prepare("UPDATE m06_bank_accounts SET active=0 WHERE tenant_id='SHOP-A'").run();
+  const before=await snapshot();
+  for(const [op,tender] of [
+    ['OP-NEW-BANK-OFF01',account('B1','100','Bank')],
+    ['OP-NEW-MOB-OFF001',account('M1','100','Mobile Banking')]
+  ]){
+    await assert.rejects(()=>posting().post(input(op,{payments:[tender]})),/active payment account/);
+    assert.deepEqual(await snapshot(),before);
+  }
+});

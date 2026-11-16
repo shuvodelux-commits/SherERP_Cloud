@@ -149,11 +149,19 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
       const {tenantId,actorId,invoiceId,operationId,sku,units,customerId}=input;
       const sourceDraftId=Object.hasOwn(input,'sourceDraftId')?input.sourceDraftId:'';
       const sourceDraftVersion=sourceDraftId?input.sourceDraftVersion:0;
+      // A prior operation is historical evidence, not permission for a new
+      // payment. Only the same actor may normalize its now-inactive account;
+      // intent hashing, exact receipt readback and SQL's live bank guard stay.
+      const prior=await DB.prepare(SQL_LOOKUP).bind(tenantId,operationId).first();
+      if(prior && prior.actor_id!==actorId)
+        return {status:'CONFLICT',operationId};
+      const historicalReplay=Boolean(prior);
       // A read can become stale: the SAME SQL posting statement must repeat
       // every bank/customer/stock/session guard. This read grants NO authority.
       const trustedBankRows=(await DB.prepare(SQL_ACCOUNTS).bind(tenantId).all()).results.map(a=>({
         'Bank Account ID':a.account_id,'Account Name':a.account_name,
-        'Account Type':a.method,Status:a.active===1?'Active':'Inactive','Is Deleted':'FALSE'
+        'Account Type':a.method,
+        Status:a.active===1||historicalReplay?'Active':'Inactive','Is Deleted':'FALSE'
       }));
       const allocation=normalizeSalePayments_(decimalString(grand),input.payments,trustedBankRows);
       const paid=asPaisa(allocation.paidAmount,'Paid amount');
