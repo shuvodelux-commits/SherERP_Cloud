@@ -28,8 +28,8 @@ const has=(r,scope,row,code)=>r.issues.some(x=>x.scope===scope&&x.row===row&&x.c
 
 test('source contract retains historical fields with no automatic actor ID inference',()=>{
   const cfg=readFileSync(new URL('../legacy/source/Config.gs',import.meta.url),'utf8');
-  assert.match(cfg,/USERS: \\[([\\s\\S]*?)"Created By",([\\s\\S]*?)"Created At",([\\s\\S]*?)"Last Login"/);
-  assert.match(cfg,/ROLES: \\[([\\s\\S]*?)"Created At"/);
+  assert.match(cfg,/USERS: \[([\s\S]*?)"Created By",([\s\S]*?)"Created At",([\s\S]*?)"Last Login"/);
+  assert.match(cfg,/ROLES: \[([\s\S]*?)"Created At"/);
   const source=readFileSync(new URL('../legacy/source/UserManagement.gs',import.meta.url),'utf8');
   assert.match(source,/'Created By': 'First-run bootstrap'/);
 });
@@ -100,7 +100,7 @@ test('identity/permission audit failure also denies provenance pass',()=>{
 
 test('pure preflight neither opens D1 nor registers public import RPC',()=>{
   const code=readFileSync(new URL('../src/auth/staff-provenance-preflight.js',import.meta.url),'utf8');
-  assert.doesNotMatch(code,/\\.prepare\\(|\\.batch\\(|\\bfetch\\(|\\bconsole\\.|\\bimportLegacyStaffSnapshotWithD1\\(/);
+  assert.doesNotMatch(code,/\.prepare\(|\.batch\(|\bfetch\(|\bconsole\.|\bimportLegacyStaffSnapshotWithD1\(/);
   const worker=readFileSync(new URL('../src/index.js',import.meta.url),'utf8')+
     readFileSync(new URL('../src/rpc/registry.js',import.meta.url),'utf8');
   assert.doesNotMatch(worker,/auditLegacyStaffProvenance|staff-provenance-preflight/);
