@@ -1,9 +1,9 @@
 /**
  * M04 internal read-only PARTIAL projection of the frozen Users bootstrap.
  *
- * The local auth schema has no Created By / Created At / Last Login columns.
- * This is NOT a full getUsersBootstrap implementation, an RPC handler, or a
- * production data contract. Public auth/Users management remains disabled.
+ * Local D1 retains immutable historical Created By / Created At / Last Login.
+ * Only complete verified source history is projected in this PARTIAL preview.
+ * This is not a public RPC; Users management remains disabled.
  */
 import {authorizeStaffReadWithD1} from './d1-staff-read-gate.js';
 
@@ -21,11 +21,12 @@ export async function readStaffDirectoryPreviewWithD1(db,{token,nowMs}={}){
   if(!first.authorized)return denied();
 
   // Enumerate every user, including inactive staff, matching the frozen
-  // Users screen's listing. Only five reconciled fields exist in this
-  // NONDEPLOYABLE local auth schema; never silently fill missing source data.
+  // Users screen's listing. Missing source history is never inferred.
   const users=await db.prepare(`SELECT
     user_id AS id,full_name AS name,phone_key AS mobile,
-    role_name AS role,status FROM auth_users
+    role_name AS role,status,source_created_by AS createdBy,
+    source_created_at_iso AS createdAt,source_last_login_iso AS lastLogin
+    FROM auth_users
     ORDER BY user_id COLLATE BINARY`).all();
   const roles=await db.prepare(`SELECT role_name AS name FROM auth_roles
     WHERE status='Active' ORDER BY role_name COLLATE BINARY`).all();
@@ -40,7 +41,11 @@ export async function readStaffDirectoryPreviewWithD1(db,{token,nowMs}={}){
   return {
     authorized:true,
     partial:true,
-    users:users.results.map(({id,name,mobile,role,status})=>({id,name,mobile,role,status})),
+    users:users.results.map(({id,name,mobile,role,status,createdBy,createdAt,lastLogin})=>
+      typeof createdBy==='string' && typeof createdAt==='string' &&
+      typeof lastLogin==='string'
+        ? {id,name,mobile,role,status,createdBy,createdAt,lastLogin}
+        : {id,name,mobile,role,status}),
     roles:roles.results.map(({name})=>({name})),
   };
 }
