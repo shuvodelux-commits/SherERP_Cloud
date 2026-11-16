@@ -13,7 +13,18 @@ const UTC=/^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const nonnegative=x=>Number.isSafeInteger(x)&&x>=0;
 const fail=()=>{throw new Error(BAD);};
-const exact=(x,keys)=>object(x)&&Object.keys(x).sort().join('|')===keys.slice().sort().join('|');
+const exact=(x,keys)=>{
+  if(!object(x))return false;
+  const own=Reflect.ownKeys(x);
+  if(own.length!==keys.length||
+     own.some(k=>typeof k!=='string'||!keys.includes(k)))return false;
+  // Accessor-backed evidence must never execute attacker-controlled getters:
+  // they can contain private source values in thrown error messages.
+  return keys.every(k=>{
+    const descriptor=Object.getOwnPropertyDescriptor(x,k);
+    return descriptor?.enumerable===true&&Object.hasOwn(descriptor,'value');
+  });
+};
 const timestamp=x=>typeof x==='string'&&UTC.test(x)&&
   !Number.isNaN(Date.parse(x))&&new Date(x).toISOString()===x;
 
