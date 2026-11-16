@@ -38,6 +38,17 @@ test('hashes valid bearer token by exact UTF-8 SHA256, preserving leading zero d
   assert.notEqual(await hashOpaqueSessionToken(minted),minted);
 });
 
+test('shared digest matches byte-decoded D1 login token, never the UTF-8 hex representation',async()=>{
+  const token='0000000000000000000000000000000000000000000000000000000000000014';
+  const rawDigest=createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
+  const textDigest=createHash('sha256').update(token,'utf8').digest('hex');
+  assert.notEqual(rawDigest,textDigest);
+  assert.equal(await hashOpaqueSessionToken(token),rawDigest);
+  const minted=createOpaqueSessionToken();
+  assert.equal(await hashOpaqueSessionToken(minted),
+    createHash('sha256').update(Buffer.from(minted,'hex')).digest('hex'));
+});
+
 test('reject malformed, uppercase, non-string and whitespace tokens without hashing',async()=>{
   for(const invalid of [
     undefined,null,'',false,123,{},[], 'A'.repeat(64),'g'.repeat(64),
