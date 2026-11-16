@@ -39,6 +39,14 @@ test('freeze-gated importer requires two genuinely distinct supplied snapshot ob
   const s=source();
   await mustRejectWithoutD1(s,s);
 });
+test('two wrapper objects sharing source USERS or ROLES arrays are not independent snapshots',async()=>{
+  const first=source();
+  const sharedUsers={users:first.users,roles:structuredClone(first.roles)};
+  await mustRejectWithoutD1(first,sharedUsers);
+  const sharedRoles={users:structuredClone(first.users),roles:first.roles};
+  await mustRejectWithoutD1(first,sharedRoles);
+});
+
 test('freeze-gated importer rejects added, removed or reordered staff before touching D1',async()=>{
   const s=source(),second=structuredClone(s);second.users.reverse();
   await mustRejectWithoutD1(s,second);
