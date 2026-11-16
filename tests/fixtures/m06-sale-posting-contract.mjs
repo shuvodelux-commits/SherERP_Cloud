@@ -68,6 +68,70 @@ function validate(input){
   return {price,discount,grand:Math.max(0,subtotal-discount)};
 }
 
+/**
+ * Read-only proof for a replayed, already-posted synthetic sale. Original
+ * invoice identity alone does not prove the child Cash/Bank/Customer records
+ * survived intact. These are fixed, tenant-scoped SQL selectors, not caller SQL.
+ */
+async function verifyReplayReceipt(DB,{
+  tenantId,invoiceId,sku,units,customerId,due,children,
+  sourceDraftId,sourceDraftVersion,actorId
+}){
+  const expectedPayments=children.map(p=>({
+    row_id:p.rowId,row_order:p.rowOrder,method:p.method,
+    account_id:p.accountId,tender_paisa:p.tenderPaisa,
+    applied_paisa:p.appliedPaisa,change_paisa:p.changePaisa
+  })).sort((a,b)=>a.row_order-b.row_order);
+  const byRowId=(a,b)=>a.row_id<b.row_id?-1:a.row_id>b.row_id?1:0;
+  const expectedCash=children.filter(p=>p.method==='Cash'&&p.appliedPaisa>0)
+    .map(p=>({row_id:p.rowId,credit_paisa:p.appliedPaisa})).sort(byRowId);
+  const expectedBank=children.filter(p=>p.method!=='Cash'&&p.appliedPaisa>0)
+    .map(p=>({row_id:p.rowId,account_id:p.accountId,credit_paisa:p.appliedPaisa}))
+    .sort(byRowId);
+  const checks=[
+    {
+      sql:'SELECT sku,units FROM m06_sale_items WHERE tenant_id=? AND invoice_id=? ORDER BY sku',
+      rows:[{sku,units}]
+    },{
+      sql:'SELECT sku,units_out FROM m06_stock_movements WHERE tenant_id=? AND invoice_id=? ORDER BY sku',
+      rows:[{sku,units_out:units}]
+    },{
+      sql:'SELECT row_id,row_order,method,account_id,tender_paisa,applied_paisa,change_paisa FROM m06_payment_children WHERE tenant_id=? AND invoice_id=? ORDER BY row_order',
+      rows:expectedPayments
+    },{
+      sql:'SELECT row_id,credit_paisa FROM m06_cash_book WHERE tenant_id=? AND invoice_id=? ORDER BY row_id',
+      rows:expectedCash
+    },{
+      sql:'SELECT row_id,account_id,credit_paisa FROM m06_bank_book WHERE tenant_id=? AND invoice_id=? ORDER BY row_id',
+      rows:expectedBank
+    },{
+      sql:'SELECT customer_id,debit_paisa FROM m06_customer_ledger WHERE tenant_id=? AND invoice_id=? ORDER BY customer_id',
+      rows:due>0?[{customer_id:customerId,debit_paisa:due}]:[]
+    },{
+      sql:'SELECT draft_id,version,invoice_id,actor_id,action FROM m06_draft_audit WHERE tenant_id=? AND invoice_id=? ORDER BY draft_id',
+      rows:sourceDraftId?[{
+        draft_id:sourceDraftId,version:sourceDraftVersion,
+        invoice_id:invoiceId,actor_id:actorId,action:'POSTED'
+      }]:[]
+    }
+  ];
+  try{
+    // One read-only D1 batch observes a consistent synthetic receipt snapshot;
+    // this is not a replacement for the authoritative atomic posting boundary.
+    const proof=await DB.batch(checks.map(c=>
+      DB.prepare(c.sql).bind(tenantId,invoiceId)));
+    if(!Array.isArray(proof)||proof.length!==checks.length)
+      throw new Error('Missing posted sale evidence');
+    for(let i=0;i<checks.length;i++){
+      const actual=dataRows(proof[i]);
+      if(JSON.stringify(actual)!==JSON.stringify(checks[i].rows))
+        throw new Error('Posted sale child mismatch');
+    }
+  }catch{
+    throw new Error('NEEDS_REVIEW: posted sale receipt integrity mismatch; reconcile operation ID');
+  }
+}
+
 export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
   if(!DB || typeof DB.prepare!=='function' || typeof DB.batch!=='function')
     throw new Error('D1 transactional sale binding unavailable');
@@ -133,8 +197,13 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
         return {status:'COMMITTED',operationId,invoiceId};
       if(claimed.length===0){
         if(lookup.length===0)return {status:'DECLINED',operationId};
-        if(existing && existing.actor_id===actorId && existing.payload_hash===payloadHash)
+        if(existing && existing.actor_id===actorId && existing.payload_hash===payloadHash){
+          await verifyReplayReceipt(DB,{
+            tenantId,invoiceId:existing.invoice_id,sku,units,customerId,
+            due,children,sourceDraftId,sourceDraftVersion,actorId
+          });
           return {status:'REPLAY',operationId,invoiceId:existing.invoice_id};
+        }
         if(existing)return {status:'CONFLICT',operationId};
       }
       throw new Error('NEEDS_REVIEW: ambiguous sale posting result; reconcile operation ID');

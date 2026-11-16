@@ -458,3 +458,53 @@ test('posted sale child rows reject SQL UPDATE and DELETE without changing invoi
   }
   assert.deepEqual(await snapshot(),saved);
 });
+
+
+// TDD RED: a persisted operation ID/header is not itself sufficient to
+// acknowledge a payment replay after child accounting records drift.
+test('replay refuses an extra Cash Book row that was never in the paid tender',async()=>{
+  const sale=input('OP-REPLAY-TAMPER-CASH');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`INSERT INTO m06_cash_book(
+    tenant_id,invoice_id,row_id,credit_paisa) VALUES (?,?,?,?)`)
+    .bind(sale.tenantId,sale.invoiceId,'UNMATCHED-CASH',101).run();
+  const afterTamper=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),afterTamper);
+});
+
+test('replay refuses extra payment children even when invoice intent hash still matches',async()=>{
+  const sale=input('OP-REPLAY-TAMPER-TENDER');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`INSERT INTO m06_payment_children(
+    tenant_id,invoice_id,row_id,row_order,method,account_id,
+    tender_paisa,applied_paisa,change_paisa) VALUES (?,?,?,2,'Cash','',101,101,0)`)
+    .bind(sale.tenantId,sale.invoiceId,'UNMATCHED-TENDER').run();
+  const afterTamper=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),afterTamper);
+});
+
+test('replay refuses an unearned Bank Book entry attached to an existing paid invoice',async()=>{
+  const sale=input('OP-REPLAY-TAMPER-BANK',{
+    payments:[account('B1','100','Bank')]
+  });
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`INSERT INTO m06_bank_book(
+    tenant_id,invoice_id,row_id,account_id,credit_paisa) VALUES (?,?,?,?,?)`)
+    .bind(sale.tenantId,sale.invoiceId,'UNMATCHED-BANK','BANK-1',101).run();
+  const afterTamper=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),afterTamper);
+});
+
+test('replay of consumed draft requires the matching exact posted draft audit row',async()=>{
+  const sale=fromDraft('OP-REPLAY-DRAFT-AUDIT','DRAFT-REPLAY-AUDIT');
+  await seedDraft('DRAFT-REPLAY-AUDIT');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`DELETE FROM m06_draft_audit WHERE tenant_id=? AND draft_id=?`)
+    .bind(sale.tenantId,sale.sourceDraftId).run();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.equal(await count('m06_invoices'),1);
+  assert.equal(await count('m06_drafts'),0);
+});
