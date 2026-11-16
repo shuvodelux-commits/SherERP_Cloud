@@ -38,3 +38,24 @@ test('refuses unknown or duplicate legacy wrapper instead of silently skipping p
   assert.throws(()=>patchServerCall('hello'),/wrapper/i);
   assert.throws(()=>patchServerCall(legacy+'\n'+legacy),/duplicate|multiple/i);
 });
+
+
+test('RPC HTTP non-JSON and empty response bodies reject with a controlled error',async()=>{
+  const patched=patchServerCall(legacy);
+  const fn=patched.slice(patched.indexOf('  function serverCall'),patched.indexOf('  // ---------------- 6.'));
+  for(const status of [200,503]){
+    const call=runInNewContext(fn+';serverCall',{
+      fetch:async()=>({
+        ok:status===200,
+        status,
+        json:async()=>{throw new SyntaxError(status===200
+          ? 'Unexpected token < in JSON at position 0'
+          : 'Unexpected end of JSON input');}
+      })
+    });
+    await assert.rejects(call('getProducts'),{
+      name:'Error',
+      message:'Server error'
+    },'HTTP '+status+' invalid JSON body must not leak parser diagnostics');
+  }
+});
