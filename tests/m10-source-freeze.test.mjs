@@ -140,3 +140,24 @@ test('M10 master gate rejects fully matching source/D1 snapshots without stable 
   assert.equal(issue(broken,'SOURCE_FREEZE_ROW_DIGEST_CHANGED'),1);
   assert.equal(issue(broken,'SOURCE_FREEZE_FINAL_SOURCE_MISMATCH'),1);
 });
+
+test('accessor-backed snapshot evidence is rejected before reading private getter side effects',()=>{
+  for(const key of ['rowDigest','idDigest']){
+    const x=captures();
+    Object.defineProperty(x.firstPass.groups[0],key,{
+      enumerable:true,configurable:true,
+      get(){throw new Error('PRIVATE_BUSINESS_VALUE_EXPOSED');}
+    });
+    assert.throws(()=>run(x),error=>
+      error.message==='M10 source freeze evidence invalid' &&
+      !error.message.includes('PRIVATE_BUSINESS_VALUE_EXPOSED'));
+  }
+  const x=captures();
+  Object.defineProperty(x.firstPass,'snapshotId',{
+    enumerable:true,configurable:true,
+    get(){throw new Error('PRIVATE_SNAPSHOT_TOKEN_EXPOSED');}
+  });
+  assert.throws(()=>run(x),error=>
+    error.message==='M10 source freeze evidence invalid' &&
+    !error.message.includes('PRIVATE_SNAPSHOT_TOKEN_EXPOSED'));
+});
