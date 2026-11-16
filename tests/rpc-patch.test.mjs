@@ -80,3 +80,20 @@ test('RPC serialization failures return rejected Promises without sending a requ
     assert.equal(requests,0,'invalid JSON must not send any RPC request');
   }
 });
+
+
+test('compiled original login honors pending button before keyboard retry',()=>{
+  const frozenLogin = [
+    '  function doLogin_() {',
+    "    var errEl = document.getElementById('loginError');",
+    "    var btn = document.getElementById('loginSubmitBtn');",
+    "    var mobile = (document.getElementById('loginMobile').value || '').trim();",
+    '  }'
+  ].join('\n');
+  const output=patchServerCall(frozenLogin+'\n'+legacy);
+  assert.match(output,
+    /function doLogin_\(\) \{\s*var errEl = document\.getElementById\('loginError'\);\s*var btn = document\.getElementById\('loginSubmitBtn'\);\s*if \(btn && btn\.disabled\) return;/,
+    'original login must reject concurrent Enter submissions while button is disabled');
+  assert.equal(output.split('if (btn && btn.disabled) return;').length-1,1,
+    'guard is inserted once, not duplicated');
+});
