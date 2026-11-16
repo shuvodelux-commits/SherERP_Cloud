@@ -1,16 +1,16 @@
 # M02/M03 — Frozen 49-Group Source-to-D1 Coverage Review (2026-11-16)
 
-**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; nine existing *local-versioned* migrations `0001`–`0009` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
+**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; ten existing *local-versioned* migrations `0001`–`0010` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
 
 ## Readiness summary
 
 - **49** configured source groups need complete source-to-D1 parity and reconciliation.
 - **4** have *catalog DDL only*: SETTINGS, PRODUCT_CATEGORIES, PRODUCT_UNITS and EXPENSE_CATEGORIES.
-- **3** have *audit DDL only*: DELETE_LOG, SALES_DRAFT_AUDIT and INVOICE_EDIT_LOG, preserving original history, JSON snapshots, source IDs and SQL-enforced immutability. Synthetic import tests are not historical production reconciliation.
+- **4** have *audit DDL only*: DELETE_LOG, SALES_DRAFT_AUDIT, INVOICE_EDIT_LOG and OPENING_BALANCE_EDIT_LOG, preserving historical IDs, signed amounts and source-row provenance under immutable SQL guards. Synthetic import tests are not historical production reconciliation.
 - **1** has *diagnostic DDL only*: LOGS, preserving text and source-row provenance without a unique source Log ID. Synthetic offline import proof is not live source reconciliation.
 - **5** have *Party identity only*: CUSTOMERS, SUPPLIERS, VENDORS, FINANCE_PERSONS and EXPENSE_PAYEES. `party_legacy_links` is **not** a money/account/ledger table.
 - **3** have *local auth schema only*: USERS, ROLES and SESSIONS. They are **not** a live public RPC or approved source-data import.
-- **33** have **no source-specific target in versioned candidate migrations** (synthetic Workerd/D1 tests may exist for certain operations; they do not change this release classification).
+- **32** have **no source-specific target in versioned candidate migrations** (synthetic Workerd/D1 tests may exist for certain operations; they do not change this release classification).
 - **0 of 49** groups have a verified complete source snapshot import and financial/row-by-row reconciliation in this audit. **394** source GAS functions are identified as async-impacted by the separate conservative M03 call graph, not necessarily unported.
 - Original GAS and private live Sheets were **not** queried, exported or modified to construct this report. Exact staff source exports and production remote migrations remain separately gated.
 
@@ -53,7 +53,7 @@
 | `SESSIONS` | 6 | Local auth DDL only | `auth_sessions` |
 | `LOGS` | 3 | Diagnostic STRICT DDL + isolated synthetic import; no live reconciliation | `legacy_error_logs` |
 | `DELETE_LOG` | 9 | Append-only historical audit DDL and local synthetic import; no live reconciliation | `legacy_delete_log` |
-| `OPENING_BALANCE_EDIT_LOG` | 12 | No source-specific DDL | — |
+| `OPENING_BALANCE_EDIT_LOG` | 12 | Immutable historical source audit DDL and synthetic offline import; no live reconciliation | `legacy_opening_balance_edit_audit` |
 | `BANK_ACCOUNTS` | 10 | No source-specific DDL | — |
 | `BANK_BOOK` | 18 | No source-specific DDL | — |
 | `BANK_TRANSFERS` | 14 | No source-specific DDL | — |
@@ -70,7 +70,7 @@
 
 ## Next conversion milestones
 
-1. Review every one of the 33 unmapped source groups by dependencies and lock a single schema/posting owner. Use source IDs, original row provenance, gross Party account directions, FIFO and cash-session relationships; do not infer data identity by phone/name.
+1. Review every one of the 32 unmapped source groups by dependencies and lock a single schema/posting owner. Use source IDs, original row provenance, gross Party account directions, FIFO and cash-session relationships; do not infer data identity by phone/name.
 2. For the next safe source-backed M02/M03 vertical slice, require versioned schema, deterministic offline fixture import with original-ID/readback reconciliation, awaited repo adapter, source-shaped RPC response proof and real isolated Workerd/D1 tests. Do not deploy it automatically.
 3. Separately complete protected M04 source/auth/staging policy; maintain the empty production RPC allowlist until specific authorized functions pass real D1 acceptance.
 4. Promote a status **only** on reviewed merge evidence of full source data correctness, not because one synthetic SQL table or unit test exists.
