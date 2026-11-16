@@ -2,7 +2,7 @@
 import {readFile, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 
-/** Patch only the legacy transport function in the generated HTML. Source stays byte-identical. */
+/** Patch legacy RPC and pending-login safeguards in generated HTML. Original source stays byte-identical. */
 export function patchServerCall(html) {
   const startMarker = '  function serverCall(fnName) {';
   const endMarker = '  // ---------------- 6. Shared across every page ----------------';
