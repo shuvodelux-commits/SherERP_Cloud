@@ -32,7 +32,7 @@ const SQL_POST=`INSERT INTO m06_invoices(tenant_id,invoice_id,operation_id,actor
    AND d.customer_id=? AND d.payments_json=?))
  ON CONFLICT(tenant_id,operation_id) DO NOTHING
  RETURNING invoice_id,payload_hash,actor_id`;
-const SQL_LOOKUP=`SELECT invoice_id,payload_hash,actor_id FROM m06_invoices
+const SQL_LOOKUP=`SELECT invoice_id,payload_hash,actor_id,payments_json FROM m06_invoices
  WHERE tenant_id=? AND operation_id=?`;
 const asPaisa=(value,label)=>salePaymentPaisa_(value,label,false);
 const decimalString=cents=>(cents/100).toFixed(2);
@@ -155,14 +155,35 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
       const prior=await DB.prepare(SQL_LOOKUP).bind(tenantId,operationId).first();
       if(prior && prior.actor_id!==actorId)
         return {status:'CONFLICT',operationId};
-      const historicalReplay=Boolean(prior);
-      // A read can become stale: the SAME SQL posting statement must repeat
-      // every bank/customer/stock/session guard. This read grants NO authority.
-      const trustedBankRows=(await DB.prepare(SQL_ACCOUNTS).bind(tenantId).all()).results.map(a=>({
-        'Bank Account ID':a.account_id,'Account Name':a.account_name,
-        'Account Type':a.method,
-        Status:a.active===1||historicalReplay?'Active':'Inactive','Is Deleted':'FALSE'
-      }));
+      // A historical operation is checked against the immutable original
+      // invoice's payment snapshot, never the mutable Bank/Mobile directory.
+      // This supplies no authority for a new sale: SQL_POST retains its active
+      // account CAS and verifyReplayReceipt requires every original child.
+      let trustedBankRows;
+      if(prior){
+        let originalPayments;
+        try{
+          originalPayments=JSON.parse(prior.payments_json);
+          if(!Array.isArray(originalPayments) || originalPayments.some(p=>
+            !plain(p) || !['Cash','Bank','Mobile Banking'].includes(p.method) ||
+            (p.method!=='Cash' && !SIMPLE_ID.test(p.accountId||''))))
+            throw new Error('Invalid immutable payment snapshot');
+        }catch{
+          throw new Error('NEEDS_REVIEW: posted sale payment snapshot invalid; reconcile operation ID');
+        }
+        trustedBankRows=originalPayments.filter(p=>p.method!=='Cash').map(p=>({
+          'Bank Account ID':p.accountId,'Account Name':'',
+          'Account Type':p.method,Status:'Active','Is Deleted':'FALSE'
+        }));
+      }else{
+        // A read can become stale: the SAME SQL posting statement must repeat
+        // every bank/customer/stock/session guard. This read grants NO authority.
+        trustedBankRows=(await DB.prepare(SQL_ACCOUNTS).bind(tenantId).all()).results.map(a=>({
+          'Bank Account ID':a.account_id,'Account Name':a.account_name,
+          'Account Type':a.method,Status:a.active===1?'Active':'Inactive',
+          'Is Deleted':'FALSE'
+        }));
+      }
       const allocation=normalizeSalePayments_(decimalString(grand),input.payments,trustedBankRows);
       const paid=asPaisa(allocation.paidAmount,'Paid amount');
       const due=asPaisa(allocation.dueAmount,'Due amount');
