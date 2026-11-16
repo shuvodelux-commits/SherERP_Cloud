@@ -1,0 +1,14 @@
+{
+  "name": "shererp-m03-m04-master-authority-local",
+  "main": "tests/fixtures/m03-m04-master-authority-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shererp-master-authority-local",
+      "database_id": "00000000-0000-0000-0000-000000000099",
+      "migrations_dir": "tests/fixtures/m04-auth-migrations"
+    }
+  ]
+}

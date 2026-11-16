@@ -9,13 +9,17 @@ import {handleRpc} from '../../src/rpc/handler.js';
 import {authorizeStaffReadWithD1} from '../../src/auth/d1-staff-read-gate.js';
 import {readStaffDirectoryPreviewWithD1} from '../../src/auth/d1-staff-directory.js';
 import {readRoleDirectoryPreviewWithD1} from '../../src/auth/d1-role-directory.js';
+import {previewManagementDeleteWithD1} from '../../src/auth/d1-management-delete-preflight.js';
+import {previewManagementAddWithD1} from '../../src/auth/d1-management-add-preflight.js';
+import {previewUsersEditWithD1} from '../../src/auth/d1-management-users-edit-preflight.js';
+import {previewRolesEditWithD1} from '../../src/auth/d1-management-roles-edit-preflight.js';
 
 const json=(status,value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 export default {
   async fetch(request,env){
     if(request.method!=='POST') return json(405,{error:'Method forbidden'});
     const path=new URL(request.url).pathname;
-    if(!['/__m04_test__/login','/__m04_test__/validate','/__m04_test__/logout','/__m04_test__/rpc','/__m04_test__/authorize','/__m04_test__/staff-directory','/__m04_test__/role-directory'].includes(path))
+    if(!['/__m04_test__/login','/__m04_test__/validate','/__m04_test__/logout','/__m04_test__/rpc','/__m04_test__/authorize','/__m04_test__/staff-directory','/__m04_test__/role-directory','/__m04_test__/delete-preflight','/__m04_test__/add-preflight','/__m04_test__/users-edit-preflight','/__m04_test__/roles-edit-preflight'].includes(path))
       return json(404,{error:'Not found'});
     try {
       const raw=await request.json();
@@ -37,6 +41,26 @@ export default {
       if(path==='/__m04_test__/role-directory')
         return json(200,await readRoleDirectoryPreviewWithD1(env.DB,{
           token:raw.token,nowMs,
+        }));
+      // Nondeployable test-only RBAC eligibility preview, not a write route.
+      if(path==='/__m04_test__/delete-preflight')
+        return json(200,await previewManagementDeleteWithD1(env.DB,{
+          token:raw.token,methodName:raw.methodName,nowMs,
+        }));
+      // Nondeployable M04 Workerd fixture only; no public creation.
+      if(path==='/__m04_test__/add-preflight')
+        return json(200,await previewManagementAddWithD1(env.DB,{
+          token:raw.token,methodName:raw.methodName,nowMs,
+        }));
+      // Synthetic Workerd-only nonbinding staff users.edit eligibility.
+      if(path==='/__m04_test__/users-edit-preflight')
+        return json(200,await previewUsersEditWithD1(env.DB,{
+          token:raw.token,methodName:raw.methodName,nowMs,
+        }));
+      // Synthetic Workerd-only nonbinding roles.edit preview, never public.
+      if(path==='/__m04_test__/roles-edit-preflight')
+        return json(200,await previewRolesEditWithD1(env.DB,{
+          token:raw.token,methodName:raw.methodName,nowMs,
         }));
       if(path==='/__m04_test__/rpc'){
         if(typeof raw.fnName!=='string' || !['login','validateSession','logout'].includes(raw.fnName))

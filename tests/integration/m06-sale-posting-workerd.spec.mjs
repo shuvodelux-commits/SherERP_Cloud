@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createSyntheticD1SalePostingContract} from '../fixtures/m06-sale-posting-contract.mjs';
-import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED} from '../fixtures/m06-sale-posting-schema.mjs';
+import {M06_SALE_TEST_DDL,M06_SALE_TEST_SEED,M06_CHILD_IMMUTABILITY_TABLES,M06_CHILD_IMMUTABILITY_DDL} from '../fixtures/m06-sale-posting-schema.mjs';
 
 const server=createTestHarness({workers:[{configPath:'./wrangler.m06-sale-posting-test.jsonc'}]});
 const worker=server.getWorker('shererp-m06-sale-workerd-test');
@@ -42,6 +42,11 @@ before(async()=>{
   for(const [sql,values] of M06_SALE_TEST_SEED)await DB.prepare(sql).bind(...values).run();
 });
 beforeEach(async()=>{
+  // Only the isolated test reset may remove the posting-child guards.
+  for(const table of M06_CHILD_IMMUTABILITY_TABLES){
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_update`).run();
+    await DB.prepare(`DROP TRIGGER IF EXISTS ${table}_immutable_delete`).run();
+  }
   for(const t of ['m06_fail_payment','m06_fail_bank','m06_fail_cash','m06_fail_due','m06_fail_draft_audit'])
     await DB.prepare('DROP TRIGGER IF EXISTS '+t).run();
   await DB.prepare('DROP TRIGGER m06_invoice_immutable_delete').run();
@@ -57,6 +62,7 @@ beforeEach(async()=>{
   await DB.prepare("DELETE FROM m06_cash_sessions WHERE tenant_id='SHOP-B'").run();
   for(const t of ['m06_owned_stock','m06_customer_accounts','m06_party_links','m06_supplier_accounts'])
     await DB.prepare(`DELETE FROM ${t} WHERE tenant_id='SHOP-B'`).run();
+  for(const sql of M06_CHILD_IMMUTABILITY_DDL)await DB.prepare(sql).run();
 });
 after(async()=>{await server.close();});
 
@@ -421,4 +427,198 @@ test('draft version update after candidate preparation is refused by SQL CAS and
   assert.equal(await count('m06_invoices'),0);
   assert.equal(await count('m06_draft_audit'),0);
   assert.equal((await one("SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,2);
+});
+
+
+// RED: once a posted invoice is committed, every source-linked child row must
+// be write-once; native corrections must create separate audited reversal rows.
+test('posted sale child rows reject SQL UPDATE and DELETE without changing invoice or money',async()=>{
+  const posted=await posting().post(input('OP-CHILD-IMMUT1',{
+    customerId:'CUS-1',payments:[
+      account('B1','40','Bank'),{id:'C1',method:'Cash',amount:'10'}
+    ]
+  }));
+  assert.equal(posted.status,'COMMITTED');
+  const immutableTables=[
+    'm06_sale_items','m06_stock_movements','m06_payment_children',
+    'm06_cash_book','m06_bank_book','m06_customer_ledger'
+  ];
+  const saved=await snapshot();
+  for(const table of immutableTables){
+    const row=await one(`SELECT rowid AS id FROM ${table} LIMIT 1`);
+    assert.ok(row,`Expected posted row in ${table}`);
+    await assert.rejects(
+      ()=>DB.prepare(`UPDATE ${table} SET tenant_id=tenant_id WHERE rowid=?`).bind(row.id).run(),
+      /m06-immutable-child/,`${table}: UPDATE must fail closed`
+    );
+    await assert.rejects(
+      ()=>DB.prepare(`DELETE FROM ${table} WHERE rowid=?`).bind(row.id).run(),
+      /m06-immutable-child/,`${table}: DELETE must fail closed`
+    );
+  }
+  assert.deepEqual(await snapshot(),saved);
+});
+
+
+// TDD RED: a persisted operation ID/header is not itself sufficient to
+// acknowledge a payment replay after child accounting records drift.
+test('replay refuses an extra Cash Book row that was never in the paid tender',async()=>{
+  const sale=input('OP-REPLAY-TAMPER-CASH');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`INSERT INTO m06_cash_book(
+    tenant_id,invoice_id,row_id,credit_paisa) VALUES (?,?,?,?)`)
+    .bind(sale.tenantId,sale.invoiceId,'UNMATCHED-CASH',101).run();
+  const afterTamper=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),afterTamper);
+});
+
+test('replay refuses extra payment children even when invoice intent hash still matches',async()=>{
+  const sale=input('OP-REPLAY-TAMPER-TENDER');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`INSERT INTO m06_payment_children(
+    tenant_id,invoice_id,row_id,row_order,method,account_id,
+    tender_paisa,applied_paisa,change_paisa) VALUES (?,?,?,2,'Cash','',101,101,0)`)
+    .bind(sale.tenantId,sale.invoiceId,'UNMATCHED-TENDER').run();
+  const afterTamper=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),afterTamper);
+});
+
+test('replay refuses an unearned Bank Book entry attached to an existing paid invoice',async()=>{
+  const sale=input('OP-REPLAY-TAMPER-BANK',{
+    payments:[account('B1','100','Bank')]
+  });
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`INSERT INTO m06_bank_book(
+    tenant_id,invoice_id,row_id,account_id,credit_paisa) VALUES (?,?,?,?,?)`)
+    .bind(sale.tenantId,sale.invoiceId,'UNMATCHED-BANK','BANK-1',101).run();
+  const afterTamper=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),afterTamper);
+});
+
+test('replay of consumed draft requires the matching exact posted draft audit row',async()=>{
+  const sale=fromDraft('OP-REPLAY-DRAFT-AUDIT','DRAFT-REPLAY-AUDIT');
+  await seedDraft('DRAFT-REPLAY-AUDIT');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  await DB.prepare(`DELETE FROM m06_draft_audit WHERE tenant_id=? AND draft_id=?`)
+    .bind(sale.tenantId,sale.sourceDraftId).run();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.equal(await count('m06_invoices'),1);
+  assert.equal(await count('m06_drafts'),0);
+});
+
+test('replay refuses a consumed draft reappearing with the same tenant and ID, without writing a second sale',async()=>{
+  const sale=fromDraft('OP-DRAFT-GHOST01','DRAFT-GHOST-1');
+  await seedDraft('DRAFT-GHOST-1');
+  assert.equal((await posting().post(sale)).status,'COMMITTED');
+  assert.equal(await count('m06_drafts'),0);
+  assert.equal(await count('m06_draft_audit'),1);
+  // Simulate a stale import/recreation after posting; immutable audit survives.
+  await seedDraft('DRAFT-GHOST-1');
+  const before=await snapshot();
+  await assert.rejects(()=>posting().post(sale),/NEEDS_REVIEW/);
+  assert.deepEqual(await snapshot(),before);
+  assert.equal(await count('m06_drafts'),1);
+  assert.equal(await count('m06_draft_audit'),1);
+});
+
+test('posted Bank and Mobile invoices replay after account deactivation without new tender, stock or due',async()=>{
+  const bank=input('OP-HIST-BANK-0001',{
+    payments:[account('B1','60','Bank'),{id:'C1',method:'Cash',amount:'40'}]
+  });
+  const mobile=input('OP-HIST-MOB-0001',{
+    payments:[account('M1','100','Mobile Banking')]
+  });
+  assert.equal((await posting().post(bank)).status,'COMMITTED');
+  assert.equal((await posting().post(mobile)).status,'COMMITTED');
+  await DB.prepare("UPDATE m06_bank_accounts SET active=0 WHERE tenant_id='SHOP-A'").run();
+  const before=await snapshot();
+  for(const sale of [bank,mobile]){
+    assert.deepEqual(await posting().post({...sale,invoiceId:'INV-CLIENT-RETRY'}),{
+      status:'REPLAY',operationId:sale.operationId,invoiceId:sale.invoiceId
+    });
+    assert.deepEqual(await snapshot(),before);
+  }
+  // An existing operation does not confer authority to change actor or intent.
+  assert.deepEqual(await posting().post({...bank,actorId:'USER-B'}),{
+    status:'CONFLICT',operationId:bank.operationId
+  });
+  assert.deepEqual(await posting().post({...mobile,sku:'OTHER'}),{
+    status:'CONFLICT',operationId:mobile.operationId
+  });
+  assert.deepEqual(await snapshot(),before);
+});
+
+test('fresh Bank and Mobile operations still refuse inactive payment accounts without effects',async()=>{
+  await DB.prepare("UPDATE m06_bank_accounts SET active=0 WHERE tenant_id='SHOP-A'").run();
+  const before=await snapshot();
+  for(const [op,tender] of [
+    ['OP-NEW-BANK-OFF01',account('B1','100','Bank')],
+    ['OP-NEW-MOB-OFF001',account('M1','100','Mobile Banking')]
+  ]){
+    await assert.rejects(()=>posting().post(input(op,{payments:[tender]})),/active payment account/);
+    assert.deepEqual(await snapshot(),before);
+  }
+});
+
+test('archived Bank and Mobile master records do not prevent exact immutable sale receipt replay',async()=>{
+  const bank=input('OP-ARCHIVE-BANK01',{
+    payments:[account('B1','60','Bank'),{id:'C1',method:'Cash',amount:'40'}]
+  });
+  const mobile=input('OP-ARCHIVE-MOB001',{
+    payments:[account('M1','100','Mobile Banking')]
+  });
+  assert.equal((await posting().post(bank)).status,'COMMITTED');
+  assert.equal((await posting().post(mobile)).status,'COMMITTED');
+  await DB.prepare("DELETE FROM m06_bank_accounts WHERE tenant_id='SHOP-A'").run();
+  try{
+    const before=await snapshot();
+    for(const original of [bank,mobile]){
+      assert.deepEqual(await posting().post({...original,invoiceId:'INV-RETRY-UNTRUSTED'}),{
+        status:'REPLAY',operationId:original.operationId,invoiceId:original.invoiceId
+      });
+      assert.deepEqual(await snapshot(),before);
+    }
+    // A historical receipt must not authorize any new sale using absent accounts.
+    await assert.rejects(()=>posting().post(input('OP-ARCHIVE-NEW-01',{
+      payments:[account('B1','100','Bank')]
+    })),/active payment account/);
+    assert.deepEqual(await posting().post({...bank,actorId:'USER-B'}),{
+      status:'CONFLICT',operationId:bank.operationId
+    });
+    const changed={...bank,payments:[
+      account('B1','70','Bank'),{id:'C1',method:'Cash',amount:'30'}
+    ]};
+    assert.deepEqual(await posting().post(changed),{
+      status:'CONFLICT',operationId:bank.operationId
+    });
+    assert.deepEqual(await snapshot(),before);
+  }finally{
+    // Shared test DB: restore catalog rows even when RED intentionally fails.
+    await DB.prepare("INSERT INTO m06_bank_accounts VALUES ('SHOP-A','BANK-1','Shop Bank','Bank',1)").run();
+    await DB.prepare("INSERT INTO m06_bank_accounts VALUES ('SHOP-A','MOB-1','Shop Wallet','Mobile Banking',1)").run();
+  }
+});
+
+test('reclassified Bank master account cannot reinterpret or block its original immutable sale replay',async()=>{
+  const bank=input('OP-RECLASS-BANK01',{
+    payments:[account('B1','100','Bank')]
+  });
+  assert.equal((await posting().post(bank)).status,'COMMITTED');
+  await DB.prepare("UPDATE m06_bank_accounts SET method='Mobile Banking' WHERE tenant_id='SHOP-A' AND account_id='BANK-1'").run();
+  try{
+    const before=await snapshot();
+    assert.deepEqual(await posting().post(bank),{
+      status:'REPLAY',operationId:bank.operationId,invoiceId:bank.invoiceId
+    });
+    assert.deepEqual(await snapshot(),before);
+    await assert.rejects(()=>posting().post(input('OP-RECLASS-NEW01',{
+      payments:[account('B1','100','Bank')]
+    })),/account type does not match/);
+    assert.deepEqual(await snapshot(),before);
+  }finally{
+    await DB.prepare("UPDATE m06_bank_accounts SET method='Bank' WHERE tenant_id='SHOP-A' AND account_id='BANK-1'").run();
+  }
 });

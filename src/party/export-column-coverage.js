@@ -38,6 +38,9 @@ const plain=value=>value!==null && typeof value==='object' &&
 const validCell=value=>value===null || typeof value==='string' ||
   typeof value==='boolean' ||
   (typeof value==='number' && Number.isFinite(value));
+const validDeletionFlag=value=>value===null || typeof value==='boolean' ||
+  (typeof value==='string' && (value.trim()==='' ||
+    /^(TRUE|FALSE)$/i.test(value.trim())));
 // Source financial cells are exact signed minor units, never silently rounded.
 // Align with the existing gross-balance-preflight.js::toMinorUnits contract.
 const balanceGroups=new Set(['CUSTOMERS','SUPPLIERS','VENDORS']);
@@ -75,7 +78,7 @@ export function validatePartyExportCompleteness({sourceRows,sourceHeaders}={}){
   for(const group of groups){
     const expected=columns[group],supplied=sourceHeaders[group];
     const headerMismatch=supplied.length!==expected.length ||
-      supplied.some((name,index)=>name!==expected[index]);
+      expected.some((name,index)=>supplied[index]!==name);
     if(headerMismatch){
       add(issues,group,'HEADER_MISMATCH',1);
       counts.headerIssues++;
@@ -98,7 +101,10 @@ export function validatePartyExportCompleteness({sourceRows,sourceHeaders}={}){
           continue;
         }
         if(!validCell(value) ||
-          (balanceGroups.has(group) && balanceFields.has(name) && !exactBalance(value))){
+          (name==='Is Deleted' && !validDeletionFlag(value)) ||
+          (balanceGroups.has(group) && balanceFields.has(name) && !exactBalance(value)) ||
+          (group==='FINANCE_PERSONS' && (name==='Roles'||name==='Person Type') &&
+            value!==null && typeof value!=='string')){
           unsafe++;
         }else if(
           (name===expected[0] && typeof value!=='string') ||

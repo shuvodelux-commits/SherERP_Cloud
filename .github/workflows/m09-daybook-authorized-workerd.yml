@@ -1,0 +1,26 @@
+name: M09 Day Book authorized bootstrap real local Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  daybook-auth-parity:
+    name: Verify M09 daybook.view exact-session authorization on isolated D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run full Node source oracle and security tests
+        run: npm test
+      - name: Install pinned Wrangler into isolated CI runner only
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Run isolated real Workerd D1 Day Book authorization tests
+        run: node --test tests/integration/m09-daybook-authorized-workerd.spec.mjs

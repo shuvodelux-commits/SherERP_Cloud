@@ -17,6 +17,34 @@ const fields=new Set([
   'Current Due','Current Receivable','Opening Balance',
   'FINANCE_TRANSACTIONS.Amount'
 ]);
+// Frozen preflight contracts: account types are legal only for their
+// original role, balance column and current-versus-opening basis.
+const sourceAccountKinds={
+  CUSTOMERS:{
+    SOURCE_CURRENT:{'Current Due':['CUSTOMER_RECEIVABLE','CUSTOMER_ADVANCE']},
+    HISTORICAL_OPENING:{'Opening Balance':['CUSTOMER_RECEIVABLE','CUSTOMER_ADVANCE']}
+  },
+  SUPPLIERS:{
+    SOURCE_CURRENT:{'Current Due':['SUPPLIER_PAYABLE','SUPPLIER_ADVANCE']},
+    HISTORICAL_OPENING:{'Opening Balance':['SUPPLIER_PAYABLE','SUPPLIER_ADVANCE']}
+  },
+  VENDORS:{
+    SOURCE_CURRENT:{
+      'Current Due':['VENDOR_PAYABLE'],
+      'Current Receivable':['VENDOR_RECEIVABLE']
+    }
+  },
+  FINANCE_PERSONS:{
+    SOURCE_CURRENT:{'FINANCE_TRANSACTIONS.Amount':[
+      'OWNER_EQUITY','OWNER_ADVANCE',
+      'LENDER_LOAN_PAYABLE','LENDER_CREDIT',
+      'BORROWER_LOAN_RECEIVABLE','BORROWER_CREDIT'
+    ]}
+  }
+};
+const validSourceContract=row=>
+  sourceAccountKinds[row.sourceGroup]?.[row.basis]?.[row.sourceField]
+    ?.includes(row.kind)===true;
 const rowFields=['partyId','sourceGroup','sourceId','kind','sourceField','basis','amountMinor'];
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
   (Object.getPrototypeOf(x)===Object.prototype||
@@ -30,20 +58,21 @@ const add=(items,stage,code,count=1)=>{
 const identity=row=>JSON.stringify([
   row.partyId,row.sourceGroup,row.sourceId,row.kind,row.sourceField,row.basis
 ]);
-function validateRow(row,basis){
+function validateRow(row,basis,strictSource=false){
   if(!plain(row)||Object.keys(row).length!==rowFields.length||
      rowFields.some(field=>!Object.hasOwn(row,field))||
      !nonempty(row.partyId)||!nonempty(row.sourceId)||
      !sourceGroups.has(row.sourceGroup)||!kinds.has(row.kind)||
      !fields.has(row.sourceField)||row.basis!==basis||
-     !Number.isSafeInteger(row.amountMinor)||row.amountMinor<=0)
+     !Number.isSafeInteger(row.amountMinor)||row.amountMinor<=0||
+     (strictSource&&!validSourceContract(row)))
     throw new Error('Invalid checkpoint');
 }
-function index(rows,basis){
+function index(rows,basis,strictSource=false){
   const found=new Map();
   let duplicates=0;
   for(const row of rows){
-    validateRow(row,basis);
+    validateRow(row,basis,strictSource);
     const key=identity(row);
     if(found.has(key))duplicates++;
     else found.set(key,row);
@@ -63,6 +92,35 @@ function totalsMatch(rows,sourceTotals){
     kinds.has(kind)&&Number.isSafeInteger(value)&&value>0&&
       totals.get(kind)===value);
 }
+// Expected source side only: a physical source ID has one Party,
+// and each signed original account channel has only one direction.
+// Current vs historical opening and separate Owner/Lender/Borrower
+// channels remain independent; Vendors have two independent fields.
+const signedChannel=Object.freeze({
+  CUSTOMER_RECEIVABLE:'customer',CUSTOMER_ADVANCE:'customer',
+  SUPPLIER_PAYABLE:'supplier',SUPPLIER_ADVANCE:'supplier',
+  OWNER_EQUITY:'owner',OWNER_ADVANCE:'owner',
+  LENDER_LOAN_PAYABLE:'lender',LENDER_CREDIT:'lender',
+  BORROWER_LOAN_RECEIVABLE:'borrower',BORROWER_CREDIT:'borrower'
+});
+function assertExpectedSourceConsistency(current,opening){
+  const partyBySource=new Map(),kindByChannel=new Map();
+  for(const row of [...current,...opening]){
+    const source=JSON.stringify([row.sourceGroup,row.sourceId]);
+    const previousParty=partyBySource.get(source);
+    if(previousParty!==undefined&&previousParty!==row.partyId)
+      throw new Error('Inconsistent original source Party');
+    partyBySource.set(source,row.partyId);
+    const channel=signedChannel[row.kind];
+    if(!channel)continue; // Vendor two-way obligations are independent.
+    const key=JSON.stringify([row.sourceGroup,row.sourceId,row.basis,channel]);
+    const previousKind=kindByChannel.get(key);
+    if(previousKind!==undefined&&previousKind!==row.kind)
+      throw new Error('Conflicting signed source account directions');
+    kindByChannel.set(key,row.kind);
+  }
+}
+
 function compare(expected,actual,stage,items){
   const seen=index(actual,stage);
   add(items,stage,'DUPLICATE_CHECKPOINT',seen.duplicates);
@@ -104,8 +162,9 @@ export function reconcileGrossPartyCheckpoints(input={}){
       expectedOpening:opening.length,observedOpening:null
     };
     const issues=[];
-    const expectedCurrent=index(current,'SOURCE_CURRENT');
-    const expectedOpening=index(opening,'HISTORICAL_OPENING');
+    const expectedCurrent=index(current,'SOURCE_CURRENT',true);
+    const expectedOpening=index(opening,'HISTORICAL_OPENING',true);
+    assertExpectedSourceConsistency(current,opening);
     if(preflight.formatVersion!==1||
        preflight.sourceCommit!==sourceCommit||
        preflight.currency!=='BDT')

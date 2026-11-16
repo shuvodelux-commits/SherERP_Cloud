@@ -50,6 +50,15 @@ jobs:
         run: |
           npm test
           node scripts/check-staging-d1.mjs wrangler.staging.jsonc wrangler.preview.jsonc
+      - name: Gate approved migration count before any remote apply
+        if: inputs.operation == 'apply'
+        run: |
+          EXPECTED_REMOTE_MIGRATION_COUNT=2
+          actual_count="$(find migrations -maxdepth 1 -type f -name '*.sql' | wc -l)"
+          if [ "$actual_count" -ne "$EXPECTED_REMOTE_MIGRATION_COUNT" ]; then
+            echo '::error::New authentication schema requires separate M04 owner approval; remote apply blocked.'
+            exit 1
+          fi
       - name: Verify remote database name and exact UUID before any SQL
         run: |
           npx --yes wrangler@4.161.0 d1 list --json --config wrangler.staging.jsonc > "$RUNNER_TEMP/staging-db-list.json"

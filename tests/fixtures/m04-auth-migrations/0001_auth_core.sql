@@ -4,6 +4,15 @@
 CREATE TABLE auth_roles (
   role_name TEXT PRIMARY KEY
     CHECK (length(trim(role_name)) > 0 AND lower(trim(role_name)) <> 'administrator'),
+  -- Test-only parity with versioned D1 auth provenance fields.
+  -- Both remain NULL for ordinary local synthetic auth fixture roles.
+  source_role_id TEXT UNIQUE
+    CHECK (source_role_id IS NULL OR
+      (length(source_role_id) BETWEEN 1 AND 128 AND source_role_id=trim(source_role_id))),
+  source_created_at_iso TEXT
+    CHECK (source_created_at_iso IS NULL OR
+      (length(source_created_at_iso)=24 AND
+       strftime('%Y-%m-%dT%H:%M:%fZ',source_created_at_iso)=source_created_at_iso)),
   status TEXT NOT NULL CHECK (status IN ('Active','Inactive')),
   permissions_json TEXT NOT NULL DEFAULT '{}',
   -- Source ROLES[Allowed Modules] display metadata; never an authorization proof.

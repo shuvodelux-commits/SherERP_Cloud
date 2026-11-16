@@ -2,7 +2,9 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
-import {createOfflinePasswordCredential,loginWithD1} from '../../src/auth/d1-auth-core.js';
+import {createOfflinePasswordCredential,loginWithD1,validateSessionWithD1} from '../../src/auth/d1-auth-core.js';
+import {authorizeStaffReadWithD1} from '../../src/auth/d1-staff-read-gate.js';
+import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
 const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-test.jsonc'}]});
 const worker=harness.getWorker('shererp-m04-auth-workerd-local-only');
@@ -49,6 +51,8 @@ test('real Workerd+D1 issues random opaque tokens and persists only SHA-256 fing
   const digest=createHash('sha256').update(Buffer.from(a.body.token,'hex')).digest('hex');
   const persisted=await DB.prepare('SELECT token_hash,user_id,expires_at_ms FROM auth_sessions WHERE token_hash=?').bind(digest).first();
   assert.equal(persisted.token_hash,digest);
+  assert.equal(await hashOpaqueSessionToken(a.body.token),persisted.token_hash);
+  assert.notEqual(createHash('sha256').update(a.body.token,'utf8').digest('hex'),persisted.token_hash);
   assert.equal(persisted.user_id,'USR-ADMIN');
   assert.equal(persisted.expires_at_ms,BASE+12*60*60*1000);
   assert.equal(await DB.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE token_hash=?').bind(a.body.token).first().then(r=>r.n),0);
@@ -302,4 +306,92 @@ test('physical DELETE cannot erase issued active or revoked session fingerprints
     const checked=await rpc('validate',{token,nowMs:now+2000});
     assert.equal(checked.body.authenticated,!revoke);
   }
+});
+
+test('M04 staff read refuses a D1 role whose source visible modules contradict view rights',async()=>{
+  const now=BASE+1_100_000;
+  // The frozen source derives Allowed Modules from permissions[*].view=true.
+  // A contradictory row must never authorize users bootstrap independently
+  // of the login profile's existing source-role integrity check.
+  const permissions=JSON.stringify({
+    users:{view:true,add:false,edit:false,delete:false},
+    sales:{view:true,add:false,edit:false,delete:'disabled'},
+  });
+  await DB.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES ('M04ReadDrift','Active',?,'sales'),
+           ('M04ReadConsistent','Active',?,'users,sales')`)
+    .bind(permissions,permissions).run();
+  await seed('USR-M04-READ-DRIFT','01710000010','M04ReadDrift');
+  await seed('USR-M04-READ-CONSISTENT','01710000011','M04ReadConsistent');
+  const drift=await rpc('login',{
+    phoneKey:'01710000010',password:PASSWORD,nowMs:now
+  });
+  assert.equal(drift.body.authenticated,true);
+  const inconsistent=await authorizeStaffReadWithD1(DB,{
+    token:drift.body.token,methodName:'getUsersBootstrap',nowMs:now+1000
+  });
+  assert.deepEqual(inconsistent,{authorized:false},
+    'source-inconsistent role must not authorize a staff bootstrap read');
+
+  const valid=await rpc('login',{
+    phoneKey:'01710000011',password:PASSWORD,nowMs:now
+  });
+  assert.equal(valid.body.authenticated,true);
+  const consistent=await authorizeStaffReadWithD1(DB,{
+    token:valid.body.token,methodName:'getUsersBootstrap',nowMs:now+1000
+  });
+  assert.deepEqual(consistent,{
+    authorized:true,actor:{id:'USR-M04-READ-CONSISTENT',role:'M04ReadConsistent'}
+  },'valid source-consistent staff role retains existing view permission');
+});
+
+test('core second session SELECT rejects activity rewound after the heartbeat',async()=>{
+  const start=BASE+1_500_000;
+  const issued=await loginWithD1(DB,{
+    phoneKey:'01710000001',password:PASSWORD,nowMs:start,
+  });
+  assert.equal(issued.authenticated,true);
+  const digest=createHash('sha256').update(Buffer.from(issued.token,'hex')).digest('hex');
+  const heartbeat=await validateSessionWithD1(DB,{
+    token:issued.token,nowMs:start+1_000_000,
+  });
+  assert.equal(heartbeat.authenticated,true,'fresh session heartbeats normally succeed');
+  const checkAt=start+2_000_000;
+  let injected=0;
+  // The core UPDATE succeeds and stamps checkAt. Simulate a concurrent
+  // database write to this one synthetic session before the subsequent
+  // actor SELECT; this adapter is local to the test and never deployed.
+  const interleavedD1={
+    prepare(sql){
+      const stmt=DB.prepare(sql);
+      if(!sql.includes('SELECT u.user_id,u.full_name,u.role_name FROM auth_sessions s'))
+        return stmt;
+      return {
+        bind(...params){
+          const query=stmt.bind(...params);
+          return {
+            async first(){
+              injected++;
+              await DB.prepare('UPDATE auth_sessions SET last_activity_at_ms=? WHERE token_hash=?')
+                .bind(start,digest).run();
+              return query.first();
+            },
+          };
+        },
+      };
+    },
+  };
+  const raced=await validateSessionWithD1(interleavedD1,{
+    token:issued.token,nowMs:checkAt,
+  });
+  assert.equal(injected,1,'rewind happened between the two real D1 statements');
+  assert.deepEqual(raced,{authenticated:false},
+    'the second actor lookup must not accept a session outside the idle window');
+  const persisted=await DB.prepare('SELECT last_activity_at_ms FROM auth_sessions WHERE token_hash=?')
+    .bind(digest).first();
+  assert.equal(persisted.last_activity_at_ms,start);
+  assert.deepEqual(await validateSessionWithD1(DB,{
+    token:issued.token,nowMs:checkAt+1000,
+  }),{authenticated:false},'ordinary future validation also refuses the stale session');
 });

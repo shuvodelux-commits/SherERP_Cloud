@@ -38,3 +38,62 @@ test('refuses unknown or duplicate legacy wrapper instead of silently skipping p
   assert.throws(()=>patchServerCall('hello'),/wrapper/i);
   assert.throws(()=>patchServerCall(legacy+'\n'+legacy),/duplicate|multiple/i);
 });
+
+
+test('RPC HTTP non-JSON and empty response bodies reject with a controlled error',async()=>{
+  const patched=patchServerCall(legacy);
+  const fn=patched.slice(patched.indexOf('  function serverCall'),patched.indexOf('  // ---------------- 6.'));
+  for(const status of [200,503]){
+    const call=runInNewContext(fn+';serverCall',{
+      fetch:async()=>({
+        ok:status===200,
+        status,
+        json:async()=>{throw new SyntaxError(status===200
+          ? 'Unexpected token < in JSON at position 0'
+          : 'Unexpected end of JSON input');}
+      })
+    });
+    await assert.rejects(call('getProducts'),{
+      name:'Error',
+      message:'Server error'
+    },'HTTP '+status+' invalid JSON body must not leak parser diagnostics');
+  }
+});
+
+
+test('RPC serialization failures return rejected Promises without sending a request',async()=>{
+  const html=patchServerCall(legacy);
+  const fn=html.slice(html.indexOf('  function serverCall'),html.indexOf('  // ---------------- 6.'));
+  let requests=0;
+  const call=runInNewContext(fn+';serverCall',{
+    fetch:async()=>{requests++;throw new Error('fetch should not run');}
+  });
+  const circular=[];
+  circular.push(circular);
+  for(const invalid of [circular,1n]){
+    let result;
+    assert.doesNotThrow(()=>{
+      result=call('getProducts',invalid);
+    },'serverCall must return a Promise rather than throw during JSON.stringify');
+    assert.equal(typeof result?.then,'function','returned value is Promise-like');
+    await assert.rejects(result,{name:'TypeError'});
+    assert.equal(requests,0,'invalid JSON must not send any RPC request');
+  }
+});
+
+
+test('compiled original login honors pending button before keyboard retry',()=>{
+  const frozenLogin = [
+    '  function doLogin_() {',
+    "    var errEl = document.getElementById('loginError');",
+    "    var btn = document.getElementById('loginSubmitBtn');",
+    "    var mobile = (document.getElementById('loginMobile').value || '').trim();",
+    '  }'
+  ].join('\n');
+  const output=patchServerCall(frozenLogin+'\n'+legacy);
+  assert.match(output,
+    /function doLogin_\(\) \{\s*var errEl = document\.getElementById\('loginError'\);\s*var btn = document\.getElementById\('loginSubmitBtn'\);\s*if \(btn && btn\.disabled\) return;/,
+    'original login must reject concurrent Enter submissions while button is disabled');
+  assert.equal(output.split('if (btn && btn.disabled) return;').length-1,1,
+    'guard is inserted once, not duplicated');
+});

@@ -49,3 +49,35 @@ test('detects disconnected floating scrollbar and leaked GAS RPC wrapper', () =>
   const noFetch = builtHtml.replace("fetch('/api/rpc'", "google.script.run('/api/rpc'");
   assert.match(inspectUiContracts(noFetch).join('\n'), /same-origin RPC fetch/);
 });
+
+test('static shell ID guard ignores lookalike data attributes and quoted id fragments', () => {
+  const fakeDuplicate = builtHtml.replace('</body>',
+    `<div data-id="printHost" data-label=" id='printHost'"></div></body>`);
+  assert.deepEqual(inspectUiContracts(fakeDuplicate), [],
+    'data-id and id text inside another quoted attribute must not count as real IDs');
+
+  const lostRealId = builtHtml.replace('<div id="app" style="visibility:hidden;">',
+    '<div data-id="app" style="visibility:hidden;">');
+  assert.notEqual(lostRealId, builtHtml, 'test fixture must replace the real root ID');
+  assert.match(inspectUiContracts(lostRealId).join('\\n'), /app missing from live shell markup/,
+    'a data-id lookalike must not conceal a missing required root ID');
+});
+
+
+test('commented invoice header CSS cannot satisfy the active print contract', () => {
+  const changed = builtHtml.replace('display: table-header-group;', 'display: table-row-group;');
+  assert.notEqual(changed, builtHtml, 'test must remove the real repeating-header display');
+  const withDecoy = changed.replace('</body>',
+    '<style>/* body.printing-invoice .inv-table thead { display: table-header-group; } */</style></body>');
+  assert.match(inspectUiContracts(withDecoy).join('\\n'), /repeating invoice table header missing/,
+    'a comment must not conceal missing active invoice print CSS');
+});
+
+test('commented mobile breakpoint cannot satisfy the active responsive contract', () => {
+  const changed = builtHtml.replace('@media (max-width: 860px)', '@media (max-width: 600px)');
+  assert.notEqual(changed, builtHtml, 'test must remove the real 860px breakpoint');
+  const withDecoy = changed.replace('</body>',
+    '<style>/* @media (max-width: 860px) { .decoy { display:none; } } */</style></body>');
+  assert.match(inspectUiContracts(withDecoy).join('\\n'), /860px mobile breakpoint missing/,
+    'a comment must not conceal missing mobile CSS');
+});

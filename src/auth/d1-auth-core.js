@@ -271,13 +271,15 @@ export async function validateSessionWithD1(db,{token,nowMs}={}){
 
   const row=await db.prepare(`SELECT u.user_id,u.full_name,u.role_name FROM auth_sessions s
      JOIN auth_users u ON u.user_id=s.user_id
-     WHERE s.token_hash=? AND s.revoked_at_ms IS NULL AND s.expires_at_ms>?
+     WHERE s.token_hash=? AND s.revoked_at_ms IS NULL
+       AND s.created_at_ms<=? AND s.expires_at_ms>?
+       AND s.last_activity_at_ms>? AND s.last_activity_at_ms<=?
        AND u.status='Active' AND u.auth_version=s.user_auth_version
        AND u.credential_version=s.credential_version
        AND ((u.role_name='Administrator' AND s.role_auth_version IS NULL)
          OR EXISTS (SELECT 1 FROM auth_roles r WHERE r.role_name=u.role_name
            AND r.status='Active' AND r.auth_version=s.role_auth_version))`)
-    .bind(digest,nowMs).first();
+    .bind(digest,nowMs,nowMs,nowMs-AUTH_POLICY.sessionIdleMs,nowMs).first();
   return row ? {authenticated:true,user:sanitizedUser(row)} : denyLogin();
 }
 

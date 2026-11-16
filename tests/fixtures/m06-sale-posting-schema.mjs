@@ -1,4 +1,20 @@
 /** M06 ONLY: synthetic local Workerd/D1 schema, never production migrations. */
+/** Fixed test-only D1 tables; posted child effects are append-only. */
+export const M06_CHILD_IMMUTABILITY_TABLES=[
+  "m06_sale_items",
+  "m06_stock_movements",
+  "m06_payment_children",
+  "m06_cash_book",
+  "m06_bank_book",
+  "m06_customer_ledger"
+];
+export const M06_CHILD_IMMUTABILITY_DDL=M06_CHILD_IMMUTABILITY_TABLES.flatMap(table=>[
+  `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table}
+    BEGIN SELECT RAISE(ABORT,'m06-immutable-child'); END`,
+  `CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table}
+    BEGIN SELECT RAISE(ABORT,'m06-immutable-child'); END`
+]);
+
 export const M06_SALE_TEST_DDL=[
 `CREATE TABLE m06_cash_sessions(tenant_id TEXT PRIMARY KEY, state TEXT NOT NULL CHECK(state IN ('Open','Closed'))) STRICT`,
 `CREATE TABLE m06_owned_stock(tenant_id TEXT NOT NULL, sku TEXT NOT NULL, available INTEGER NOT NULL CHECK(available>=0), PRIMARY KEY(tenant_id,sku)) STRICT`,
@@ -95,7 +111,8 @@ export const M06_SALE_TEST_DDL=[
  NEW.invoice_id,NEW.actor_id,'POSTED' WHERE NEW.source_draft_id<>'';
  END`,
 `CREATE TRIGGER m06_invoice_immutable_update BEFORE UPDATE ON m06_invoices BEGIN SELECT RAISE(ABORT,'m06-immutable-invoice'); END`,
-`CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices BEGIN SELECT RAISE(ABORT,'m06-immutable-invoice'); END`
+`CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices BEGIN SELECT RAISE(ABORT,'m06-immutable-invoice'); END`,
+...M06_CHILD_IMMUTABILITY_DDL
 ];
 
 export const M06_SALE_TEST_SEED=[

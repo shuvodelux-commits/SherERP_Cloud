@@ -9,7 +9,7 @@
  *
  * This is NOT a publicly exposed findInvoice implementation.
  */
-import {readSalePaymentBreakdown_} from './sale-payments.js';
+import {readSalePaymentBreakdown_,salePaymentPaisa_} from './sale-payments.js';
 
 const record=value=>value!==null && typeof value==='object' &&
   !Array.isArray(value) &&
@@ -33,6 +33,27 @@ function dateOnly(value){
   if(typeof value!=='string' ||
     !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(value)){
     throw new TypeError('Invalid canonical posted-invoice date');
+  }
+  const [year,month,day]=value.slice(0,10).split('-').map(Number);
+  // Date.setUTCFullYear also handles years 0000–0099 without the
+  // Date.UTC(0..99) implicit 1900 offset. Reject silently rolled days.
+  const calendar=new Date(0);
+  calendar.setUTCFullYear(year,month-1,day);
+  if(calendar.getUTCFullYear()!==year ||
+    calendar.getUTCMonth()!==month-1 ||
+    calendar.getUTCDate()!==day){
+    throw new TypeError('Invalid canonical posted-invoice date');
+  }
+  // An imported ISO-shaped Date must also carry a real clock/UTC offset.
+  // Keep the calendar day as stored; never shift invoice dates by timezone.
+  const timestamp=value.match(/T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/);
+  if(timestamp){
+    const [,hour,minute,second,offset]=timestamp;
+    const invalidClock=Number(hour)>23||Number(minute)>59||Number(second)>59;
+    const invalidOffset=offset&&offset!=='Z'&&
+      (Number(offset.slice(1,3))>23||Number(offset.slice(-2))>59);
+    if(invalidClock||invalidOffset)
+      throw new TypeError('Invalid canonical posted-invoice date');
   }
   return value.slice(0,10);
 }
@@ -81,6 +102,18 @@ export function projectPostedSaleInvoice(invoiceId,untrustedSnapshot){
   const sale=matches[0];
   if(String(sale['Is Deleted']||'').toUpperCase()==='TRUE'){
     throw new Error('Invoice not found or has been deleted.');
+  }
+
+  // Validate immutable checkout totals separately from later collections,
+  // credits and returns. Never correct an imported invoice while printing.
+  try{
+    const grand=salePaymentPaisa_(sale['Grand Total'],'Original grand total',false);
+    const paid=salePaymentPaisa_(sale['Paid Amount'],'Original paid amount',false);
+    const due=salePaymentPaisa_(sale['Due Amount'],'Original due amount',false);
+    if(!Number.isSafeInteger(paid+due)||paid+due!==grand)
+      throw new Error('Unreconciled original checkout');
+  }catch{
+    throw new Error('NEEDS_REVIEW: posted invoice original checkout totals mismatch');
   }
 
   const saleDate=dateOnly(sale['Date']);

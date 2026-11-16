@@ -1,0 +1,26 @@
+name: M02 Opening balance edit historical audit real local Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  opening-balance-edit-audit-local-d1:
+    name: Verify frozen opening balance audit and atomic immutable D1 history
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install source dependency lock
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Prove frozen source, SQLite STRICT and preflight validation
+        run: node --test tests/m02-opening-balance-edit-audit-schema.test.mjs tests/m02-opening-balance-edit-audit-import.test.mjs
+      - name: Prove local Workerd D1 import rollback and immutable history
+        run: node --test tests/integration/m02-opening-balance-edit-audit-workerd.spec.mjs

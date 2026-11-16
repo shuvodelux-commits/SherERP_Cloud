@@ -1,7 +1,7 @@
 import {requireD1Binding} from './d1-binding.js';
 
 // M03 source-shaped read subset of legacy Database.gs. NOT a general Sheet emulator.
-// Only the two approved, non-sensitive masters from original CONFIG.HEADERS.
+// Only the three reviewed, non-sensitive masters from original CONFIG.HEADERS.
 const MAX_ROWS = 1000;
 const CATALOG = Object.freeze({
   PRODUCT_CATEGORIES: Object.freeze({
@@ -13,6 +13,13 @@ const CATALOG = Object.freeze({
     headers: Object.freeze(['Unit ID','Unit Name','Status','Created At']),
     fields: Object.freeze(['unit_id','unit_name','status','created_at']),
     sql: 'SELECT legacy_sheet_row, unit_id, unit_name, status, created_at FROM product_units ORDER BY legacy_sheet_row ASC LIMIT ?',
+  }),
+  // Reviewed frozen Config.gs + M02 0005_expense_categories master.
+  // getAllRows_ must retain inactive and blank-status rows, not only UI choices.
+  EXPENSE_CATEGORIES: Object.freeze({
+    headers: Object.freeze(['Category ID','Category Name','Description','Status','Created At']),
+    fields: Object.freeze(['category_id','category_name','description','status','created_at']),
+    sql: 'SELECT legacy_sheet_row, category_id, category_name, description, status, created_at FROM expense_categories ORDER BY legacy_sheet_row ASC LIMIT ?',
   }),
 });
 
@@ -54,7 +61,7 @@ function validColumn(sheetKey,columnName){
 }
 
 /**
- * Internal async, read-only migration adapter for two reviewed master groups.
+ * Internal async, read-only migration adapter for three reviewed master groups.
  * Never attach to public RPC until M04 auth. Does not cache, write, or expose SETTINGS.
  * Original Database.gs find helpers use String() exact-match semantics.
  */

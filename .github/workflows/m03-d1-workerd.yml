@@ -10,7 +10,7 @@ jobs:
   local-worker-d1:
     name: Test read-only adapters against local workerd and D1
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,4 +23,9 @@ jobs:
       - name: Install pinned Wrangler only in this isolated CI runner
         run: npm install --no-save --package-lock=false wrangler@4.161.0
       - name: Run actual local workerd/D1 adapter integration
-        run: node --test tests/integration/m03-workerd.spec.mjs
+        run: |
+          node --test tests/integration/m03-workerd.spec.mjs
+          node --test tests/integration/m03-daybook-rpc-workerd.spec.mjs
+          node --test tests/integration/m03-daybook-http-workerd.spec.mjs
+          node --test tests/integration/m03-expense-category-read-workerd.spec.mjs
+          node --test tests/integration/m03-expense-payee-party-proof-workerd.spec.mjs

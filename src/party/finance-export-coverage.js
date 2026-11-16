@@ -19,6 +19,9 @@ const cell=x=>x===null || typeof x==='string' || typeof x==='boolean' ||
   (typeof x==='number' && Number.isFinite(x));
 const softDeleted=row=>row['Is Deleted']===true ||
   String(row['Is Deleted']||'').trim().toUpperCase()==='TRUE';
+const validDeletionFlag=value=>value===null || typeof value==='boolean' ||
+  (typeof value==='string' && (value.trim()==='' ||
+    /^(TRUE|FALSE)$/i.test(value.trim())));
 function positiveAmount(value){
   if(typeof value!=='number' && typeof value!=='string')return false;
   if(typeof value==='number'&&!Number.isFinite(value))return false;
@@ -66,7 +69,8 @@ export function validateFinanceTransactionExport(input={}){
         else if(positions.has(value))counts.duplicateSourceRows++;
         else positions.add(value);
       }else if(!allowed.has(field))counts.unexpectedFields++;
-      else if(!cell(value))counts.unsafeValues++;
+      else if(!cell(value) || (field==='Is Deleted' && !validDeletionFlag(value)))
+        counts.unsafeValues++;
     }
     const id=row['Finance ID'],personId=row['Person ID'];
     if(typeof id==='number')unsafeIdentifiers++;

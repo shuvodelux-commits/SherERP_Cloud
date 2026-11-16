@@ -17,9 +17,12 @@ import './m03-authorized-receipt-workerd.spec.mjs'; // Session-derived actor and
 import './m03-m04-receipt-workerd.spec.mjs'; // Actual proposed M04 session schema + single-business immutable receipt readback.
 import './m03-authorized-post-workerd.spec.mjs'; // Synthetic M04 authority checked inside atomic D1 receipt/post claim.
 import './m03-catalog-append-workerd.spec.mjs'; // Existing isolated catalog writer suite.
+import './m02-product-unit-import-workerd.spec.mjs'; // M02 frozen Product Units source import / real D1 rollback, local-only.
+import './m02-product-category-import-workerd.spec.mjs'; // M02 frozen Product Categories source import / real D1 rollback, local-only.
 import './m03-catalog-update-workerd.spec.mjs'; // M03 guarded update with separate local D1 fixture.
 import './m03-product-status-workerd.spec.mjs'; // M03 frozen ProductSettings status orchestration, fixed local D1 only.
 import './m03-master-atomic-workerd.spec.mjs'; // M03 source PCAT/PUNT, one-statement local D1 creation receipt/cleanup proof.
+import './m03-m04-authorized-master-workerd.spec.mjs'; // Current M04 products.add session in the same atomic local D1 master INSERT.
 import './m03-catalog-tail-delete-workerd.spec.mjs'; // Tail-only guarded deletes, isolated D1.
 import './m03-exactly-one-workerd.spec.mjs'; // Internal atomic write guard on synthetic local D1.
 import './m03-id-issuer-workerd.spec.mjs'; // M03 source IDs: isolated D1 receipt+counter trigger, replay and concurrency.
@@ -27,11 +30,17 @@ import './m03-id-post-workerd.spec.mjs'; // M03 source INV ID + synthetic stock/
 import './m05-purchase-posting-workerd.spec.mjs'; // M05 test-only atomic supplier purchase posting; local D1 only.
 import './m06-sale-posting-workerd.spec.mjs'; // M06 isolated synthetic sale/tender/Customer due atomic D1 proof.
 import './m07-cash-return-workerd.spec.mjs'; // M07 single-invoice Cash return exact-once/rollback proof on M06 source.
+import './m07-cash-delete-workerd.spec.mjs'; // M07 test-only original Cash Return deletion, exact-once stock/Cash undo with audit.
 import './m07-store-credit-workerd.spec.mjs'; // M07 signed Customer credit with no Cash/Bank and cross-method replay guard.
+import './m07-credit-delete-workerd.spec.mjs'; // M07 test-only source-bound signed Customer Store Credit reversal and audit.
 import './m07-cash-batch-workerd.spec.mjs'; // M07 2–20 original-invoice Cash batch all-or-nothing local D1.
 import './m07-store-credit-batch-workerd.spec.mjs'; // M07 ordered signed Store Credit batch exact-once/rollback local D1.
 import './m07-purchase-cash-return-workerd.spec.mjs'; // M07 source-linked purchase Cash refund original-lot local D1 proof.
+import './m07-purchase-cash-delete-workerd.spec.mjs'; // M07 source-specific Purchase Cash Return reversal, local D1 only.
 import './m07-purchase-supplier-credit-workerd.spec.mjs'; // M07 signed Supplier Credit original-lot D1 ledger/reversal proof.
+import './m07-purchase-credit-delete-workerd.spec.mjs'; // M07 Supplier Credit Purchase Return source-bound deletion, local D1 only.
+import './m07-purchase-multilot-cash-workerd.spec.mjs'; // M07-B4A isolated multi-lot Cash receipt real Workerd/D1 atomic proof.
+import './m08-reconciliation-atomic-workerd.spec.mjs'; // M08 single closing-entry atomicity, local D1 only; no public writer.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
@@ -70,10 +79,10 @@ async function query(path){
   return {status:response.status,body:await response.json()};
 }
 
-test('workerd applies actual M02 migrations to its isolated D1 binding',async()=>{
-  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
-  assert.equal(result.applied_migrations,2);
-  assert.equal(result.application_tables,7);
+test('workerd applies all eleven M02/core migrations including isolated expense, LOGS, DELETE_LOG, SALES_DRAFT_AUDIT, INVOICE_EDIT_LOG, OPENING_BALANCE_EDIT_LOG and STOCK_LOT_COST_CORRECTIONS histories',async()=>{
+  const result=await db.prepare("SELECT (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','expense_categories','legacy_error_logs','legacy_delete_log','legacy_sales_draft_audit','legacy_invoice_edit_audit','legacy_opening_balance_edit_audit','legacy_stock_lot_cost_corrections','parties','party_roles','party_legacy_links','party_identity_review')) AS application_tables").first();
+  assert.equal(result.applied_migrations,11);
+  assert.equal(result.application_tables,14);
 });
 
 test('Cloudflare Worker runtime executes the real catalog adapter via local D1',async()=>{

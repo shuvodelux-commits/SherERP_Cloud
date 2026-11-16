@@ -32,7 +32,7 @@ const SQL_POST=`INSERT INTO m06_invoices(tenant_id,invoice_id,operation_id,actor
    AND d.customer_id=? AND d.payments_json=?))
  ON CONFLICT(tenant_id,operation_id) DO NOTHING
  RETURNING invoice_id,payload_hash,actor_id`;
-const SQL_LOOKUP=`SELECT invoice_id,payload_hash,actor_id FROM m06_invoices
+const SQL_LOOKUP=`SELECT invoice_id,payload_hash,actor_id,payments_json FROM m06_invoices
  WHERE tenant_id=? AND operation_id=?`;
 const asPaisa=(value,label)=>salePaymentPaisa_(value,label,false);
 const decimalString=cents=>(cents/100).toFixed(2);
@@ -68,6 +68,76 @@ function validate(input){
   return {price,discount,grand:Math.max(0,subtotal-discount)};
 }
 
+/**
+ * Read-only proof for a replayed, already-posted synthetic sale. Original
+ * invoice identity alone does not prove the child Cash/Bank/Customer records
+ * survived intact. These are fixed, tenant-scoped SQL selectors, not caller SQL.
+ */
+async function verifyReplayReceipt(DB,{
+  tenantId,invoiceId,sku,units,customerId,due,children,
+  sourceDraftId,sourceDraftVersion,actorId
+}){
+  const expectedPayments=children.map(p=>({
+    row_id:p.rowId,row_order:p.rowOrder,method:p.method,
+    account_id:p.accountId,tender_paisa:p.tenderPaisa,
+    applied_paisa:p.appliedPaisa,change_paisa:p.changePaisa
+  })).sort((a,b)=>a.row_order-b.row_order);
+  const byRowId=(a,b)=>a.row_id<b.row_id?-1:a.row_id>b.row_id?1:0;
+  const expectedCash=children.filter(p=>p.method==='Cash'&&p.appliedPaisa>0)
+    .map(p=>({row_id:p.rowId,credit_paisa:p.appliedPaisa})).sort(byRowId);
+  const expectedBank=children.filter(p=>p.method!=='Cash'&&p.appliedPaisa>0)
+    .map(p=>({row_id:p.rowId,account_id:p.accountId,credit_paisa:p.appliedPaisa}))
+    .sort(byRowId);
+  const checks=[
+    {
+      sql:'SELECT sku,units FROM m06_sale_items WHERE tenant_id=? AND invoice_id=? ORDER BY sku',
+      rows:[{sku,units}]
+    },{
+      sql:'SELECT sku,units_out FROM m06_stock_movements WHERE tenant_id=? AND invoice_id=? ORDER BY sku',
+      rows:[{sku,units_out:units}]
+    },{
+      sql:'SELECT row_id,row_order,method,account_id,tender_paisa,applied_paisa,change_paisa FROM m06_payment_children WHERE tenant_id=? AND invoice_id=? ORDER BY row_order',
+      rows:expectedPayments
+    },{
+      sql:'SELECT row_id,credit_paisa FROM m06_cash_book WHERE tenant_id=? AND invoice_id=? ORDER BY row_id',
+      rows:expectedCash
+    },{
+      sql:'SELECT row_id,account_id,credit_paisa FROM m06_bank_book WHERE tenant_id=? AND invoice_id=? ORDER BY row_id',
+      rows:expectedBank
+    },{
+      sql:'SELECT customer_id,debit_paisa FROM m06_customer_ledger WHERE tenant_id=? AND invoice_id=? ORDER BY customer_id',
+      rows:due>0?[{customer_id:customerId,debit_paisa:due}]:[]
+    },{
+      sql:'SELECT draft_id,version,invoice_id,actor_id,action FROM m06_draft_audit WHERE tenant_id=? AND invoice_id=? ORDER BY draft_id',
+      rows:sourceDraftId?[{
+        draft_id:sourceDraftId,version:sourceDraftVersion,
+        invoice_id:invoiceId,actor_id:actorId,action:'POSTED'
+      }]:[]
+    }
+  ];
+  // A consumed source draft must remain absent. A stale reimport under its
+  // original ID is an unresolved inconsistency, not proof of clean replay.
+  if(sourceDraftId)checks.push({
+    sql:'SELECT draft_id FROM m06_drafts WHERE tenant_id=? AND draft_id=?',
+    rows:[],draftId:sourceDraftId
+  });
+  try{
+    // One read-only D1 batch observes a consistent synthetic receipt snapshot;
+    // this is not a replacement for the authoritative atomic posting boundary.
+    const proof=await DB.batch(checks.map(c=>
+      DB.prepare(c.sql).bind(tenantId,c.draftId??invoiceId)));
+    if(!Array.isArray(proof)||proof.length!==checks.length)
+      throw new Error('Missing posted sale evidence');
+    for(let i=0;i<checks.length;i++){
+      const actual=dataRows(proof[i]);
+      if(JSON.stringify(actual)!==JSON.stringify(checks[i].rows))
+        throw new Error('Posted sale child mismatch');
+    }
+  }catch{
+    throw new Error('NEEDS_REVIEW: posted sale receipt integrity mismatch; reconcile operation ID');
+  }
+}
+
 export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
   if(!DB || typeof DB.prepare!=='function' || typeof DB.batch!=='function')
     throw new Error('D1 transactional sale binding unavailable');
@@ -79,12 +149,41 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
       const {tenantId,actorId,invoiceId,operationId,sku,units,customerId}=input;
       const sourceDraftId=Object.hasOwn(input,'sourceDraftId')?input.sourceDraftId:'';
       const sourceDraftVersion=sourceDraftId?input.sourceDraftVersion:0;
-      // A read can become stale: the SAME SQL posting statement must repeat
-      // every bank/customer/stock/session guard. This read grants NO authority.
-      const trustedBankRows=(await DB.prepare(SQL_ACCOUNTS).bind(tenantId).all()).results.map(a=>({
-        'Bank Account ID':a.account_id,'Account Name':a.account_name,
-        'Account Type':a.method,Status:a.active===1?'Active':'Inactive','Is Deleted':'FALSE'
-      }));
+      // A prior operation is historical evidence, not permission for a new
+      // payment. Only the same actor may normalize its now-inactive account;
+      // intent hashing, exact receipt readback and SQL's live bank guard stay.
+      const prior=await DB.prepare(SQL_LOOKUP).bind(tenantId,operationId).first();
+      if(prior && prior.actor_id!==actorId)
+        return {status:'CONFLICT',operationId};
+      // A historical operation is checked against the immutable original
+      // invoice's payment snapshot, never the mutable Bank/Mobile directory.
+      // This supplies no authority for a new sale: SQL_POST retains its active
+      // account CAS and verifyReplayReceipt requires every original child.
+      let trustedBankRows;
+      if(prior){
+        let originalPayments;
+        try{
+          originalPayments=JSON.parse(prior.payments_json);
+          if(!Array.isArray(originalPayments) || originalPayments.some(p=>
+            !plain(p) || !['Cash','Bank','Mobile Banking'].includes(p.method) ||
+            (p.method!=='Cash' && !SIMPLE_ID.test(p.accountId||''))))
+            throw new Error('Invalid immutable payment snapshot');
+        }catch{
+          throw new Error('NEEDS_REVIEW: posted sale payment snapshot invalid; reconcile operation ID');
+        }
+        trustedBankRows=originalPayments.filter(p=>p.method!=='Cash').map(p=>({
+          'Bank Account ID':p.accountId,'Account Name':'',
+          'Account Type':p.method,Status:'Active','Is Deleted':'FALSE'
+        }));
+      }else{
+        // A read can become stale: the SAME SQL posting statement must repeat
+        // every bank/customer/stock/session guard. This read grants NO authority.
+        trustedBankRows=(await DB.prepare(SQL_ACCOUNTS).bind(tenantId).all()).results.map(a=>({
+          'Bank Account ID':a.account_id,'Account Name':a.account_name,
+          'Account Type':a.method,Status:a.active===1?'Active':'Inactive',
+          'Is Deleted':'FALSE'
+        }));
+      }
       const allocation=normalizeSalePayments_(decimalString(grand),input.payments,trustedBankRows);
       const paid=asPaisa(allocation.paidAmount,'Paid amount');
       const due=asPaisa(allocation.dueAmount,'Due amount');
@@ -133,8 +232,13 @@ export function createSyntheticD1SalePostingContract(DB,{beforeBatch}={}){
         return {status:'COMMITTED',operationId,invoiceId};
       if(claimed.length===0){
         if(lookup.length===0)return {status:'DECLINED',operationId};
-        if(existing && existing.actor_id===actorId && existing.payload_hash===payloadHash)
+        if(existing && existing.actor_id===actorId && existing.payload_hash===payloadHash){
+          await verifyReplayReceipt(DB,{
+            tenantId,invoiceId:existing.invoice_id,sku,units,customerId,
+            due,children,sourceDraftId,sourceDraftVersion,actorId
+          });
           return {status:'REPLAY',operationId,invoiceId:existing.invoice_id};
+        }
         if(existing)return {status:'CONFLICT',operationId};
       }
       throw new Error('NEEDS_REVIEW: ambiguous sale posting result; reconcile operation ID');

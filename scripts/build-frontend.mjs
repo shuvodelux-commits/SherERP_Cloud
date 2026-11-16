@@ -7,11 +7,14 @@ export async function buildFrontend({sourceDir, outputDir}) {
   const src = resolve(sourceDir);
   const dest = resolve(outputDir);
   let includeCount=0;
+  const expandedNames=new Set();
   const expand=async (name, stack=[]) => {
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
       throw new Error('Invalid include name: '+name);
     }
     if (stack.includes(name)) throw new Error('Include cycle: '+[...stack,name].join(' -> '));
+    if (expandedNames.has(name)) throw new Error('Duplicate include: '+name);
+    expandedNames.add(name);
     let input;
     try {
       input=await readFile(join(src,name+'.html'),'utf8');

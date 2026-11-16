@@ -1,0 +1,32 @@
+name: M10 Catalog source-to-D1 digest parity (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-digest-d1:
+    name: Verify M10 original-ID and row checksums against isolated Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler in ephemeral CI runner only
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Prove independently computed original source and persisted D1 digests
+        run: node --test tests/integration/m10-catalog-digest-workerd.spec.mjs
+      - name: Prove Expense Categories source-to-D1 checksums and tamper detection
+        run: node --test tests/integration/m10-expense-category-digest-workerd.spec.mjs
+      - name: Verify id-less original LOGS source-position provenance against isolated D1
+        run: node --test tests/integration/m10-idless-logs-workerd.spec.mjs
+      - name: Prove immutable DELETE_LOG original Log ID and full-row checksums against isolated D1
+        run: node --test tests/integration/m10-delete-log-digest-workerd.spec.mjs
+      - name: Prove Sales Draft Audit authentic original IDs and immutable content against local D1
+        run: node --test tests/integration/m10-sales-draft-audit-digest-workerd.spec.mjs

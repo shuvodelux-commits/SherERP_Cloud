@@ -21,9 +21,15 @@ export function inspectUiContracts(html) {
     /<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, ''
   );
   const ids = new Map();
-  for (const match of markup.matchAll(/<[a-z][\w:-]*\b[^>]*?\bid\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)) {
-    const id = match[1] ?? match[2];
-    ids.set(id, (ids.get(id) ?? 0) + 1);
+  // Match opening tags without mistaking '>' in quoted values for tag ends.
+  for (const tag of markup.matchAll(/<[a-z][\w:-]*\b((?:[^<>"']|"[^"]*"|'[^']*')*)>/gi)) {
+    // Consume each complete attribute, including its quoted value, so
+    // data-id and text inside data-label cannot masquerade as a real id.
+    for (const attr of tag[1].matchAll(/\s+([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
+      if (attr[1].toLowerCase() !== 'id') continue;
+      const id = attr[2] ?? attr[3] ?? attr[4];
+      if (id !== undefined) ids.set(id, (ids.get(id) ?? 0) + 1);
+    }
   }
   for (const id of REQUIRED_IDS) {
     const count = ids.get(id) ?? 0;
@@ -32,7 +38,8 @@ export function inspectUiContracts(html) {
   }
 
   const css = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)]
-    .map((match) => match[1]).join('\n');
+    .map((match) => match[1]).join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
   if (!/@media\s*\(\s*max-width\s*:\s*860px\s*\)/i.test(css)) {
     errors.push('860px mobile breakpoint missing');
   }

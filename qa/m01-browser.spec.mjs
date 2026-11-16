@@ -436,3 +436,64 @@ test('original thermal draft renderer shows draft marker without A4-only paid de
     assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
   }finally{await page.close();}
 });
+
+
+test('rapid Enter while sign-in is pending sends only one RPC and permits retry afterward',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const requests=[];
+  let startFirst,releaseFirst;
+  const firstRequest=new Promise(resolve=>{startFirst=resolve;});
+  const pendingFirst=new Promise(resolve=>{releaseFirst=resolve;});
+  const errorMessage='Sign-in is unavailable because server authentication is not configured yet.';
+  try{
+    await page.route('**/api/rpc',async route=>{
+      const payload=route.request().postDataJSON();
+      if(payload?.fnName!=='login')return route.continue();
+      requests.push(payload);
+      if(requests.length===1){
+        startFirst();
+        await pendingFirst;
+      }
+      await route.fulfill({
+        status:503,contentType:'application/json',
+        headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'},
+        body:JSON.stringify({success:false,message:errorMessage})
+      });
+    });
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.locator('#loginMobile').fill('01700000000');
+    await page.locator('#loginPassword').fill('invalid-synthetic-pending');
+    await page.locator('#loginPassword').press('Enter');
+    await firstRequest;
+    assert.equal(await page.locator('#loginSubmitBtn').isDisabled(),true,
+      'the original login shows its existing pending UI');
+    await page.locator('#loginPassword').press('Enter');
+    await page.locator('#loginPassword').press('Enter');
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(
+      ()=>requestAnimationFrame(resolve))));
+    assert.equal(requests.length,1,'pending Enter key must not dispatch duplicate login RPCs');
+    releaseFirst();
+    await page.locator('#loginError').getByText(errorMessage).waitFor();
+    await page.locator('#loginSubmitBtn:not([disabled])').waitFor();
+    assert.equal(await page.locator('#loginSubmitBtn').getAttribute('aria-busy'),'false');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),null);
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+    const retry=page.waitForResponse(response=>
+      response.url().endsWith('/api/rpc') &&
+      response.request().method()==='POST' &&
+      response.request().postDataJSON()?.fnName==='login');
+    await page.locator('#loginPassword').press('Enter');
+    const response=await retry;
+    assert.equal(response.status(),503);
+    assert.equal(requests.length,2,'after pending clears one intentional retry is allowed');
+    assert.deepEqual(requests.map(request=>request.args),[
+      ['01700000000','invalid-synthetic-pending'],
+      ['01700000000','invalid-synthetic-pending']
+    ]);
+    assert.equal(await page.locator('#loginOverlay').isVisible(),true);
+  }finally{
+    releaseFirst?.();
+    await page.close();
+  }
+});
