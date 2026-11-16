@@ -56,9 +56,17 @@ test('original Chromium login/restore/logout use real isolated M04 auth D1, not 
     page=await browser.newPage({viewport:{width:1280,height:800}});
     let shellCalls=0;
     const requests=[];
+    let logoutRpcResult;
     await page.route('**/api/rpc',async route=>{
       const payload=route.request().postDataJSON();
       requests.push({fnName:payload?.fnName,arity:payload?.args?.length});
+      if(payload?.fnName==='logout'){
+        // Capture the real local D1 response before the original UI navigates
+        // away; Chromium may discard its body after logout redirects.
+        const reply=await route.fetch();
+        logoutRpcResult={status:reply.status(),body:await reply.json()};
+        return route.fulfill({response:reply});
+      }
       if(payload?.fnName!=='getAppShellData')return route.continue();
       shellCalls++;
       await route.fulfill({
@@ -129,7 +137,7 @@ test('original Chromium login/restore/logout use real isolated M04 auth D1, not 
     await page.evaluate(()=>{void doLogout_();});
     const logout=await logoutResponse;
     assert.equal(logout.status(),200);
-    assert.deepEqual(await logout.json(),{success:true,data:'logged out'});
+    assert.deepEqual(logoutRpcResult,{status:200,body:{success:true,data:'logged out'}});
     await page.locator('#loginOverlay:not([hidden])').waitFor();
     await page.waitForFunction(()=>localStorage.getItem('hwerp.session.token')===null);
     assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
