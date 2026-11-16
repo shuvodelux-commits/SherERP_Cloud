@@ -141,7 +141,7 @@ test('existing purchase with only legacy units produces same guard decisions as 
 test('Purchase Return and soft-deleted header preserve original source edit locks',()=>{
   const data=snapshot();
   data.returns.push({'Purchase ID':'PUR-001','Return ID':'PR-1','Is Deleted':'FALSE'});
-  assert.throws(()=>review(input(),data),/Purchase Return records.*cannot.*updated/i);
+  assert.throws(()=>review(input(),data),/Purchase Return records.*no longer be updated/i);
   data.returns[0]['Is Deleted']='TRUE';
   data.purchases[0]['Is Deleted']='TRUE';
   assert.throws(()=>review(input(),data),/purchase has been deleted/i);
