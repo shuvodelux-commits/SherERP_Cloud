@@ -15,6 +15,7 @@ const CATALOG=Object.freeze({
   EXPENSE_CATEGORIES:'expense_categories'
 });
 const DIAGNOSTIC=Object.freeze({LOGS:'legacy_error_logs'});
+const HISTORICAL_AUDIT=Object.freeze({DELETE_LOG:'legacy_delete_log'});
 const PARTY_IDENTITY=Object.freeze({
   CUSTOMERS:'party_legacy_links',
   SUPPLIERS:'party_legacy_links',
@@ -62,7 +63,7 @@ export function buildMigrationCoverage({
   const tables=createdTables(migrations);
   const seen=new Set();
   const summary={
-    sourceGroups:0,catalogSchemaOnly:0,diagnosticSchemaOnly:0,partyIdentityOnly:0,authLocalOnly:0,
+    sourceGroups:0,catalogSchemaOnly:0,diagnosticSchemaOnly:0,auditSchemaOnly:0,partyIdentityOnly:0,authLocalOnly:0,
     unmapped:0,fullyReconciled:0,asyncImpactedFunctions
   };
   const rows=schema.tables.map(source=>{
@@ -82,6 +83,9 @@ export function buildMigrationCoverage({
     }else if(Object.hasOwn(DIAGNOSTIC,sheetKey)){
       status='diagnostic-schema-only';targetTable=DIAGNOSTIC[sheetKey];
       summary.diagnosticSchemaOnly++;
+    }else if(Object.hasOwn(HISTORICAL_AUDIT,sheetKey)){
+      status='audit-schema-only';targetTable=HISTORICAL_AUDIT[sheetKey];
+      summary.auditSchemaOnly++;
     }else if(Object.hasOwn(PARTY_IDENTITY,sheetKey)){
       status='party-identity-only';targetTable=PARTY_IDENTITY[sheetKey];
       summary.partyIdentityOnly++;
@@ -130,10 +134,10 @@ async function main() {
   // Explicit current-baseline gate; adding future migrations/groups requires
   // source/schema review, not silent promotion to a production-ready status.
   const s=report.summary;
-  if(files.length!==6||s.sourceGroups!==49||s.catalogSchemaOnly!==4||
-     s.diagnosticSchemaOnly!==1||
+  if(files.length!==7||s.sourceGroups!==49||s.catalogSchemaOnly!==4||
+     s.diagnosticSchemaOnly!==1||s.auditSchemaOnly!==1||
      s.partyIdentityOnly!==5||s.authLocalOnly!==3||
-     s.unmapped!==36||s.fullyReconciled!==0||
+     s.unmapped!==35||s.fullyReconciled!==0||
      s.asyncImpactedFunctions!==394)
     throw new Error('M02/M03 coverage baseline changed; review source/schema mapping');
   if(mode==='--json')process.stdout.write(JSON.stringify(report,null,2)+'\n');
