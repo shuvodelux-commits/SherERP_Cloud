@@ -1,0 +1,26 @@
+name: M10 Original Opening Balance Edit audit D1 checksum proof
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  opening-balance-edit-local-d1:
+    name: Verify M10 opening-balance original Audit ID and immutable source-to-D1 hashes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install isolated pinned Wrangler only in CI
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify source-frozen real original ID and row checksum contract
+        run: node --test tests/m10-opening-balance-edit-digest.test.mjs
+      - name: Prove independently persisted source-to-real-local-D1 parity
+        run: node --test tests/integration/m10-opening-balance-edit-digest-workerd.spec.mjs
