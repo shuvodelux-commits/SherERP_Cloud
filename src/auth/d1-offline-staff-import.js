@@ -3,19 +3,20 @@
  * Not a Worker RPC, not a deployment command, and not a source data exporter.
  * Frozen Mohim_ERP IDs and legacy password verifiers remain separate.
  *
- * IMPORTANT: Original source Created By/At and Last Login provenance is not
- * represented by the current M04 schema. Do not authorize live import or
- * cutover until a reviewed provenance migration and export are approved.
+ * Requires reviewed 0004 source-provenance fields and a protected export.
+ * Preserves original source actor/time text in the same D1 batch as staff.
+ * Not authorization to import live users or activate public login.
  */
-import {auditLegacyStaffRoleAuthority} from './source-role-permission-import-gate.js';
+import {auditLegacyStaffProvenance} from './staff-provenance-preflight.js';
 import {normalizeLegacyStaffPhoneSearch} from './staff-phone-identity.js';
 import {AUTH_POLICY} from './d1-auth-core.js';
 
 const USER_FIELDS=[
   'User ID','Full Name','Mobile Number','Password Hash','Password Salt','Role','Status',
+  'Created By','Created At','Last Login',
 ];
 const ROLE_FIELDS=[
-  'Role ID','Role Name','Allowed Modules','Permissions','Status',
+  'Role ID','Role Name','Allowed Modules','Permissions','Status','Created At',
 ];
 const HASH=/^[0-9a-f]{64}$/;
 const SALT=/^[0-9a-f]{48}$/;
@@ -80,7 +81,7 @@ function captureVerifiedSnapshot(source){
   const capturedUsers=captureRows(users,USER_FIELDS);
   const capturedRoles=captureRows(roles,ROLE_FIELDS);
   if(!capturedUsers || !capturedRoles)throw rejected();
-  const report=auditLegacyStaffRoleAuthority(capturedUsers,capturedRoles);
+  const report=auditLegacyStaffProvenance({users:capturedUsers,roles:capturedRoles});
   if(!report.preflightPass)throw rejected();
   if(capturedRoles.some(row=>row['Role ID']!==row['Role ID'].trim() ||
      row['Role ID'].length>128 ||
@@ -128,7 +129,8 @@ export async function reconcileLegacyStaffSnapshotWithD1(db,source){
     for(let i=0;i<roles.length;i++){
       const sourceRole=roles[i];
       const row=await db.prepare(`SELECT role_name,source_role_id,status,
-        allowed_modules,permissions_json FROM auth_roles WHERE source_role_id=?`)
+        allowed_modules,permissions_json,source_created_at_iso
+        FROM auth_roles WHERE source_role_id=?`)
         .bind(sourceRole['Role ID']).first();
       if(!row ||
          row.source_role_id!==sourceRole['Role ID'] ||
@@ -137,12 +139,15 @@ export async function reconcileLegacyStaffSnapshotWithD1(db,source){
          row.allowed_modules!==sourceRole['Allowed Modules'] ||
          row.permissions_json!==sourceRole.Permissions)
         issues.push(recordIssue('role',i,'ROLE_READBACK_MISMATCH'));
+      if(!row || row.source_created_at_iso!==sourceRole['Created At'])
+        issues.push(recordIssue('role',i,'ROLE_PROVENANCE_MISMATCH'));
     }
 
     for(let i=0;i<users.length;i++){
       const sourceUser=users[i];
       const row=await db.prepare(`SELECT user_id,full_name,phone_key,role_name,status,
-        credential_state,password_algo,password_hash,password_salt,password_iterations
+        credential_state,password_algo,password_hash,password_salt,password_iterations,
+        source_created_by,source_created_at_iso,source_last_login_iso
         FROM auth_users WHERE user_id=?`)
         .bind(sourceUser['User ID']).first();
       const secret=await db.prepare(`SELECT legacy_hash,legacy_salt FROM
@@ -163,6 +168,10 @@ export async function reconcileLegacyStaffSnapshotWithD1(db,source){
         row.password_salt!==sourceUser['Password Salt'];
       if(!userMatch)
         issues.push(recordIssue('user',i,'USER_READBACK_MISMATCH'));
+      if(!row || row.source_created_by!==sourceUser['Created By'] ||
+         row.source_created_at_iso!==sourceUser['Created At'] ||
+         row.source_last_login_iso!==sourceUser['Last Login'])
+        issues.push(recordIssue('user',i,'USER_PROVENANCE_MISMATCH'));
       if(!secret || secret.legacy_hash!==sourceUser['Password Hash'] ||
          secret.legacy_salt!==sourceUser['Password Salt'])
         issues.push(recordIssue('user',i,'LEGACY_VERIFIER_MISMATCH'));
@@ -210,10 +219,10 @@ export async function importLegacyStaffSnapshotWithD1(db,source){
       .bind('__m04_offline_staff_import_guard__'));
     for(const role of roles){
       statements.push(db.prepare(`INSERT INTO auth_roles
-        (role_name,source_role_id,status,allowed_modules,permissions_json)
-        VALUES (?,?,?,?,?)`).bind(
+        (role_name,source_role_id,status,allowed_modules,permissions_json,source_created_at_iso)
+        VALUES (?,?,?,?,?,?)`).bind(
         role['Role Name'],role['Role ID'],role.Status,
-        role['Allowed Modules'],role.Permissions
+        role['Allowed Modules'],role.Permissions,role['Created At']
       ));
     }
     for(const user of users){
@@ -223,12 +232,14 @@ export async function importLegacyStaffSnapshotWithD1(db,source){
       const placeholderSalt=randomHex(24);
       statements.push(db.prepare(`INSERT INTO auth_users
         (user_id,full_name,phone_key,role_name,status,credential_state,
-         password_algo,password_hash,password_salt,password_iterations)
-        VALUES (?,?,?,?,?,'LegacyPending','pbkdf2-sha256',?,?,?)`).bind(
+         password_algo,password_hash,password_salt,password_iterations,
+         source_created_by,source_created_at_iso,source_last_login_iso)
+        VALUES (?,?,?,?,?,'LegacyPending','pbkdf2-sha256',?,?,?,?,?,?)`).bind(
         user['User ID'],user['Full Name'],
         normalizeLegacyStaffPhoneSearch(user['Mobile Number']),
         user.Role,user.Status,
-        placeholderHash,placeholderSalt,AUTH_POLICY.passwordIterations
+        placeholderHash,placeholderSalt,AUTH_POLICY.passwordIterations,
+        user['Created By'],user['Created At'],user['Last Login']
       ));
       statements.push(db.prepare(`INSERT INTO auth_legacy_credentials
         (user_id,legacy_hash,legacy_salt) VALUES (?,?,?)`).bind(

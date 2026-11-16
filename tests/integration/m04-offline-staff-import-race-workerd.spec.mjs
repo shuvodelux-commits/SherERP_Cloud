@@ -20,6 +20,8 @@ const source=()=>({
     'Mobile Number':'01790000991',
     'Password Hash':createHash('sha256').update('Synthetic-Race-Only!'+SALT).digest('hex'),
     'Password Salt':SALT,'Role':'Administrator','Status':'Active',
+    'Created By':'First-run bootstrap','Created At':'2025-01-20T12:05:06.000Z',
+    'Last Login':'',
   }],
   roles:[],
 });
