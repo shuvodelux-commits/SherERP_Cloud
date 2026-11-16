@@ -23,7 +23,7 @@
 - **Frozen source:** `legacy/source/RoleManagement.gs:getRolesBootstrap` and `Config.gs:ROLES` values; never change.
 - **D1 table:** `auth_roles(role_name,status,source_role_id,source_created_at_iso)`; only disposable test fixture inserts and reads.
 - **Implementation:** `src/auth/d1-role-directory.js`, existing `readRoleDirectoryPreviewWithD1`, no new public API.
-- **RED test:** `tests/integration/m04-legacy-rpc-workerd.spec.mjs`, existing local-only route `/__m04_test__/role-directory`, authentic D1 sessions and rows.
+- **RED test:** `tests/integration/m04-provenance-workerd.spec.mjs`, the existing local-only `wrangler.m04-provenance-test.jsonc` harness that applies real versioned migrations including `0004_auth_source_provenance.sql`. Call the internal role-directory reader directly with a genuine D1 session; the local HTTP Worker itself keeps every route disabled. The `m04-legacy-rpc-workerd` fixture has an older purpose-built auth schema without 0004 fields, so it must not be used for this regression.
 - **Return shape:** `{authorized:true,partial:true,roles:[{name,status,sourceRoleId?,sourceCreatedAt?}],moduleOptions,deleteWindowOptions}`. Optional fields appear only if both stored; source timestamps remain ISO strings without fabrication.
 - **Security:** role RBAC is not Party roles; preserve postread auth recheck. Partial remains `true`; not a complete source Roles bootstrap, not authorization for writes.
 - **Excluded:** source GAS/Sheets, remote/staging/production D1, Wrangler, public `/api/rpc`, role mutations, real owner/staff data, secret fields and unrelated workstreams.
