@@ -28,6 +28,12 @@ export function patchServerCall(html) {
       return response.json().catch(function () {
         throw new Error('Server error');
       }).then(function (res) {
+        // A declared RPC success field must be Boolean, never a truthy string.
+        // Raw legacy responses with no success field retain source semantics.
+        if (res && Object.prototype.hasOwnProperty.call(res, 'success') &&
+            typeof res.success !== 'boolean') {
+          throw new Error('Server error');
+        }
         if (!response.ok || !res || res.success === false) {
           throw new Error(res && res.message || 'Server error');
         }

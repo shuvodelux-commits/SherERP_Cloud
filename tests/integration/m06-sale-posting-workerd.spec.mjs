@@ -562,3 +562,63 @@ test('fresh Bank and Mobile operations still refuse inactive payment accounts wi
     assert.deepEqual(await snapshot(),before);
   }
 });
+
+test('archived Bank and Mobile master records do not prevent exact immutable sale receipt replay',async()=>{
+  const bank=input('OP-ARCHIVE-BANK01',{
+    payments:[account('B1','60','Bank'),{id:'C1',method:'Cash',amount:'40'}]
+  });
+  const mobile=input('OP-ARCHIVE-MOB001',{
+    payments:[account('M1','100','Mobile Banking')]
+  });
+  assert.equal((await posting().post(bank)).status,'COMMITTED');
+  assert.equal((await posting().post(mobile)).status,'COMMITTED');
+  await DB.prepare("DELETE FROM m06_bank_accounts WHERE tenant_id='SHOP-A'").run();
+  try{
+    const before=await snapshot();
+    for(const original of [bank,mobile]){
+      assert.deepEqual(await posting().post({...original,invoiceId:'INV-RETRY-UNTRUSTED'}),{
+        status:'REPLAY',operationId:original.operationId,invoiceId:original.invoiceId
+      });
+      assert.deepEqual(await snapshot(),before);
+    }
+    // A historical receipt must not authorize any new sale using absent accounts.
+    await assert.rejects(()=>posting().post(input('OP-ARCHIVE-NEW-01',{
+      payments:[account('B1','100','Bank')]
+    })),/active payment account/);
+    assert.deepEqual(await posting().post({...bank,actorId:'USER-B'}),{
+      status:'CONFLICT',operationId:bank.operationId
+    });
+    const changed={...bank,payments:[
+      account('B1','70','Bank'),{id:'C1',method:'Cash',amount:'30'}
+    ]};
+    assert.deepEqual(await posting().post(changed),{
+      status:'CONFLICT',operationId:bank.operationId
+    });
+    assert.deepEqual(await snapshot(),before);
+  }finally{
+    // Shared test DB: restore catalog rows even when RED intentionally fails.
+    await DB.prepare("INSERT INTO m06_bank_accounts VALUES ('SHOP-A','BANK-1','Shop Bank','Bank',1)").run();
+    await DB.prepare("INSERT INTO m06_bank_accounts VALUES ('SHOP-A','MOB-1','Shop Wallet','Mobile Banking',1)").run();
+  }
+});
+
+test('reclassified Bank master account cannot reinterpret or block its original immutable sale replay',async()=>{
+  const bank=input('OP-RECLASS-BANK01',{
+    payments:[account('B1','100','Bank')]
+  });
+  assert.equal((await posting().post(bank)).status,'COMMITTED');
+  await DB.prepare("UPDATE m06_bank_accounts SET method='Mobile Banking' WHERE tenant_id='SHOP-A' AND account_id='BANK-1'").run();
+  try{
+    const before=await snapshot();
+    assert.deepEqual(await posting().post(bank),{
+      status:'REPLAY',operationId:bank.operationId,invoiceId:bank.invoiceId
+    });
+    assert.deepEqual(await snapshot(),before);
+    await assert.rejects(()=>posting().post(input('OP-RECLASS-NEW01',{
+      payments:[account('B1','100','Bank')]
+    })),/account type does not match/);
+    assert.deepEqual(await snapshot(),before);
+  }finally{
+    await DB.prepare("UPDATE m06_bank_accounts SET method='Bank' WHERE tenant_id='SHOP-A' AND account_id='BANK-1'").run();
+  }
+});

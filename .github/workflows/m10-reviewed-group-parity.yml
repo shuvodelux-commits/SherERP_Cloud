@@ -1,0 +1,22 @@
+name: M10 reviewed original-ID vs positional provenance gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  reviewed-provenance-parity:
+    name: Verify M10 six-group authentic-ID and LOGS positional provenance gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install baseline dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify redacted six-group mixed-identity summary comparison
+        run: node --test tests/m10-reviewed-group-parity.test.mjs
