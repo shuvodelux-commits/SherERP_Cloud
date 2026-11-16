@@ -90,10 +90,12 @@ test('HTTP validation blocks extra fields, arity, invalid bearer and unknown met
     assert.equal(result.cache,'no-store');
     assert.equal(result.nosniff,'nosniff');
   }
-  for(const name of ['completeSale','getSettingsMap_','getDayBookTransactions','login']){
+  for(const name of ['completeSale','getSettingsMap_','getDayBookTransactions']){
     const result=await post({fnName:name,args:[TOKEN]},a.bridge);
     assert.equal(result.status,501,name);
   }
+  // Preserve the preexisting public auth-unconfigured fallback.
+  assert.equal((await post({fnName:'login',args:[TOKEN]},a.bridge)).status,503);
   assert.equal(a.count(),0);
 });
 
