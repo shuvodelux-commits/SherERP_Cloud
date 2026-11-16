@@ -35,3 +35,27 @@ test('valid leap day, year-end rollover and canonical ISO timestamp retain due-d
   assert.equal(invoice('2026-11-15T10:45:00',5).date,'2026-11-15');
   assert.equal(invoice('2026-11-15',0).dueDate,'');
 });
+
+test('canonical invoice timestamp refuses impossible clock or numeric timezone offsets',()=>{
+  for(const timestamp of [
+    '2026-11-15T24:00:00','2026-11-15T23:60:00',
+    '2026-11-15T23:59:60','2026-11-15T25:61:99',
+    '2026-11-15T10:20:00+06:90','2026-11-15T10:20:00+24:00',
+    '2026-11-15T10:20:00-2360'
+  ]){
+    assert.throws(()=>invoice(timestamp),
+      /Invalid canonical posted-invoice date/,timestamp);
+  }
+});
+
+test('canonical invoice timestamp accepts real clock and offset formats without shifting date',()=>{
+  for(const date of [
+    '2024-02-29T23:59:59.123+06:00','2024-02-29T23:59:59+0630',
+    '2024-02-29T00:00:00Z','2024-02-29T12:13:14',
+    '2024-02-29'
+  ]){
+    const result=invoice(date);
+    assert.equal(result.date,'2024-02-29',date);
+    assert.equal(result.dueDate,'2024-03-05',date);
+  }
+});
