@@ -186,7 +186,9 @@ test('compiled login rejects malformed M04 profiles before assigning browser aut
   const output=patchServerCall(
     frozenLogin+'\n'+frozenShell+'\n'+frozenAuth+'\n'+legacy);
   const start=output.indexOf('  function onAuthenticated_(payload) {');
-  const end=output.indexOf('  function serverCall(fnName) {',start);
+  // The synthetic legacy fixture has a literal BEFORE delimiter; do not
+  // evaluate it as JavaScript when extracting the authentication function.
+  const end=output.indexOf('\nBEFORE\n',start);
   assert.ok(start>=0&&end>start);
   const snippet=output.slice(start,end);
   const stored=[],visible=[],shell=[];
