@@ -1,6 +1,6 @@
 # M02/M03 — Frozen 49-Group Source-to-D1 Coverage Review (2026-11-16)
 
-**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; twelve existing *local-versioned* migrations `0001`–`0012` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
+**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; thirteen existing *local-versioned* migrations `0001`–`0013` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
 
 ## Readiness summary
 
@@ -10,7 +10,7 @@
 - **1** has *diagnostic DDL only*: LOGS, preserving text and source-row provenance without a unique source Log ID. Synthetic offline import proof is not live source reconciliation.
 - **5** have *Party identity only*: CUSTOMERS, SUPPLIERS, VENDORS, FINANCE_PERSONS and EXPENSE_PAYEES. `party_legacy_links` is **not** a money/account/ledger table.
 - **3** have *local auth schema only*: USERS, ROLES and SESSIONS. They are **not** a live public RPC or approved source-data import.
-- **1** has *isolated source archive DDL only*: frozen canonical PRODUCTS plus a separately identified older multi-unit PRODUCTS/PRODUCT_UNIT_CONVERSIONS snapshot, with original IDs and source-text evidence, not active stock/price writer or live reconciled import.
+- **1** has *isolated source archive plus inert operational candidate DDL only*: frozen canonical PRODUCTS plus a separately identified older multi-unit PRODUCTS/PRODUCT_UNIT_CONVERSIONS snapshot, with original IDs and source-text evidence, candidate `products` + immutable unit revisions are not an authorized stock/price writer or live reconciled import.
 - **30** have **no source-specific target in versioned candidate migrations** (synthetic Workerd/D1 tests may exist for certain operations; they do not change this release classification).
 - **0 of 49** groups have a verified complete source snapshot import and financial/row-by-row reconciliation in this audit. **394** source GAS functions are identified as async-impacted by the separate conservative M03 call graph, not necessarily unported.
 - Original GAS and private live Sheets were **not** queried, exported or modified to construct this report. Exact staff source exports and production remote migrations remain separately gated.
@@ -19,7 +19,7 @@
 
 | Original source group | Source headers | Current versioned evidence | Narrow D1 candidate |
 | --- | ---: | --- | --- |
-| `PRODUCTS` | 19 | Isolated canonical/older source-profile immutable product snapshots; optional older conversions are not a canonical data group; no live stock/price writer or production-data reconciliation | `legacy_product_snapshots` |
+| `PRODUCTS` | 19 | Isolated canonical/older source-profile immutable product snapshots; optional older conversions are not a canonical data group; no authorized stock/price writer or production-data reconciliation; 0013 adds an unpopulated candidate `products` and versioned unit catalog | `legacy_product_snapshots` |
 | `BUNDLE_COMPONENTS` | 7 | No source-specific DDL | — |
 | `SALE_BUNDLE_COMPONENTS` | 9 | No source-specific DDL | — |
 | `SUPPLIERS` | 13 | Party identity only | `party_legacy_links` |
