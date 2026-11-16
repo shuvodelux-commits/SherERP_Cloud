@@ -23,7 +23,9 @@ export function patchServerCall(html) {
       credentials: 'same-origin',
       body: JSON.stringify({fnName: fnName, args: args})
     }).then(function (response) {
-      return response.json().then(function (res) {
+      return response.json().catch(function () {
+        throw new Error('Server error');
+      }).then(function (res) {
         if (!response.ok || !res || res.success === false) {
           throw new Error(res && res.message || 'Server error');
         }
