@@ -27,6 +27,8 @@ jobs:
         run: npm install --no-save --package-lock=false wrangler@4.161.0
       - name: Test original browser Day Book RPC against isolated Workerd D1
         run: node --test qa/m01-daybook-local-d1.spec.mjs
+      - name: Test original Chromium login and logout on isolated real M04 D1
+        run: node --test qa/m01-auth-browser-local-d1.spec.mjs
       - name: Keep synthetic evidence for review
         if: always()
         uses: actions/upload-artifact@v4
