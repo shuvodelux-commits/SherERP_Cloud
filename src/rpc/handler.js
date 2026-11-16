@@ -1,4 +1,5 @@
 import {rpcRegistry} from './registry.js';
+import {buildSourceAppShellData} from '../modules/source-app-shell-reader.js';
 
 const MAX_RPC_BYTES = 65_536;
 const MAX_ARGS = 20;
@@ -7,6 +8,11 @@ const RPC_NAME = /^[A-Za-z][A-Za-z0-9_]{0,79}$/;
 // Internal opt-in only: these are the entire reviewed legacy auth transport
 // surface. The public Worker never passes an authAdapter.
 const AUTH_ARGS = Object.freeze({login:2,validateSession:1,logout:1});
+
+const APP_SHELL_RPC='getAppShellData';
+const APP_SHELL_UNAVAILABLE='Application shell unavailable or access denied.';
+const APP_SHELL_TOKEN=/^[0-9a-f]{64}$/;
+const SOURCE_SHELL_NAV=buildSourceAppShellData({shopName:'',currencySymbol:''}).data.navItems;
 
 const DAY_BOOK_RPC='getDayBookBootstrap';
 const DAY_BOOK_TOKEN=/^[0-9a-f]{64}$/;
@@ -145,6 +151,49 @@ function validDayBookEnvelope(result) {
   });
 }
 
+/**
+ * Reject additional/private NAV columns, getters and permission mutations
+ * even when a trusted backend bridge accidentally returns a bad shape.
+ * The source tree is static presentation metadata, NOT an auth grant.
+ */
+function exactShellNavigation(actual,expected) {
+  if(Array.isArray(expected)){
+    if(!Array.isArray(actual)||Object.getPrototypeOf(actual)!==Array.prototype||
+       actual.length!==expected.length ||
+       Reflect.ownKeys(actual).length!==expected.length+1)
+      return false;
+    return expected.every((item,i)=>{
+      const d=Object.getOwnPropertyDescriptor(actual,String(i));
+      return d?.enumerable===true && Object.hasOwn(d,'value') &&
+        exactShellNavigation(d.value,item);
+    });
+  }
+  if(expected && typeof expected==='object'){
+    if(!plainRecord(actual))return false;
+    const wanted=Object.keys(expected);
+    const actualKeys=Reflect.ownKeys(actual);
+    if(actualKeys.length!==wanted.length||
+       actualKeys.some(k=>typeof k!=='string'||!wanted.includes(k)))
+      return false;
+    return wanted.every(k=>{
+      const d=Object.getOwnPropertyDescriptor(actual,k);
+      return d?.enumerable===true && Object.hasOwn(d,'value') &&
+        exactShellNavigation(d.value,expected[k]);
+    });
+  }
+  return actual===expected;
+}
+
+function validAppShellEnvelope(result){
+  if(!ownFields(result,['success','data'])||result.success!==true ||
+     !ownFields(result.data,['shopName','currencySymbol','navItems']))
+    return false;
+  const data=result.data;
+  return typeof data.shopName==='string' && data.shopName.length<=256 &&
+    typeof data.currencySymbol==='string' && data.currencySymbol.length<=32 &&
+    exactShellNavigation(data.navItems,SOURCE_SHELL_NAV);
+}
+
 function rpcError(status, message, headers = {}) {
   return Response.json({success:false, message}, {status, headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 }
@@ -172,7 +221,7 @@ async function boundedBody(request) {
   return new TextDecoder('utf-8',{fatal:true}).decode(full);
 }
 
-export async function handleRpc(request, {authAdapter,dayBookBridge}={}) {
+export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBridge}={}) {
   if (request.method !== 'POST') return rpcError(405,'POST required',{'Allow':'POST'});
   const origin=request.headers.get('Origin');
   if (origin && origin!==new URL(request.url).origin) return rpcError(403,'Cross-origin RPC forbidden');
@@ -208,6 +257,27 @@ export async function handleRpc(request, {authAdapter,dayBookBridge}={}) {
     } catch {
       // Never expose credentials, D1 errors, SQL, or exception messages.
       return rpcError(503,'Authentication backend unavailable');
+    }
+  }
+
+  if(appShellBridge!==undefined && payload.fnName===APP_SHELL_RPC) {
+    // Internal-only trusted M04 composition, never imported by src/index.js.
+    // The original pre-login call is denied; an issued bearer is required.
+    if(!ownFields(payload,['fnName','args'])||payload.args.length!==1 ||
+       typeof payload.args[0]!=='string'||!APP_SHELL_TOKEN.test(payload.args[0]))
+      return rpcError(400,'Invalid RPC arguments');
+    try{
+      const invoke=Object.getOwnPropertyDescriptor(appShellBridge,'invoke')?.value;
+      if(typeof invoke!=='function')
+        return rpcError(503,APP_SHELL_UNAVAILABLE);
+      const result=await invoke.call(appShellBridge,{token:payload.args[0]});
+      if(!validAppShellEnvelope(result))
+        return rpcError(503,APP_SHELL_UNAVAILABLE);
+      return Response.json(result,{headers:{
+        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
+      }});
+    }catch{
+      return rpcError(503,APP_SHELL_UNAVAILABLE);
     }
   }
 
