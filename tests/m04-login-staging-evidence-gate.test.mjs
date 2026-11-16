@@ -48,7 +48,7 @@ const has=(report,code)=>assert(report.blockers.includes(code),
 
 test('empty or unverified report is blocked with stable safe codes and never grants import/deploy/cutover',()=>{
   for(const input of [null,undefined,{},'SECRET_PASSWORD',[],{observed:'SECRET_PASSWORD'}]){
-    const report=assess(input);
+    const report=assessM04LoginStagingEvidence(input,options());
     assert.equal(report.documentaryComplete,false);
     assert.equal(report.authorizesDeployment,false);
     assert.equal(report.authorizesStaffImport,false);
