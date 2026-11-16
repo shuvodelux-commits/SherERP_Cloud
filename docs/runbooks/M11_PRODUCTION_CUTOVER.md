@@ -150,3 +150,29 @@ node scripts/check-m11-production-candidate.mjs \
 ```
 
 This is intentionally **not** a production deployment tool, proof of real health authenticity, permission to create/bind D1 or GO to switch routing. A syntactically valid, synthetic candidate can pass document completeness while real M10, auth/security/financial parity, operator review and owner approval remain absent. Never add production D1 resources to `wrangler.preview.jsonc`, `previews` or the connected public preview Worker.
+
+
+## M11-05 — Operator-reviewed monitoring and incident severity (offline only)
+
+The post-cutover monitoring gate is a **rehearsal/evidence triage function**, not an active Cloudflare alert or production authority. Before production launch, the owner must separately verify that real Worker, D1, source-freeze and financial reconciliation monitoring is configured, tested, staffed and accessible to the incident operator. Every actual observation must come from a private, authenticated source; a syntactically valid JSON file is not proof of complete telemetry.
+
+`scripts/check-m11-monitoring.mjs` accepts one private, metadata-only JSON object with the **exact** fields `schemaVersion:1`, `releaseSha`, `sourceSnapshotSha256`, `window`, `thresholds`, `observations` and `metrics`. The window holds UTC `startedAt`/`endedAt` timestamps and may cover no more than 24 hours. Operator-signed and independently retained `thresholds` have `http5xxRateBps` (0–10000), `workerP95LatencyMs` (positive milliseconds ≤60000), `status:"verified"`, a non-sensitive `record` ID, and the exact `releaseSha`. Observation IDs are `worker`, `d1`, `financial`, `inventory`, `legacy`, `operation`, with `reviewStatus:"verified"` and `releaseSha`; each points to separately protected evidence, never a URL or secret.
+
+The `metrics` are nonnegative, safe-integer aggregates:
+`workerRequests`, `worker5xx`, `workerP95LatencyMs`, `d1Errors`, `unauthorizedAcceptedWrites`, `duplicatePostingEffects`, `grossLedgerDiscrepancies`, `inventoryDiscrepancies`, `legacyWritesAfterFreeze`, `unreconciledAcknowledgedOperations`.
+
+Run privately against the independently reviewed release and frozen legacy source-snapshot checksum:
+
+```sh
+node scripts/check-m11-monitoring.mjs /private/monitoring-window.json \
+  <exact-release-sha> <final-source-snapshot-sha256>
+```
+
+The script prints only fixed result and blocker codes—**never** metrics payloads, transaction IDs, invoice details or staff/customer data. Severity is deterministic:
+
+- **`INSUFFICIENT_EVIDENCE`:** Missing/invalid/unreviewed observation, release or checksum mismatch, invalid counts, missing traffic denominator, unknown schema fields or invalid monitoring window. Stop the release/handover decision and obtain real evidence.
+- **`INCIDENT_HOLD`:** Any accepted unauthorized write, duplicate monetary posting, gross account mismatch, stock mismatch, post-freeze legacy write, unreconciled acknowledged operation or D1 error. Inform incident authority, immediately investigate write safety, preserve IDs and journals privately; use the *separately approved* write-freeze/recovery procedure, never let the check itself reroute traffic.
+- **`ESCALATE`:** Owner-approved HTTP 5xx error-rate or Worker p95 budget is exceeded without a higher-severity breach. Page the named on-call, investigate impact and escalate further on failed financial/stock checks.
+- **`OBSERVE`:** All supplied metadata is structurally complete and no supplied metric exceeds limits. This is **not** evidence that real telemetry, alerts, source freeze, M10 financial parity, service auth or production deployment is functioning.
+
+A single monitoring window never proves ongoing safety, incident response readiness or GO. Preserve complete private logs, define live alert routing and thresholds independently, run ongoing source/D1 reconciliation, rehearse the incident communication tree and require owner business acceptance before considering M11 handover.
