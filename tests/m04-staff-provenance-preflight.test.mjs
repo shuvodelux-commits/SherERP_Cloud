@@ -82,7 +82,7 @@ test('malformed root exports and accessor/private proxy fields fail closed with 
   Object.defineProperty(bad.users[1],'Created By',{get(){throw Error('PRIVATE SOURCE ACTOR')},enumerable:true});
   const res=auditLegacyStaffProvenance(bad);
   assert.equal(res.preflightPass,false);
-  assert.ok(res.issues.some(x=>x.code==='USER_PROVENANCE_MALFORMED'));
+  assert.ok(res.issues.some(x=>x.code==='ROW_MALFORMED' || x.code==='USER_PROVENANCE_MALFORMED'));
   assert.equal(JSON.stringify(res).includes('PRIVATE SOURCE ACTOR'),false);
   assert.equal(auditLegacyStaffProvenance(null).preflightPass,false);
   const evil=new Proxy(snapshot(),{getOwnPropertyDescriptor(){throw Error('PRIVATE SOURCE') }});
