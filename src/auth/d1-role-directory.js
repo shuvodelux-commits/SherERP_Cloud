@@ -2,8 +2,8 @@
  * M04 internal PARTIAL staff Roles directory preview (read-only).
  *
  * The frozen RoleManagement.gs::getRolesBootstrap also includes source role
- * IDs, Created At, full Permissions and labeled UI options. These are NOT
- * represented/reconciled by this M04 local schema; no public RPC may use it.
+ * IDs, Created At and full Permissions. Verified source ID/time are projected
+ * when both exist; this remains PARTIAL, never a public RPC.
  */
 import {authorizeStaffReadWithD1} from './d1-staff-read-gate.js';
 import {roleBootstrapOptions} from '../modules/auth/permission-policy.js';
@@ -11,8 +11,8 @@ import {roleBootstrapOptions} from '../modules/auth/permission-policy.js';
 const deny=()=>({authorized:false});
 
 /**
- * Return only source-known role name/status for a currently authorized
- * roles.view session. Staff role names never represent Unified Party roles.
+ * Return role name/status and both stored source provenance fields, only
+ * when complete, for an authorized roles.view session. Not Unified Party roles.
  */
 export async function readRoleDirectoryPreviewWithD1(db,{token,nowMs}={}){
   const first=await authorizeStaffReadWithD1(db,{
@@ -22,7 +22,8 @@ export async function readRoleDirectoryPreviewWithD1(db,{token,nowMs}={}){
 
   // List inactive roles too, as the source getRolesBootstrap reads all ROLES.
   // Avoid returning permission configuration, authority epochs or credentials.
-  const result=await db.prepare(`SELECT role_name AS name,status
+  const result=await db.prepare(`SELECT role_name AS name,status,
+      source_role_id AS sourceRoleId,source_created_at_iso AS sourceCreatedAt
     FROM auth_roles ORDER BY role_name COLLATE BINARY`).all();
 
   // D1 authorization recheck after the read; no client identity or role claims.
@@ -34,7 +35,10 @@ export async function readRoleDirectoryPreviewWithD1(db,{token,nowMs}={}){
   return {
     authorized:true,
     partial:true,
-    roles:result.results.map(({name,status})=>({name,status})),
+    roles:result.results.map(({name,status,sourceRoleId,sourceCreatedAt})=>
+      typeof sourceRoleId==='string' && typeof sourceCreatedAt==='string'
+        ? {name,status,sourceRoleId,sourceCreatedAt}
+        : {name,status}),
     ...roleBootstrapOptions(),
   };
 }
