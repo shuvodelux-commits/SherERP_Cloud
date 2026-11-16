@@ -194,3 +194,32 @@ M11-06 tested a representative subset of preview RPC calls; **M11-07 extends tha
 This check is already included in `node scripts/check-m11-preview-runtime.mjs` and runs in the existing no-secrets PR-only Cloudflare Workers Builds safety workflow. A source inventory mismatch, deleted dynamic target, silently enabled nonrepresentative source RPC, public registry registration or leaked environment access fails with fixed codes and blocks a normal PR merge when branch rules enforce this check. No original GAS, live Sheets, remote D1 or Cloudflare release is accessed.
 
 **Scope and remaining limitations:** The 145-name inventory covers known original browser methods, not arbitrary new RPC names, attack payload space, trusted staff authorization, real production database connectivity or all Cloudflare dashboard changes. Local behavior and an empty public registry are deliberately required until separate M10 business reconciliation, security proof and owner GO authorize a new non-preview production release. **A passing preview smoke does not mean the ERP is functional.**
+
+
+## M11-08 — Sticky incident hold and documented recovery review
+
+A single clean M11-05 monitoring window **must never be used to clear a prior unresolved accounting, stock, D1 or unauthorized-write incident**. Use the offline, metadata-only continuity reviewer `scripts/check-m11-incident-continuity.mjs` to examine consecutive, source/release-pinned windows and any separately approved recovery review records. This is a *documentary* operator procedure, not an alert runner, D1 query, incident controller or permission to resume transactions.
+
+The private JSON uses the exact top-level structure:
+
+```json
+{
+  "schemaVersion": 1,
+  "releaseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceSnapshotSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "windows": [],
+  "recoveryReviews": []
+}
+```
+
+Populate `windows` with **one or more** complete M11-05 monitoring manifests (up to 48), ordered in canonical UTC with each start equal to the previous end, no gaps or overlaps, and identical reviewed release/SHA-256 pins. `windows: []` is shown above only as a structural key illustration: it **fails** the preflight until actual privately collected and independently reviewed window evidence is supplied. Do not submit customer/staff identities, invoice payloads, passwords, SQL, tokens, financial line entries or raw D1 journals.
+
+An M11-05 `INCIDENT_HOLD` persists across later `OBSERVE` windows until an independently signed review points to the **latest** outstanding incident window and a **subsequent quiet** window. The review metadata has exact keys `incidentWindow` and `throughWindow` (zero-based indexes in the supplied window array), `status: "verified"`, `releaseSha`, `sourceSnapshotSha256` and `evidence`. `evidence` requires six **different non-sensitive private reference IDs**: `legacyFreeze`, `d1Freeze`, `committedWriteJournal`, `grossPartyAccounts`, `inventoryLots` and `ownerReview`. A recovery review on an incident or escalated window, a duplicate/out-of-order review, or a review with no outstanding critical incident is rejected. A new incident after a reviewed recovery creates a fresh sticky hold.
+
+```sh
+node scripts/check-m11-incident-continuity.mjs \
+  /private/m11-monitoring-continuity.json \
+  <reviewed-release-sha> <final-source-snapshot-sha256>
+```
+
+Statuses are `INSUFFICIENT_EVIDENCE`, `INCIDENT_HOLD`, `ESCALATE`, `OBSERVE` or `RECOVERY_REVIEWED`. **`RECOVERY_REVIEWED` is only a structurally complete review record, not an authenticated incident clearance or operational GO.** The CLI prints fixed diagnostic codes and explicitly sets `authorizesWriteResumption:false` and `authorizesTrafficSwitch:false` for every status. Real emergency write freezes, exact committed-write reconciliation, independent source and D1 verification, incident on-call coordination, permission and session checks, and a separate owner decision remain mandatory before restoring any authoritative writer.
