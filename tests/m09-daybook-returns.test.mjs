@@ -173,7 +173,7 @@ test('source metadata, original reason descriptions and backdated flags preserve
 test('zero values, blanks and empty source groups match frozen source and do not create phantom cash',()=>{
   assert.deepEqual(parity(snap()),[]);
   const result=parity(snap([
-    salesReturn('SR-ZERO',{'Total Return Amount':'','Refund Method':''})
+    salesReturn('SR-ZERO',{'Total Return Amount':'','Refund Method':'','Reason':''})
   ],[purchaseReturn('PR-ZERO',{'Total Return Amount':'0','Reason':''})]));
   assert.deepEqual(result.map(r=>r.amount),[0,0]);
   assert.deepEqual(result.map(r=>r.description),['Return against S-1','Return against P-1']);
