@@ -73,6 +73,7 @@ test('reject unsupported modules and privilege-bearing wrong types or delete/bac
 test('non-canonical role names fail rather than silently remap source staff references',()=>{
   const {users,roles}=snapshot();
   roles[0]['Role Name']=' Cashier ';
+  users[1].Role=' Cashier '; // Keep source references consistent; isolate canonical-name denial.
   assert.equal(rejected(auditLegacyStaffRoleAuthority(users,roles),'ROLE_NAME_NOT_CANONICAL'),true);
 });
 
