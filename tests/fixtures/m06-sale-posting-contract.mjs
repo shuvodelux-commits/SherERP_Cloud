@@ -115,11 +115,17 @@ async function verifyReplayReceipt(DB,{
       }]:[]
     }
   ];
+  // A consumed source draft must remain absent. A stale reimport under its
+  // original ID is an unresolved inconsistency, not proof of clean replay.
+  if(sourceDraftId)checks.push({
+    sql:'SELECT draft_id FROM m06_drafts WHERE tenant_id=? AND draft_id=?',
+    rows:[],draftId:sourceDraftId
+  });
   try{
     // One read-only D1 batch observes a consistent synthetic receipt snapshot;
     // this is not a replacement for the authoritative atomic posting boundary.
     const proof=await DB.batch(checks.map(c=>
-      DB.prepare(c.sql).bind(tenantId,invoiceId)));
+      DB.prepare(c.sql).bind(tenantId,c.draftId??invoiceId)));
     if(!Array.isArray(proof)||proof.length!==checks.length)
       throw new Error('Missing posted sale evidence');
     for(let i=0;i<checks.length;i++){
