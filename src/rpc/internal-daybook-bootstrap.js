@@ -33,7 +33,7 @@ function input(request){
       return null;
   }
   const fnName=fields.fnName.value,args=fields.args.value;
-  if(typeof fnName!=='string' || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(fnName) ||
+  if(typeof fnName!=='string' || fnName.length<1 || fnName.length>80 ||
      !Array.isArray(args) || Object.getPrototypeOf(args)!==Array.prototype ||
      args.length!==1 || Reflect.ownKeys(args).length!==2)
     return null;
