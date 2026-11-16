@@ -1,0 +1,24 @@
+# M09 — Day Book filtered transaction window and independent book totals
+
+**Date:** 2026-11-16  
+**Baseline:** Frozen Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2; `legacy/source/DayBook.gs::getDayBookTransactions` (its final `const filtered = rows.filter(...)` through `const totals = ...` block), `legacy/source/Utils.gs::roundMoney_`, `legacy/source/daybook.html::dbFetch/dbRender`. Source copies are immutable.
+
+## User-visible intent and scope
+The owner expects the Cloudflare ERP's Day Book to show the same transactions, search/date/module filter results and cash/bank totals as Mohim ERP, without redesigning the original HTML or authorizing financial operations prematurely. PR #302 preserved the Day Book bootstrap, and merged PR #323 proved internal `daybook.view` authorization against isolated local D1. The full production transaction model is **not** available: the M05/M07/M08 posting and reversal tables are still in independent migration streams.
+
+## Approaches
+1. Full public `getDayBookTransactions` now: **rejected**. Missing D1 business transactions, Cash Book posting order, source-reference bank deduplication and return reversal reconciliation would produce a false ledger.
+2. New Party or financial aggregate storage: **rejected**. Inconsistent with single source of truth and no new ledger.
+3. **Chosen: pure, internal source-comparable final window and totals projection** over already-authorized, source-shaped normalized Day Book rows. No DB I/O, no client-supplied authorizer, no RPC registration; future audited upstream adapters must supply normalized records and actor authority.
+
+## Exact contract and risk controls
+Export `projectDayBookWindow(rows, filters, isAdmin)` returning `{rows, totals, isAdmin, count}`, with six numeric totals in original order: `cashIn, cashOut, bankIn, bankOut, netCash, netBank`. `rows` are trusted source-shaped transaction rows, after the original upstream running-cash-balance calculation; `isAdmin` is a **server-authorized** boolean from the same M04/tenant-scoped authority, never a caller-provided role string. `filters` is a plain own-data object with original `dateFrom,dateTo,module,paymentMethod,query,backdatedOnly,includeDeleted`. Preserve raw lexical date boundaries (do not reverse or apply timezone offsets), strict module/payment match, case-insensitive text search over reference + party + description + transaction type, backdated-only filtering, and reverse timestamp sorting with original `localeCompare`.
+
+Original `getDayBookTransactions` removes soft-deleted data before its final filter unless the authenticated Administrator requests `includeDeleted`; this internal projection MUST enforce that same removal itself, even if the supplied trusted upstream snapshot mistakenly contains deleted records. Administrator `includeDeleted` makes deleted records visible but **never** adds their cash/bank values to totals. Include a deleted row in `count` when visible. Do not mutate caller records or reorder the original snapshot in place. No per-Party balance, automatic cross-role net or inferred Cash Book balance is calculated here. Separate cash and bank sums use the frozen `roundMoney_` behavior, including per-row round accumulation and signed net.
+
+Accept only safe primitive filter strings, boolean flags, plain objects with own-value descriptors and finite already-normalized numeric money/flags; reject invalid/tricky getters, inherited filter data, malformed Dates, nonnumeric financial values, or untrusted actor types rather than exposing a misleading report. This defensive fail-closed behavior is narrower than legacy GAS's permissive JS inputs. Do not trust client `includeDeleted` alone; never read from D1 without a separate `daybook.view` guard.
+
+## TDD and release gates
+Test original source's *exact final filter/totals block* as an oracle, not a rewritten expected implementation; compare approved scenarios of cash vs bank, Unicode search, date edges, backdated flags, deleted row visibility, reversed date window and cent rounding. Negative tests verify no accessors/prototype poisoning, no in-place mutation, no public route or source UI changes. Record RED commit before source implementation; GREEN must pass full Node suite and affected existing Workerd/D1/Chromium CI. No direct D1 transaction assertions are claimed for this pure function. Independent M05/M07/M08 full read-model, cash posting order, bank duplicate suppression and real-D1 financial parity are **future required gates** before shipping a user-facing Day Book.
+
+**Impact/rollback:** Two new docs, one Node oracle test, one internal module. No changed D1 schema, RPC registry, UI/source GAS, authorization, cash/stock/finance writes, Cloudflare build config, imported business data or preview bindings. Revert four additive files to undo.
