@@ -28,5 +28,7 @@ jobs:
         run: |
           node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
           node scripts/check-staging-d1.mjs wrangler.staging.jsonc wrangler.preview.jsonc
+      - name: M11 local public-preview Worker no-write smoke (synthetic only)
+        run: node scripts/check-m11-preview-runtime.mjs
       - name: Bundle Worker without publishing or credentials
         run: npx --yes wrangler@4.161.0 deploy --dry-run --config wrangler.preview.jsonc

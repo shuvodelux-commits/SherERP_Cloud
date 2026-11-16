@@ -176,3 +176,12 @@ The script prints only fixed result and blocker codes—**never** metrics payloa
 - **`OBSERVE`:** All supplied metadata is structurally complete and no supplied metric exceeds limits. This is **not** evidence that real telemetry, alerts, source freeze, M10 financial parity, service auth or production deployment is functioning.
 
 A single monitoring window never proves ongoing safety, incident response readiness or GO. Preserve complete private logs, define live alert routing and thresholds independently, run ongoing source/D1 reconciliation, rehearse the incident communication tree and require owner business acceptance before considering M11 handover.
+
+
+## M11-06 — Public preview Worker no-write runtime CI gate
+
+The existing connected `shererp-cloud-preview` is deliberately **not** a production ERP. In addition to verifying the DB-free Wrangler configuration, each GitHub PR now runs `node scripts/check-m11-preview-runtime.mjs` in the no-secrets preview validation workflow. This uses a **local in-process Worker**, synthetic HTTP requests, mock static assets and a trap that records every attempted environment-property access other than `ASSETS`. It does not contact Cloudflare, GAS/Sheets or a real D1 database.
+
+The smoke probes `GET /api/health` for `foundation/not-connected`, confirms public login remains unavailable and selected product, sale, purchase, return, bank, stock and cash-book RPCs return controlled non-success responses, and checks malformed RPC, GET-only RPC refusal, unknown API paths, headers and static-asset fallback. Any business RPC success, unexpected health readiness claim, use of unbound DB/secrets or preview binding drift fails PR CI with a fixed blocker code. The test is also regression-tested against synthetic intentionally unsafe Worker mutants.
+
+This makes accidental preview activation more visible at **merge time**, without changing the deployment owner, Worker code or production routing. It is not exhaustive security testing and cannot certify Cloudflare dashboard settings, actual remote previews, production D1, authentication, source data reconciliation or owner GO. Production ERP enablement must occur only through a separately reviewed, non-preview release with completed M10 staging evidence and a formally authorized cutover.
