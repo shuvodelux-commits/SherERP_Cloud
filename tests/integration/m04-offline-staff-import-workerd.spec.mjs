@@ -50,7 +50,7 @@ before(async()=>{
 after(async()=>{await harness.close();});
 
 test('real 0003/0004 migrations and isolated local worker contain no import HTTP/RPC route',async()=>{
-  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n,8);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n,9);
   assert.deepEqual(await counts(),ZERO);
   assert.equal((await worker.fetch('http://m04-import.local/')).status,404);
   assert.equal((await worker.fetch('http://m04-import.local/api/rpc')).status,404);
