@@ -264,7 +264,7 @@ export async function importLegacyStaffSnapshotWithD1(db,source){
     throw error('Offline staff import rejected');
   }
 
-  const proof=await reconcileLegacyStaffSnapshotWithD1(db,source);
+  const proof=await reconcileLegacyStaffSnapshotWithD1(db,{users,roles});
   if(!proof.match)throw error('Offline staff import reconciliation failed');
   return {imported:true,counts:proof.counts,readbackMatch:true};
 }
