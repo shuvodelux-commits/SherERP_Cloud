@@ -248,3 +248,37 @@ node scripts/check-m11-production-smoke.mjs \
 ```
 
 Outputs contain only fixed status, blocker codes and caution, never input contents. `DOCUMENTARY_COMPLETE` means the supplied shape passes consistency checks: it **does not** demonstrate that a real private production deployment exists, that the Worker is secure, that a receipt matches a real posted operation, that business parity holds, or that the owner approved launch. M10 reconciliation/recovery/auth/performance gates, separate production deployment authority, on-call evidence, and postlaunch owner acceptance remain independent and mandatory. Do not enable D1 on a public preview as a workaround.
+
+
+## M11-10 — Linked operational handover and custody evidence
+
+A single completed source-import, a synthetic business-smoke evidence manifest, or an incident window marked `OBSERVE` **does not** establish a safe owner handover. Use `scripts/check-m11-handover-evidence.mjs` only to cross-check a private, operator-reviewed **handover metadata record** against the existing M11 handover-phase release evidence, exact activation sequence, M11-09 business-smoke evidence and M11-08 consecutive monitoring history. All underlying evidence must be retained and verified **outside GitHub** and never include passwords, financial row payloads, tokens, client data or identifiable staff/Party records.
+
+The input handover metadata must have exactly `schemaVersion:1`, `releaseSha`, `sourceSha`, `sourceSnapshotSha256`, `observationsEndedAt`, `reviewedAt` and `custody`. The first three pins must match the independently supplied release and original source snapshot. UTC timestamps must use canonical `YYYY-MM-DDTHH:MM:SSZ`; `observationsEndedAt` must match the final supplied monitoring-window end exactly, and the handover review must be **later** than that observation. At least two contiguous reviewed monitoring windows must be supplied, without recent alert escalation or unresolved critical incidents. A critical incident, including one with a documentary recovery review, requires a separate human incident-authority decision before normal handover; this conservative gate never clears it automatically.
+
+The `custody` object requires exactly eight distinct release-pinned `{status:"verified",record:"audit/non-sensitive-reference",releaseSha:"<release-sha>"}` entries:
+
+- `backupCustodian`: verified ownership of D1 backups and private recovery access;
+- `restoreDrill`: independently checked real restore/readback and post-cutover write replay rehearsal;
+- `sourceArchive`: preserved immutable GAS/Sheets source-data archive and retention owner;
+- `incidentOnCall`: staffed escalation and freeze/rollback incident authority;
+- `monitoringAlerts`: reviewed Worker/D1 plus financial-stock/source-freeze alert routing;
+- `supportHandoff`: shop-facing support and operator continuity instructions;
+- `accountingAcceptance`: same reviewed reference as the release manifest's `postlaunch-d1-write-and-account-reconciliation` check;
+- `ownerBusinessAcceptance`: same reviewed reference as the release manifest's `owner-handover-acceptance` check.
+
+Records must not be reused across distinct custody roles. All status and receipt identifiers here are **self-reported metadata** and are not a substitute for independent review of live deployment, source-data custody, source/D1 amounts, gross Party accounts, stock/FIFO, staff permissions and original invoice printing.
+
+Run only on operator-controlled local private JSON files:
+
+```sh
+node scripts/check-m11-handover-evidence.mjs \
+  /private/m11-handover.json \
+  /private/m11-release-evidence.json \
+  /private/m11-activation-order.json \
+  /private/m11-postcutover-smoke.json \
+  /private/m11-monitoring-continuity.json \
+  <exact-reviewed-release-sha> <final-source-snapshot-sha256>
+```
+
+`DOCUMENTARY_COMPLETE` states only that the submitted metadata and references are internally consistent under the source pin. A different operator must validate authenticity of the underlying evidence; M10 source-to-D1 migration parity, actual restore rehearsal, incident disposition, and **explicit owner business acceptance remain independent**. The tool grants no production authorization and cannot deploy, reroute, connect a D1 binding, freeze writers, restore a backup or resume transactions.

@@ -122,3 +122,23 @@ test('missing trusted snapshots, deleted/mismatched invoice and invalid next rev
   const unsafe=fixture();unsafe.paymentRows.push({'Invoice ID':'INV-001','Revision':Number.MAX_SAFE_INTEGER,'Status':'Reversed'});
   assert.throws(()=>planSaleSplitPaymentCorrection(unsafe),/revision|range/i);
 });
+
+
+test('unreconciled original checkout cannot produce a split-payment correction intent',()=>{
+  const variants=[
+    {field:'Due Amount',value:'30.01',settlementDue:30.01},
+    {field:'Grand Total',value:'99.99',settlementDue:30}
+  ];
+  for(const variant of variants){
+    const data=fixture();
+    data.sale[variant.field]=variant.value;
+    data.currentSettlement.dueAmount=variant.settlementDue;
+    const before=json(data);
+    assert.throws(
+      ()=>planSaleSplitPaymentCorrection(data),
+      /NEEDS_REVIEW: original split-payment checkout totals mismatch/,
+      variant.field
+    );
+    assert.deepEqual(data,before,'A rejected correction must not mutate historical records');
+  }
+});

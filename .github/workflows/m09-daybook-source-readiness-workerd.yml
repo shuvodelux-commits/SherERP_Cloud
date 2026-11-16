@@ -1,0 +1,28 @@
+name: M09 authenticated Day Book source completeness (local D1 only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  m09-source-gate:
+    name: Verify M04 daybook.view and fail-closed twelve-group D1 readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test preserved source and pure composer
+        run: npm test
+      - name: Verify frozen source unchanged
+        run: npm run verify:source
+      - name: Install pinned Wrangler only in isolated runner
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Real local Workerd D1 authenticated completeness contract
+        run: node --test tests/integration/m09-daybook-source-readiness-workerd.spec.mjs
