@@ -1,0 +1,36 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+
+const root=new URL('../',import.meta.url);
+const file=(name)=>readFileSync(new URL(name,root),'utf8');
+
+test('versioned M02/M04 auth migration has five concrete guarded auth tables, never an import fixture',()=>{
+  const migrations=readdirSync(new URL('migrations/',root)).filter(s=>s.endsWith('.sql')).sort();
+  assert.deepEqual(migrations,[
+    '0001_core_catalog.sql','0002_party_identity.sql','0003_auth_core.sql',
+  ]);
+  const sql=file('migrations/0003_auth_core.sql');
+  for(const table of ['auth_roles','auth_users','auth_legacy_credentials','auth_sessions','auth_login_throttle']){
+    assert.match(sql,new RegExp('CREATE TABLE '+table+'\\s*\\('));
+  }
+  for(const trigger of [
+    'trg_auth_last_admin_update','trg_auth_last_admin_delete',
+    'trg_auth_user_version','trg_auth_role_version','trg_auth_session_no_replace',
+    'trg_auth_session_identity_seal','trg_auth_session_no_delete',
+    'trg_auth_credential_downgrade','trg_auth_legacy_purge',
+  ]) assert.ok(sql.includes('CREATE TRIGGER '+trigger),trigger);
+  assert.doesNotMatch(sql,/NONDEPLOYABLE LOCAL TEST FIXTURE|NOT A MIGRATION/);
+  assert.doesNotMatch(sql,/INSERT INTO auth_users|INSERT INTO auth_legacy_credentials/i);
+});
+
+test('manual remote staging apply remains blocked while only M02 first two migrations are approved',()=>{
+  const workflow=file('.github/workflows/remote-d1-staging.yml');
+  assert.match(workflow,/Gate approved migration count before any remote apply/);
+  assert.match(workflow,/EXPECTED_REMOTE_MIGRATION_COUNT=2/);
+  const preview=JSON.parse(file('wrangler.preview.jsonc'));
+  assert.equal(preview.d1_databases,undefined);
+  const index=file('src/index.js');
+  assert.doesNotMatch(index,/createD1LegacyAuthRpc|authAdapter:/);
+  assert.match(file('src/rpc/registry.js'),/Object\.create\(null\)/);
+});
