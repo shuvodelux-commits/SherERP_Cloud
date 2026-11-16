@@ -24,9 +24,9 @@ const snapshot=()=>[
 ];
 const expected=()=>snapshot().map((row,i)=>({
   ...row,
-  ...i===0
+  ...(i===0
     ? {'Before Return Amount':'12.5'}
-    : {'After Grand Total':'99.5','After Return Amount':'14'}
+    : {'After Grand Total':'99.5','After Return Amount':'14'})
 }));
 let DB;
 const read=()=>createInvoiceEditAuditReadAdapter({DB});
