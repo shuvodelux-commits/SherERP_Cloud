@@ -8,6 +8,7 @@
  * Not authorization to import live users or activate public login.
  */
 import {auditLegacyStaffProvenance} from './staff-provenance-preflight.js';
+import {auditStableLegacyStaffFreeze} from './two-pass-source-freeze.js';
 import {normalizeLegacyStaffPhoneSearch} from './staff-phone-identity.js';
 import {AUTH_POLICY} from './d1-auth-core.js';
 
@@ -266,4 +267,22 @@ export async function importLegacyStaffSnapshotWithD1(db,source){
   const proof=await reconcileLegacyStaffSnapshotWithD1(db,source);
   if(!proof.match)throw error('Offline staff import reconciliation failed');
   return {imported:true,counts:proof.counts,readbackMatch:true};
+}
+
+/**
+ * Synthetic offline rehearsal with an explicit source-freeze gate.
+ *
+ * The two source snapshots must be independently acquired by the trusted
+ * operator; equality of their values cannot prove independent capture.
+ * Capture once into private plain objects BEFORE any DB work so caller
+ * changes cannot be observed by a later await. Existing D1.batch remains
+ * the only staff write boundary; public RPC is never wired to this helper.
+ */
+export async function rehearseFrozenLegacyStaffImportWithD1(db,first,confirmation){
+  if(first===confirmation)throw rejected();
+  const firstCaptured=captureVerifiedSnapshot(first);
+  const secondCaptured=captureVerifiedSnapshot(confirmation);
+  const report=auditStableLegacyStaffFreeze(firstCaptured,secondCaptured);
+  if(!report.freezeMatch)throw rejected();
+  return importLegacyStaffSnapshotWithD1(db,firstCaptured);
 }
