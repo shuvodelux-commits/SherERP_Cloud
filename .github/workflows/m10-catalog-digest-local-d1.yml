@@ -22,3 +22,5 @@ jobs:
         run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
       - name: Prove independently computed original source and persisted D1 digests
         run: node --test tests/integration/m10-catalog-digest-workerd.spec.mjs
+      - name: Prove Expense Categories source-to-D1 checksums and tamper detection
+        run: node --test tests/integration/m10-expense-category-digest-workerd.spec.mjs
