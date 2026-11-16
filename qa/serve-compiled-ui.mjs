@@ -10,7 +10,7 @@ import worker from '../src/index.js';
  * Local-only M01 browser fixture. All API requests use the actual inert
  * public Worker router; no D1 binding or trusted authentication adapter exists.
  */
-export async function serveCompiledUi() {
+export async function serveCompiledUi({internalDayBookRpc}={}) {
   const temp=await mkdtemp(join(tmpdir(),'shererp-m01-browser-'));
   let server;
   try {
@@ -31,7 +31,22 @@ export async function serveCompiledUi() {
           const url=new URL(request.url,'http://127.0.0.1:'+server.address().port);
           const init={method:request.method,headers:request.headers};
           if(request.method!=='GET' && request.method!=='HEAD' && body.length) init.body=body;
-          const result=await worker.fetch(new Request(url,init),{});
+          // Opt-in QA-only bridge for one reviewed internal Day Book read.
+          // No runtime Worker, public registry or deployment path imports it.
+          let result;
+          if(path==='/api/rpc' && request.method==='POST' &&
+             typeof internalDayBookRpc==='function'){
+            let payload;
+            try{payload=JSON.parse(body.toString('utf8'));}catch{payload=null;}
+            if(payload?.fnName==='getDayBookBootstrap'){
+              const envelope=await internalDayBookRpc(payload);
+              result=Response.json(envelope,{
+                status:envelope.success===true?200:403,
+                headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}
+              });
+            }
+          }
+          if(!result)result=await worker.fetch(new Request(url,init),{});
           response.writeHead(result.status,Object.fromEntries(result.headers));
           response.end(Buffer.from(await result.arrayBuffer()));
         }else if(path==='/' || path==='/index.html'){
