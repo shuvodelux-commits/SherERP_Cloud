@@ -131,3 +131,27 @@ test('valid Boolean success, explicit failure and raw legacy response remain com
   const raw={legacyResult:'source-compatibility'};
   assert.equal((await makeCall(raw)('getOldSetting')).legacyResult,'source-compatibility');
 });
+
+
+test('generated authenticated shell restores login cover when app-shell metadata fails',()=>{
+  const frozenLogin=[
+    '  function doLogin_() {',
+    "    var errEl = document.getElementById('loginError');",
+    "    var btn = document.getElementById('loginSubmitBtn');",
+    '  }'
+  ].join('\n');
+  const frozenShell=[
+    '  function loadAppShell_() {',
+    '    return getAppShellDataOnce_()',
+    '      .catch(function (err) {',
+    "        showToast(err.message || 'Could not load app settings.', 'error');",
+    '      });',
+    '  }'
+  ].join('\n');
+  const output=patchServerCall(frozenLogin+'\n'+frozenShell+'\n'+legacy);
+  assert.match(output,
+    /\.catch\(function \(err\) \{\s*showLogin_\(\);\s*showToast\(err\.message \|\| 'Could not load app settings\.', 'error'\);/,
+    'generated original UI must restore the login overlay before rendering a failed shell toast');
+  assert.equal(output.split('showLogin_();').length-1,1,
+    'failed shell must insert one lock instruction, not multiple');
+});
