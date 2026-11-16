@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {inventorySchema} from '../scripts/inventory-schema.mjs';
-import {catalogTables,verifyCatalogMapping,legacyToD1Record} from '../src/db/catalog-mapping.js';
+import {expenseCategoryMapping,verifyExpenseCategoryMapping,mapExpenseCategoryRecord} from '../src/db/expense-category-mapping.js';
 
 const source=inventorySchema(readFileSync(new URL('../legacy/source/Config.gs',import.meta.url),'utf8'));
 const originalColumns=['Category ID','Category Name','Description','Status','Created At'];
@@ -11,15 +11,15 @@ const originalColumns=['Category ID','Category Name','Description','Status','Cre
 test('frozen EXPENSE_CATEGORIES maps only its five source columns and preserves descriptive bytes',()=>{
   const entry=source.tables.find(x=>x.sheetKey==='EXPENSE_CATEGORIES');
   assert.deepEqual(entry?.columns,originalColumns);
-  assert.deepEqual(catalogTables.EXPENSE_CATEGORIES,{
+  assert.deepEqual(expenseCategoryMapping,{
     table:'expense_categories',
     columns:{
       'Category ID':'category_id','Category Name':'category_name',
       'Description':'description','Status':'status','Created At':'created_at'
     }
   });
-  assert.equal(verifyCatalogMapping(source),true);
-  assert.deepEqual(legacyToD1Record('EXPENSE_CATEGORIES',{
+  assert.equal(verifyExpenseCategoryMapping(source),true);
+  assert.deepEqual(mapExpenseCategoryRecord({
     'Category ID':'EC-00001','Category Name':'দোকান ভাড়া',
     'Description':'  মাসিক খরচ  ','Status':'Inactive',
     'Created At':'2026-11-16T09:00:00.000Z',_rowIndex:2
@@ -28,7 +28,7 @@ test('frozen EXPENSE_CATEGORIES maps only its five source columns and preserves 
     description:'  মাসিক খরচ  ',status:'Inactive',
     created_at:'2026-11-16T09:00:00.000Z',legacy_sheet_row:2
   });
-  assert.throws(()=>legacyToD1Record('EXPENSE_CATEGORIES',{
+  assert.throws(()=>mapExpenseCategoryRecord({
     'Category ID':'EC-1','Category Name':'Rent','Unknown':'unsafe'
   }),/unexpected/i);
 });

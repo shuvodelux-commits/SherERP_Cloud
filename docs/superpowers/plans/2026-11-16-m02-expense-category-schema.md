@@ -21,7 +21,7 @@
 ## Scope / impact
 
 - `migrations/0005_expense_categories.sql` — creates only `expense_categories`, source keys and indexes; zero financial tables.
-- `src/db/catalog-mapping.js` — add fixed `EXPENSE_CATEGORIES` headers mapping; no new RPC or write function.
+- `src/db/expense-category-mapping.js` — independent fixed five-header mapping without modifying the established three-group catalog dry-run importer; no new RPC or write function.
 - `tests/m02-expense-category-schema.test.mjs` and existing mapping/coverage/staging tests — source and DDL proof.
 - `scripts/audit-migration-coverage.mjs`, `tests/m02-m03-migration-coverage.test.mjs`, local schema verifier and local PR-only staging workflow — update exact reviewed baseline from 4 to 5 migrations; 4 catalog-only, 5 Party-identity-only, 3 auth-local-only, 37 unmapped; **zero fully reconciled**.
 - `docs/reviews/2026-11-16-m02-m03-source-coverage.md` — reflect reviewed count, without claiming import readiness.
