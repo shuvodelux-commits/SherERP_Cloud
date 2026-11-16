@@ -49,3 +49,16 @@ test('detects disconnected floating scrollbar and leaked GAS RPC wrapper', () =>
   const noFetch = builtHtml.replace("fetch('/api/rpc'", "google.script.run('/api/rpc'");
   assert.match(inspectUiContracts(noFetch).join('\n'), /same-origin RPC fetch/);
 });
+
+test('static shell ID guard ignores lookalike data attributes and quoted id fragments', () => {
+  const fakeDuplicate = builtHtml.replace('</body>',
+    `<div data-id="printHost" data-label=" id='printHost'"></div></body>`);
+  assert.deepEqual(inspectUiContracts(fakeDuplicate), [],
+    'data-id and id text inside another quoted attribute must not count as real IDs');
+
+  const lostRealId = builtHtml.replace('<div id="app" style="visibility:hidden;">',
+    '<div data-id="app" style="visibility:hidden;">');
+  assert.notEqual(lostRealId, builtHtml, 'test fixture must replace the real root ID');
+  assert.match(inspectUiContracts(lostRealId).join('\\n'), /app missing from live shell markup/,
+    'a data-id lookalike must not conceal a missing required root ID');
+});
