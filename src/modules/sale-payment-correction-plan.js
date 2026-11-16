@@ -53,8 +53,18 @@ export function planSaleSplitPaymentCorrection(snapshot){
 
   // Keep checkout tender and later Customer collections separate. A later
   // settlement must be reconciled by M08 before any historical edit.
-  const savedPaid=salePaymentPaisa_(sale['Paid Amount'],'Paid Amount',false);
-  const savedDue=salePaymentPaisa_(sale['Due Amount'],'Due Amount',false);
+  // Do not construct a correction for an imported invoice whose immutable
+  // checkout header is already financially inconsistent.
+  let savedPaid,savedDue;
+  try{
+    const savedGrand=salePaymentPaisa_(sale['Grand Total'],'Grand Total',false);
+    savedPaid=salePaymentPaisa_(sale['Paid Amount'],'Paid Amount',false);
+    savedDue=salePaymentPaisa_(sale['Due Amount'],'Due Amount',false);
+    if(!Number.isSafeInteger(savedPaid+savedDue)||savedPaid+savedDue!==savedGrand)
+      throw new Error('Unreconciled original checkout');
+  }catch{
+    throw new Error('NEEDS_REVIEW: original split-payment checkout totals mismatch');
+  }
   const currentPaid=salePaymentPaisa_(
     snapshot.currentSettlement.paidAmount,'Current paid amount',false);
   const currentDue=salePaymentPaisa_(
