@@ -78,8 +78,11 @@ test('deleting a persisted original source row cannot be silently treated as par
   assert.equal(result.meta.changes,1);
   assert.equal((await readStored()).length,2);
   const persisted=await readStored();
-  assert.throws(()=>digest(persisted),e=>e.message==='M10 catalog digest invalid');
-  assert.notEqual(persisted.length,source().length);
+  const fromD1=digest(persisted),fromSource=digest(source());
+  assert.equal(fromD1.rowCount,2);
+  assert.equal(fromSource.rowCount,3);
+  assert.notEqual(fromD1.rowDigest,fromSource.rowDigest);
+  assert.notEqual(fromD1.idDigest,fromSource.idDigest);
 });
 
 test('isolated Workerd fixture exposes no source, D1, import or public RPC route',async()=>{
