@@ -50,7 +50,7 @@ test('0005 creates a reviewed STRICT expense master, preserving stable row ident
       VALUES (?,?,?,?,?,?)`);
     insert.run(2,'EXP-001','বিদ্যুৎ বিল','আগের মাস','Active','');
     insert.run(3,'EXP-002','বিদ্যুৎ বিল','','Inactive','2026-11-16T00:00:00.000Z');
-    const rows=db.prepare('SELECT legacy_sheet_row,category_id,category_name,description,status,created_at FROM expense_categories ORDER BY legacy_sheet_row').all();
+    const rows=db.prepare('SELECT legacy_sheet_row,category_id,category_name,description,status,created_at FROM expense_categories ORDER BY legacy_sheet_row').all().map(row=>({...row}));
     assert.deepEqual(rows,[
       {legacy_sheet_row:2,category_id:'EXP-001',category_name:'বিদ্যুৎ বিল',
        description:'আগের মাস',status:'Active',created_at:''},
