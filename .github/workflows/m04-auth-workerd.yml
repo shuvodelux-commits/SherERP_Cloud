@@ -27,4 +27,5 @@ jobs:
             tests/integration/m04-auth-authority-version-workerd.spec.mjs \
             tests/integration/m04-legacy-rpc-workerd.spec.mjs \
             tests/integration/m04-legacy-upgrade-workerd.spec.mjs \
-            tests/integration/m04-admin-identity-replace-workerd.spec.mjs
+            tests/integration/m04-admin-identity-replace-workerd.spec.mjs \
+            tests/integration/m02-m04-integrated-auth-workerd.spec.mjs
