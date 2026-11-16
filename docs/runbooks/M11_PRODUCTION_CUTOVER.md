@@ -111,3 +111,19 @@ node scripts/check-m11-write-delta.mjs /private/m11-delta.json <release-commit-s
 - `mode: "resume-legacy"` requires every operation classified `replayed-to-legacy` with private evidence of **actual confirmed replay**, per-account/stock reconciliation and safe idempotency; `mode: "roll-forward"` requires every operation classified `retained-on-d1` while legacy remains read-only.
 - A zero-write delta requires a verified independent zero-count committed checkpoint, zero-count acknowledged checkpoint and both freeze records, rather than a blank manifest.
 - The structural validator does **not** query source/D1, verify the journal is complete, compare actual replay effects, check a live backup, prove source permission safety or authenticate an owner. A green result is **not** authorization to switch routes, resume writes or restore D1. Require a real rehearsal, separate M10/M11 owner approval and human review of the private artifacts before any operational step.
+
+
+## M11-03 — Offline cutover sequence rehearsal
+
+M11 has three reviewed **documentary event sequences**: `activation` (complete activation/smoke), `rollback-to-legacy` (replay and resume legacy) and `hold-d1-readonly` (controlled D1 incident hold). This check is not a production controller; it cannot freeze either live writer, read Cloudflare/Sheets, operate routing or assert the authenticity of supplied evidence.
+
+Prepare a strictly metadata-only private JSON document with `schemaVersion: 1`, `releaseSha` (exact approved target commit), `sourceSha` (frozen original commit), `sourceSnapshotSha256` (final source export digest), `path` and ordered `events`. Each event has `{ "seq": 1, "event": "legacy-writes-frozen", "record": "audit/source-freeze-001", "releaseSha": "<release-commit-sha>" }`. Every record must refer to a separately retained, verified private artifact; never include real source records, customer details, passwords, credentials, invoice payloads or exports in the JSON.
+
+The approved order is defined by `M11_CUTOVER_EVENT_ORDER` in `scripts/check-m11-cutover-order.mjs`. The validator cross-checks the release manifest accepted by `assessM11Evidence(... phase: 'switch')`. For emergency rollback and D1 read-only hold, it also requires a `assessM11WriteDelta`-accepted private write-delta artifact matching the same release and source-snapshot digest. `rollback-to-legacy` requires `resume-legacy` dispositions; `hold-d1-readonly` requires `roll-forward` dispositions.
+
+```sh
+node scripts/check-m11-cutover-order.mjs /private/m11-order.json /private/m11-release.json \
+  <release-commit-sha> <final-source-snapshot-sha256> [ /private/m11-delta.json ]
+```
+
+The CLI uses the repository-pinned source SHA, emits only fixed blocker codes and **never** makes a launch decision. A structurally complete review record does not demonstrate that actual freezes, snapshots, migrations, reconciliation, approvals, replay or traffic changes occurred. A real M10 rehearsal, source-data custody, human verification of event chronology, and separately authorized production GO remain mandatory.
