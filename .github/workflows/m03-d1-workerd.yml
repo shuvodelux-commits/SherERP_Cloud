@@ -26,3 +26,4 @@ jobs:
         run: |
           node --test tests/integration/m03-workerd.spec.mjs
           node --test tests/integration/m03-daybook-rpc-workerd.spec.mjs
+          node --test tests/integration/m03-daybook-http-workerd.spec.mjs
