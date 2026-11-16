@@ -2,7 +2,7 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
-import {createOfflinePasswordCredential} from '../../src/auth/d1-auth-core.js';
+import {createOfflinePasswordCredential,loginWithD1} from '../../src/auth/d1-auth-core.js';
 import {createD1LegacyAuthRpc,tokenFingerprint} from '../../src/auth/d1-legacy-rpc.js';
 import {normalizeLegacyStaffPhoneSearch} from '../../src/auth/staff-phone-identity.js';
 
@@ -827,4 +827,58 @@ test('source-profile SELECT must reject a session made idle between validation a
   assert.equal(persisted.last_activity_at_ms,start);
   assert.equal((await bridge.validateSession(token)).success,false,
     'a later ordinary core session check also refuses the stale heartbeat');
+});
+
+test('management previews deny contradictory view-derived role navigation while preserving independent action grants',async()=>{
+  const at=NOW+4_000_000;
+  const phone='01710000118';
+  const permissions={
+    sales:{view:true},
+    users:{view:false,add:true,edit:true,delete:true},
+    roles:{view:false,add:true,delete:true},
+  };
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,allowed_modules,permissions_json)
+    VALUES ('NavMismatchActions','Active','products',?)`)
+    .bind(JSON.stringify(permissions)).run();
+  await seed('USR-RPC-NAV-ACTIONS',phone,'NavMismatchActions');
+  const countsBefore=await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first();
+
+  // Test-only direct D1 core login establishes a genuine persisted session
+  // without going through the source-profile bridge, which already denies
+  // this contradictory role. This isolates the independent preview defect.
+  const signIn=await loginWithD1(db,{phoneKey:phone,password:SECRET,nowMs:at});
+  assert.equal(signIn.authenticated,true);
+  const probes=[
+    ['createUser',addPreflight],
+    ['addRole',addPreflight],
+    ['updateUser',usersEditPreflight],
+    ['resetPassword',usersEditPreflight],
+    ['setUserStatus',usersEditPreflight],
+    ['deleteUser',deletePreflight],
+    ['deleteRole',deletePreflight],
+  ];
+  const denied={status:200,body:{eligible:false}};
+  for(const [method,probe] of probes)
+    assert.deepEqual(await probe(method,signIn.token,at+1000),denied,
+      method+' must reject the role metadata contradiction');
+
+  // Correct the source-derived display navigation and use a fresh session:
+  // users/roles action rights without view are legitimate, distinct grants.
+  await db.prepare(`UPDATE auth_roles SET allowed_modules='sales'
+    WHERE role_name='NavMismatchActions'`).run();
+  assert.deepEqual(await addPreflight('createUser',signIn.token,at+2000),denied,
+    'role authority version must invalidate the earlier session');
+  const corrected=await loginWithD1(db,{
+    phoneKey:phone,password:SECRET,nowMs:at+3000,
+  });
+  assert.equal(corrected.authenticated,true);
+  const allowed={status:200,body:{
+    eligible:true,actor:{id:'USR-RPC-NAV-ACTIONS',role:'NavMismatchActions'},
+  }};
+  for(const [method,probe] of probes)
+    assert.deepEqual(await probe(method,corrected.token,at+4000),allowed,
+      method+' must continue honoring independent non-view actions');
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM auth_users').first()).n,
+    countsBefore.n,'previews must never mutate the staff directory');
 });
