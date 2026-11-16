@@ -39,7 +39,7 @@ test('0006 creates only an independent STRICT diagnostic table with nonunique ti
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM legacy_error_logs').get().n,2);
     assert.throws(()=>insert.run(2,'','ERR','different'),/unique/i);
     assert.throws(()=>insert.run(1,'','ERR','invalid'),/check/i);
-    assert.throws(()=>db.prepare("INSERT INTO legacy_error_logs (timestamp_text,context,message) VALUES (42,'ERR','wrong type')").run(),/constraint|datatype/i);
+    assert.throws(()=>db.prepare("INSERT INTO legacy_error_logs (timestamp_text,context,message) VALUES (X'0102','ERR','wrong type')").run(),/constraint|datatype/i);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM legacy_error_logs").get().n,2);
   }finally{db.close();}
 });
