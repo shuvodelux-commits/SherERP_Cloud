@@ -111,8 +111,7 @@ beforeEach(async()=>{
  }
  for(const t of [
   'm07_price_inject_adjustment','m07_price_inject_version',
-  'm07_receipt_immutable_delete','m06_invoice_immutable_delete',
-  'm07_cash_delete_guard_prior_price_edit'
+  'm07_receipt_immutable_delete','m06_invoice_immutable_delete'
  ])await DB.prepare(`DROP TRIGGER IF EXISTS ${t}`).run();
  for(const t of [
   'm07_cash_price_edit_dependencies','m07_cash_price_edit_adjustments',
@@ -127,8 +126,7 @@ beforeEach(async()=>{
   ...M07_CASH_PRICE_EDIT_IMMUTABLE_DDL])await DB.prepare(q).run();
  for(const q of [
   "CREATE TRIGGER m07_receipt_immutable_delete BEFORE DELETE ON m07_cash_returns BEGIN SELECT RAISE(ABORT,'immutable-cash-return'); END",
-  "CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices BEGIN SELECT RAISE(ABORT,'immutable-invoice'); END",
-  "CREATE TRIGGER m07_cash_delete_guard_prior_price_edit BEFORE INSERT ON m07_cash_delete_receipts BEGIN SELECT CASE WHEN EXISTS(SELECT 1 FROM m07_cash_price_edit_receipts e WHERE e.tenant_id=NEW.tenant_id AND e.return_id=NEW.return_id) THEN RAISE(IGNORE) END; END"
+  "CREATE TRIGGER m06_invoice_immutable_delete BEFORE DELETE ON m06_invoices BEGIN SELECT RAISE(ABORT,'immutable-invoice'); END"
  ])await DB.prepare(q).run();
  await DB.prepare("UPDATE m06_owned_stock SET available=CASE sku WHEN 'PIPE' THEN 2 ELSE 4 END").run();
  await DB.prepare("UPDATE m06_customer_accounts SET due_paisa=0").run();
