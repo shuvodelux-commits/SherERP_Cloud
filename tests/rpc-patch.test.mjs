@@ -97,3 +97,37 @@ test('compiled original login honors pending button before keyboard retry',()=>{
   assert.equal(output.split('if (btn && btn.disabled) return;').length-1,1,
     'guard is inserted once, not duplicated');
 });
+
+
+test('explicit non-Boolean RPC success flags never resolve as business success',async()=>{
+  const generated=patchServerCall(legacy);
+  const fn=generated.slice(generated.indexOf('  function serverCall'),
+    generated.indexOf('  // ---------------- 6.'));
+  let requestCount=0;
+  for(const invalid of ['false','true',0,1,null,[],{}]){
+    const response={success:invalid,data:{postedSale:'SYNTHETIC-NOT-POSTED'}};
+    const call=runInNewContext(fn+';serverCall',{
+      fetch:async()=>{requestCount++;return {ok:true,json:async()=>response};}
+    });
+    await assert.rejects(call('completeSale'),{
+      name:'Error',message:'Server error'
+    },'explicit success='+JSON.stringify(invalid)+' must fail closed');
+  }
+  assert.equal(requestCount,7);
+});
+
+test('valid Boolean success, explicit failure and raw legacy response remain compatible',async()=>{
+  const generated=patchServerCall(legacy);
+  const fn=generated.slice(generated.indexOf('  function serverCall'),
+    generated.indexOf('  // ---------------- 6.'));
+  const makeCall=response=>runInNewContext(fn+';serverCall',{
+    fetch:async()=>({ok:true,json:async()=>response})
+  });
+  const data={invoice:'SYNTHETIC-SALE',amount:42};
+  assert.equal((await makeCall({success:true,data})('getSale')).invoice,'SYNTHETIC-SALE');
+  await assert.rejects(makeCall({success:false,message:'Denied'})('completeSale'),{
+    name:'Error',message:'Denied'
+  });
+  const raw={legacyResult:'source-compatibility'};
+  assert.equal((await makeCall(raw)('getOldSetting')).legacyResult,'source-compatibility');
+});
