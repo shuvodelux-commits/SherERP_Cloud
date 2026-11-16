@@ -1,14 +1,14 @@
 # M02/M03 — Frozen 49-Group Source-to-D1 Coverage Review (2026-11-16)
 
-**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; only four existing *local-versioned* migrations `0001`–`0004` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
+**Scope:** pinned source `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`; target baseline `SherERP_Cloud/main@ee86bcf5142bd63b376cc9be6e4cc123841f8ded`. Source authority is `legacy/source/Config.gs` and `docs/baseline/schema-inventory.json`; five existing *local-versioned* migrations `0001`–`0005` are considered. The linked tests and script verify the current classifications against SQL table creation and the pinned source.
 
 ## Readiness summary
 
 - **49** configured source groups need complete source-to-D1 parity and reconciliation.
-- **3** have *catalog DDL only*: SETTINGS, PRODUCT_CATEGORIES and PRODUCT_UNITS.
+- **4** have *catalog DDL only*: SETTINGS, PRODUCT_CATEGORIES, PRODUCT_UNITS and EXPENSE_CATEGORIES.
 - **5** have *Party identity only*: CUSTOMERS, SUPPLIERS, VENDORS, FINANCE_PERSONS and EXPENSE_PAYEES. `party_legacy_links` is **not** a money/account/ledger table.
 - **3** have *local auth schema only*: USERS, ROLES and SESSIONS. They are **not** a live public RPC or approved source-data import.
-- **38** have **no source-specific target in versioned candidate migrations** (synthetic Workerd/D1 tests may exist for certain operations; they do not change this release classification).
+- **37** have **no source-specific target in versioned candidate migrations** (synthetic Workerd/D1 tests may exist for certain operations; they do not change this release classification).
 - **0 of 49** groups have a verified complete source snapshot import and financial/row-by-row reconciliation in this audit. **394** source GAS functions are identified as async-impacted by the separate conservative M03 call graph, not necessarily unported.
 - Original GAS and private live Sheets were **not** queried, exported or modified to construct this report. Exact staff source exports and production remote migrations remain separately gated.
 
@@ -35,7 +35,7 @@
 | `CUSTOMERS` | 15 | Party identity only | `party_legacy_links` |
 | `CUSTOMER_LEDGER` | 24 | No source-specific DDL | — |
 | `EXPENSES` | 23 | No source-specific DDL | — |
-| `EXPENSE_CATEGORIES` | 5 | No source-specific DDL | — |
+| `EXPENSE_CATEGORIES` | 5 | Catalog DDL only; no source import | `expense_categories` |
 | `EXPENSE_PAYEES` | 10 | Party identity only | `party_legacy_links` |
 | `CASH_BOOK` | 14 | No source-specific DDL | — |
 | `STOCK_MOVEMENT` | 15 | No source-specific DDL | — |
@@ -69,7 +69,7 @@
 ## Next conversion milestones
 
 1. Review every one of the 38 unmapped source groups by dependencies and lock a single schema/posting owner. Use source IDs, original row provenance, gross Party account directions, FIFO and cash-session relationships; do not infer data identity by phone/name.
-2. For the first safe source-backed M02/M03 vertical slice, require versioned schema, deterministic offline fixture import with original-ID/readback reconciliation, awaited repo adapter, source-shaped RPC response proof and real isolated Workerd/D1 tests. Do not deploy it automatically.
+2. For the next safe source-backed M02/M03 vertical slice, require versioned schema, deterministic offline fixture import with original-ID/readback reconciliation, awaited repo adapter, source-shaped RPC response proof and real isolated Workerd/D1 tests. Do not deploy it automatically.
 3. Separately complete protected M04 source/auth/staging policy; maintain the empty production RPC allowlist until specific authorized functions pass real D1 acceptance.
 4. Promote a status **only** on reviewed merge evidence of full source data correctness, not because one synthetic SQL table or unit test exists.
 5. Following M05–M09 source parity, run M10 full private data rehearsal and M11 approved production cutover/rollback.

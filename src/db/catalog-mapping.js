@@ -8,6 +8,9 @@ export const catalogTables = Object.freeze({
   }),
   PRODUCT_UNITS: Object.freeze({
     table:'product_units',columns:Object.freeze({'Unit ID':'unit_id','Unit Name':'unit_name','Status':'status','Created At':'created_at'})
+  }),
+  EXPENSE_CATEGORIES: Object.freeze({
+    table:'expense_categories',columns:Object.freeze({'Category ID':'category_id','Category Name':'category_name','Description':'description','Status':'status','Created At':'created_at'})
   })
 });
 

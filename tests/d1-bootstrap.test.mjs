@@ -12,6 +12,7 @@ const sourceInventory = {tables: [
   {sheetKey: 'SETTINGS', sheetName: 'Settings', columns: ['Key', 'Value']},
   {sheetKey: 'PRODUCT_CATEGORIES', sheetName:'Product Categories', columns: ['Category ID','Category Name','Status','Created At']},
   {sheetKey: 'PRODUCT_UNITS', sheetName:'Product Units', columns: ['Unit ID','Unit Name','Status','Created At']},
+  {sheetKey: 'EXPENSE_CATEGORIES', sheetName:'Expense Categories', columns: ['Category ID','Category Name','Description','Status','Created At']},
 ]};
 
 test('migrations create only the three reviewed master-data tables', () => {
