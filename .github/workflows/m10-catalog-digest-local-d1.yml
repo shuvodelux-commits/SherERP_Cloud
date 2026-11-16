@@ -24,3 +24,5 @@ jobs:
         run: node --test tests/integration/m10-catalog-digest-workerd.spec.mjs
       - name: Prove Expense Categories source-to-D1 checksums and tamper detection
         run: node --test tests/integration/m10-expense-category-digest-workerd.spec.mjs
+      - name: Verify id-less original LOGS source-position provenance against isolated D1
+        run: node --test tests/integration/m10-idless-logs-workerd.spec.mjs
