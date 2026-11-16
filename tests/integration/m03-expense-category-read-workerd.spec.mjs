@@ -64,7 +64,11 @@ test('new read is D1 read-only, original source rows still present and public ro
   await x.getAllRows_('EXPENSE_CATEGORIES');
   await x.findRows_('EXPENSE_CATEGORIES','Status','Inactive');
   const sourceAfter=await DB.prepare('SELECT * FROM expense_categories ORDER BY legacy_sheet_row').all();
-  assert.deepEqual(sourceAfter,sourceBefore);
+  // D1 reports nondeterministic query timing for equivalent SELECT results.
+  // Compare persisted records, never transport/query duration metadata.
+  assert.deepEqual(sourceAfter.results,sourceBefore.results);
+  assert.equal(sourceAfter.meta.changed_db,false);
+  assert.equal(sourceAfter.meta.rows_written,0);
   for(const path of ['/api/rpc','/api/health','/__m03_test__/expense-categories']){
     assert.equal((await worker.fetch('http://expense-read.local'+path,{method:'POST'})).status,404);
   }

@@ -165,3 +165,50 @@ test('compiled original serverCall propagates the inert Worker failure without o
     await assertLocked(page);
   }finally{await page.close();}
 });
+
+
+test('compiled original Chromium RPC rejects malformed explicit success on synthetic HTTP 200',async()=>{
+  const page=await pageWithOriginalLogin();
+  let syntheticReply={success:'false',data:{privateSuccess:'UNAUTHORIZED'}};
+  const calls=[];
+  try{
+    await page.route('**/api/rpc',async route=>{
+      calls.push(route.request().postDataJSON());
+      await route.fulfill({
+        status:200,contentType:'application/json',
+        headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'},
+        body:JSON.stringify(syntheticReply)
+      });
+    });
+    const browserCall=()=>page.evaluate(async()=>{
+      try{
+        return {resolved:true,value:await serverCall('getProducts')};
+      }catch(error){
+        return {resolved:false,name:error.name,message:error.message};
+      }
+    });
+    for(const invalid of ['false',0,1,null,[]]){
+      syntheticReply={success:invalid,data:{privateSuccess:'UNAUTHORIZED'}};
+      assert.deepEqual(await browserCall(),{
+        resolved:false,name:'Error',message:'Server error'
+      },'malformed explicit success='+JSON.stringify(invalid)+' must reject in Chromium');
+    }
+    syntheticReply={success:true,data:{value:'VALID_SYNTHETIC'}};
+    assert.deepEqual(await browserCall(),{
+      resolved:true,value:{value:'VALID_SYNTHETIC'}
+    },'Boolean success still unwraps data');
+    syntheticReply={legacyValue:'RAW_SOURCE_COMPATIBLE'};
+    assert.deepEqual(await browserCall(),{
+      resolved:true,value:{legacyValue:'RAW_SOURCE_COMPATIBLE'}
+    },'original source may omit success for raw return values');
+    syntheticReply={success:false,message:'Denied'};
+    assert.deepEqual(await browserCall(),{
+      resolved:false,name:'Error',message:'Denied'
+    });
+    assert.equal(calls.length,8);
+    assert.ok(calls.every(c=>c.fnName==='getProducts'&&Array.isArray(c.args)&&c.args.length===0));
+    await assertLocked(page);
+  }finally{
+    await page.close();
+  }
+});

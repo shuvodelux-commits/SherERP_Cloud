@@ -17,9 +17,9 @@ before(async()=>{
 });
 after(async()=>harness.close());
 
-test('real versioned D1 migrates 0001–0009: four nullable source columns and two immutability guards',async()=>{
+test('real versioned D1 migrates 0001–0011: four nullable source columns and two immutability guards',async()=>{
   const migration=(await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n;
-  assert.equal(migration,9);
+  assert.equal(migration,11);
   const users=await DB.prepare("SELECT name FROM pragma_table_info('auth_users') WHERE name IN ('source_created_by','source_created_at_iso','source_last_login_iso')").all();
   const roles=await DB.prepare("SELECT name FROM pragma_table_info('auth_roles') WHERE name='source_created_at_iso'").all();
   assert.equal(users.results.length,3);
@@ -90,4 +90,48 @@ test('noncanonical source timestamp formats fail DB constraints while NULL histo
     (role_name,status,source_created_at_iso) VALUES ('InvalidRole','Active',?)`)
     .bind('2025-01-20').run(),/constraint|check/i);
   assert.equal((await DB.prepare("SELECT source_created_at_iso FROM auth_users WHERE user_id='USR-NATIVE'").first()).source_created_at_iso,null);
+});
+
+test('verified source role directory retains role ID and history without inventing native metadata',async()=>{
+  const {createOfflinePasswordCredential,loginWithD1}=await import('../../src/auth/d1-auth-core.js');
+  const {readRoleDirectoryPreviewWithD1}=await import('../../src/auth/d1-role-directory.js');
+  const time=1_800_300_000_000;
+  const password='SyntheticProvRoleTest!2026';
+  const cred=await createOfflinePasswordCredential(password);
+  await DB.prepare(`INSERT INTO auth_users
+    (user_id,full_name,phone_key,role_name,status,password_hash,password_salt,password_iterations)
+    VALUES ('USR-PROV-ROLE-VIEW','Synthetic Role Viewer','01790000991','Administrator',
+      'Active',?,?,?)`)
+    .bind(cred.passwordHash,cred.passwordSalt,cred.iterations).run();
+  await DB.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,source_role_id,source_created_at_iso)
+    VALUES ('M04IncompleteRole','Inactive','{}','ROL-M04-INCOMPLETE',NULL),
+      ('M04NativeRole','Active','{}',NULL,NULL)`).run();
+
+  const admin=await loginWithD1(DB,{
+    phoneKey:'01790000991',password,nowMs:time,
+  });
+  assert.equal(admin.authenticated,true);
+  assert.deepEqual(await readRoleDirectoryPreviewWithD1(DB,{
+    token:'forged',nowMs:time+1000,
+  }),{authorized:false},'valid current D1 roles.view remains mandatory');
+
+  const result=await readRoleDirectoryPreviewWithD1(DB,{
+    token:admin.token,nowMs:time+1000,
+  });
+  assert.equal(result.authorized,true);
+  assert.equal(result.partial,true,'still not a public full source Roles bootstrap');
+  const byName=name=>result.roles.find(row=>row.name===name);
+  assert.deepEqual(byName('Cashier'),{
+    name:'Cashier',status:'Inactive',
+    sourceRoleId:'ROL-PROV-1',sourceCreatedAt:roleCreated,
+  },'both original Role ID and Created At are preserved exactly');
+  assert.deepEqual(byName('M04IncompleteRole'),{
+    name:'M04IncompleteRole',status:'Inactive',
+  },'an incomplete provenance pair must not be invented');
+  assert.deepEqual(byName('M04NativeRole'),{
+    name:'M04NativeRole',status:'Active',
+  },'a D1-native role is not given fabricated source history');
+  assert.equal(result.roles.some(r=>Object.hasOwn(r,'permissions')),false);
+  assert.equal(result.roles.some(r=>Object.hasOwn(r,'authVersion')),false);
 });

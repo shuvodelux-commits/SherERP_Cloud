@@ -189,3 +189,41 @@ test('authorization and all snapshot row groups are required, with no inherited 
   Object.defineProperty(data.sales[0],'Grand Total',{get:()=>90});
   assert.throws(()=>projectSalesManagementList(data,{canViewSales:true}),/accessor|trusted|snapshot/i);
 });
+
+
+test('Sales list refuses malformed original checkout amounts even when later Customer settlement is valid',()=>{
+  const cases=[
+    {'Due Amount':30.01},
+    {'Paid Amount':60.01},
+    {'Grand Total':89.99},
+    {'Due Amount':-1},
+    {'Paid Amount':'60.001'},
+    {'Grand Total':undefined},
+    {'Due Amount':'not-an-amount'}
+  ];
+  for(const override of cases){
+    const trusted=fixture();
+    Object.assign(trusted.sales[0],override);
+    assert.throws(()=>projectSalesManagementList(trusted,{
+      canViewSales:true,canViewProfit:false
+    }),/NEEDS_REVIEW: Sales list original checkout totals mismatch/,
+    JSON.stringify(override));
+  }
+});
+
+test('valid zero-checkout row remains visible without inventing payments or a Party',()=>{
+  const trusted=fixture();
+  Object.assign(trusted.sales[2],{
+    'Grand Total':0,'Paid Amount':0,'Due Amount':0,'Customer ID':''
+  });
+  const original=structuredClone(trusted);
+  const result=projectSalesManagementList(trusted,{
+    canViewSales:true,canViewProfit:false
+  });
+  const row=result.find(x=>x.invoiceId==='INV-03');
+  assert.equal(row.grandTotal,0);
+  assert.equal(row.paidAmount,0);
+  assert.equal(row.dueAmount,0);
+  assert.equal(row.customerId,'');
+  assert.deepEqual(trusted,original);
+});

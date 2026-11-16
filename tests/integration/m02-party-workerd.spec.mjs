@@ -27,13 +27,13 @@ before(async()=>{
 });
 after(async()=>{await harness.close();});
 
-test('nine versioned migrations retain the initial seven identity/catalog tables on real workerd D1',async()=>{
+test('eleven versioned migrations retain the initial seven identity/catalog tables on real workerd D1',async()=>{
   const rows=await DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review') ORDER BY name").all();
   assert.deepEqual(rows.results.map(x=>x.name),[
     'parties','party_identity_review','party_legacy_links','party_roles','product_categories','product_units','settings'
   ]);
   const n=await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first();
-  assert.equal(n.n,9);
+  assert.equal(n.n,11);
   const triggers=await DB.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_party_%' ORDER BY name").all();
   assert.deepEqual(triggers.results.map(x=>x.name),[
     'trg_party_cross_source_verification','trg_party_legacy_identity_immutable',

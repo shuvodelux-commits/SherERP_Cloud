@@ -1,0 +1,26 @@
+name: M10 Invoice Edit Audit source-to-D1 parity (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  invoice-edit-audit-digest-local-d1:
+    name: Verify M10 original invoice-edit IDs and immutable audit rows in local D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install baseline dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler only in ephemeral CI runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Validate frozen 49-group source ID and row hash contract
+        run: node --test tests/m10-invoice-edit-audit-digest.test.mjs
+      - name: Validate independent original-source and persisted real local D1 audit checksum parity
+        run: node --test tests/integration/m10-invoice-edit-audit-digest-workerd.spec.mjs
