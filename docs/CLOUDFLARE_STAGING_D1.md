@@ -15,8 +15,8 @@ Adding a Wrangler file to a Git repository does **not** by itself attach a bindi
 `.github/workflows/staging-d1-local.yml` runs on PRs without Cloudflare credentials. It:
 1. Runs source tests, validates the expected staging database identity and enforces Worker separation.
 2. Builds the original static frontend and bundles the staging Worker via `wrangler deploy --dry-run`.
-3. Applies `0001_core_catalog.sql`, `0002_party_identity.sql` and proposed `0003_auth_core.sql` via `wrangler d1 migrations apply shererp-staging-db --local` with isolated GitHub runner persistence.
-4. Queries **local** SQLite/D1 and expects seven core tables, five auth tables, three migration records, four Party history triggers and three auth session guards.
+3. Applies `0001_core_catalog.sql`, `0002_party_identity.sql` `, `0003_auth_core.sql` and `0004_auth_source_provenance.sql` via `wrangler d1 migrations apply shererp-staging-db --local` with isolated GitHub runner persistence.
+4. Queries **local** SQLite/D1 and expects seven core tables, five auth tables, four migration records, four Party history triggers, three auth session guards, four provenance fields and two immutable-provenance triggers.
 
 It contains no `--remote`, account/token secrets or actual Worker deploy step. CI creates only temporary local state.
 
@@ -41,4 +41,4 @@ After reviewing local-D1 CI, confirm the D1 database name/UUID from Cloudflare D
 
 Do not paste Cloudflare API tokens into chat, files, commits or build logs; do not run production migrations.
 
-The proposed third M04 SQL migration is exercised only in temporary local D1 and is not approved for remote application. The manual remote staging workflow refuses apply if the SQL count differs from the two previously approved core migrations; a separate owner review and staff-data cutover plan are required before that guard can be changed. The public Worker remains D1-free with no registered business RPCs.
+The third and fourth M04 SQL migrations are exercised only in temporary local D1 and is not approved for remote application. The manual remote staging workflow refuses apply if the SQL count differs from the two previously approved core migrations; a separate owner review and staff-data cutover plan are required before that guard can be changed. The public Worker remains D1-free with no registered business RPCs.
