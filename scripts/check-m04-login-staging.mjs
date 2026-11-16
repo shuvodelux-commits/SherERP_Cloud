@@ -87,9 +87,12 @@ export function assessM04LoginStagingEvidence(input,options={}){
     fail('M04_DOCUMENT_INPUT_INVALID');
     return report(blockers);
   }
+  let stagingResourceId,stagingWorkerName;
   try{
     validateCloudflarePreviewConfig(root.preview);
     validateStagingConfig(root.staging,root.preview);
+    stagingResourceId=root.staging.d1_databases[0].database_id;
+    stagingWorkerName=root.staging.name;
   }catch{
     fail('M04_CONFIG_ISOLATION_INVALID');
   }
@@ -112,8 +115,8 @@ export function assessM04LoginStagingEvidence(input,options={}){
     fail('M04_OBSERVED_SCHEMA_INVALID');
 
   if(!observed||typeof observed.databaseId!=='string'||
-     observed.databaseId!==root.staging?.d1_databases?.[0]?.database_id||
-     observed.workerName!==root.staging?.name||
+     observed.databaseId!==stagingResourceId||
+     observed.workerName!==stagingWorkerName||
      !pin||observed.releaseSha!==pin.expectedReleaseSha)
     fail('M04_PRIVATE_WORKER_UNVERIFIED');
   if(!migrations || REQUIRED_MIGRATIONS.some(name=>!migrations.includes(name)))
