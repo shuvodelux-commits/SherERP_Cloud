@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {validateLocalD1SchemaReport} from '../scripts/local-d1-schema-check.mjs';
 
 const expected={
-  app_tables:8,applied_migrations:5,history_triggers:4,auth_tables:5,
+  app_tables:9,applied_migrations:6,history_triggers:4,auth_tables:5,
   auth_session_guards:3,provenance_columns:4,provenance_guards:2,
 };
 const envelope=row=>[{results:[row],success:true}];
 
-test('local D1 schema evidence requires 5 migrations, historical columns and immutable guards',()=>{
+test('local D1 schema evidence requires 6 migrations, historical columns and immutable guards',()=>{
   assert.equal(validateLocalD1SchemaReport(envelope(expected)),true);
   assert.equal(validateLocalD1SchemaReport(envelope(expected)[0]),true);
 });
