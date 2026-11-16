@@ -55,9 +55,12 @@ test('original Chromium frontend reads authorized Day Book from isolated D1 and 
     }
 
     const daybook=createM03DayBookRpcBridge({DB},{now:()=>NOW});
-    // QA only: nonexistent public route must stay 501; callback attaches
-    // this one internal bridge to this loopback test server only.
-    site=await serveCompiledUi({internalDayBookRpc:payload=>daybook.invoke(payload)});
+    let bridgeCalls=0;
+    // QA only: spy on the internal read and never give the public Worker this bridge.
+    site=await serveCompiledUi({internalDayBookRpc:payload=>{
+      bridgeCalls++;
+      return daybook.invoke(payload);
+    }});
     browser=await chromium.launch({
       headless:true,
       ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
@@ -86,6 +89,62 @@ test('original Chromium frontend reads authorized Day Book from isolated D1 and 
     assert.equal(requests.length,1);
     assert.deepEqual(requests[0],{fnName:'getDayBookBootstrap',args:[ALLOWED]});
     assert.doesNotMatch(JSON.stringify(success),/PRIVATE_SYNTHETIC|auth_sessions/);
+    assert.equal(bridgeCalls,1,'one authorized original browser RPC must reach the internal D1 bridge');
+
+    // Exercise the actual HTTP security boundary, not only an in-page mock.
+    // These requests carry exclusively synthetic credentials to loopback.
+    const safeBody=JSON.stringify({fnName:'getDayBookBootstrap',args:[ALLOWED]});
+    const probes=[
+      {
+        name:'foreign-origin',
+        headers:{Origin:'https://foreign.invalid','Content-Type':'application/json'},
+        data:safeBody,status:403,message:'Cross-origin RPC forbidden'
+      },
+      {
+        name:'wrong-content-type',
+        headers:{'Content-Type':'text/plain'},
+        data:safeBody,status:415,message:'JSON request required'
+      },
+      {
+        name:'extra-client-actor',
+        headers:{'Content-Type':'application/json'},
+        data:JSON.stringify({fnName:'getDayBookBootstrap',args:[ALLOWED],role:'Administrator'}),
+        status:400,message:'Invalid RPC arguments'
+      },
+      {
+        name:'extra-argument',
+        headers:{'Content-Type':'application/json'},
+        data:JSON.stringify({fnName:'getDayBookBootstrap',args:[ALLOWED,'extra']}),
+        status:400,message:'Invalid RPC arguments'
+      },
+      {
+        name:'oversized-body',
+        headers:{'Content-Type':'application/json'},
+        data:JSON.stringify({fnName:'getDayBookBootstrap',args:[ALLOWED,'x'.repeat(66_000)]}),
+        status:413,message:'RPC request too large'
+      },
+      {
+        name:'malformed-json',
+        headers:{'Content-Type':'application/json'},
+        data:'{bad-json',status:400,message:'Invalid JSON'
+      }
+    ];
+    for(const probe of probes){
+      const reply=await page.request.post(site.url+'api/rpc',{
+        headers:probe.headers,data:probe.data
+      });
+      assert.equal(reply.status(),probe.status,probe.name+' HTTP status');
+      assert.deepEqual(await reply.json(),{
+        success:false,message:probe.message
+      },probe.name+' controlled payload');
+      assert.equal(reply.headers()['cache-control'],'no-store',probe.name+' no caching');
+      assert.equal(reply.headers()['x-content-type-options'],'nosniff',probe.name+' MIME protection');
+    }
+    assert.equal(bridgeCalls,1,
+      'invalid HTTP requests must not reach the internal D1 authorization reader');
+    assert.equal(await page.locator('#loginOverlay').isVisible(),true);
+    assert.equal(await page.locator('#app').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),null);
 
     async function browserError(fnName,token) {
       return page.evaluate(async ({name,bearer})=>{
