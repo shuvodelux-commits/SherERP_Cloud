@@ -59,3 +59,24 @@ test('RPC HTTP non-JSON and empty response bodies reject with a controlled error
     },'HTTP '+status+' invalid JSON body must not leak parser diagnostics');
   }
 });
+
+
+test('RPC serialization failures return rejected Promises without sending a request',async()=>{
+  const html=patchServerCall(legacy);
+  const fn=html.slice(html.indexOf('  function serverCall'),html.indexOf('  // ---------------- 6.'));
+  let requests=0;
+  const call=runInNewContext(fn+';serverCall',{
+    fetch:async()=>{requests++;throw new Error('fetch should not run');}
+  });
+  const circular=[];
+  circular.push(circular);
+  for(const invalid of [circular,1n]){
+    let result;
+    assert.doesNotThrow(()=>{
+      result=call('getProducts',invalid);
+    },'serverCall must return a Promise rather than throw during JSON.stringify');
+    assert.equal(typeof result?.then,'function','returned value is Promise-like');
+    await assert.rejects(result,{name:'TypeError'});
+    assert.equal(requests,0,'invalid JSON must not send any RPC request');
+  }
+});

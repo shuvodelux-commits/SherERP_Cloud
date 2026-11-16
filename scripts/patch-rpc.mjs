@@ -17,11 +17,13 @@ export function patchServerCall(html) {
   }
   const replacement = `  function serverCall(fnName) {
     var args = Array.prototype.slice.call(arguments, 1);
-    return fetch('/api/rpc', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      credentials: 'same-origin',
-      body: JSON.stringify({fnName: fnName, args: args})
+    return Promise.resolve().then(function () {
+      return fetch('/api/rpc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({fnName: fnName, args: args})
+      });
     }).then(function (response) {
       return response.json().catch(function () {
         throw new Error('Server error');
