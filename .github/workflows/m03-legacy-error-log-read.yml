@@ -1,0 +1,24 @@
+name: M03 ID-less LOGS private D1 read (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  local-logs-read:
+    name: Test original LOGS source history against isolated local Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler only in isolated CI runner
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify M02 source import to M03 private LOGS read on real local D1
+        run: node --test tests/integration/m03-legacy-error-log-read-workerd.spec.mjs
