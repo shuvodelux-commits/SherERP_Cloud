@@ -38,7 +38,8 @@ import './m07-store-credit-batch-workerd.spec.mjs'; // M07 ordered signed Store 
 import './m07-purchase-cash-return-workerd.spec.mjs'; // M07 source-linked purchase Cash refund original-lot local D1 proof.
 import './m07-purchase-cash-delete-workerd.spec.mjs'; // M07 source-specific Purchase Cash Return reversal, local D1 only.
 import './m07-purchase-supplier-credit-workerd.spec.mjs'; // M07 signed Supplier Credit original-lot D1 ledger/reversal proof.
-import './m07-purchase-multilot-cash-workerd.spec.mjs'; // M07-B4A isolated multi-lot Cash receipt real Workerd/D1 atomic proof.
+import './m07-purchase-multilot-cash-workerd.spec.mjs';
+import './m08-reconciliation-atomic-workerd.spec.mjs'; // M08 single closing-entry atomicity, local D1 only; no public writer. // M07-B4A isolated multi-lot Cash receipt real Workerd/D1 atomic proof.
 
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
