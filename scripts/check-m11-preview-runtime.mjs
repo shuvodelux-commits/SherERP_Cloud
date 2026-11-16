@@ -4,6 +4,8 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import workerEntry from '../src/index.js';
 import {validateCloudflarePreviewConfig} from './check-cloudflare-preview.mjs';
+import {listM11PreviewRpcNames} from './m11-preview-rpc-closure.mjs';
+import {rpcRegistry} from '../src/rpc/registry.js';
 
 /**
  * Local request-level smoke of the public preview Worker.
@@ -38,11 +40,16 @@ const rpcRequest=payload=>new Request(ORIGIN+'/api/rpc',{
  * able to post business writes, authenticate, read environment secrets/D1, or
  * present the inert shell as production.
  */
-export async function probeM11PreviewRuntime({worker,previewConfig}={}) {
+export async function probeM11PreviewRuntime({worker,previewConfig,registry=rpcRegistry}={}) {
   try{validateCloudflarePreviewConfig(previewConfig);}
   catch{fail('M11_PREVIEW_CONFIG_INVALID');}
   if(!worker||typeof worker.fetch!=='function'){
     fail('M11_PREVIEW_WORKER_INVALID');
+  }
+  // Validate the actual public registry even if a test supplies a separate mutant.
+  if(Reflect.ownKeys(rpcRegistry).length!==0 || !Object.isFrozen(rpcRegistry) ||
+    !registry || typeof registry!=='object' || Reflect.ownKeys(registry).length!==0){
+    fail('M11_PREVIEW_REGISTRY_UNSAFE');
   }
 
   let unexpectedEnvReads=0;
@@ -86,6 +93,28 @@ export async function probeM11PreviewRuntime({worker,previewConfig}={}) {
     const res=await call(rpcRequest(JSON.stringify({fnName:name,args})));
     const body=await bodyOrFail(res,'M11_PREVIEW_RPC_UNSAFE');
     if(res.status!==expectedStatus||!safeHeaders(res)||
+      !exact(body,['success','message'])||body.success!==false||
+      typeof body.message!=='string'||!body.message){
+      fail('M11_PREVIEW_RPC_UNSAFE');
+    }
+  }
+
+  // Source-complete refusal proof, not an RPC allowlist: use the same pinned
+  // literal + dynamic method inventory validated by M00.
+  let targets;
+  try{
+    const read=relative=>JSON.parse(readFileSync(new URL('../'+relative,import.meta.url),'utf8'));
+    const source=read('docs/baseline/source-manifest.json');
+    targets=listM11PreviewRpcNames({
+      literalInventory:read('docs/baseline/m00-rpc-contract-inventory.json'),
+      dynamicClosure:read('docs/baseline/m00-dynamic-rpc-closure.json'),
+      expectedSourceSha:source.source.commit
+    });
+  }catch{fail('M11_PREVIEW_INVENTORY_INVALID');}
+  for(const name of targets){
+    const res=await call(rpcRequest(JSON.stringify({fnName:name,args:[]})));
+    const body=await bodyOrFail(res,'M11_PREVIEW_RPC_UNSAFE');
+    if(res.status!==(name==='login'?503:501)||!safeHeaders(res)||
       !exact(body,['success','message'])||body.success!==false||
       typeof body.message!=='string'||!body.message){
       fail('M11_PREVIEW_RPC_UNSAFE');
