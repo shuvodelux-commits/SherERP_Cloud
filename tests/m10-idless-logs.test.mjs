@@ -23,7 +23,10 @@ test('M10 logs retain duplicate diagnostic rows and use source-row provenance, n
   });
   assert.deepEqual(rows,before);
   assert.equal(Object.hasOwn(result,'idDigest'),false);
-  assert.doesNotMatch(JSON.stringify(result),/POS|missing timestamp|row_id|Message/);
+  // Match serialized source *values*, not the prefix "POS" inside the
+  // intended, public SOURCE_ROW_POSITION_ONLY provenance classification.
+  const report=JSON.stringify(result);
+  assert.doesNotMatch(report,/"POS"|"Report"|missing timestamp|বাংলা 오류|2026-11-15T09:00|row_id|"Message"|"Context"|"Timestamp"/);
 });
 
 test('source property insertion order and valid Date conversion preserve same digest',()=>{
