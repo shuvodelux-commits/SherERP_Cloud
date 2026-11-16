@@ -34,3 +34,12 @@ test('manual remote staging apply remains blocked while only M02 first two migra
   assert.doesNotMatch(index,/createD1LegacyAuthRpc|authAdapter:/);
   assert.match(file('src/rpc/registry.js'),/Object\.create\(null\)/);
 });
+
+test('frozen ROLES Role ID retains an immutable unique source reference in the real auth schema',()=>{
+  const config=file('legacy/source/Config.gs');
+  assert.match(config,/ROLES:\s*\[\s*"Role ID"/);
+  const sql=file('migrations/0003_auth_core.sql');
+  assert.match(sql,/source_role_id TEXT UNIQUE/);
+  assert.match(sql,/CREATE TRIGGER trg_auth_role_source_id_no_replace/);
+  assert.match(sql,/CREATE TRIGGER trg_auth_role_source_id_immutable/);
+});
