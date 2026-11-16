@@ -7,6 +7,11 @@
 CREATE TABLE auth_roles (
   role_name TEXT PRIMARY KEY
     CHECK (length(trim(role_name)) > 0 AND lower(trim(role_name)) <> 'administrator'),
+  -- Preserve original ROLES[Role ID] separately from the mutable display name.
+  -- Null is allowed for a newly created D1-only custom role, never invented for import.
+  source_role_id TEXT UNIQUE
+    CHECK (source_role_id IS NULL OR
+      (length(source_role_id) BETWEEN 1 AND 128 AND source_role_id=trim(source_role_id))),
   status TEXT NOT NULL CHECK (status IN ('Active','Inactive')),
   permissions_json TEXT NOT NULL DEFAULT '{}',
   -- Source ROLES[Allowed Modules] display metadata; never an authorization proof.
@@ -140,6 +145,24 @@ CREATE TRIGGER trg_auth_role_no_replace BEFORE INSERT ON auth_roles
 WHEN EXISTS (SELECT 1 FROM auth_roles r WHERE r.role_name=NEW.role_name)
 BEGIN
   SELECT RAISE(ABORT,'role replacement forbidden');
+END;
+
+-- A conflicting source Role ID must never make INSERT OR REPLACE delete
+-- another role (and thereby reset role authority epochs or provenance).
+CREATE TRIGGER trg_auth_role_source_id_no_replace BEFORE INSERT ON auth_roles
+WHEN NEW.source_role_id IS NOT NULL AND EXISTS
+  (SELECT 1 FROM auth_roles r WHERE r.source_role_id=NEW.source_role_id)
+BEGIN
+  SELECT RAISE(ABORT,'source role id replacement forbidden');
+END;
+
+-- Once attached to a source Role ID, the original identifier is immutable.
+-- D1-only roles may receive an ID later only via separately reviewed import.
+CREATE TRIGGER trg_auth_role_source_id_immutable BEFORE UPDATE OF source_role_id ON auth_roles
+WHEN OLD.source_role_id IS NOT NULL
+  AND OLD.source_role_id IS NOT NEW.source_role_id
+BEGIN
+  SELECT RAISE(ABORT,'source role id immutable');
 END;
 
 -- Frozen RoleManagement.gs refuses deleting roles assigned to ANY user.
