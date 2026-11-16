@@ -127,3 +127,26 @@ node scripts/check-m11-cutover-order.mjs /private/m11-order.json /private/m11-re
 ```
 
 The CLI uses the repository-pinned source SHA, emits only fixed blocker codes and **never** makes a launch decision. A structurally complete review record does not demonstrate that actual freezes, snapshots, migrations, reconciliation, approvals, replay or traffic changes occurred. A real M10 rehearsal, source-data custody, human verification of event chronology, and separately authorized production GO remain mandatory.
+
+
+## M11-04 — Production candidate isolation and health preflight
+
+**Current NO-GO:** `wrangler.jsonc` has **no production D1 binding**, and `src/index.js` currently returns `{"status":"foundation","service":"shererp-cloud","database":"not-connected"}` from `GET /api/health`. Workers Builds publishing the preview Worker from `main` is not evidence that a D1-connected ERP is deployed, and no source GAS/Sheets migration may be triggered on this basis.
+
+Before a separate owner-approved production deployment configuration is proposed, review its *private candidate config*, **actual observed** release health, exact preview/staging configs and the M11 prepare-phase evidence references together. The offline validator `scripts/check-m11-production-candidate.mjs` must refuse:
+
+- the existing `shererp-cloud-preview` identity, staging Worker identity or re-use of the staging D1 database name or UUID;
+- public workers.dev exposure, preview resource bindings, missing/extra D1 binding, unsupported config keys (including premature routes), or changed original asset routing;
+- an observed `foundation/not-connected` response, stale deployed release SHA or missing independent M10 owner-signoff record.
+
+Run **only on operator-reviewed local files**; do not commit production credentials, private evidence payloads, staff/customer exports or cloud tokens:
+
+```sh
+node scripts/check-m11-production-candidate.mjs \
+  /private/proposed-production-wrangler.json \
+  /private/reviewed-production-health.json \
+  /private/m11-release-evidence.json \
+  <exact-reviewed-release-sha>
+```
+
+This is intentionally **not** a production deployment tool, proof of real health authenticity, permission to create/bind D1 or GO to switch routing. A syntactically valid, synthetic candidate can pass document completeness while real M10, auth/security/financial parity, operator review and owner approval remain absent. Never add production D1 resources to `wrangler.preview.jsonc`, `previews` or the connected public preview Worker.
