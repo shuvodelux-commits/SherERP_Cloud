@@ -153,3 +153,35 @@ test('server edit permission is mandatory, and malformed snapshots fail closed',
   assert.throws(()=>projectSaleForUpdate(invoiceId,malformed,{canEditSales:true}),/trusted|session|snapshot/i);
   assert.throws(()=>projectSaleForUpdate('',snapshot(),{canEditSales:true}),/invoice/i);
 });
+
+
+test('ambiguous active vendor rows for one invoice/product must not silently select the last supplier',()=>{
+  const data=snapshot();
+  data.vendorSourcing=[
+    {'Invoice ID':invoiceId,'Product ID':'PIPE','Vendor ID':'V-ORIGINAL',
+      'Vendor Name':'Original Supplier','Unit Cost':'7','Quantity':1,'Is Deleted':'FALSE'},
+    {'Invoice ID':invoiceId,'Product ID':'PIPE','Vendor ID':'V-CONFLICT',
+      'Vendor Name':'Conflicting Supplier','Unit Cost':'11','Quantity':1,'Is Deleted':'FALSE'}
+  ];
+  assert.throws(
+    ()=>projectSaleForUpdate(invoiceId,data,{canEditSales:true}),
+    /NEEDS_REVIEW: ambiguous historical vendor sourcing for Sales Update Mode/
+  );
+});
+
+test('deleted vendor tombstones and unrelated invoice/product rows preserve native edit source parity',()=>{
+  const data=snapshot();
+  data.vendorSourcing=[
+    {'Invoice ID':invoiceId,'Product ID':'PIPE','Vendor ID':'V-ACTIVE',
+      'Vendor Name':'Original Vendor','Unit Cost':'8.75','Quantity':1,'Is Deleted':'FALSE'},
+    {'Invoice ID':invoiceId,'Product ID':'PIPE','Vendor ID':'V-DELETED',
+      'Vendor Name':'Retired Vendor','Unit Cost':'99','Quantity':1,'Is Deleted':'TRUE'},
+    {'Invoice ID':'INV-OTHER','Product ID':'PIPE','Vendor ID':'V-UNRELATED',
+      'Vendor Name':'Other Invoice','Unit Cost':'10','Quantity':1,'Is Deleted':'FALSE'},
+    {'Invoice ID':invoiceId,'Product ID':'UNRELATED-PRODUCT','Vendor ID':'V-OTHER',
+      'Vendor Name':'Other Product','Unit Cost':'12','Quantity':1,'Is Deleted':'FALSE'}
+  ];
+  const result=compare(data);
+  assert.equal(result.items[0].vendorId,'V-ACTIVE');
+  assert.equal(result.items[0].vendorUnitCost,8.75);
+});
