@@ -34,6 +34,16 @@ function dateOnly(value){
     !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(value)){
     throw new TypeError('Invalid canonical posted-invoice date');
   }
+  const [year,month,day]=value.slice(0,10).split('-').map(Number);
+  // Date.setUTCFullYear also handles years 0000–0099 without the
+  // Date.UTC(0..99) implicit 1900 offset. Reject silently rolled days.
+  const calendar=new Date(0);
+  calendar.setUTCFullYear(year,month-1,day);
+  if(calendar.getUTCFullYear()!==year ||
+    calendar.getUTCMonth()!==month-1 ||
+    calendar.getUTCDate()!==day){
+    throw new TypeError('Invalid canonical posted-invoice date');
+  }
   return value.slice(0,10);
 }
 
