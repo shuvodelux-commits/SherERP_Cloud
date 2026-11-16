@@ -55,7 +55,7 @@ test('source-shaped LOGS read retains full duplicate rows, blanks, physical inde
 });
 
 test('original String find semantics preserve identical events and first physical match',async()=>{
-  const a=createLegacyErrorLogReadAdapter(mockDB().DB);
+  const a=createLegacyErrorLogReadAdapter({DB:mockDB().DB});
   assert.deepEqual(await a.findRows_('LOGS','Context','POS'),ROWS.slice(0,2));
   assert.deepEqual(await a.findRows_('LOGS','Message','  বাংলা 오류  '),ROWS.slice(0,2));
   assert.deepEqual(await a.findFirstRow_('LOGS','Message','  বাংলা 오류  '),ROWS[0]);
@@ -65,7 +65,7 @@ test('original String find semantics preserve identical events and first physica
   assert.equal(await a.findRowIndex_('LOGS','Context','Reports'),4);
   assert.equal(await a.findRowIndex_('LOGS','Context','unknown'),-1);
   assert.equal(await a.findFirstRow_('LOGS','Message','বাংলা 오류'),null);
-  assert.equal(await a.findRow_('LOGS','Log ID','not-allowed').catch(()=>null),null);
+  await assert.rejects(()=>a.findRow_('LOGS','Log ID','not-allowed'),/unsupported|column|header/i);
 });
 
 test('unknown source groups and source column names fail before SQL; writes never exposed',async()=>{
@@ -121,10 +121,9 @@ test('malformed D1, extra private fields, getters or nontext values are rejected
     {success:true,results:[{...valid,row_id:33}]},
     {success:true,results:[{...valid,context:null}]},
     {success:true,results:[{...valid,message:22}]},
-    {success:true,results:[gettter()]},
+    {success:true,results:[getter]},
     {success:true,results:[{...valid,legacy_sheet_row:undefined}]}
   ];
-  function gettter(){return getter;}
   for(const response of cases){
     const a=createLegacyErrorLogReadAdapter(mockDB(response).DB);
     let error;
