@@ -157,8 +157,9 @@ async function seed621(){
   boxConversionId:'BOX-25',boxUnitName:'Box',
   length:'24',width:'24',dimensionUnit:'in',piecesPerBox:'25',coveragePolicy:'nominal'
  };
- await insert621('INSERT INTO synthetic_m03_tile_current VALUES(?,?,?,?,?)',
-  'BUS-A','PRD-000011',3,5,JSON.stringify(tileMeasurement));
+ await insert621('INSERT INTO synthetic_m03_tile_current VALUES(?,?,?,?,?,?)',
+  'BUS-A','PRD-000011',3,5,JSON.stringify(tileMeasurement),
+  createHash('sha256').update(JSON.stringify(tileMeasurement)).digest('hex'));
  await insert621('INSERT INTO synthetic_m03_bundle_components VALUES (?,?,?,?,?,?,?)',
   'BUS-A','PRD-000014','PRD-000010','5','Pcs',1,'Active');
  await insert621('INSERT INTO synthetic_m03_stock_lots VALUES(?,?,?,?,?,?)',
@@ -228,13 +229,37 @@ test('M03 #621 real local Workerd D1 authenticated Products bootstrap preserves 
    {...tile,piecesPerBox:'24'},
    {...tile,coveragePolicy:'manufacturer'}
   ]){
-   await insert621("UPDATE synthetic_m03_tile_current SET measurement_json=? WHERE product_id='PRD-000011'",JSON.stringify(bad));
+   await insert621("UPDATE synthetic_m03_tile_current SET measurement_json=?,measurement_sha256=? WHERE product_id='PRD-000011'",
+    JSON.stringify(bad),createHash('sha256').update(JSON.stringify(bad)).digest('hex'));
    await assert.rejects(()=>call621(T621.A),reject621);
   }
-  await insert621("UPDATE synthetic_m03_tile_current SET measurement_json=? WHERE product_id='PRD-000011'",original);
+  await insert621("UPDATE synthetic_m03_tile_current SET measurement_json=?,measurement_sha256=? WHERE product_id='PRD-000011'",original,
+    createHash('sha256').update(original).digest('hex'));
   await insert621("UPDATE synthetic_m03_tile_current SET unit_revision=2 WHERE product_id='PRD-000011'");
   await assert.rejects(()=>call621(T621.A),reject621);
   await insert621("UPDATE synthetic_m03_tile_current SET unit_revision=3 WHERE product_id='PRD-000011'");
+ });
+ await t.test('current manufacturer evidence is accepted; old Tile dimensions at same revision are denied',async()=>{
+  const row=await DB.prepare(
+   "SELECT measurement_json FROM synthetic_m03_tile_current WHERE product_id='PRD-000011'"
+  ).first();
+  const original=row.measurement_json;
+  const reviewed={...JSON.parse(original),coveragePolicy:'manufacturer',
+   manufacturerSqftPerBox:'100.000',manufacturerEvidence:'supplier-label-verified'};
+  const verifiedText=JSON.stringify(reviewed);
+  const digest=createHash('sha256').update(verifiedText).digest('hex');
+  await insert621("UPDATE synthetic_m03_tile_current SET measurement_json=?,measurement_sha256=? WHERE product_id='PRD-000011'",
+   verifiedText,digest);
+  const result=await call621(T621.A);
+  assert.equal(result.products[1]['M05 Stock Preview'].tileMeasurement.manufacturerEvidence,
+   'supplier-label-verified');
+  assert.match(display621(result.products[1]),/Sqft/);
+  const stale={...reviewed,length:'12'};
+  await insert621("UPDATE synthetic_m03_tile_current SET measurement_json=? WHERE product_id='PRD-000011'",
+   JSON.stringify(stale));
+  await assert.rejects(()=>call621(T621.A),reject621);
+  await insert621("UPDATE synthetic_m03_tile_current SET measurement_json=?,measurement_sha256=? WHERE product_id='PRD-000011'",
+   original,createHash('sha256').update(original).digest('hex'));
  });
  await t.test('unknown/stale conversion Unit master and bad stock source deny without leaking IDs',async()=>{
   await insert621("UPDATE product_units SET status='Inactive' WHERE unit_id='PUNT-000012'");
