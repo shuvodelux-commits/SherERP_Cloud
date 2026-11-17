@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
 import {reviewOfflineSourceReferences} from '../scripts/dry-run-source-parity.mjs';
 
 const schema=JSON.parse(readFileSync(new URL('../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
@@ -132,4 +135,21 @@ test('frozen export checks are required even for an isolated relationship review
  const supplementary=make();
  supplementary.sourceCommit='590adfad128fe7155bfb7b608a2ed5665b202a9c';
  assert.throws(()=>check(supplementary),/rejected|SOURCE_COMMIT/);
+});
+
+test('offline --references CLI redacts secrets and returns nonzero for review findings',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'m02-links-'));
+ try{
+  const path=join(dir,'source.json');writeFileSync(path,JSON.stringify(make()));
+  const cli=new URL('../scripts/dry-run-source-parity.mjs',import.meta.url).pathname;
+  const r=spawnSync(process.execPath,[cli,'--references',path],{encoding:'utf8'});
+  assert.equal(r.status,1);
+  const report=JSON.parse(r.stdout);
+  assert.equal(report.humanReviewRequired,true);
+  assert.equal(report.automaticLinksCreated,0);
+  assert.doesNotMatch(r.stdout+r.stderr,secrets);
+  const bogus=spawnSync(process.execPath,[cli,'--references'],{encoding:'utf8'});
+  assert.equal(bogus.status,1);
+  assert.doesNotMatch(bogus.stderr,secrets);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });
