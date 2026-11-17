@@ -46,6 +46,53 @@ function lineageBlocker(root,key,prefix,audit){
 }
 
 /**
+ * Full original historical rows, including soft-deleted sources, are counted
+ * against the already reviewed original sourceRows receipts. Import receipts
+ * themselves are still checked by the independent source-eligibility gate.
+ */
+const SOURCE_ROW_LINKS=Object.freeze({
+  salesSnapshot:Object.freeze([
+    ['SALES','allSales'],
+    ['SALES_RETURN','returnHeaders'],
+    ['SALES_RETURN_ITEMS','returnItems']
+  ]),
+  purchaseSnapshot:Object.freeze([
+    ['PURCHASES','allPurchases'],
+    ['PURCHASE_RETURN','returnHeaders'],
+    ['PURCHASE_RETURN_ITEMS','returnItems']
+  ])
+});
+
+/** Read only own data properties, never source/receipt getters. */
+function ownData(record,key){
+  if(!record || typeof record!=='object' || Array.isArray(record) ||
+    (Object.getPrototypeOf(record)!==Object.prototype &&
+     Object.getPrototypeOf(record)!==null))return undefined;
+  const descriptor=Object.getOwnPropertyDescriptor(record,key);
+  return descriptor && Object.hasOwn(descriptor,'value')
+    ? descriptor.value : undefined;
+}
+
+function sourceRowCountBlockers(root,snapshotKey,lineageIssue){
+  // An invalid/missing lineage snapshot has not passed the shape/accessor
+  // audit; do not inspect its arrays or falsely accept a row-count result.
+  if(lineageIssue?.endsWith('_MISSING') || lineageIssue?.endsWith('_INVALID'))
+    return [];
+  const snapshot=ownData(root,snapshotKey);
+  const sources=ownData(ownData(root,'manifest'),'sourceGroups');
+  return SOURCE_ROW_LINKS[snapshotKey].flatMap(([group,field])=>{
+    const rows=ownData(snapshot,field);
+    const receipt=ownData(sources,group);
+    const count=ownData(receipt,'sourceRows');
+    // Missing/invalid receipts remain independently blocked by the original
+    // evidence gate. Do not reinterpret them as zero rows.
+    if(!Array.isArray(rows) || !Number.isSafeInteger(count) || count<0)
+      return [];
+    return rows.length===count ? [] : [group+'_SOURCE_ROWS_MISMATCH'];
+  });
+}
+
+/**
  * Full source-shaped inputs, not tenant/session/browser inputs:
  *   {manifest, salesSnapshot:{allSales,returnHeaders,returnItems},
  *              purchaseSnapshot:{allPurchases,returnHeaders,returnItems}}
@@ -60,13 +107,19 @@ export function evaluateM09ReportsLineageEvidence(input){
     'SALES_RETURN_LINEAGE',auditM09SalesReturnLineage);
   const purchaseIssue=lineageBlocker(root,'purchaseSnapshot',
     'PURCHASE_RETURN_LINEAGE',auditM09PurchaseReturnLineage);
+  const salesCountIssues=sourceRowCountBlockers(root,'salesSnapshot',salesIssue);
+  const purchaseCountIssues=sourceRowCountBlockers(root,'purchaseSnapshot',purchaseIssue);
 
   const reports=evidence.reports.map(item=>{
     const lineageBlockers=[];
-    if((item.key==='sales' || item.key==='profit') && salesIssue)
-      lineageBlockers.push(salesIssue);
-    if((item.key==='purchase' || item.key==='profit') && purchaseIssue)
-      lineageBlockers.push(purchaseIssue);
+    if(item.key==='sales' || item.key==='profit'){
+      if(salesIssue)lineageBlockers.push(salesIssue);
+      lineageBlockers.push(...salesCountIssues);
+    }
+    if(item.key==='purchase' || item.key==='profit'){
+      if(purchaseIssue)lineageBlockers.push(purchaseIssue);
+      lineageBlockers.push(...purchaseCountIssues);
+    }
     const evidenceComplete=item.evidenceComplete && lineageBlockers.length===0;
     return {
       ...item,
