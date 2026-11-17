@@ -15,6 +15,7 @@
 - GitHub-only branch/PR, do not modify `legacy/source`, `src/rpc`, Wrangler, migrations, reports UI or data.
 - No auto-netting or imported financial balance calculations; zero financial writes.
 - All new source keys must be original configured group names, not aliases.
+- Balance Sheet evidence includes `FINANCE_TRANSACTIONS` (source Owner Capital/Outstanding Loan), not just `CASH_BOOK`/bank/lot rows.
 
 ## Review Focus
 - Missing source group silently replaced by a valid-looking empty array.
