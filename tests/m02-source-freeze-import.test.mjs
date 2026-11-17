@@ -187,7 +187,7 @@ test('both CLIs reject symlink input with fixed redactable error and no JSON dat
    assert.equal(v.stdout,'');
    assert.match(v.stderr,/rejected|invalid/i);
    assert.doesNotMatch(v.stderr,sensitive);
-   assert.doesNotMatch(v.stderr,new RegExp(dir.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+   assert.equal(v.stderr.includes(dir),false);
   }
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
