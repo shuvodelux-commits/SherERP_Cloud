@@ -7,17 +7,17 @@ import {
   assertRemoteSchema
 } from '../scripts/guard-remote-staging.mjs';
 
-const goodResource = {name:'shererp-operational-staging-20261118',uuid:'74102df7-dd31-4999-81d5-69bca42f0424'};
-const archived = {name:'shererp-legacy-history-staging-20261118',uuid:'19190fd2-1f5e-4e8a-a062-bd7a0cbf3d96'};
+const goodResource = {name:'shererp-staging-db',uuid:'aa04618e-1639-4cb9-bdf5-7b967d8b968b'};
+const archiveResource = {name:'shererp-legacy-history-staging-20261118',uuid:'3328e5c8-7695-4d6c-8bcf-9725437ebdd5'};
 const before = [{success:true,results:[{existing_user_tables:0}]}];
 const after = [{success:true,results:[{app_tables:7,applied_migrations:2,history_triggers:4}]}];
 
 test('remote identity must match an exact unique named database and UUID',()=>{
-  assert.equal(assertExactD1Resource([goodResource,archived]),true);
-  assert.equal(assertExactD1Resource({result:[goodResource,archived]}),true);
-  assert.throws(()=>assertExactD1Resource([{...goodResource,uuid:'wrong'},archived]),/identity|UUID|matching/i);
-  assert.throws(()=>assertExactD1Resource([goodResource,goodResource,archived]),/exactly one|duplicate/i);
-  assert.throws(()=>assertExactD1Resource([{name:'shererp-operational-staging-20261118',uuid:'different'},archived]),/identity|UUID|matching/i);
+  assert.equal(assertExactD1Resource([goodResource,archiveResource]),true);
+  assert.equal(assertExactD1Resource({result:[goodResource,archiveResource]}),true);
+  assert.throws(()=>assertExactD1Resource([{...goodResource,uuid:'wrong'},archiveResource]),/identity|UUID|matching/i);
+  assert.throws(()=>assertExactD1Resource([goodResource,goodResource,archiveResource]),/exactly one|duplicate/i);
+  assert.throws(()=>assertExactD1Resource([{name:'shererp-staging-db',uuid:'different'},archiveResource]),/identity|UUID|matching/i);
 });
 
 test('remote schema must be empty before applying migrations',()=>{
