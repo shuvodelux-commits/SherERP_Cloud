@@ -96,7 +96,7 @@ BEGIN
     (NEW.pricing_unit='Box' AND (
       (lower(u.purchase_anchor_unit_name)=lower(c.unit_name)
        AND p.purchase_price_text=NEW.unit_price_text
-       AND (c.purchase_price_override_text='' OR c.purchase_price_override_text=NEW.unit_price_text))
+       AND (c.purchase_price_override_text='' OR (CASE WHEN instr(c.purchase_price_override_text,'.')>0 THEN rtrim(rtrim(c.purchase_price_override_text,'0'),'.') ELSE c.purchase_price_override_text END)=(CASE WHEN instr(NEW.unit_price_text,'.')>0 THEN rtrim(rtrim(NEW.unit_price_text,'0'),'.') ELSE NEW.unit_price_text END)))
       OR
       (lower(u.purchase_anchor_unit_name)<>lower(c.unit_name)
        AND c.purchase_price_override_text=NEW.unit_price_text)
@@ -105,7 +105,7 @@ BEGIN
     (NEW.pricing_unit='Pcs' AND (
       ((u.purchase_anchor_unit_name='' OR lower(u.purchase_anchor_unit_name)='pcs')
        AND p.purchase_price_text=NEW.unit_price_text
-       AND (u.stock_purchase_override_text='' OR u.stock_purchase_override_text=NEW.unit_price_text))
+       AND (u.stock_purchase_override_text='' OR (CASE WHEN instr(u.stock_purchase_override_text,'.')>0 THEN rtrim(rtrim(u.stock_purchase_override_text,'0'),'.') ELSE u.stock_purchase_override_text END)=(CASE WHEN instr(NEW.unit_price_text,'.')>0 THEN rtrim(rtrim(NEW.unit_price_text,'0'),'.') ELSE NEW.unit_price_text END)))
       OR
       (u.purchase_anchor_unit_name<>'' AND lower(u.purchase_anchor_unit_name)<>'pcs'
        AND u.stock_purchase_override_text=NEW.unit_price_text)
