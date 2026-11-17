@@ -56,6 +56,8 @@ before(async()=>{
     await DB.prepare('INSERT INTO synthetic_m03_g1_stock(business_id,sku,available) VALUES(?,?,?)')
       .bind(id,'PIPE-1',amount).run();
   }
+  await DB.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions
+    (business_id,session_id,status) VALUES('BUSINESS-A','SESSION-1','Open')`).run();
   posting=createM04AtomicG1SaleProof({DB},{businessId:'BUSINESS-A'});
 });
 after(async()=>{await harness.close();});
@@ -164,4 +166,62 @@ test('private G1 D1 overlay is not deployed or activated as a public sale RPC',a
   assert.equal(live.includes('synthetic_m03_g1_stock'),false);
   const reply=await worker.fetch('http://local.test/__m03_m04_g1__/sale',{method:'POST'});
   assert.equal(reply.status,404);
+});
+
+test('G2 real Workerd D1: no Open session means neither stock nor journal can post',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=3 WHERE business_id='BUSINESS-A'").run();
+  for(const status of ['Starting','Closing','Closed']){
+    await DB.prepare('UPDATE synthetic_m03_g1_cash_sessions SET status=? WHERE business_id=?')
+      .bind(status,'BUSINESS-A').run();
+    const before=await snapshot();
+    assert.deepEqual(await posting.post_(input(SECOND,'OP-G2-'+status.toUpperCase())),{
+      status:'DECLINED',operationId:'OP-G2-'+status.toUpperCase()
+    });
+    assert.deepEqual(await snapshot(),before);
+  }
+  await DB.prepare("DELETE FROM synthetic_m03_g1_cash_sessions WHERE business_id='BUSINESS-A'").run();
+  await DB.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions
+    (business_id,session_id,status) VALUES('BUSINESS-B','B-SESSION','Open')`).run();
+  const noSession=await snapshot();
+  assert.deepEqual(await posting.post_(input(SECOND,'OP-G2-NONE')),{status:'DECLINED',operationId:'OP-G2-NONE'});
+  assert.deepEqual(await snapshot(),noSession);
+  await DB.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions
+    (business_id,session_id,status) VALUES('BUSINESS-A','SESSION-2','Open')`).run();
+});
+
+test('G2 real D1: close between actor verification and receipt claim denies stale operation',async()=>{
+  const before=await snapshot();
+  let hit=false;
+  const proxy={prepare(sql){
+    const statement=DB.prepare(sql);
+    if(!sql.includes('INSERT INTO operation_receipts'))return statement;
+    return {bind(...values){
+      const bound=statement.bind(...values);
+      return {...bound,async first(){
+        if(!hit){
+          hit=true;
+          await DB.prepare("UPDATE synthetic_m03_g1_cash_sessions SET status='Closing' WHERE business_id='BUSINESS-A'").run();
+        }
+        return bound.first();
+      }};
+    }};
+  }};
+  const trial=createM04AtomicG1SaleProof({DB:proxy},{businessId:'BUSINESS-A'});
+  assert.deepEqual(await trial.post_(input(SECOND,'OP-G2-RACE')),{
+    status:'DECLINED',operationId:'OP-G2-RACE'
+  });
+  assert.equal(hit,true);
+  assert.deepEqual(await snapshot(),before);
+  await DB.prepare("UPDATE synthetic_m03_g1_cash_sessions SET status='Open' WHERE business_id='BUSINESS-A'").run();
+});
+
+test('G2 real Workerd D1: closed session preserves stable prior receipt replay without new posting',async()=>{
+  assert.equal((await posting.post_(input(SECOND,'OP-G2-OPEN'))).status,'COMMITTED');
+  const after=await snapshot();
+  await DB.prepare("UPDATE synthetic_m03_g1_cash_sessions SET status='Closing' WHERE business_id='BUSINESS-A'").run();
+  assert.deepEqual(await posting.post_(input(SECOND,'OP-G2-OPEN')),{status:'REPLAY',
+    operationId:'OP-G2-OPEN',resultRef:'SYNTH-OP-G2-OPEN'});
+  assert.deepEqual(await posting.post_(input(SECOND,'OP-G2-CLOSED')),{status:'DECLINED',
+    operationId:'OP-G2-CLOSED'});
+  assert.deepEqual(await snapshot(),after);
 });
