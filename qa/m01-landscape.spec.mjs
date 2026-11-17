@@ -405,3 +405,95 @@ test('M01 Playwright POS V2 authorized Products add action stays visible',async(
     await page.close();
   }
 });
+
+
+test('M01 original POS V2 keyboard tabs and no-match search never create a sale',async t=>{
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]},
+    {key:'bank',label:'Bank',sidebarGroup:4,sidebarOrder:50}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-375x812',width:375,height:812,phone:true},
+    {name:'desktop-1280x800',width:1280,height:800,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:phone,hasTouch:phone
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const login=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await login).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        if(phone){
+          await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+        }else{
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' &&
+          document.body.classList.contains('pos-v2-active'));
+        assert.equal(await page.evaluate(()=>posState.cart.length),0,
+          'no products have been selected before keyboard search');
+        if(phone){
+          for(const key of ['customer','payment','cart']){
+            const button=page.locator(
+              '#page-pos .pos-v2-workflow-tabs [data-pos-v2-tab="'+key+'"]');
+            await button.focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await page.locator('#page-pos')
+              .getAttribute('data-pos-v2-tab-state'),key,
+              'native keyboard Enter should activate the original '+key+' tab');
+            assert.equal(await button.getAttribute('aria-selected'),'true');
+          }
+        }
+        const search=page.locator('#posSearch');
+        await search.waitFor({state:'visible'});
+        await search.focus();
+        await search.fill('m01-no-matching-synthetic-product');
+        for(const key of ['ArrowDown','ArrowUp','Enter']){
+          await search.press(key);
+          assert.equal(await page.evaluate(()=>posState.cart.length),0,
+            'keyboard '+key+' with no local product must not change the cart');
+        }
+        assert.equal(await page.evaluate(()=>currentPage),'posv2');
+        await search.press('Escape');
+        assert.equal(await search.inputValue(),'',
+          'original POS search Escape should clear the unmatched query');
+        assert.equal(await page.evaluate(()=>posState.cart.length),0);
+        assert.equal(await page.evaluate(()=>document.activeElement?.id),
+          'posSearch','Escape must retain usable keyboard focus');
+        const evidence=await captureM01NavEvidence(page,
+          'posv2-keyboard-'+name);
+        assert.ok(evidence.screenshotBytes>1500);
+        assert.equal(evidence.loginHidden,true);
+        assert.equal(evidence.appVisible,true);
+        assert.equal(evidence.bankNavCount,0);
+        await page.evaluate(()=>goToPage('bank'));
+        assert.equal(await page.evaluate(()=>currentPage),'dashboard',
+          'the POS-only Clerk still cannot navigate to Bank');
+        assert.equal(calls.filter(call=>call.fnName==='login').length,1);
+        assert.equal(calls.filter(call=>
+          /^(?:saveSale|createSale|completeSale|postSale|submitSale)$/i
+            .test(call.fnName||'')).length,0,
+          'keyboard-only POS QA must not post sales, payments or stock');
+      }finally{await page.close();}
+    });
+  }
+});
