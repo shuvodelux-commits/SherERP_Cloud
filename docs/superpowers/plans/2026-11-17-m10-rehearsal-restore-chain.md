@@ -1,6 +1,6 @@
 # M10-12 — Cross-gate source→D1→backup→restore evidence continuity
 
-**Workstream:** M10. **Issue:** #312. **Coordination:** #456. **Starting main:** `e6f823605fa73d0d427693f39f74e4a452281c2d`. **Original source:** `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`.
+**Workstream:** M10. **Issue:** #312. **Coordination:** #456. **Starting main:** `d3cef4a21e685f356c09ecde59a0663d0dc896cb` (includes merged M10-11 #466). **Original source:** `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`.
 
 ## Scoped implementation overview (12 sentences)
 
