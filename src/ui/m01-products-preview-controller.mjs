@@ -28,6 +28,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
     '#m01ProductUnitPanel .m01-preview {margin-top:10px;padding:9px;border:1px solid var(--color-border,#d8deea);border-radius:6px;min-height:38px;font-weight:600;overflow-wrap:anywhere;}',
     '#m01ProductUnitPanel .m01-error {color:#ae2833;}',
     '#m01ProductUnitPanel .m01-bn {font-size:11px;display:block;color:var(--color-text-muted,#5d6473);font-weight:400;}',
+    '#prodSaveBtn.m01-advanced-save-disabled {background:#e9edf2!important;color:#64748b!important;border-color:#cbd5e1!important;cursor:not-allowed!important;opacity:1!important;}',
     '@media (max-width:600px){#m01ProductUnitPanel .m01-fields{grid-template-columns:1fr;}}'
   ].join('\n');
   document.head.appendChild(style);
@@ -98,6 +99,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
   const areaFields=byId('m01AreaFields');
   const preview=byId('m01StockPreview');
   const readOnly=byId('m01PreviewReadOnly');
+  const originalSaveLabel=save.textContent;
 
   function managedUnits(){
     const items=globalThis.prodState?.units||[];
@@ -137,6 +139,9 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
     preview.hidden=!advanced;
     readOnly.hidden=!advanced;
     save.disabled=advanced;
+    save.classList.toggle('m01-advanced-save-disabled',advanced);
+    save.textContent=advanced?'Save unavailable':originalSaveLabel;
+    save.title=advanced?'Preview only — server-authorized product saving is not yet available':'';
     if(!advanced){preview.textContent='';return}
     try{
       refreshAnchorChoices();
