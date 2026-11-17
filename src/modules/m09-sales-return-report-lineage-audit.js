@@ -69,17 +69,30 @@ export function auditM09SalesReturnLineage(snapshot){
   const items=rows(data,'returnItems');
   const issues=new Set();
 
+  // Frozen Utils.gs::assertUniqueSalesInvoiceIds_ checks the IDs of
+  // active invoices against ALL source Sales rows, including soft deletions,
+  // using trimmed string identity (not just active raw Invoice ID values).
+  const historicalCounts=new Map(),activeNormalizedCounts=new Map();
   const saleCounts=new Map();
   for(const sale of sales){
-    if(isDeleted(sale))continue;
     const id=sourceId(sale['Invoice ID']);
+    const normalized=id?.trim();
+    if(normalized)
+      historicalCounts.set(normalized,(historicalCounts.get(normalized)||0)+1);
+    if(isDeleted(sale))continue;
     if(!id){
       issues.add('INVALID_SALE_INVOICE_ID');
       continue;
     }
-    const count=(saleCounts.get(id)||0)+1;
-    saleCounts.set(id,count);
+    // Preserve exact original raw IDs for parent/child Return references.
+    saleCounts.set(id,(saleCounts.get(id)||0)+1);
+    const count=(activeNormalizedCounts.get(normalized)||0)+1;
+    activeNormalizedCounts.set(normalized,count);
     if(count>1)issues.add('DUPLICATE_ACTIVE_SALE_INVOICE');
+  }
+  for(const [id,activeCount] of activeNormalizedCounts){
+    if(activeCount===1 && historicalCounts.get(id)>1)
+      issues.add('AMBIGUOUS_HISTORICAL_SALE_INVOICE_ID');
   }
 
   const activeHeaders=new Map(),deletedHeaderIds=new Set();
