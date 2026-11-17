@@ -186,8 +186,13 @@ test('source Bank/Mobile account and exact money policy apply to the combined to
    id:'BANK',method:'Bank',accountId:'BANK-1',amount:'3000'
   }];
   await assert.rejects(()=>preview(x,snapshot(db)),/exceed|invoice total/i);
+  // Frozen SalePayments.gs filters a zero-tender Cash row: keep that
+  // original behavior instead of inventing a stricter payment contract.
   x.payments=[{id:'C',method:'Cash',amount:'0'}];
-  await assert.rejects(()=>preview(x,snapshot(db)),/positive|zero|cash/i);
+  const zeroTender=await preview(x,snapshot(db));
+  assert.deepEqual(zeroTender.allocation.payments,[]);
+  assert.equal(zeroTender.allocation.paidAmount,0);
+  assert.equal(zeroTender.allocation.dueAmount,2640);
   x.payments=[];x.discount='9999';
   const zero=await preview(x,snapshot(db));
   assert.equal(zero.grandTotal,0);
