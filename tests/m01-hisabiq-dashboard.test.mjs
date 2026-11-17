@@ -126,3 +126,15 @@ test('M01 Step 2 RED: user and tenant scope, modal focus, and bounded layout per
   assert.doesNotMatch(runtime,/window\.eval\(|innerHTML\s*=\s*[^'"]/,
     'layout restoration must not interpret stored text as DOM or code');
 });
+
+
+test('M01 Step 2: drag targets always derive group kind from the widget registry',async t=>{
+  const html=await compiled(t);
+  const marker='<script id="hisabiq-dashboard-runtime">';
+  const start=html.indexOf(marker),end=html.indexOf('</script>',start);
+  const runtime=html.slice(start,end);
+  assert.match(runtime,/touchTarget\(point,definitions\[w\.id\]\.kind\)/);
+  assert.match(runtime,/definitions\[from\]\.kind===definitions\[w\.id\]\.kind/);
+  assert.doesNotMatch(runtime,/\bw\.kind\b/,
+    'persisted layout entries have only id and visible; w.kind is undefined');
+});
