@@ -2,7 +2,7 @@
 /**
  * M03 Run 2 — source-pinned, reviewed async conversion regression gate.
  *
- * These six files are a small subset of the 394 GAS functions whose
+ * These twelve files are a small subset of the 394 GAS functions whose
  * repository-facing chains need conversion. Requiring explicit await at
  * their known D1 calls prevents a Promise silently reaching source-style
  * arrays, row indexes and RPC envelopes. THIS IS NOT full async closure.
@@ -27,7 +27,27 @@ const REVIEWED=Object.freeze({
     'getAllRows_','getOptions','getSettingsMap_'
   ]),
   'src/modules/source-app-shell-reader.js':Object.freeze(['getAppShellSettings_']),
-  'src/rpc/internal-daybook-bootstrap.js':Object.freeze(['getBootstrap'])
+  'src/rpc/internal-daybook-bootstrap.js':Object.freeze(['getBootstrap']),
+  // Historical diagnostics/audit readers return immutable source-shaped
+  // text evidence only; those group identities are NOT current posting data.
+  'src/db/legacy-error-log-read.js':Object.freeze([
+    'all','findRows_','findFirstRow_','findRow_'
+  ]),
+  'src/db/delete-log-audit-read.js':Object.freeze([
+    'all','findRows_','findFirstRow_','findRow_'
+  ]),
+  'src/db/invoice-edit-audit-read.js':Object.freeze([
+    'all','findRows_','findFirstRow_','findRow_'
+  ]),
+  'src/db/sales-draft-audit-read.js':Object.freeze([
+    'all','findRows_','findFirstRow_','findRow_'
+  ]),
+  'src/db/opening-balance-edit-audit-read.js':Object.freeze([
+    'all','findRows_','findFirstRow_','findRow_'
+  ]),
+  'src/db/stock-lot-cost-history-read.js':Object.freeze([
+    'all','findRows_','findFirstRow_','findRow_'
+  ])
 });
 export const REVIEWED_AWAIT_FILES=Object.freeze(Object.keys(REVIEWED));
 const EXPECTED_SITES=Object.freeze({
@@ -36,7 +56,13 @@ const EXPECTED_SITES=Object.freeze({
   'src/db/party-identity-read.js':2,
   'src/modules/product-master-options.js':4,
   'src/modules/source-app-shell-reader.js':1,
-  'src/rpc/internal-daybook-bootstrap.js':1
+  'src/rpc/internal-daybook-bootstrap.js':1,
+  'src/db/legacy-error-log-read.js':4,
+  'src/db/delete-log-audit-read.js':4,
+  'src/db/invoice-edit-audit-read.js':4,
+  'src/db/sales-draft-audit-read.js':4,
+  'src/db/opening-balance-edit-audit-read.js':4,
+  'src/db/stock-lot-cost-history-read.js':4
 });
 
 
@@ -87,7 +113,7 @@ function allAwaitedCalls(source,required) {
 
 /**
  * Deterministic static contract, not a runtime adapter or a production gate.
- * Source input must contain EXACTLY the reviewed six modules and data-only
+ * Source input must contain EXACTLY the reviewed twelve modules and data-only
  * source strings; nothing is evaluated, deployed or introspected from D1.
  */
 export function auditReviewedM03AwaitChains(sources){
@@ -124,7 +150,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
       [path,readFileSync(new URL(path,root),'utf8')]
     ));
     const out=auditReviewedM03AwaitChains(sources);
-    if(out.awaitedCallSites!==15)throw deny();
+    if(out.awaitedCallSites!==39)throw deny();
     process.stdout.write('M03 reviewed awaited slice: '+out.files+
       ' source files / '+out.awaitedCallSites+
       ' awaited calls (NOT full 394-function conversion)\n');
