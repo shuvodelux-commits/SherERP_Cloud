@@ -2,6 +2,7 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
+import {resolveLegacyPartyByProvenance} from '../../src/db/party-identity-read.js';
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
 const server=createTestHarness({workers:[{configPath:'./wrangler.m03-test.jsonc'}]});
@@ -215,4 +216,34 @@ test('M09 Reports bootstrap derives safe source-shaped projection through actual
     const after=await db.prepare('SELECT COUNT(*) AS n FROM settings').first();
     assert.equal(after.n,before.n);
   }
+});
+
+test('Run1 actual Workerd D1 ties exact original Party identity to its reviewed physical source row',async()=>{
+  const before=await db.prepare('SELECT COUNT(*) AS n FROM party_legacy_links').first();
+  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=2 WHERE source_group='CUSTOMERS' AND source_id='CUS-1'").run();
+  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=7 WHERE source_group='SUPPLIERS' AND source_id='SUP-1'").run();
+  const link=(sourceGroup,sourceId,legacySheetRow)=>
+    resolveLegacyPartyByProvenance({DB:db},{sourceGroup,sourceId,legacySheetRow});
+  assert.deepEqual(await link('CUSTOMERS','CUS-1',2),{
+    partyId:'PARTY-1',sourceGroup:'CUSTOMERS',sourceId:'CUS-1',
+    legacySheetRow:2,linkBasis:'ORIGINAL_RECORD',partyStatus:'ACTIVE'
+  });
+  assert.deepEqual(await link('SUPPLIERS','SUP-1',7),{
+    partyId:'PARTY-1',sourceGroup:'SUPPLIERS',sourceId:'SUP-1',
+    legacySheetRow:7,linkBasis:'HUMAN_VERIFIED',partyStatus:'ACTIVE'
+  });
+  for(const item of [
+    ['CUSTOMERS','CUS-1',7],
+    ['CUSTOMERS','CUS-2',2],
+    ['SUPPLIERS','CUS-1',2],
+    ['SUPPLIERS','SUP-1',2],
+    ['VENDORS','SUP-1',7]
+  ]){
+    assert.equal(await link(...item),null,item.join(':'));
+  }
+  await db.prepare("UPDATE party_legacy_links SET status='DISPUTED' WHERE source_group='SUPPLIERS' AND source_id='SUP-1'").run();
+  assert.equal(await link('SUPPLIERS','SUP-1',7),null);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM party_legacy_links').first()).n,before.n);
+  const publicWorker=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8');
+  assert.equal(publicWorker.includes('resolveLegacyPartyByProvenance'),false);
 });
