@@ -50,6 +50,11 @@ function checkedDate(value){
   reportDefaultRange(value);
   return value;
 }
+/** Frozen DeleteEngine.gs::isDeleted_: original source activeRows_ predicate. */
+function isDeleted(row){
+  const value=own(row,'Is Deleted');
+  return value===true || String(value||'').toUpperCase()==='TRUE';
+}
 function sortedByDesc(map,field){
   return [...map.values()].sort((a,b)=>
     (Number(b[field])||0)-(Number(a[field])||0));
@@ -123,8 +128,7 @@ export function projectProfitReport(snapshot,filters,today){
   for(const expense of expensesRows)checkedDate(own(expense,'Date'));
 
   const sales=allSales.filter(sale=>
-    !(own(sale,'Is Deleted')===true||
-      String(own(sale,'Is Deleted')||'').toUpperCase()==='TRUE') &&
+    !isDeleted(sale) &&
     dateInReportRange(checkedDate(own(sale,'Date')),range));
   const duplicates=duplicateInvoiceIds(allSales,sales);
   if(duplicates.length)
@@ -203,6 +207,7 @@ export function projectProfitReport(snapshot,filters,today){
     mapIncrement(costQtyByInvoiceProduct,id,own(lot,'Product ID'),quantity);
   }
   for(const vendor of vendorSourcing){
+    if(isDeleted(vendor))continue;
     const id=String(own(vendor,'Invoice ID'));
     if(!inScope.has(id))continue;
     const qty=checkedNumber(own(vendor,'Quantity'),'vendor quantity');
@@ -220,6 +225,7 @@ export function projectProfitReport(snapshot,filters,today){
   let expenses=0;
   const expenseByCategory=new Map();
   for(const e of expensesRows){
+    if(isDeleted(e))continue;
     if(own(e,'Status')==='Cancelled')continue;
     if(!dateInReportRange(checkedDate(own(e,'Date')),range))continue;
     const amount=checkedNumber(own(e,'Amount'),'expense');
