@@ -263,3 +263,93 @@ test('distinct normalized staff phones pass and preflight reports never expose p
   assert.equal(output.includes(SALT),false);
   assert.ok(denied.issues.every(i=>Object.keys(i).sort().join(',')==='code,row,scope'));
 });
+
+
+test('protected staff preflight rejects unknown, hidden and symbol export columns without disclosing them',()=>{
+  const marker='PRIVATE-UNAPPROVED-EXPORT-COLUMN-DO-NOT-LOG';
+  const cases=[
+    {
+      scope:'user',
+      mutate:({users})=>{users[0]['Session Token']=marker;},
+    },
+    {
+      scope:'role',
+      mutate:({roles})=>{roles[0]['Private Permission Override']=marker;},
+    },
+    {
+      scope:'user',
+      mutate:({users})=>Object.defineProperty(users[0],'Extra Hidden Secret',{
+        enumerable:false,value:marker,
+      }),
+    },
+    {
+      scope:'role',
+      mutate:({roles})=>{roles[0][Symbol('PRIVATE_ROLE_KEY')]=marker;},
+    },
+  ];
+  for(const {scope,mutate} of cases){
+    const source=sample();
+    mutate(source);
+    const result=auditLegacyStaffImport(source.users,source.roles);
+    assert.equal(result.preflightPass,false,
+      'the standalone audit must not certify unknown source columns');
+    assert.equal(has(result,scope,'ROW_MALFORMED',0),true);
+    assert.equal(JSON.stringify(result).includes(marker),false,
+      'no unreviewed export value should be reflected');
+  }
+
+  // The pinned frozen source includes provenance columns. These are
+  // approved historical data, not arbitrary extensions to the export.
+  const approved=sample();
+  approved.users[0]['Created By']='Synthetic Administrator';
+  approved.users[0]['Created At']='2026-01-01T00:00:00.000Z';
+  approved.users[0]['Last Login']='';
+  approved.roles[0]['Created At']='2026-01-01T00:00:00.000Z';
+  assert.equal(auditLegacyStaffImport(approved.users,approved.roles).preflightPass,true,
+    'reviewed source provenance columns remain eligible');
+});
+
+
+test('M04 protected staff preflight rejects unapproved array-level export metadata',()=>{
+  const secret='PRIVATE-NOT-FOR-AUDIT-ARRAY-OUTPUT-338';
+  const modifiers=[
+    {
+      name:'named USERS array field',
+      change:(source)=>{source.users['SESSIONS']=secret;},
+    },
+    {
+      name:'named ROLES array field',
+      change:(source)=>{source.roles['Private Role Dump']=secret;},
+    },
+    {
+      name:'symbol USERS array field',
+      change:(source)=>{source.users[Symbol('hidden-bearer')]=secret;},
+    },
+    {
+      name:'nonenumerable ROLES array field',
+      change:(source)=>Object.defineProperty(source.roles,'secret',{
+        value:secret,enumerable:false,
+      }),
+    },
+    {
+      name:'array ownKeys Proxy error',
+      change:(source)=>{source.users=new Proxy(source.users,{
+        ownKeys(){throw new Error(secret);}
+      });},
+    },
+  ];
+  for(const {name,change} of modifiers){
+    const source=sample();
+    change(source);
+    const result=auditLegacyStaffImport(source.users,source.roles);
+    assert.equal(result.preflightPass,false,name);
+    assert.deepEqual(result.issues,[{
+      scope:'snapshot',row:null,code:'SNAPSHOT_INVALID',
+    }],name);
+    assert.equal(JSON.stringify(result).includes(secret),false,
+      'no unreviewed array metadata or Proxy message may be returned');
+  }
+  const source=sample();
+  assert.equal(auditLegacyStaffImport(source.users,source.roles).preflightPass,
+    true,'ordinary dense source arrays must remain accepted');
+});

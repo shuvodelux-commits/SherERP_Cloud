@@ -22,6 +22,8 @@ const FIXED=Object.freeze({
   '/__m03_id__/d-retry':req(D,'OP-DB-1',hash('e')),
   '/__m03_id__/e-exhausted':req(E,'OP-E-1',hash('f')),
   '/__m03_id__/no-counter':req({tenantId:'TENANT-Z',idKey:'PRODUCT_CATEGORIES'},'OP-Z-1',hash('1')),
+  '/__m03_id__/wrong-prefix':req({tenantId:'TENANT-W',idKey:'PRODUCT_CATEGORIES'},'OP-W-1',hash('2')),
+  '/__m03_id__/unknown-family':req({tenantId:'TENANT-Q',idKey:'SESSIONS'},'OP-Q-1',hash('3')),
   ...Object.fromEntries(Array.from({length:12},(_,i)=>[
     '/__m03_id__/bulk-'+i,
     req({tenantId:'TENANT-A',idKey:'PRODUCT_UNITS'},'OP-BULK-'+i,hash('9'))

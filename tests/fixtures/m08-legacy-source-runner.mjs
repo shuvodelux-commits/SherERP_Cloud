@@ -8,7 +8,8 @@ import {readFileSync} from 'node:fs';
 import {parse} from 'acorn';
 import {runInNewContext} from 'node:vm';
 
-const ALLOWED = new Set(['Utils.gs','CashBook.gs','CashSession.gs','BankBook.gs','BankLedger.gs','PartyLedger.gs','DeleteEngine.gs','FinanceModule.gs','CashReconciliation.gs']);
+const ALLOWED = new Set(['Utils.gs','CashBook.gs','CashSession.gs','BankBook.gs','BankLedger.gs','PartyLedger.gs','DeleteEngine.gs','FinanceModule.gs','CashReconciliation.gs',
+  'Vendors.gs','ExpenseSettings.gs']);
 const VALID_NAME = /^[A-Za-z_$][\w$]*$/;
 
 /**

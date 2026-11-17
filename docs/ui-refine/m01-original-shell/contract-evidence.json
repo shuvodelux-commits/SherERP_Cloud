@@ -1,0 +1,89 @@
+{
+  "evidence_type": "Playwright 1.65.1 Chromium synthetic-only M01 compiled frontend",
+  "date": "2026-11-17",
+  "source_shas": {
+    "before": "5a06c28",
+    "after": "20d87bf2ecb85416694c7eee197cd92d4d124743"
+  },
+  "login_390x844": {
+    "before": {
+      "lang": "",
+      "title": "",
+      "associated_mobile_labels": [],
+      "associated_password_labels": [],
+      "horizontal_overflow_px": 0
+    },
+    "after": {
+      "lang": "en",
+      "title": "Hardware Store ERP",
+      "associated_mobile_labels": [
+        "Mobile Number"
+      ],
+      "associated_password_labels": [
+        "Password"
+      ],
+      "horizontal_overflow_px": 0
+    }
+  },
+  "mobile_more_390x844": {
+    "before": {
+      "modal_open": true,
+      "focus_inside_on_open": false,
+      "background_inert": false,
+      "tab_contained": false,
+      "shift_tab_contained": false,
+      "escape_closed": true,
+      "focus_restored_to_more": false
+    },
+    "after": {
+      "modal_open": true,
+      "focus_inside_on_open": true,
+      "background_inert": true,
+      "tab_contained": true,
+      "shift_tab_contained": true,
+      "escape_closed": true,
+      "focus_restored_to_more": true
+    }
+  },
+  "javascript_page_errors": {
+    "before": [],
+    "after": []
+  },
+  "visual_capture": {
+    "tool": "Super Board ui-refine-loop scripts/shoot.mjs using Playwright, adapted for system Chromium and test-only session without reload",
+    "viewport_css_px": [
+      {
+        "width": 1440,
+        "height": 900
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "schemes": [
+      "light",
+      "dark"
+    ],
+    "pixel_pairs_compared": 8,
+    "changed_pixels_by_pair": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "dark_mode_supported": "not established",
+    "committed_screenshots": 16,
+    "committed_side_by_side_sheets": 8
+  },
+  "limitations": [
+    "No Workflow/Agent orchestration tool or local Impeccable install; fallback rubric only",
+    "Login and authenticated shell were synthetic; public worker RPC stayed inert",
+    "Pixel-equivalence does not prove contrast/WCAG compliance, live data behavior or physical printing",
+    "The 24 screenshot and comparison PNGs are committed to the GitHub refine branch; GitHub Actions also uploads replayable M01 screenshots"
+  ]
+}

@@ -26,6 +26,12 @@ import {M08_TRANSFER_DDL}
 import {auditD1BankTransfers}
   from '../fixtures/m08-d1-transfer-provenance-preview.mjs';
 
+import {M08_VENDOR_PAYEE_DDL}
+  from '../fixtures/m08-d1-vendor-payee-schema.mjs';
+import {previewD1VendorPayeeIsolation}
+  from '../fixtures/m08-d1-vendor-payee-preview.mjs';
+
+
 const oracle=loadPinnedGASFunctions({
   'Utils.gs':['roundMoney_'],
   'CashReconciliation.gs':[
@@ -1269,5 +1275,279 @@ test('M08 transfer D1 rejects malformed source date and request before financial
   assert.deepEqual(await transferSnapshot(),malformed);
   assert.equal((await worker.fetch('https://m08-transfer.test/api/rpc',{
     method:'POST',body:JSON.stringify(trRequest())
+  })).status,404);
+});
+
+
+
+// M08 #580: Vendor payable and receivable stay gross; Payee is identity only.
+// Disposable local Workerd/D1 source provenance; no production posting.
+const vpVendor=(id='V1',name='Same Shop',extra={})=>({
+  'Vendor ID':id,'Vendor Name':name,Phone:'01700000001',
+  Address:'Source row', 'Current Due':0,'Current Receivable':0,
+  Status:'Active','Is Deleted':'',...extra
+});
+const vpLedger=(id,vendorId='V1',type='Payable',debit=0,credit=0,extra={})=>({
+  'Ledger ID':id,'Vendor ID':vendorId,'Vendor Name':'Same Shop',
+  'Balance Type':type,Date:'2026-11-17',Type:'Sourcing',Reference:'',
+  Debit:debit,Credit:credit,Balance:0,'Is Deleted':'',
+  'Created At':'2026-11-17T10:00:00Z',...extra
+});
+const vpPayee=(id='P1',name='Same Shop',extra={})=>({
+  'Payee ID':id,'Payee Name':name,Phone:'01700000001',
+  Status:'Active','Is Deleted':'',...extra
+});
+const vpExpense=(id,payeeId='P1',amount=20,extra={})=>({
+  'Expense ID':id,'Ledger ID':payeeId,Amount:amount,
+  'Payment Method':'Cash',Status:'Active','Is Deleted':'',...extra
+});
+const vpReq=(extra={})=>({
+  tenantId:'SHOP-A',vendorId:'V1',payeeId:'P1',...extra
+});
+async function vpReset(){
+  for(const table of [
+    'm08_vp_expenses','m08_vp_payees','m08_vp_ledger','m08_vp_vendors'
+  ])await DB.prepare('DROP TABLE IF EXISTS '+table).run();
+  for(const ddl of M08_VENDOR_PAYEE_DDL)await DB.prepare(ddl).run();
+}
+async function vpSeed(tenant,masters=[],ledger=[],payees=[],expenses=[]){
+  const deleted=x=>x['Is Deleted']===true ||
+    String(x['Is Deleted']||'').toUpperCase()==='TRUE'?1:0;
+  for(let i=masters.length-1;i>=0;i--){
+    const m=masters[i];
+    await DB.prepare('INSERT INTO m08_vp_vendors VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .bind(tenant,i+2,m['Vendor ID'],m['Vendor Name'],
+        m.Phone,m.Address,cents(m['Current Due']),
+        cents(m['Current Receivable']),m.Status,deleted(m)).run();
+  }
+  for(let i=ledger.length-1;i>=0;i--){
+    const e=ledger[i];
+    await DB.prepare('INSERT INTO m08_vp_ledger VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(tenant,i+2,e['Ledger ID'],e['Vendor ID'],
+        e['Vendor Name'],e.Date,e.Type,e.Reference,e['Balance Type'],
+        cents(e.Debit),cents(e.Credit),cents(e.Balance),
+        deleted(e),e['Created At']).run();
+  }
+  for(let i=payees.length-1;i>=0;i--){
+    const p=payees[i];
+    await DB.prepare('INSERT INTO m08_vp_payees VALUES(?,?,?,?,?,?,?)')
+      .bind(tenant,i+2,p['Payee ID'],p['Payee Name'],
+        p.Phone,p.Status,deleted(p)).run();
+  }
+  for(let i=expenses.length-1;i>=0;i--){
+    const x=expenses[i];
+    await DB.prepare('INSERT INTO m08_vp_expenses VALUES(?,?,?,?,?,?,?,?)')
+      .bind(tenant,i+2,x['Expense ID'],x['Ledger ID'],
+        cents(x.Amount),x['Payment Method'],x.Status,deleted(x)).run();
+  }
+}
+async function vpSnapshot(){
+  const data={};
+  for(const name of [
+    'm08_vp_vendors','m08_vp_ledger','m08_vp_payees','m08_vp_expenses'
+  ])data[name]=(await DB.prepare(
+    'SELECT * FROM '+name+' ORDER BY tenant_id,legacy_row'
+  ).all()).results.map(x=>({...x}));
+  return data;
+}
+async function vpRead(request=vpReq()){
+  const beforeState=await vpSnapshot();
+  const result=await previewD1VendorPayeeIsolation(DB,request);
+  assert.deepEqual(await vpSnapshot(),beforeState,
+    'M08 Vendor/Payee read must not write any D1 record');
+  return result;
+}
+function vpSource(masters,ledger,payees){
+  const src=loadPinnedGASFunctions({
+    'Utils.gs':['roundMoney_','ledgerSortKey_',
+      'recalculateLedgerBalancesForDisplay_'],
+    'Vendors.gs':['getAllVendorsForUI_'],
+    'ExpenseSettings.gs':['getActiveExpensePayeesForUI_']
+  },{
+    activeRows_:kind=>({
+      VENDORS:masters,EXPENSE_PAYEES:payees
+    }[kind]||[]).filter(row=>row['Is Deleted']!==true &&
+      String(row['Is Deleted']||'').toUpperCase()!=='TRUE')
+  });
+  const vendorList=plain(src.getAllVendorsForUI_());
+  const payeeList=plain(src.getActiveExpensePayeesForUI_());
+  const ledgerDisplay=plain(src.recalculateLedgerBalancesForDisplay_(
+    ledger.filter(row=>row['Is Deleted']!==true &&
+      String(row['Is Deleted']||'').toUpperCase()!=='TRUE'), 'Balance Type'
+  ));
+  return {vendorList,payeeList,ledgerDisplay};
+}
+
+test('M08 VP vendor gross payable/receivable source running balances never net',async()=>{
+  await vpReset();
+  const masters=[vpVendor('V1','Same Shop',{
+    'Current Due':800,'Current Receivable':250
+  })];
+  const ledger=[
+    vpLedger('L1','V1','Payable',1000,0,{Balance:1000}),
+    vpLedger('L2','V1','Receivable',300,0,{Balance:300}),
+    vpLedger('L3','V1','Payable',0,200,{Balance:800}),
+    vpLedger('L4','V1','Receivable',0,50,{Balance:250})
+  ];
+  const payees=[vpPayee()];
+  await vpSeed('SHOP-A',masters,ledger,payees);
+  const r=await vpRead();
+  const source=vpSource(masters,ledger,payees);
+  assert.deepEqual(r.vendor.profile,source.vendorList[0]);
+  assert.deepEqual(r.vendor.ledger,source.ledgerDisplay);
+  assert.deepEqual(r.payee.activeList,source.payeeList);
+  assert.deepEqual(r.vendor.reconstructed,{payable:800,receivable:250});
+  assert.deepEqual(r.vendor.drift,[]);
+  assert.equal(r.payee.createsPayable,false);
+  assert.equal(r.payee.liabilityAmount,null);
+});
+
+test('M08 VP stale stored master and ledger Balance are reported without a correction write',async()=>{
+  await vpReset();
+  const master=vpVendor('V1','A',{
+    'Current Due':999,'Current Receivable':888
+  });
+  const entry=vpLedger('L1','V1','Payable',100,0,{Balance:3});
+  await vpSeed('SHOP-A',[master],[entry],[vpPayee()]);
+  const r=await vpRead();
+  assert.deepEqual(r.vendor.reconstructed,{payable:100,receivable:0});
+  assert.deepEqual(r.vendor.drift,[
+    'MASTER_PAYABLE_MISMATCH',
+    'MASTER_RECEIVABLE_MISMATCH',
+    'LEDGER_STORED_BALANCE_MISMATCH:L1'
+  ]);
+});
+
+test('M08 VP expense Payee is identity only even with matching Vendor ID and name',async()=>{
+  await vpReset();
+  const masters=[vpVendor('DUP','Same Name',{
+    'Current Due':70,'Current Receivable':25
+  })];
+  const ledger=[
+    vpLedger('LV','DUP','Payable',70,0),
+    vpLedger('LR','DUP','Receivable',25,0)
+  ];
+  const payees=[vpPayee('DUP','Same Name')];
+  const expenses=[
+    vpExpense('E1','DUP',100),
+    vpExpense('E2','DUP',40,{Status:'Cancelled',
+      'Payment Method':'Bank'}),
+    vpExpense('E3','DUP',50,{'Is Deleted':'TRUE',
+      'Payment Method':'Other'})
+  ];
+  await vpSeed('SHOP-A',masters,ledger,payees,expenses);
+  const r=await vpRead(vpReq({vendorId:'DUP',payeeId:'DUP'}));
+  assert.deepEqual(r.vendor.reconstructed,{payable:70,receivable:25});
+  assert.deepEqual(r.payee.expenses.map(x=>[x.expenseId,x.status,x.isDeleted]),[
+    ['E1','Active',false],['E2','Cancelled',false],['E3','Active',true]
+  ]);
+  assert.equal(r.payee.activeExpenseTotal,100);
+  assert.equal(r.payee.createsPayable,false);
+  assert.equal(r.payee.liabilityAmount,null);
+});
+
+test('M08 VP source created-time ordering and physical rows are stable with reverse SQL inserts',async()=>{
+  await vpReset();
+  const masters=[vpVendor('V1','A',{'Current Due':45})];
+  const rows=[
+    vpLedger('L-early','V1','',20,0,{
+      'Created At':'2026-11-17T08:00:00Z'}),
+    vpLedger('L-tie-A','V1','Payable',10,0,{
+      'Created At':'2026-11-17T10:00:00Z'}),
+    vpLedger('L-tie-B','V1','Payable',15,0,{
+      'Created At':'2026-11-17T10:00:00Z'})
+  ];
+  await vpSeed('SHOP-A',masters,rows,[vpPayee()]);
+  const r=await vpRead();
+  assert.deepEqual(r.vendor.ledger,vpSource(masters,rows,[vpPayee()]).ledgerDisplay);
+  assert.deepEqual(r.vendor.ledger.map(x=>x['Ledger ID']),[
+    'L-tie-A','L-tie-B','L-early'
+  ]);
+  assert.deepEqual(r.vendor.reconstructed,{payable:45,receivable:0});
+});
+
+test('M08 VP inactive masters remain historical and negative gross positions do not cross-net',async()=>{
+  await vpReset();
+  const m=vpVendor('V1','Inactive Shop',{
+    'Current Due':-50,'Current Receivable':0,Status:'Inactive'
+  });
+  const p=vpPayee('P1','Inactive Payee',{Status:'Inactive'});
+  const e=vpLedger('L1','V1','Payable',0,50,{Balance:-50});
+  await vpSeed('SHOP-A',[m],[e],[p],[vpExpense('E1','P1',10)]);
+  const r=await vpRead();
+  assert.equal(r.vendor.profile.status,'Inactive');
+  assert.equal(r.payee.selected.status,'Inactive');
+  assert.equal(r.payee.selected.selectable,false);
+  assert.deepEqual(r.payee.activeList,[]);
+  assert.deepEqual(r.vendor.reconstructed,{payable:-50,receivable:0});
+  assert.deepEqual(r.vendor.drift,[]);
+});
+
+test('M08 VP tenant scoped same source IDs never share vendor or payee transactions',async()=>{
+  await vpReset();
+  await vpSeed('SHOP-A',[vpVendor('V1','A',{'Current Due':30})],
+    [vpLedger('L1','V1','Payable',30,0)],
+    [vpPayee('P1','A')],[vpExpense('E1','P1',10)]);
+  await vpSeed('SHOP-B',[vpVendor('V1','B',{'Current Due':90})],
+    [vpLedger('L1','V1','Payable',90,0)],
+    [vpPayee('P1','B')],[vpExpense('E1','P1',50)]);
+  const first=await vpRead();
+  const second=await vpRead(vpReq({tenantId:'SHOP-B'}));
+  assert.equal(first.vendor.profile.name,'A');
+  assert.equal(second.vendor.profile.name,'B');
+  assert.equal(first.vendor.reconstructed.payable,30);
+  assert.equal(second.vendor.reconstructed.payable,90);
+  assert.equal(first.payee.activeExpenseTotal,10);
+  assert.equal(second.payee.activeExpenseTotal,50);
+});
+
+test('M08 VP duplicate source IDs and unknown Vendor or Payee links fail closed',async()=>{
+  await vpReset();
+  await vpSeed('SHOP-A',[vpVendor()],[vpLedger('L1')],[vpPayee()],
+    [vpExpense('E1')]);
+  await DB.prepare(
+    "INSERT INTO m08_vp_vendors VALUES('SHOP-A',99,'V1','Duplicate','','',0,0,'Active',0)"
+  ).run();
+  await assert.rejects(()=>previewD1VendorPayeeIsolation(DB,vpReq()),
+    /Duplicate Vendor ID/);
+  await DB.prepare('DELETE FROM m08_vp_vendors WHERE legacy_row=99').run();
+  await DB.prepare(
+    "INSERT INTO m08_vp_ledger VALUES('SHOP-A',99,'L1','V1','Same Shop','2026-11-17','Issue','','Receivable',10,0,0,0,'2026-11-17T11:00:00Z')"
+  ).run();
+  await assert.rejects(()=>previewD1VendorPayeeIsolation(DB,vpReq()),
+    /Duplicate Vendor Ledger ID/);
+  await DB.prepare('DELETE FROM m08_vp_ledger WHERE legacy_row=99').run();
+  await DB.prepare("UPDATE m08_vp_ledger SET vendor_id='MISSING'").run();
+  await assert.rejects(()=>previewD1VendorPayeeIsolation(DB,vpReq()),
+    /Unresolved Vendor ledger reference/);
+  await DB.prepare("UPDATE m08_vp_ledger SET vendor_id='V1'").run();
+  await DB.prepare("UPDATE m08_vp_expenses SET payee_id='MISSING'").run();
+  await assert.rejects(()=>previewD1VendorPayeeIsolation(DB,vpReq()),
+    /Unresolved Expense Payee ID/);
+});
+
+test('M08 VP invalid requests, imported cents and public Worker route fail closed without writes',async()=>{
+  await vpReset();
+  await vpSeed('SHOP-A',[vpVendor()],[vpLedger('L1')],[vpPayee()],
+    [vpExpense('E1')]);
+  const unchanged=await vpSnapshot();
+  for(const bad of [
+    null,{}, {tenantId:''}, {tenantId:'SHOP-A;DROP',
+      vendorId:'V1',payeeId:'P1'},
+    {tenantId:'SHOP-A',vendorId:'V1',payeeId:'P1',sql:'SELECT 1'},
+    {tenantId:Promise.resolve('SHOP-A'),vendorId:'V1',payeeId:'P1'},
+    Object.defineProperty({tenantId:'SHOP-A',vendorId:'V1'},
+      'payeeId',{get(){throw Error('getter');},enumerable:true})
+  ])await assert.rejects(()=>previewD1VendorPayeeIsolation(DB,bad),TypeError);
+  await assert.rejects(()=>previewD1VendorPayeeIsolation(null,vpReq()),
+    /D1/);
+  assert.deepEqual(await vpSnapshot(),unchanged);
+  await DB.prepare("UPDATE m08_vp_expenses SET amount_cents=-100").run();
+  const negative=await vpSnapshot();
+  await assert.rejects(()=>previewD1VendorPayeeIsolation(DB,vpReq()),
+    /Invalid source Expense amount cents/);
+  assert.deepEqual(await vpSnapshot(),negative);
+  assert.equal((await worker.fetch('https://m08-vp.test/api/rpc',{
+    method:'POST',body:JSON.stringify(vpReq())
   })).status,404);
 });

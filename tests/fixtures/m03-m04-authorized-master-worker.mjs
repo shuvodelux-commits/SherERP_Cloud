@@ -4,6 +4,8 @@
  * Incoming request body/query never supplies actor, SQL, time or tenant.
  */
 import {createM04AuthorizedProductMasterCreator} from '../../src/modules/m04-authorized-product-master-create.js';
+import {handleRpc} from '../../src/rpc/handler.js';
+import {createM03PrivateProductMasterBridge} from '../../src/rpc/m03-private-product-master-bridge.js';
 const NOW=1_800_000_000_000;
 const T=Object.freeze({
   admin:'a'.repeat(64),staff:'b'.repeat(64),
@@ -29,6 +31,15 @@ const json=(status,data)=>Response.json(data,{status,headers:{'Cache-Control':'n
 export default {
   async fetch(request,env){
     const path=new URL(request.url).pathname;
+    // Nondeployable M03 Run 4 opt-in composition: server owns clock/business;
+    // all client authority fields are rejected by handleRpc.
+    if(path==='/__m04_master__/private-rpc'){
+      return handleRpc(request,{
+        productMasterBridge:createM03PrivateProductMasterBridge(env,{
+          businessId:'BUS-A',now:()=>NOW
+        })
+      });
+    }
     if(!Object.hasOwn(routes,path))return json(404,{error:'Not found'});
     if(request.method!=='POST')return json(405,{error:'POST required'});
     try{

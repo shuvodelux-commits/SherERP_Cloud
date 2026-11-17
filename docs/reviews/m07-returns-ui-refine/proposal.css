@@ -1,0 +1,58 @@
+/*
+ * M07 Return search UX — REVIEW PROPOSAL ONLY.
+ * This file is intentionally NOT imported by the app, public Worker, frontend
+ * compiler, original GAS source or deploy config. M01/#25 owns integration.
+ *
+ * Frozen source: legacy/source/returns.html
+ * The original CSS target #rtSearchCard > div[style*="display:flex"] misses
+ * actual nested rows in #rtInvoiceSearchPanel/#rtCustomerSearchPanel.
+ * Source IDs, text, events, validation and payment/return logic stay intact.
+ */
+
+/* Preserve one-line desktop layout while preventing input's intrinsic width
+   from stealing the entire row at narrow/tablet widths. */
+#page-returns #rtInvoiceSearchPanel > div[style*="display:flex"],
+#page-returns #rtCustomerSearchPanel > div[style*="display:flex"] {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) auto auto;
+  align-items: stretch;
+  gap: 8px;
+}
+#page-returns #rtSearchInput,
+#page-returns #rtCustomerSearchInput {
+  flex: none !important;
+  min-width: 0;
+}
+#page-returns #rtSearchCard button:focus-visible,
+#page-returns #rtSearchCard input:focus-visible {
+  outline: 2px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
+@media (max-width: 540px) {
+  #page-returns #rtInvoiceSearchPanel > div[style*="display:flex"] > .erp-search-clear-field,
+  #page-returns #rtCustomerSearchPanel > div[style*="display:flex"] > .erp-search-clear-field {
+    grid-column: 1 / -1;
+    min-width: 0;
+    width: 100%;
+  }
+  #page-returns #rtInvoiceSearchPanel > div[style*="display:flex"],
+  #page-returns #rtCustomerSearchPanel > div[style*="display:flex"] {
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  }
+  #page-returns #rtSearchInput,
+  #page-returns #rtCustomerSearchInput {
+    grid-column: 1 / -1;
+    min-height: 44px;
+    width: 100%;
+  }
+  #page-returns #rtFindBtn,
+  #page-returns #rtFindCustomerBtn,
+  #page-returns #rtClearBtn,
+  #page-returns #rtCustomerClearBtn {
+    min-height: 44px;
+    min-width: 0;
+    width: 100%;
+    white-space: normal;
+    padding: 8px 10px;
+  }
+}
