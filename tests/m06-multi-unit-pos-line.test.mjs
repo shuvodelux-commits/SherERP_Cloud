@@ -187,3 +187,24 @@ test('untrusted snapshots, unsupported shortage mode and empty units cannot crea
   assert.throws(()=>plan(mixed({unitBreakdown:[{conversionId:'BASE',qty:0}]}),source()),
     /greater than zero|quantity/i);
 });
+
+
+test('Own mode does not sell phantom availability when positive FIFO lots exceed net owned stock',()=>{
+  const snapshot=source();
+  // A legacy OVERSOLD / correction backlog can leave positive source lots
+  // while the product NET Current Stock is smaller than those lots.
+  snapshot.products[0]['Current Stock']=140;
+  const before=structuredClone(snapshot);
+  assert.throws(
+    ()=>plan(mixed({shortageMode:'Own'}),snapshot),
+    /Owned stock shortage|net owned stock|available/i,
+    'Own must check both the FIFO lots and the product net stock'
+  );
+  const vendor=plan(mixed({shortageMode:'Vendor'}),snapshot);
+  assert.equal(vendor.baseQty,145);
+  assert.equal(vendor.shortfallBaseQty,5);
+  assert.deepEqual(vendor.fifoDraws,[
+    {lotId:'LOT-OLD',baseQty:100},{lotId:'LOT-NEW',baseQty:40}
+  ]);
+  assert.deepEqual(snapshot,before,'Net-stock shortage review cannot mutate inventory');
+});
