@@ -395,3 +395,39 @@ test('core second session SELECT rejects activity rewound after the heartbeat',a
     token:issued.token,nowMs:checkAt+1000,
   }),{authenticated:false},'ordinary future validation also refuses the stale session');
 });
+
+
+test('synthetic LegacyPending staff cannot validate a pre-upgrade session or advance its heartbeat',async()=>{
+  const now=BASE+1_800_000;
+  const userId='USR-M04-PENDING-SAFETY';
+  const phone='01710000013';
+  const credential=await createOfflinePasswordCredential(PASSWORD);
+  await DB.prepare(`INSERT INTO auth_users
+    (user_id,full_name,phone_key,role_name,status,credential_state,
+     password_hash,password_salt,password_iterations)
+    VALUES (?,?,?,'Administrator','Active','LegacyPending',?,?,?)`)
+    .bind(userId,'Synthetic Pending Staff',phone,
+      credential.passwordHash,credential.passwordSalt,credential.iterations).run();
+  const versions=await DB.prepare(
+    'SELECT auth_version,credential_version FROM auth_users WHERE user_id=?'
+  ).bind(userId).first();
+  const token='ab'.repeat(32);
+  const digest=createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
+  // A malformed historical import/privileged internal writer could create
+  // this record. Its existence must never upgrade pending credentials into
+  // a valid internet session.
+  await DB.prepare(`INSERT INTO auth_sessions
+    (token_hash,user_id,user_auth_version,role_auth_version,credential_version,
+     created_at_ms,last_activity_at_ms,expires_at_ms)
+    VALUES (?,?,?,NULL,?,?,?,?)`)
+    .bind(digest,userId,versions.auth_version,versions.credential_version,
+      now,now,now+60_000).run();
+
+  assert.deepEqual(await validateSessionWithD1(DB,{token,nowMs:now+1000}),
+    {authenticated:false});
+  const persisted=await DB.prepare(
+    'SELECT last_activity_at_ms FROM auth_sessions WHERE token_hash=?'
+  ).bind(digest).first();
+  assert.equal(persisted.last_activity_at_ms,now,
+    'a pending-credential account must not receive a session heartbeat');
+});
