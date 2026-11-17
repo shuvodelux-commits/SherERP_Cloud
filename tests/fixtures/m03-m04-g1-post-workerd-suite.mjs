@@ -268,4 +268,5 @@ test('G3 real Workerd: stock movement drift also refuses replay; late movement f
   const before=await snapshot();
   await assert.rejects(()=>posting.post_(input(SECOND,'OP-G3-ROLLBACK')),/NEEDS_REVIEW/i);
   assert.deepEqual(await snapshot(),before);
+  await DB.prepare('DROP TRIGGER synthetic_m03_g3_fault').run();
 });
