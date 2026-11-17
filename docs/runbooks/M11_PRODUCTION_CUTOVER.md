@@ -2,6 +2,8 @@
 
 **Status: DRAFT — NOT APPROVED FOR LIVE LAUNCH.** Tracking [M11 issue #306](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/306). Read `AGENTS.md`, `docs/WORKSTREAMS.md` M10/M11, `docs/MIGRATION_PLAN.md`, `docs/runbooks/M04_PROTECTED_STAFF_EXPORT_AND_CUTOVER.md`, ADR-007 and the M11 Superpowers plan first.
 
+**Release gate crosswalk:** [M11 release-critical evidence matrix](M11_RELEASE_READINESS_MATRIX.md) maps the ten issue #306 gates to M03/M04/M10 prerequisites, actual operator evidence and stop conditions. It is a **NO-GO preparation reference**, not cutover permission.
+
 ## Current deployment boundary
 
 - `main` automatically publishes only the **inert, D1-free** `shererp-cloud-preview` shell using Cloudflare Workers Builds. Its `/api/health` response is `foundation / not-connected`.
