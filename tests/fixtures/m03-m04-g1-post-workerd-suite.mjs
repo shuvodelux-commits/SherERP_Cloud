@@ -56,6 +56,11 @@ before(async()=>{
     await DB.prepare('INSERT INTO synthetic_m03_g1_stock(business_id,sku,available) VALUES(?,?,?)')
       .bind(id,'PIPE-1',amount).run();
   }
+  for(const [business,floor] of [['BUSINESS-A',16],['BUSINESS-B',0]]){
+    await DB.prepare(`INSERT INTO synthetic_m03_g4_sale_counters
+      (business_id,id_key,prefix,current_sequence) VALUES(?,'SALES','INV',?)`)
+      .bind(business,floor).run();
+  }
   await DB.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions
     (business_id,session_id,status) VALUES('BUSINESS-A','SESSION-1','Open')`).run();
   posting=createM04AtomicG1SaleProof({DB},{businessId:'BUSINESS-A'});
@@ -268,4 +273,71 @@ test('G3 real Workerd: stock movement drift also refuses replay; late movement f
   const before=await snapshot();
   await assert.rejects(()=>posting.post_(input(SECOND,'OP-G3-ROLLBACK')),/NEEDS_REVIEW/i);
   assert.deepEqual(await snapshot(),before);
+  await DB.prepare('DROP TRIGGER synthetic_m03_g3_fault').run();
+});
+
+test('G4 Workerd D1 issues one source invoice ID with authorized sale and stable replay',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=2 WHERE business_id='BUSINESS-A'").run();
+  await DB.prepare("UPDATE synthetic_m03_g1_cash_sessions SET status='Open' WHERE business_id='BUSINESS-A'").run();
+  const counter=async()=>(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  const before=await counter();
+  const inputValue=input(SECOND,'OP-G4-WORKER-1');
+  assert.equal((await posting.post_(inputValue)).status,'COMMITTED');
+  assert.equal(await counter(),before+1);
+  const row=await DB.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id=?").bind('OP-G4-WORKER-1').first();
+  assert.equal(row.source_invoice_id,'INV-'+String(before+1).padStart(6,'0'));
+  const prior=await snapshot();
+  assert.equal((await posting.post_(inputValue)).status,'REPLAY');
+  assert.equal(await counter(),before+1);
+  assert.deepEqual(await snapshot(),prior);
+});
+
+test('G4 Workerd D1 journal failure rolls back invoice sequence and uses same next ID on retry',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=1 WHERE business_id='BUSINESS-A'").run();
+  await DB.prepare(`CREATE TRIGGER synthetic_g4_fail_late BEFORE INSERT ON synthetic_m03_g1_journal
+    WHEN NEW.account_kind='sales_revenue'
+    BEGIN SELECT RAISE(ABORT,'G4 isolated journal fault'); END`).run();
+  const counter=async()=>(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  const before=await counter();
+  const prestate=await snapshot();
+  await assert.rejects(()=>posting.post_(input(SECOND,'OP-G4-WORKER-RETRY')),/NEEDS_REVIEW/i);
+  assert.equal(await counter(),before);
+  assert.deepEqual(await snapshot(),prestate);
+  await DB.prepare('DROP TRIGGER synthetic_g4_fail_late').run();
+  assert.equal((await posting.post_(input(SECOND,'OP-G4-WORKER-RETRY'))).status,'COMMITTED');
+  const row=await DB.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id=?").bind('OP-G4-WORKER-RETRY').first();
+  assert.equal(row.source_invoice_id,'INV-'+String(before+1).padStart(6,'0'));
+});
+
+test('G4 Workerd D1 concurrent last-stock sales allocate only one original invoice ID',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=1 WHERE business_id='BUSINESS-A'").run();
+  const before=(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  const results=await Promise.all([
+    posting.post_(input(SECOND,'OP-G4-WORKER-A')),
+    posting.post_(input(SECOND,'OP-G4-WORKER-B'))
+  ]);
+  assert.deepEqual(results.map(value=>value.status).sort(),['COMMITTED','DECLINED']);
+  const after=(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  assert.equal(after,before+1);
+  const rows=(await DB.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id IN (?,?)")
+    .bind('OP-G4-WORKER-A','OP-G4-WORKER-B').all()).results;
+  assert.deepEqual(rows.map(row=>row.source_invoice_id),['INV-'+String(after).padStart(6,'0')]);
+});
+
+test('G4 Workerd D1 two concurrent successful sales receive separate sequential source IDs',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=2 WHERE business_id='BUSINESS-A'").run();
+  const counter=async()=>(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  const before=await counter();
+  const results=await Promise.all([
+    posting.post_(input(SECOND,'OP-G4-WORKER-BOTH-A')),
+    posting.post_(input(SECOND,'OP-G4-WORKER-BOTH-B'))
+  ]);
+  assert.deepEqual(results.map(value=>value.status).sort(),['COMMITTED','COMMITTED']);
+  assert.equal(await counter(),before+2);
+  const rows=(await DB.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id IN (?,?) ORDER BY source_invoice_id")
+    .bind('OP-G4-WORKER-BOTH-A','OP-G4-WORKER-BOTH-B').all()).results;
+  assert.deepEqual(rows.map(x=>x.source_invoice_id),[
+    'INV-'+String(before+1).padStart(6,'0'),
+    'INV-'+String(before+2).padStart(6,'0')
+  ]);
 });

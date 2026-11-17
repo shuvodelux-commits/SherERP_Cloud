@@ -9,7 +9,9 @@
  * and both synthetic ledger entries. Cash Session must be exactly Open for
  * new posts; historical receipt replay remains available after Close Day.
  * Every committed receipt is verified against its immutable stock movement
- * and exact cash/revenue child rows before COMMITTED or REPLAY is reported. A stale JavaScript preflight cannot
+ * and exact cash/revenue child rows before COMMITTED or REPLAY is reported.
+ * G4 issues an original-style INV sequence inside that same SQL INSERT,
+ * never reserving it in an earlier JS read. A stale JavaScript preflight cannot
  * authorize any write. A post-commit unknown outcome always needs review.
  */
 import {requireD1Binding} from './d1-binding.js';
@@ -24,6 +26,7 @@ const MONEY=/^(?:0|[1-9][0-9]{0,8})\.[0-9]{2}$/;
 const HASH=/^[0-9a-f]{64}$/;
 const SKU='PIPE-1';
 const OP_TYPE='sales.post';
+const SOURCE_INVOICE=/^INV-[0-9]{6,}$/;
 
 // The M04 fixture stores one business per isolated D1: sessions do not have
 // tenant_id. Never use this adapter with a shared-tenant D1 or public Worker.
@@ -55,9 +58,14 @@ const AUTH_WHERE=`WHERE s.token_hash=?
 const IDENTITY=`SELECT u.user_id AS actor_id ${AUTH_FROM} ${AUTH_WHERE} LIMIT 2`;
 const CLAIM=`INSERT INTO operation_receipts(
     tenant_id,operation_id,actor_id,operation_type,payload_hash,
-    result_ref,committed_at,sku,units,amount_cents)
-  SELECT ?,?,u.user_id,'sales.post',?,?,?,?,?,?
-  ${AUTH_FROM} ${AUTH_WHERE}
+    result_ref,committed_at,sku,units,amount_cents,source_invoice_id)
+  SELECT ?,?,u.user_id,'sales.post',?,?,?,?,?,? ,
+    counter.prefix||'-'||printf('%06d',counter.current_sequence+1)
+  ${AUTH_FROM}
+  JOIN synthetic_m03_g4_sale_counters AS counter
+    ON counter.business_id=? AND counter.id_key='SALES'
+    AND counter.prefix='INV' AND counter.current_sequence<9007199254740991
+  ${AUTH_WHERE}
     AND u.user_id=?
     AND EXISTS (
       SELECT 1 FROM synthetic_m03_g1_stock
@@ -77,6 +85,7 @@ const READ=`SELECT u.user_id AS actor_id,
     receipt.actor_id AS receipt_actor_id,
     receipt.operation_type,receipt.payload_hash,receipt.result_ref,
     receipt.sku,receipt.units,receipt.amount_cents,receipt.committed_at,
+    receipt.source_invoice_id,
     (SELECT COUNT(*) FROM synthetic_m03_g1_stock_movements m
       WHERE m.business_id=receipt.tenant_id
         AND m.operation_id=receipt.operation_id) AS movement_count,
@@ -176,6 +185,7 @@ function validReceipt(row,businessId,operationId,actorId){
     row.operation_type===OP_TYPE &&
     typeof row.payload_hash==='string' && HASH.test(row.payload_hash) &&
     row.result_ref==='SYNTH-'+operationId &&
+    typeof row.source_invoice_id==='string' && SOURCE_INVOICE.test(row.source_invoice_id) &&
     row.sku===SKU &&
     Number.isSafeInteger(row.units) && row.units>=1 && row.units<=10_000 &&
     Number.isSafeInteger(row.amount_cents) && row.amount_cents>=1 &&
@@ -222,7 +232,7 @@ export function createM04AtomicG1SaleProof(env,{businessId}={}){
         claim=await DB.prepare(CLAIM).bind(
           businessId,x.operationId,hash,resultRef,
           new Date(x.nowMs).toISOString(),SKU,x.units,x.amountCents,
-          ...session,actorId,businessId,x.units,businessId
+          businessId,...session,actorId,businessId,x.units,businessId
         ).first();
       }catch(cause){
         // A failing late journal trigger rolls back the INSERT in SQLite.

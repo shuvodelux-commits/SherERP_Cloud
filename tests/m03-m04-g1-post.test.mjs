@@ -46,6 +46,11 @@ function fixture(){
     .run('BUSINESS-A','PIPE-1',2);
   db.prepare('INSERT INTO synthetic_m03_g1_stock(business_id,sku,available) VALUES(?,?,?)')
     .run('BUSINESS-B','PIPE-1',5);
+  for(const [business,floor] of [['BUSINESS-A',16],['BUSINESS-B',0]]){
+    db.prepare(`INSERT INTO synthetic_m03_g4_sale_counters
+      (business_id,id_key,prefix,current_sequence) VALUES(?,'SALES','INV',?)`)
+      .run(business,floor);
+  }
   db.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions(business_id,session_id,status)
     VALUES('BUSINESS-A','SESSION-1','Open')`).run();
   const DB={prepare(sql){
@@ -311,9 +316,9 @@ test('G2 even a direct synthetic receipt INSERT cannot bypass DB Cash Session gu
     const before=x.state();
     assert.throws(()=>x.db.prepare(`INSERT INTO operation_receipts(
       tenant_id,operation_id,actor_id,operation_type,payload_hash,result_ref,
-      committed_at,sku,units,amount_cents)
+      committed_at,sku,units,amount_cents,source_invoice_id)
       VALUES('BUSINESS-A','OP-DIRECT','ADMIN','sales.post',?,'SYNTH-OP-DIRECT',
-        '2026-11-17T08:00:00Z','PIPE-1',1,12000)`).run('a'.repeat(64)),/cash session|required|abort/i);
+        '2026-11-17T08:00:00Z','PIPE-1',1,12000,'INV-000017')`).run('a'.repeat(64)),/cash session|required|abort/i);
     assert.deepEqual(x.state(),before);
   }finally{x.close();}
 });
@@ -382,5 +387,121 @@ test('G3 stock movement is append-only, and a late movement failure rolls back r
     await assert.rejects(()=>x.post.post_(intent(ADMIN,'OP-G3-LATE')),
       /NEEDS_REVIEW|late movement/i);
     assert.deepEqual(x.state(),before);
+  }finally{x.close();}
+});
+
+test('G4 source SALES ID is issued with an atomic sale from imported high-water floor and never reissued on replay',async()=>{
+  const x=fixture();try{
+    const first=await x.post.post_(intent(ADMIN,'OP-G4-1'));
+    assert.equal(first.status,'COMMITTED');
+    const receipt=x.db.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id='OP-G4-1'").get();
+    assert.equal(receipt.source_invoice_id,'INV-000017');
+    const count=()=>x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence;
+    assert.equal(count(),17);
+    const before=x.state();
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G4-1')),{
+      status:'REPLAY',operationId:'OP-G4-1',resultRef:first.resultRef
+    });
+    assert.equal(count(),17);
+    assert.deepEqual(x.state(),before);
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G4-1',{amount:'120.01'})),{
+      status:'CONFLICT',operationId:'OP-G4-1'
+    });
+    assert.equal(count(),17,'conflicting intent may not issue another invoice ID');
+    assert.equal((await x.post.post_(intent(ADMIN,'OP-G4-2'))).status,'COMMITTED');
+    assert.equal(count(),18);
+    assert.equal(x.db.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id='OP-G4-2'").get().source_invoice_id,'INV-000018');
+  }finally{x.close();}
+});
+
+test('G4 stock shortfall, non-Open session and invalid actor cannot consume any source invoice sequence',async()=>{
+  const x=fixture();try{
+    const current=()=>x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence;
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G4-NO-STOCK',{units:3})),{
+      status:'DECLINED',operationId:'OP-G4-NO-STOCK'
+    });
+    x.db.exec("UPDATE synthetic_m03_g1_cash_sessions SET status='Closing' WHERE business_id='BUSINESS-A'");
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G4-CLOSED')),{
+      status:'DECLINED',operationId:'OP-G4-CLOSED'
+    });
+    x.db.exec("UPDATE synthetic_m03_g1_cash_sessions SET status='Open' WHERE business_id='BUSINESS-A'");
+    await assert.rejects(()=>x.post.post_(intent(DENY,'OP-G4-DENIED')),/Denied/i);
+    assert.equal(current(),16);
+    assert.equal(x.state().receipts.length,0);
+  }finally{x.close();}
+});
+
+test('G4 failed late journal and stock movement reject original INSERT and roll back the ID counter',async()=>{
+  const x=fixture();try{
+    const before=x.state();
+    x.db.exec(`CREATE TRIGGER g4_late_journal_fail BEFORE INSERT ON synthetic_m03_g1_journal
+      WHEN NEW.account_kind='sales_revenue'
+      BEGIN SELECT RAISE(ABORT,'synthetic G4 journal failed'); END`);
+    await assert.rejects(()=>x.post.post_(intent(ADMIN,'OP-G4-ROLLBACK')),/NEEDS_REVIEW/i);
+    assert.deepEqual(x.state(),before);
+    assert.equal(x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence,16);
+    x.db.exec('DROP TRIGGER g4_late_journal_fail');
+    assert.equal((await x.post.post_(intent(ADMIN,'OP-G4-ROLLBACK'))).status,'COMMITTED');
+    assert.equal(x.db.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id='OP-G4-ROLLBACK'").get().source_invoice_id,'INV-000017');
+  }finally{x.close();}
+});
+
+test('G4 one-business source ID counter cannot be borrowed from another business and refuses missing/exhausted counters',async()=>{
+  const x=fixture();try{
+    x.db.exec("DELETE FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'");
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G4-MISSING')),{
+      status:'DECLINED',operationId:'OP-G4-MISSING'
+    });
+    x.db.exec("INSERT INTO synthetic_m03_g4_sale_counters VALUES('BUSINESS-A','SALES','INV',9007199254740991)");
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G4-EXHAUSTED')),{
+      status:'DECLINED',operationId:'OP-G4-EXHAUSTED'
+    });
+    assert.equal(x.state().receipts.length,0);
+    assert.equal(x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-B'").get().current_sequence,0);
+  }finally{x.close();}
+});
+
+test('G4 distinct concurrent last-unit sales issue one unique invoice ID with no sequence gap',async()=>{
+  const x=fixture();try{
+    x.db.exec("UPDATE synthetic_m03_g1_stock SET available=1 WHERE business_id='BUSINESS-A'");
+    const pair=await Promise.all([
+      x.post.post_(intent(ADMIN,'OP-G4-RACE-A')),
+      x.post.post_(intent(SECOND,'OP-G4-RACE-B'))
+    ]);
+    assert.deepEqual(pair.map(x=>x.status).sort(),['COMMITTED','DECLINED']);
+    assert.equal(x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence,17);
+    assert.equal(x.db.prepare("SELECT source_invoice_id FROM operation_receipts").get().source_invoice_id,'INV-000017');
+    assert.equal(x.state().receipts.length,1);
+    assert.equal(x.state().journals.length,2);
+  }finally{x.close();}
+});
+
+test('G4 direct forged source invoice IDs fail SQL verification; committed invoice reference is immutable',async()=>{
+  const x=fixture();try{
+    assert.throws(()=>x.db.prepare(`INSERT INTO operation_receipts(
+      tenant_id,operation_id,actor_id,operation_type,payload_hash,result_ref,
+      committed_at,sku,units,amount_cents,source_invoice_id)
+      VALUES('BUSINESS-A','OP-G4-FORGED','ADMIN','sales.post',?,
+      'SYNTH-OP-G4-FORGED','2026-11-17T08:00:00Z','PIPE-1',1,12000,'INV-999999')`)
+      .run('a'.repeat(64)),/source|invoice|counter|mismatch|abort/i);
+    assert.equal(x.state().receipts.length,0);
+    assert.equal(x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence,16);
+    assert.equal((await x.post.post_(intent(ADMIN,'OP-G4-VALID'))).status,'COMMITTED');
+    assert.throws(()=>x.db.exec("UPDATE operation_receipts SET source_invoice_id='INV-999999'"),/immutable/i);
+  }finally{x.close();}
+});
+
+test('G4 two concurrent successful sales produce unique sequential INV IDs without a counter race',async()=>{
+  const x=fixture();try{
+    const states=await Promise.all([
+      x.post.post_(intent(ADMIN,'OP-G4-TWO-A')),
+      x.post.post_(intent(SECOND,'OP-G4-TWO-B'))
+    ]);
+    assert.deepEqual(states.map(s=>s.status),['COMMITTED','COMMITTED']);
+    const rows=x.db.prepare("SELECT source_invoice_id FROM operation_receipts ORDER BY source_invoice_id").all();
+    assert.deepEqual(rows.map(r=>r.source_invoice_id),['INV-000017','INV-000018']);
+    assert.equal(x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence,18);
+    assert.equal(x.db.prepare("SELECT available FROM synthetic_m03_g1_stock WHERE business_id='BUSINESS-A'").get().available,0);
+    assert.equal(x.db.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_g1_journal").get().n,4);
   }finally{x.close();}
 });
