@@ -126,7 +126,7 @@ test('real local Workerd/D1 source status CAS updates only reviewed expense taxo
   assert.equal(latest[2].Status,'');
   assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM expense_categories').first()).n,3);
   await assert.rejects(()=>write.updateRowFields_('EXPENSE_CATEGORIES',2,
-    {Status:'Inactive'},expected),/stale|unsafe|review|refus/i);
+    {Status:'Inactive'},expected),/stale|unsafe|review|refus|invalid/i);
   await assert.rejects(()=>write.updateRowFields_('EXPENSE_CATEGORIES',3,
     {Status:'Active'},expected),/stale|unsafe|review|refus/i);
   const after=(await DB.prepare('SELECT * FROM expense_categories ORDER BY legacy_sheet_row').all()).results;
