@@ -49,7 +49,8 @@ test('M01: dashboard customization source is accessible and isolated from financ
   assert.match(html,/data-hdb-action="show-hidden"/);
   assert.match(html,/\['move-prev','←'/);
   assert.match(html,/\['move-next','→'/);
-  assert.match(html,/draggable="true"/);
+  assert.match(html,/li\.setAttribute\('draggable','true'\)/,
+    'runtime renders draggable rows without an inert placeholder');
   assert.match(html,/role="dialog"/);
   assert.match(html,/aria-label="Customize dashboard"/);
   assert.match(html,/localStorage/);
