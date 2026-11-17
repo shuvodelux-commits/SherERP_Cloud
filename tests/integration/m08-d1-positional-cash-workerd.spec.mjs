@@ -1384,10 +1384,10 @@ test('M08 VP vendor gross payable/receivable source running balances never net',
     'Current Due':800,'Current Receivable':250
   })];
   const ledger=[
-    vpLedger('L1','V1','Payable',1000,0),
-    vpLedger('L2','V1','Receivable',300,0),
-    vpLedger('L3','V1','Payable',0,200),
-    vpLedger('L4','V1','Receivable',0,50)
+    vpLedger('L1','V1','Payable',1000,0,{Balance:1000}),
+    vpLedger('L2','V1','Receivable',300,0,{Balance:300}),
+    vpLedger('L3','V1','Payable',0,200,{Balance:800}),
+    vpLedger('L4','V1','Receivable',0,50,{Balance:250})
   ];
   const payees=[vpPayee()];
   await vpSeed('SHOP-A',masters,ledger,payees);
@@ -1472,7 +1472,7 @@ test('M08 VP inactive masters remain historical and negative gross positions do 
     'Current Due':-50,'Current Receivable':0,Status:'Inactive'
   });
   const p=vpPayee('P1','Inactive Payee',{Status:'Inactive'});
-  const e=vpLedger('L1','V1','Payable',0,50);
+  const e=vpLedger('L1','V1','Payable',0,50,{Balance:-50});
   await vpSeed('SHOP-A',[m],[e],[p],[vpExpense('E1','P1',10)]);
   const r=await vpRead();
   assert.equal(r.vendor.profile.status,'Inactive');
@@ -1512,7 +1512,7 @@ test('M08 VP duplicate source IDs and unknown Vendor or Payee links fail closed'
     /Duplicate Vendor ID/);
   await DB.prepare('DELETE FROM m08_vp_vendors WHERE legacy_row=99').run();
   await DB.prepare(
-    "INSERT INTO m08_vp_ledger VALUES('SHOP-A',99,'L1','V1','2026-11-17','Issue','','Receivable',10,0,0,0,'2026-11-17T11:00:00Z')"
+    "INSERT INTO m08_vp_ledger VALUES('SHOP-A',99,'L1','V1','Same Shop','2026-11-17','Issue','','Receivable',10,0,0,0,'2026-11-17T11:00:00Z')"
   ).run();
   await assert.rejects(()=>previewD1VendorPayeeIsolation(DB,vpReq()),
     /Duplicate Vendor Ledger ID/);
