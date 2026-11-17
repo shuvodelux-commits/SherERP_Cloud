@@ -7,6 +7,13 @@ import {M08_OPENING_DDL}
 import {previewD1OpeningCashExplanation}
   from '../fixtures/m08-d1-opening-explanation-preview.mjs';
 
+import {M08_MARKER_DDL,seedM08Marker}
+  from '../fixtures/m08-marker-retirement-atomic-schema.mjs';
+import {createSyntheticM08MarkerRetirement}
+  from '../fixtures/m08-marker-retirement-atomic-contract.mjs';
+import {previewLegacyCashAdjustmentRetirement}
+  from '../../src/modules/m08-legacy-cash-adjustment-retirement-preview.js';
+
 const timeZone='Asia/Dhaka';
 const plain=x=>JSON.parse(JSON.stringify(x));
 const session=(id,row=2,fields={})=>({
@@ -291,4 +298,211 @@ test('malformed identity or untrusted input fails; Worker route remains 404 and 
     method:'POST',body:'{}'
   })).status,404);
   assert.deepEqual(await snapshot(),beforeState);
+});
+
+
+/** M08 #452 — isolated synthetic SQL marker-retirement atomicity only.
+ * The existing M08 Workerd/D1 runner and no-secrets local binding are reused;
+ * this must not become a production reconciliation or Cash Book writer.
+ */
+const markerBase=Object.freeze({
+  tenantId:'SHOP-A',actorId:'USER-A',tokenHash:'a'.repeat(64),
+  operationId:'MARK-1',sessionId:'SESSION-1',phase:'closing',
+  revision:1,now:1000
+});
+const markerArgs=part=>({...markerBase,...part});
+const markerContract=()=>createSyntheticM08MarkerRetirement(DB);
+const markerTables={
+  cash:'m08_marker_cash',
+  sessions:'m08_marker_cash_sessions',
+  receipts:'m08_marker_receipts',
+  audit:'m08_marker_audit',
+  roles:'m08_marker_roles',
+  users:'m08_marker_users',
+  tokens:'m08_marker_tokens'
+};
+async function markerReset(){
+  for(const table of Object.values(markerTables).slice().reverse())
+    await DB.prepare('DROP TABLE IF EXISTS '+table).run();
+  for(const sql of M08_MARKER_DDL)await DB.prepare(sql).run();
+  await seedM08Marker(DB);
+}
+async function markerSnapshot(){
+  const snapshot={};
+  for(const [key,table] of Object.entries(markerTables)){
+    const sort=key==='cash'?'tenant_id,legacy_row':
+      key==='sessions'?'tenant_id,session_id':
+      key==='receipts'?'tenant_id,operation_id':
+      key==='audit'?'tenant_id,operation_id':
+      key==='roles'?'tenant_id,role_id':
+      key==='users'?'tenant_id,user_id':'tenant_id,token_hash';
+    snapshot[key]=(await DB.prepare(
+      'SELECT * FROM '+table+' ORDER BY '+sort).all()).results.map(x=>({...x}));
+  }
+  return snapshot;
+}
+const rowsFor=(snapshot,tenant='SHOP-A')=>snapshot.cash.filter(
+  row=>row.tenant_id===tenant);
+function markerSourceRows(records){
+  return records.map(row=>({
+    _rowIndex:row.legacy_row,'Entry ID':row.entry_id,
+    'Type':row.type,'Reference':row.reference,
+    'Credit':row.credit_cents/100,'Debit':row.debit_cents/100,
+    'Is Deleted':row.is_deleted===1?'TRUE':'',
+    'Description':row.description
+  }));
+}
+const expectedMarker=(phase)=>({
+  status:'COMMITTED',operationId:'MARK-1',sessionId:'SESSION-1',phase
+});
+
+test('M08 marker closing retires all source-eligible adjustments atomically without deleting positional rows',async()=>{
+  await markerReset();
+  const original=await markerSnapshot();
+  const proposals=previewLegacyCashAdjustmentRetirement(
+    markerSourceRows(rowsFor(original)),{sessionId:'SESSION-1',phase:'closing'});
+  assert.deepEqual(proposals.map(x=>x.rowIndex),[4,5]);
+  assert.deepEqual(await markerContract().post(markerBase),expectedMarker('closing'));
+  const after=await markerSnapshot(),cashRows=rowsFor(after);
+  assert.deepEqual(cashRows.map(x=>[x.legacy_row,x.entry_id,x.type,x.reference]),
+    rowsFor(original).map(x=>[x.legacy_row,x.entry_id,x.type,x.reference]),
+    'source marker chronology and identities must not change');
+  for(const proposal of proposals){
+    const row=cashRows.find(x=>x.legacy_row===proposal.rowIndex);
+    assert.equal(row.credit_cents,0);
+    assert.equal(row.debit_cents,0);
+    assert.equal(row.description,proposal.fields.Description);
+  }
+  for(const row of cashRows.filter(x=>![4,5].includes(x.legacy_row))){
+    const originalRow=rowsFor(original).find(x=>x.legacy_row===row.legacy_row);
+    assert.deepEqual(row,originalRow);
+  }
+  assert.deepEqual(rowsFor(after,'SHOP-B'),rowsFor(original,'SHOP-B'));
+  assert.equal(after.sessions.find(x=>x.tenant_id==='SHOP-A').revision,2);
+  assert.equal(after.receipts.filter(x=>x.tenant_id==='SHOP-A').length,1);
+  assert.equal(after.audit.filter(x=>x.tenant_id==='SHOP-A').length,1);
+});
+
+test('M08 marker opening retires Session Open amount but preserves physical boundary and source reference',async()=>{
+  await markerReset();
+  const original=await markerSnapshot();
+  const proposals=previewLegacyCashAdjustmentRetirement(
+    markerSourceRows(rowsFor(original)),{sessionId:'SESSION-1',phase:'opening'});
+  assert.deepEqual(proposals.map(x=>x.rowIndex),[2]);
+  assert.deepEqual(await markerContract().post(markerArgs({phase:'opening'})),
+    expectedMarker('opening'));
+  const after=await markerSnapshot();
+  const marker=rowsFor(after).find(row=>row.legacy_row===2);
+  assert.deepEqual([marker.legacy_row,marker.entry_id,marker.type,marker.reference],
+    [2,'OPEN-1','Session Open','SESSION-1']);
+  assert.deepEqual([marker.credit_cents,marker.debit_cents],[0,0]);
+  assert.equal(marker.description,proposals[0].fields.Description);
+  assert.deepEqual(rowsFor(after).find(row=>row.legacy_row===4),
+    rowsFor(original).find(row=>row.legacy_row===4),
+    'closing adjustment is untouched by opening reconciliation');
+});
+
+test('M08 marker exact replay is inert; changed same-operation intent is a conflict',async()=>{
+  await markerReset();
+  assert.equal((await markerContract().post(markerBase)).status,'COMMITTED');
+  const after=await markerSnapshot();
+  assert.deepEqual(await markerContract().post(markerBase),
+    {...expectedMarker('closing'),status:'REPLAY'});
+  assert.deepEqual(await markerContract().post(markerArgs({phase:'opening'})),
+    {status:'CONFLICT',operationId:'MARK-1'});
+  assert.deepEqual(await markerSnapshot(),after);
+});
+
+test('M08 marker stale revision, invalid token, revoked session, downgraded role, and wrong session decline inside SQL',async()=>{
+  await markerReset();
+  const invalid=[
+    markerArgs({revision:2}),
+    markerArgs({tokenHash:'b'.repeat(64)}),
+    markerArgs({now:2000}),
+    markerArgs({sessionId:'NO-SESSION'})
+  ];
+  const original=await markerSnapshot();
+  for(const input of invalid)
+    assert.equal((await markerContract().post(input)).status,'DECLINED');
+  assert.deepEqual(await markerSnapshot(),original);
+  await DB.prepare("UPDATE m08_marker_tokens SET revoked_at=900 WHERE tenant_id='SHOP-A'").run();
+  assert.equal((await markerContract().post(markerBase)).status,'DECLINED');
+  await DB.prepare("UPDATE m08_marker_tokens SET revoked_at=NULL WHERE tenant_id='SHOP-A'").run();
+  await DB.prepare("UPDATE m08_marker_roles SET can_edit=0 WHERE tenant_id='SHOP-A'").run();
+  assert.equal((await markerContract().post(markerBase)).status,'DECLINED');
+  assert.equal((await markerSnapshot()).receipts.length,0);
+  assert.equal((await markerSnapshot()).audit.length,0);
+});
+
+test('M08 marker competing operation IDs cannot both retire one session phase',async()=>{
+  await markerReset();
+  const statuses=await Promise.all([
+    markerContract().post(markerArgs({operationId:'MARK-RACE-1'})),
+    markerContract().post(markerArgs({operationId:'MARK-RACE-2'}))
+  ]);
+  assert.deepEqual(statuses.map(x=>x.status).sort(),['COMMITTED','DECLINED']);
+  const after=await markerSnapshot();
+  assert.equal(after.receipts.length,1);
+  assert.equal(after.audit.length,1);
+  assert.equal(after.sessions.find(x=>x.tenant_id==='SHOP-A').revision,2);
+});
+
+test('M08 marker injected failure on second adjusted Cash Book row rolls back the entire claim',async()=>{
+  await markerReset();
+  await DB.prepare(
+    "CREATE TRIGGER m08_marker_fail_second BEFORE UPDATE ON m08_marker_cash "+
+    "WHEN NEW.tenant_id='SHOP-A' AND NEW.legacy_row=5 "+
+    "AND (OLD.credit_cents<>NEW.credit_cents OR OLD.debit_cents<>NEW.debit_cents) "+
+    "BEGIN SELECT RAISE(ABORT,'marker-second-row-injected'); END"
+  ).run();
+  const original=await markerSnapshot();
+  await assert.rejects(()=>markerContract().post(markerBase),/NEEDS_REVIEW/);
+  assert.deepEqual(await markerSnapshot(),original);
+  await DB.prepare('DROP TRIGGER m08_marker_fail_second').run();
+  assert.equal((await markerContract().post(markerBase)).status,'COMMITTED');
+});
+
+test('M08 marker late audit failure rolls back adjustment, revision and receipt',async()=>{
+  await markerReset();
+  await DB.prepare(
+    "CREATE TRIGGER m08_marker_fail_audit BEFORE INSERT ON m08_marker_audit "+
+    "WHEN NEW.operation_id='MARK-AUDIT-FAIL' "+
+    "BEGIN SELECT RAISE(ABORT,'marker-audit-injected'); END"
+  ).run();
+  const original=await markerSnapshot();
+  await assert.rejects(()=>markerContract().post(
+    markerArgs({operationId:'MARK-AUDIT-FAIL'})),/NEEDS_REVIEW/);
+  assert.deepEqual(await markerSnapshot(),original);
+  assert.equal((await markerContract().post(markerBase)).status,'COMMITTED');
+});
+
+test('M08 marker identical Session and Cash IDs in separate tenants remain isolated',async()=>{
+  await markerReset();
+  const original=await markerSnapshot();
+  assert.equal((await markerContract().post(markerBase)).status,'COMMITTED');
+  assert.equal((await markerContract().post(markerArgs({
+    tenantId:'SHOP-B',actorId:'USER-B',tokenHash:'b'.repeat(64)
+  }))).status,'COMMITTED');
+  const after=await markerSnapshot();
+  assert.equal(after.receipts.length,2);
+  assert.equal(after.audit.length,2);
+  assert.deepEqual(rowsFor(after,'SHOP-B').map(x=>x.legacy_row),
+    rowsFor(original,'SHOP-B').map(x=>x.legacy_row));
+});
+
+test('M08 marker untrusted requests fail before D1 access; test Worker remains non-routable',async()=>{
+  await markerReset();
+  const original=await markerSnapshot();
+  for(const raw of [
+    null,{},markerArgs({phase:'transfer'}),
+    markerArgs({tenantId:'SHOP-A;DROP'}),
+    markerArgs({revision:0}),
+    markerArgs({tokenHash:'bad'}),
+    markerArgs({now:Promise.resolve(1000)}),
+    {...markerBase,sql:'UPDATE m08_marker_cash SET credit_cents=0'}
+  ])await assert.rejects(()=>markerContract().post(raw),TypeError);
+  assert.equal((await worker.fetch('https://m08.test/api/rpc',{
+    method:'POST',body:JSON.stringify(markerBase)
+  })).status,404);
+  assert.deepEqual(await markerSnapshot(),original);
 });
