@@ -35,6 +35,8 @@ test('M01: HisabIQ dashboard compiled overlay retains original source semantics 
       'must keep original operational dashboard '+sourceId+' for source contract');
   }
   assert.match(html,/function dashLoad\(\)/);
+  assert.ok(html.indexOf('id="hisabiq-dashboard-runtime"')>html.indexOf('function dashLoad()'),
+    'runtime must execute after original summary cells and loader exist');
   assert.match(html,/serverCall\('getDashboardStats', authToken\)/);
   assert.doesNotMatch(html,/40460|180300|249850|312400|96500|sampleData|demoBalance/);
 });
@@ -45,8 +47,8 @@ test('M01: dashboard customization source is accessible and isolated from financ
   assert.match(html,/data-hdb-action="reset"/);
   assert.match(html,/data-hdb-action="finish"/);
   assert.match(html,/data-hdb-action="show-hidden"/);
-  assert.match(html,/data-hdb-action="move-prev"/);
-  assert.match(html,/data-hdb-action="move-next"/);
+  assert.match(html,/\['move-prev','←'/);
+  assert.match(html,/\['move-next','→'/);
   assert.match(html,/draggable="true"/);
   assert.match(html,/role="dialog"/);
   assert.match(html,/aria-label="Customize dashboard"/);
