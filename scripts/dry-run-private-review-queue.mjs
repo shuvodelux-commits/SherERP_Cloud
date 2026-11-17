@@ -31,10 +31,10 @@ const nonblank=value=>typeof value==='string'&&value.trim()!=='';
 const byGroupRow=(a,b)=>a.sourceGroup.localeCompare(b.sourceGroup)||a.sheetRow-b.sheetRow;
 const cmp=(a,b)=>a<b?-1:a>b?1:0;
 
-function groupsOf(exported,kind){
+function groupsOf(exported,kind,withPhone=false){
  const sheet=exported.groups[kind.group];
  const indices=[sheet.headers.indexOf(kind.display)];
- if(Object.hasOwn(kind,'phone'))indices.push(sheet.headers.indexOf('Phone'));
+ if(withPhone)indices.push(sheet.headers.indexOf('Phone'));
  const buckets=new Map();
  for(const row of sheet.rows){
   const values=indices.map(i=>row.cells[i]);
@@ -84,7 +84,7 @@ export function buildM02PrivateReviewQueue({
  }
  const matches=new Map();
  for(const party of PARTIES){
-  const buckets=groupsOf(sourceExport,party);
+  const buckets=groupsOf(sourceExport,party,true);
   for(const [key,rows] of buckets){
    if(!matches.has(key))matches.set(key,new Map());
    matches.get(key).set(party.group,rows);
