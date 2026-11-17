@@ -34,10 +34,11 @@ test('exact scoped SQL insert plus receipt readback returns source-padded ID, no
   assert.equal(db.sqls.length,2);
   assert.match(db.sqls[0],/^INSERT INTO synthetic_m03_id_receipts\b/i);
   assert.match(db.sqls[0],/ON CONFLICT\s*\(tenant_id,id_key,operation_id\)\s*DO NOTHING/i);
+  assert.match(db.sqls[0],/WHERE tenant_id=\? AND id_key=\? AND prefix=\?/);
   assert.match(db.sqls[1],/^SELECT\b/i);
   assert.match(db.sqls[1],/synthetic_m03_id_counters/);
   assert.deepEqual(db.args,[
-    ['TENANT-A','PRODUCT_CATEGORIES','OP-SAME',HASH],
+    ['TENANT-A','PRODUCT_CATEGORIES','OP-SAME',HASH,'TENANT-A','PRODUCT_CATEGORIES','PCAT'],
     ['TENANT-A','PRODUCT_CATEGORIES','OP-SAME']
   ]);
   assert(db.sqls.every(sql=>!sql.includes('TENANT-A')&&!sql.includes('OP-SAME')));
@@ -46,6 +47,7 @@ test('operation ID, source family and canonical intent hash fail before any SQL'
   const db=mockDB(),issuer=createAtomicSourceIdIssuer({DB:db.DB},'TENANT-A');
   for(const patch of [
     {idKey:''},{idKey:'products;DROP'},{idKey:'PRODUCTS/SHADOW'},
+    {idKey:'SESSIONS'},{idKey:'SALE_POSTING_JOURNAL'},
     {operationId:''},{operationId:'  '},{operationId:'a'.repeat(200)},
     {intentHash:'x'.repeat(64)},{intentHash:'a'.repeat(63)},
     {intentHash:14},{intentHash:undefined}
@@ -61,6 +63,7 @@ test('ambiguous D1 results refuse success even if an INSERT could have committed
     {receipt:{intent_hash:HASH,issued_sequence:0,prefix:'PCAT'}},
     {receipt:{intent_hash:HASH,issued_sequence:Number.MAX_SAFE_INTEGER+1,prefix:'PCAT'}},
     {receipt:{intent_hash:HASH,issued_sequence:17,prefix:'BAD;SQL'}},
+    {receipt:{intent_hash:HASH,issued_sequence:17,prefix:'INV'}},
     {receipt:{intent_hash:'b'.repeat(64),issued_sequence:17,prefix:'PCAT'}}
   ];
   for(const scenario of cases){

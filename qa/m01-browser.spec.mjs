@@ -703,3 +703,94 @@ test('original Chromium refuses a validateSession reply with a different bearer'
     await page.close();
   }
 });
+
+
+test('HisabIQ dashboard source-parity smoke: six cards, four panels, custom layout and safe details',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:840}});
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.evaluate(()=>{
+      // Browser-only synthetic fixture: bypasses no Worker auth or D1 gate.
+      window.authToken='synthetic-m01-dashboard-fixture';
+      window.currentUser={id:'M01-DASH-01',tenantId:'M01-DASH-SHOP',role:'Administrator'};
+      window.allowedModules=null;
+      document.getElementById('loginOverlay').hidden=true;
+      document.getElementById('app').style.visibility='';
+      document.getElementById('shopNameLabel').textContent='Synthetic M01 Store';
+      window.dispatchEvent(new Event('focus'));
+    });
+    const count=selector=>page.locator(selector).count();
+    assert.equal(await count('#hisabiq-dashboard-metrics > [data-hdb-widget]:visible'),6);
+    assert.equal(await count('#hisabiq-dashboard-panels > [data-hdb-widget]:visible'),4);
+    await page.locator('#dashSales').evaluate(node=>{node.textContent='৳1,234';});
+    await page.waitForFunction(()=>document.querySelector('[data-hdb-value="dashSales"]').textContent==='৳1,234');
+    assert.equal(await page.locator('[data-hdb-value="unavailable"]').textContent(),'—');
+    await page.locator('#hisabiq-dashboard-customize').click();
+    await page.locator('[data-hdb-widget="today-sales"] [data-hdb-action="move-next"]').click();
+    const first=await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]').first().getAttribute('data-hdb-widget');
+    assert.equal(first,'receivable','editable dashboard reorders within the metric group');
+    await page.locator('[data-hdb-widget="low-stock"] [data-hdb-action="hide"]').click();
+    assert.equal(await page.locator('[data-hdb-widget="low-stock"]').isVisible(),false);
+    await page.locator('#hdb-all-widgets').click();
+    await page.locator('[data-hdb-list="metric"] [data-hdb-id="low-stock"] [role="switch"]').click();
+    assert.equal(await page.locator('[data-hdb-widget="low-stock"]').isVisible(),true);
+    await page.locator('[data-hdb-action="dialog-close"]').click();
+    await page.locator('[data-hdb-action="finish"]').click();
+    await saveArtifact(page,'hisabiq-dashboard-1280.png');
+    await page.locator('[data-hdb-widget="today-sales"] .hdb-widget').click();
+    assert.equal(await page.locator('#page-sales').isVisible(),true,
+      'summary card opens the existing permission-checked Sales page');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+
+test('HisabIQ Dashboard Step 1: source visual layout is responsive at 320/390/768/1440',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.evaluate(()=>{
+      // Static UI-only test actor; does not grant a real Worker or D1 session.
+      window.authToken='synthetic-m01-visual-actor';
+      window.currentUser={id:'M01-VISUAL-1',tenantId:'M01-SYNTHETIC-SHOP',
+        name:'Visual Fixture',role:'Administrator'};
+      window.allowedModules=null;
+      document.getElementById('loginOverlay').hidden=true;
+      document.getElementById('app').style.visibility='';
+      document.getElementById('shopNameLabel').textContent='Visual Fixture Store';
+      window.dispatchEvent(new Event('focus'));
+    });
+    await page.waitForFunction(()=>
+      document.querySelector('#hdb-welcome-title')?.textContent.includes('Visual Fixture'));
+    assert.equal(await page.locator('#hdb-welcome-bn').isVisible(),true);
+    assert.ok((await page.locator('#hdb-subtitle-bn').innerText()).length>5);
+    assert.equal(await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]:visible svg[data-hdb-icon]').count(),6);
+    assert.equal(await page.locator('.hdb-chart-shell').count(),2);
+    assert.ok(await page.locator('[data-hdb-chart="sales-trend"]').evaluate(n=>n.getBoundingClientRect().height>=220));
+    assert.equal(await page.locator('.hdb-panel-head').first().evaluate(n=>getComputedStyle(n).borderBottomWidth),'1px');
+    await mkdir('test-results/m01-browser',{recursive:true});
+    for(const [width,height,metrics,panels] of [
+      [320,760,2,1],[390,844,2,1],[768,960,3,1],[1440,900,6,3]
+    ]){
+      await page.setViewportSize({width,height});
+      const result=await page.evaluate(()=>{
+        const element=document.getElementById('hisabiq-dashboard');
+        const metric=document.getElementById('hisabiq-dashboard-metrics');
+        const panel=document.getElementById('hisabiq-dashboard-panels');
+        const columnCount=node=>getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length;
+        const rect=element.getBoundingClientRect();
+        return {metricColumns:columnCount(metric),panelColumns:columnCount(panel),
+          left:rect.left,right:rect.right,viewport:window.innerWidth};
+      });
+      assert.equal(result.metricColumns,metrics,'metric columns at '+width);
+      assert.equal(result.panelColumns,panels,'panel columns at '+width);
+      assert.ok(result.left>=-1 && result.right<=result.viewport+1,
+        'dashboard must stay inside '+width+'px viewport: '+JSON.stringify(result));
+      await saveArtifact(page,'hisabiq-dashboard-step1-'+width+'.png');
+    }
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});

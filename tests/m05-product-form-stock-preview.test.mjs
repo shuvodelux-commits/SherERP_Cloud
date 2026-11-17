@@ -221,3 +221,42 @@ test('invalid prices are rejected before normalization, and no public Worker/RPC
   const module=readFileSync(new URL('../src/modules/m05-product-form-stock-preview.js',import.meta.url),'utf8');
   assert.doesNotMatch(module,/\bINSERT\s+INTO\b|\bUPDATE\s+\w+\s+SET\b|\bDELETE\s+FROM\b|\.batch\s*\(|\.run\s*\(/iu);
 });
+
+
+test('Tiles Carton to Box to Pcs chain retains whole-piece stock and area',()=>{
+  const relations=[
+    {leftQty:1,leftUnit:'Carton',rightQty:10,rightUnit:'Box'},
+    {leftQty:1,leftUnit:'Box',rightQty:25,rightUnit:'Pcs'}
+  ];
+  const value=previewM05ProductAddForm(tileInput({
+    unitMasters:[...units(),{'Unit Name':'Carton',Status:'Active'}],
+    unitRelations:relations,
+    openingUnits:[
+      {unitName:'Carton',qtyText:'2'},
+      {unitName:'Box',qtyText:'5'},
+      {unitName:'Pcs',qtyText:'3'}
+    ]
+  }));
+  assert.equal(value.baseStock,'628');
+  assert.equal(value.stockCellText,'2 Carton 5 Box 3 Pcs · 2512.00 Sqft');
+  assert.deepEqual(value.conversions.map(x=>[x.unitName,x.factor]),[
+    ['Carton',250],['Box',25]
+  ]);
+  assert.equal(value.tile.displaySqft,'2512.00');
+  assert.equal(value.postingAllowed,false);
+});
+
+test('a current Tile Carton shortage remains negative with no physical stock authority',()=>{
+  const value=formatM05ProductStockCell({
+    productId:'T-24',
+    unitMasters:[...units(),{'Unit Name':'Carton',Status:'Active'}],
+    unitRelations:[
+      {leftQty:1,leftUnit:'Carton',rightQty:10,rightUnit:'Box'},
+      {leftQty:1,leftUnit:'Box',rightQty:25,rightUnit:'Pcs'}
+    ],
+    baseStockText:'-628',tileMeasurement:tiles()
+  });
+  assert.equal(value.stockState,'oversold');
+  assert.equal(value.stockCellText,'Shortage: 2 Carton 5 Box 3 Pcs · 2512.00 Sqft');
+  assert.equal(value.postingAllowed,false);
+});
