@@ -89,6 +89,17 @@ test('missing/unknown fields, extra sessions, non-plain rows and accessor proper
   assert.equal(e.message,'M04 private source timestamp preparation rejected');return true;
  });
  assert.equal(accesses,0);
+ const list=sample();
+ let accessed=0;
+ Object.defineProperty(list.users,'0',{
+  configurable:true,enumerable:true,
+  get(){accessed++;throw Error('SENSITIVE_INDEX_GETTER');}
+ });
+ assert.throws(()=>provisionallyConvertLegacyStaffExcelDates(list,options()),e=>{
+  assert.equal(e.message,'M04 private source timestamp preparation rejected');
+  return true;
+ });
+ assert.equal(accessed,0,'untrusted array element getters must not execute');
 });
 test('private source timestamp preparation is not connected to the public Worker or RPC',()=>{
  const src=readFileSync(new URL('../src/auth/legacy-archive-staff-time.js',import.meta.url),'utf8');
