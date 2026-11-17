@@ -35,6 +35,7 @@ export const SYNTHETIC_M03_PRODUCTS_BOOTSTRAP_DDL=Object.freeze([
  "CREATE TABLE synthetic_m03_tile_current("+
   "tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,unit_revision INTEGER NOT NULL,"+
   "current_measurement_revision INTEGER NOT NULL,measurement_json TEXT NOT NULL,"+
+  "measurement_sha256 TEXT NOT NULL CHECK(length(measurement_sha256)=64),"+
   "PRIMARY KEY(tenant_id,product_id),"+
   "FOREIGN KEY(tenant_id,product_id) REFERENCES synthetic_m03_product_tenants(tenant_id,product_id)) STRICT",
  "CREATE TABLE synthetic_m03_tenant_settings("+
