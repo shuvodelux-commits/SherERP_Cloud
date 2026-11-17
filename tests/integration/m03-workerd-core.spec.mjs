@@ -2,6 +2,8 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
+import {createCanonicalProductSourceReadAdapter} from '../../src/db/canonical-product-source-read.js';
+import {CANONICAL_PRODUCT_HEADERS} from '../../src/db/product-source-contract.js';
 import {resolveLegacyPartyByProvenance} from '../../src/db/party-identity-read.js';
 // Separate, nondeployable, local-only Worker with synthetic D1 binding UUID.
 // The actual deployed src/index.js and wrangler.preview.jsonc are untouched.
@@ -123,7 +125,36 @@ test('source-shaped catalog reads execute via real local D1 and preserve physica
   ]}});
   assert.deepEqual(await query('/__m03_test__/legacy-find?sheet=PRODUCT_CATEGORIES&column=Category%20ID&value=CAT-2'),{
     status:200,body:{match:{row:{'Category ID':'CAT-2','Category Name':'দড়ি',Status:'Inactive','Created At':'',_rowIndex:3},rowIndex:3}}
+  });  // M03 Run 2 extends the existing reviewed legacy-read test; the fixed
+  // ten-core-test Workerd sharding contract must not be weakened.
+  await db.prepare(
+    'INSERT INTO legacy_product_snapshots '+
+    '(source_profile,legacy_sheet_row,product_id,product_name,unit_text,'+
+    'barcode_text,purchase_price_text,current_stock_text,status_text) '+
+    'VALUES(?,?,?,?,?,?,?,?,?)'
+  ).bind('canonical',2,'P-0007','বাল্ব','Pcs','000123','001.50','0002.0','Inactive').run();
+  await db.prepare(
+    'INSERT INTO legacy_product_snapshots '+
+    '(source_profile,legacy_sheet_row,product_id,product_name,unit_text) VALUES(?,?,?,?,?)'
+  ).bind('supplementary',2,'P-0007','Different older feature source','Box').run();
+  const products=createCanonicalProductSourceReadAdapter({DB:db});
+  assert.deepEqual(await products.getSheetHeaders_('PRODUCTS'),CANONICAL_PRODUCT_HEADERS);
+  const expected=Object.fromEntries(CANONICAL_PRODUCT_HEADERS.map(h=>[h,'']));
+  Object.assign(expected,{'Product ID':'P-0007','Product Name':'বাল্ব',Unit:'Pcs',
+    Barcode:'000123','Purchase Price':'001.50','Current Stock':'0002.0',Status:'Inactive'});
+  expected._rowIndex=2;
+  assert.deepEqual(await products.getAllRows_('PRODUCTS'),[expected]);
+  assert.deepEqual(await products.findRow_('PRODUCTS','Product ID','P-0007'),{
+    row:expected,rowIndex:2
   });
+  assert.equal(await products.findRowIndex_('PRODUCTS','Product ID','P-007'),-1);
+  const saved=await db.prepare(
+    'SELECT COUNT(*) AS n FROM legacy_product_snapshots'
+  ).first();
+  assert.equal(saved.n,2);
+  const live=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8')+
+    readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
+  assert.equal(live.includes('canonical-product-source-read'),false);
 });
 
 test('Products bootstrap reference slice awaits actual D1 catalogs and Settings with source defaults',async()=>{
