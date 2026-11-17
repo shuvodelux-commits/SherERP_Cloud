@@ -48,10 +48,13 @@ function sourceId(value){
 }
 function isDeleted(row){
   const marker=row['Is Deleted'];
-  if(marker!==undefined && marker!==null && marker!=='' &&
-     marker!==false && marker!==true && marker!=='TRUE' && marker!=='FALSE')
+  if(marker!==null && marker!==undefined &&
+     !['string','boolean','number'].includes(typeof marker))
     throw new TypeError('Invalid trusted M09 deletion marker');
-  return marker===true || marker==='TRUE';
+  if(typeof marker==='number' && !Number.isFinite(marker))
+    throw new TypeError('Invalid trusted M09 deletion marker');
+  // Frozen DeleteEngine.gs::isDeleted_ uses case-insensitive TRUE.
+  return marker===true || String(marker||'').toUpperCase()==='TRUE';
 }
 
 /**
