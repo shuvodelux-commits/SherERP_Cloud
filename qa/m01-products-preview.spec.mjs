@@ -47,6 +47,7 @@ after(async()=>{
 async function openProductModal(width){
  const page=await browser.newPage({viewport:{width,height:820},
    isMobile:width<=390,hasTouch:width<=390});
+ page.setDefaultTimeout(6500);
  await page.goto(url,{waitUntil:'domcontentloaded'});
  await page.locator('#m01ProductUnitMode').waitFor({state:'attached'});
  await page.evaluate(()=>{
@@ -62,6 +63,8 @@ async function openProductModal(width){
   }
   select.value='Pcs';
   window.prodState.units=['Pcs','Box','Carton'].map(name=>({id:name,name}));
+  get('prodType').value='Standard';
+  get('prodType').dispatchEvent(new Event('change',{bubbles:true}));
   get('prodPurchasePrice').value='100';
   get('prodSellingPrice').value='160';
   const modal=get('prodModal');
@@ -71,6 +74,14 @@ async function openProductModal(width){
   document.body.appendChild(modal);
   modal.hidden=false;modal.style.display='flex';
  });
+ const diagnostic=await page.locator('#m01ProductUnitMode').evaluate(node=>{
+   const chain=[];let p=node;
+   while(p&&chain.length<9){chain.push({id:p.id,tag:p.tagName,
+     hidden:p.hidden,display:getComputedStyle(p).display,
+     visibility:getComputedStyle(p).visibility,rects:p.getClientRects().length});p=p.parentElement;}
+   return {chain,productType:document.getElementById('prodType').value};
+ });
+ console.log('M01_PRODUCTS_VISIBILITY_DIAGNOSTIC',JSON.stringify(diagnostic));
  return page;
 }
 
