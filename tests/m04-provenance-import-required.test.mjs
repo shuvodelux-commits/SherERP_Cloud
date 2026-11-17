@@ -166,7 +166,8 @@ test('ordinary and null-prototype exact snapshot roots reach read-only D1 prefli
       },
     };
     await assert.rejects(()=>importLegacyStaffSnapshotWithD1(db,src),
-      err=>err.message==='SYNTHETIC_DB_PREFLIGHT_REACHED');
-    assert.equal(inspected,1);
+      err=>err.message==='Offline staff import rejected',
+      'database errors are intentionally redacted even after valid preflight');
+    assert.equal(inspected,1,'a valid root must reach the trusted D1 preflight');
   }
 });
