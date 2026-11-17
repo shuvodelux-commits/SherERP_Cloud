@@ -7,6 +7,7 @@ import {createFrozenSourceReadback} from '../../src/db/m03-frozen-source-readbac
 import {createSealedSourceLookup} from '../../src/db/m03-sealed-source-lookup.js';
 import {createM03PrivateIdEvidenceReconciler} from '../../src/db/m03-private-id-evidence-reconcile.js';
 import {createM03PrivateSourceFloorAudit} from '../../src/db/m03-private-source-floor-audit.js';
+import {createM03PrivateSourceFloorInstaller} from '../../src/db/m03-private-source-floor-install.js';
 import {M02_ID_FAMILIES} from '../../scripts/dry-run-id-floor.mjs';
 import {captureM02IdEvidenceFreeze} from '../../scripts/dry-run-id-evidence-freeze.mjs';
 import {reviewOfflineSourceParity} from '../../scripts/dry-run-source-parity.mjs';
@@ -317,5 +318,51 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
  await DB.prepare("DELETE FROM synthetic_m03_id_receipts").run();
  await assert.rejects(()=>createM03PrivateSourceFloorAudit({DB},'TENANT-B')
   .auditFreshSeed_(floorArgs),/M03 private original ID counter floor rejected/);
+
+ // Run 7: use the same already-sharded real local D1 fixture to test the
+ // single-statement, 38-family synthetic seed. No production migrations.
+ await DB.prepare(
+  "DELETE FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'"
+ ).run();
+ const floorInstaller=createM03PrivateSourceFloorInstaller({DB},'TENANT-A');
+ const seeded=await floorInstaller.installFreshSynthetic_(floorArgs);
+ assert.equal(seeded.localSyntheticD1FloorsInstalled,true);
+ assert.equal(seeded.idIssuanceAuthorized,false);
+ assert.equal(seeded.publicRpcEnabled,false);
+ assert.equal(seeded.productionReady,false);
+ assert.equal((await DB.prepare(
+  "SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'"
+ ).first()).n,38);
+ assert.deepEqual(await floorInstaller.installFreshSynthetic_(floorArgs),seeded,
+  'stable replay cannot consume an ID or mutate a counter');
+ const firstFloor=(await DB.prepare(
+  "SELECT current_sequence AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A' AND id_key='PRODUCTS'"
+ ).first()).n;
+ assert.equal(firstFloor,Number(idEvidence.counters.PRODUCTS));
+ // Partial pre-existing seed blocks all remaining family INSERTs.
+ await DB.prepare(
+  "DELETE FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A' AND id_key!='PRODUCTS'"
+ ).run();
+ await assert.rejects(()=>floorInstaller.installFreshSynthetic_(floorArgs),
+  /M03 private source ID floor installation rejected/);
+ assert.equal((await DB.prepare(
+  "SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'"
+ ).first()).n,1);
+ await DB.prepare(
+  "DELETE FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'"
+ ).run();
+ // SQL-trigger failure must roll back the entire 38-row statement in D1.
+ await DB.prepare(
+  "CREATE TRIGGER synthetic_run7_abort BEFORE INSERT ON synthetic_m03_id_counters "+
+  "WHEN NEW.id_key='PRODUCT_UNITS' BEGIN SELECT RAISE(ABORT,'injected seed error'); END"
+ ).run();
+ await assert.rejects(()=>floorInstaller.installFreshSynthetic_(floorArgs),
+  /M03 private source ID floor installation rejected/);
+ assert.equal((await DB.prepare(
+  "SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'"
+ ).first()).n,0);
+ await DB.prepare('DROP TRIGGER synthetic_run7_abort').run();
+ assert.equal((await floorInstaller.installFreshSynthetic_(floorArgs)).localSyntheticD1FloorsInstalled,true);
+
  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM m03_private_source_rows').first()).n,beforeCount);
 });
