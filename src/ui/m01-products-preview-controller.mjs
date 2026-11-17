@@ -100,6 +100,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
   const preview=byId('m01StockPreview');
   const readOnly=byId('m01PreviewReadOnly');
   const originalSaveLabel=save.textContent;
+  const legacyStockGroup=byId('prodStock')?.parentElement;
 
   function managedUnits(){
     const items=globalThis.prodState?.units||[];
@@ -138,6 +139,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
     byId('m01OpeningOuter').parentElement.hidden=!useCarton.checked;
     preview.hidden=!advanced;
     readOnly.hidden=!advanced;
+    if(legacyStockGroup)legacyStockGroup.hidden=advanced||type.value==='Bundle';
     save.disabled=advanced;
     save.classList.toggle('m01-advanced-save-disabled',advanced);
     save.textContent=advanced?'Save unavailable':originalSaveLabel;
