@@ -21,6 +21,11 @@ import {M08_ROLE_DDL}
 import {previewD1RoleAccountIsolation}
   from '../fixtures/m08-d1-role-account-preview.mjs';
 
+import {M08_TRANSFER_DDL}
+  from '../fixtures/m08-d1-transfer-header-schema.mjs';
+import {auditD1BankTransfers}
+  from '../fixtures/m08-d1-transfer-provenance-preview.mjs';
+
 const oracle=loadPinnedGASFunctions({
   'Utils.gs':['roundMoney_'],
   'CashReconciliation.gs':[
@@ -990,4 +995,279 @@ test('M08 role D1 invalid identity requests, public RPC and unknown role are fai
     method:'POST',body:JSON.stringify(roleReq())
   })).status,404);
   assert.deepEqual(await roleSnapshot(),stable);
+});
+
+
+// #66 — strict source header/two-leg audit; isolated local D1 reads only.
+const th=(id,from,to,amount,fields={})=>({
+  'Transfer ID':id,'From Account ID':from,'To Account ID':to,
+  Amount:amount,Date:'2026-11-17','Is Deleted':'',
+  Notes:'','Created By':'source fixture',...fields
+});
+const tl=(id,accountId,type,reference,amount,fields={})=>
+  bankEntry(id,accountId,'2026-11-17',
+    type==='Transfer In'?amount:0,
+    type==='Transfer Out'?amount:0,
+    {Type:type,Reference:reference,...fields});
+const trRequest=(tenantId='SHOP-A')=>({tenantId});
+async function transferReset(){
+  await bankReset();
+  await DB.prepare('DROP TABLE IF EXISTS m08_transfer_headers').run();
+  for(const ddl of M08_TRANSFER_DDL)await DB.prepare(ddl).run();
+}
+async function transferSeed(tenant,accounts,headers,legs){
+  await bankSeed(tenant,accounts,legs);
+  for(let i=headers.length-1;i>=0;i--){
+    const h=headers[i];
+    await DB.prepare(
+      'INSERT INTO m08_transfer_headers VALUES(?,?,?,?,?,?,?,?,?,?)'
+    ).bind(tenant,i+2,h['Transfer ID'],h.Date,
+      h['From Account ID'],h['To Account ID'],
+      safeCents(h.Amount),
+      h['Is Deleted']===true ||
+        String(h['Is Deleted']||'').toUpperCase()==='TRUE'?1:0,
+      h.Notes,h['Created By']).run();
+  }
+}
+async function transferSnapshot(){
+  return {
+    bank:await bankSnapshot(),
+    cash:await snapshot(),
+    headers:(await DB.prepare(
+      'SELECT * FROM m08_transfer_headers ORDER BY tenant_id,legacy_row'
+    ).all()).results.map(x=>({...x}))
+  };
+}
+async function transferAuditNoWrite(tenantId='SHOP-A'){
+  const unchanged=await transferSnapshot();
+  const result=await auditD1BankTransfers(DB,trRequest(tenantId));
+  assert.deepEqual(await transferSnapshot(),unchanged,
+    'Bank transfer reconciliation must never mutate bank/cash/headers');
+  return result;
+}
+const pair=(id,from,to,amount)=>[
+  tl('BB-'+id+'-O',from,'Transfer Out',id,amount),
+  tl('BB-'+id+'-I',to,'Transfer In',id,amount)
+];
+const transferAccounts=()=>[
+  bankAccount('A',300,300),bankAccount('B',200,200)
+];
+
+test('M08 transfer D1 reproduces pinned GAS header, exact opposing legs and no Cash Book leg',async()=>{
+  await transferReset();
+  const a=transferAccounts(),events={headers:[],legs:[],cash:0,permissions:[],session:0};
+  const source=loadPinnedGASFunctions({
+    'Utils.gs':['roundMoney_'],
+    'BankBook.gs':['transferBetweenBankAccounts']
+  },{
+    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
+    CONFIG:{LOCK_TIMEOUT_MS:50},
+    requirePermission_:(token,module,action)=>{
+      events.permissions.push([module,action]);return {'Full Name':'Cashier'};
+    },
+    requireActiveCashSession_:()=>{events.session++;},
+    isValidNonNegativeNumber_:v=>Number.isFinite(v)&&v>=0,
+    getAllRows_:group=>{assert.equal(group,'BANK_ACCOUNTS');return a;},
+    generateId_:group=>{assert.equal(group,'BANK_TRANSFERS');return 'T-1';},
+    appendRow_:(group,row)=>{
+      assert.equal(group,'BANK_TRANSFERS');events.headers.push(row);
+    },
+    addBankBookEntry_:(id,fields,account)=>{
+      events.legs.push({id,fields,account});
+    },
+    addCashBookEntry_:()=>{events.cash++;},
+    sanitizeInput_:v=>String(v??''),
+    actorName_:v=>v['Full Name'],
+    ok_:data=>({success:true,data}),
+    fail_:message=>({success:false,message})
+  });
+  const posted=source.transferBetweenBankAccounts('synthetic',{
+    fromAccountId:'A',toAccountId:'B',amount:125.25,notes:'source'
+  });
+  assert.equal(posted.success,true);
+  assert.deepEqual(events.permissions,[['bank','add']]);
+  assert.equal(events.session,1);
+  assert.equal(events.cash,0);
+  assert.equal(events.headers.length,1);
+  assert.deepEqual(events.legs.map(x=>[
+    x.id,x.fields.Type,x.fields.Reference,x.fields.Debit,x.fields.Credit
+  ]),[
+    ['A','Transfer Out','T-1',125.25,''],
+    ['B','Transfer In','T-1','',125.25]
+  ]);
+  const legs=events.legs.map((x,i)=>bankEntry(
+    'BB-'+i,x.id,'2026-11-17',x.fields.Credit,x.fields.Debit,
+    {Type:x.fields.Type,Reference:x.fields.Reference}
+  ));
+  await transferSeed('SHOP-A',a,[
+    th('T-1','A','B',events.headers[0]['Amount'])
+  ],legs);
+  const res=await transferAuditNoWrite();
+  assert.deepEqual(res.summary,{balanced:1,needsReview:0,orphanLegs:0});
+  assert.deepEqual(res.transfers[0],{
+    transferId:'T-1',fromAccountId:'A',toAccountId:'B',amount:125.25,
+    status:'BALANCED',reasons:[],outEntryId:'BB-0',inEntryId:'BB-1'
+  });
+});
+
+test('M08 transfer D1 source header row ordering outranks dates and SQL insertion order',async()=>{
+  await transferReset();
+  const headers=[
+    th('FIRST','A','B',10,{Date:'2026-11-17'}),
+    th('SECOND','B','A',20,{Date:'2026-01-01'})
+  ];
+  await transferSeed('SHOP-A',transferAccounts(),headers,[
+    ...pair('FIRST','A','B',10),...pair('SECOND','B','A',20)
+  ]);
+  const r=await transferAuditNoWrite();
+  assert.deepEqual(r.transfers.map(x=>x.transferId),['FIRST','SECOND']);
+  assert.deepEqual(r.summary,{balanced:2,needsReview:0,orphanLegs:0});
+});
+
+test('M08 transfer D1 missing outbound or inbound source leg is never balanced',async()=>{
+  await transferReset();
+  await transferSeed('SHOP-A',transferAccounts(),[
+    th('NOOUT','A','B',25),th('NOIN','A','B',15)
+  ],[
+    tl('IN','B','Transfer In','NOOUT',25),
+    tl('OUT','A','Transfer Out','NOIN',15)
+  ]);
+  const r=await transferAuditNoWrite();
+  assert.deepEqual(r.transfers.map(x=>[x.transferId,x.reasons]),[
+    ['NOOUT',['MISSING_OUT_LEG']],
+    ['NOIN',['MISSING_IN_LEG']]
+  ]);
+  assert.equal(r.summary.needsReview,2);
+});
+
+test('M08 transfer D1 duplicate outbound direction and wrong amount are deterministic discrepancies',async()=>{
+  await transferReset();
+  await transferSeed('SHOP-A',transferAccounts(),[th('T1','A','B',20)],[
+    ...pair('T1','A','B',20),tl('O-OTHER','A','Transfer Out','T1',20)
+  ]);
+  const dup=await transferAuditNoWrite();
+  assert.deepEqual(dup.transfers[0].reasons,['DUPLICATE_OUT_LEG']);
+  await DB.prepare("DELETE FROM m08_bank_book WHERE entry_id='O-OTHER'").run();
+  await DB.prepare(
+    "UPDATE m08_bank_book SET debit_cents=2100 WHERE entry_id='BB-T1-O'"
+  ).run();
+  const mismatch=await transferAuditNoWrite();
+  assert.deepEqual(mismatch.transfers[0].reasons,['OUT_AMOUNT_MISMATCH']);
+});
+
+test('M08 transfer D1 wrong bank account, same account or missing imported bank account need review',async()=>{
+  await transferReset();
+  await transferSeed('SHOP-A',transferAccounts(),[
+    th('WRONG','A','B',20),th('SAME','A','A',10),th('UNKNOWN','A','MISSING',5)
+  ],[
+    tl('O1','B','Transfer Out','WRONG',20),
+    tl('I1','A','Transfer In','WRONG',20),
+    ...pair('SAME','A','A',10),
+    tl('O3','A','Transfer Out','UNKNOWN',5),
+    tl('I3','MISSING','Transfer In','UNKNOWN',5)
+  ]);
+  const r=await transferAuditNoWrite();
+  assert.ok(r.transfers[0].reasons.includes('OUT_ACCOUNT_MISMATCH'));
+  assert.ok(r.transfers[0].reasons.includes('IN_ACCOUNT_MISMATCH'));
+  assert.ok(r.transfers[1].reasons.includes('SAME_BANK_ACCOUNT'));
+  assert.ok(r.transfers[2].reasons.includes('UNKNOWN_TO_ACCOUNT'));
+  assert.equal(r.summary.needsReview,3);
+});
+
+test('M08 transfer D1 reversed historical leg and extra non-transfer entry cannot claim a clean transfer',async()=>{
+  await transferReset();
+  await transferSeed('SHOP-A',transferAccounts(),[th('T1','A','B',30)],[
+    tl('O','A','Transfer Out','T1',30,{Status:'Reversed'}),
+    tl('I','B','Transfer In','T1',30),
+    bankEntry('CORRECTION','A','2026-11-17',30,0,{
+      Type:'Reversal',Reference:'O','Reversal Of':'O'
+    }),
+    bankEntry('NOT-TRANSFER','A','2026-11-17',0,30,{
+      Type:'Cash Deposit',Reference:'T1'
+    })
+  ]);
+  const r=await transferAuditNoWrite();
+  assert.deepEqual(r.transfers[0].reasons,['CORRECTED_OUT_LEG']);
+  assert.equal(r.summary.needsReview,1);
+  assert.equal(r.summary.orphanLegs,0);
+});
+
+test('M08 transfer D1 deleted header and orphan reference preserve original evidence for review',async()=>{
+  await transferReset();
+  await transferSeed('SHOP-A',transferAccounts(),[
+    th('DELETED','A','B',10,{'Is Deleted':'TRUE'}),
+    th('ACTIVE','A','B',7)
+  ],[
+    ...pair('DELETED','A','B',10),
+    ...pair('ACTIVE','A','B',7),
+    tl('UNLINKED','A','Transfer Out','NEVER-IMPORTED',3)
+  ]);
+  const r=await transferAuditNoWrite();
+  assert.deepEqual(r.transfers.map(x=>x.transferId),['ACTIVE']);
+  assert.deepEqual(r.orphanLegs.map(x=>x.entryId),[
+    'BB-DELETED-O','BB-DELETED-I','UNLINKED'
+  ]);
+  assert.equal(r.summary.orphanLegs,3);
+  assert.equal(r.summary.balanced,1);
+});
+
+test('M08 transfer D1 two tenants can reuse exact source IDs without cross-tenant leg pairing',async()=>{
+  await transferReset();
+  const a=transferAccounts();
+  await transferSeed('SHOP-A',a,[th('T-SAME','A','B',40)],
+    pair('T-SAME','A','B',40));
+  await transferSeed('SHOP-B',a,[th('T-SAME','A','B',70)],[
+    tl('BB-T-SAME-O','A','Transfer Out','T-SAME',70)
+  ]);
+  const first=await transferAuditNoWrite('SHOP-A');
+  const second=await transferAuditNoWrite('SHOP-B');
+  assert.deepEqual(first.summary,{balanced:1,needsReview:0,orphanLegs:0});
+  assert.deepEqual(second.transfers[0].reasons,['MISSING_IN_LEG']);
+});
+
+test('M08 transfer D1 duplicate imported Transfer, Bank Book and Account IDs are rejected',async()=>{
+  await transferReset();
+  await transferSeed('SHOP-A',transferAccounts(),[th('T1','A','B',10)],
+    pair('T1','A','B',10));
+  await DB.prepare(
+    "INSERT INTO m08_transfer_headers VALUES ('SHOP-A',99,'T1','2026-11-17','A','B',1000,0,'','')"
+  ).run();
+  await assert.rejects(()=>auditD1BankTransfers(DB,trRequest()),
+    /Duplicate Transfer ID/);
+  await DB.prepare("DELETE FROM m08_transfer_headers WHERE legacy_row=99").run();
+  await DB.prepare(
+    "INSERT INTO m08_bank_book VALUES ('SHOP-A',99,'BB-T1-O','A','2026-11-17','Transfer Out','T1','',1000,0,'Active','','','','',0,0,'')"
+  ).run();
+  await assert.rejects(()=>auditD1BankTransfers(DB,trRequest()),
+    /Duplicate Bank Book Entry ID/);
+  await DB.prepare("DELETE FROM m08_bank_book WHERE legacy_row=99").run();
+  await DB.prepare(
+    "INSERT INTO m08_bank_accounts VALUES ('SHOP-A',99,'A','Another','Bank','1',0,0,'Active','Bank')"
+  ).run();
+  await assert.rejects(()=>auditD1BankTransfers(DB,trRequest()),
+    /Duplicate Bank Account ID/);
+});
+
+test('M08 transfer D1 rejects malformed source date and request before financial reads or writes',async()=>{
+  await transferReset();
+  await transferSeed('SHOP-A',transferAccounts(),[th('T1','A','B',10)],
+    pair('T1','A','B',10));
+  const stable=await transferSnapshot();
+  for(const bad of [
+    null,{}, {tenantId:'SHOP-A;DROP'}, {tenantId:''},
+    {tenantId:Promise.resolve('SHOP-A')},
+    {tenantId:'SHOP-A',sql:'DELETE FROM m08_transfer_headers'}
+  ])await assert.rejects(()=>auditD1BankTransfers(DB,bad),TypeError);
+  await assert.rejects(()=>auditD1BankTransfers(null,trRequest()),/D1/);
+  assert.deepEqual(await transferSnapshot(),stable);
+  await DB.prepare(
+    "UPDATE m08_transfer_headers SET date_text='2026-11-17T00:00:00Z'"
+  ).run();
+  const malformed=await transferSnapshot();
+  await assert.rejects(()=>auditD1BankTransfers(DB,trRequest()),
+    /canonical bank transfer date/);
+  assert.deepEqual(await transferSnapshot(),malformed);
+  assert.equal((await worker.fetch('https://m08-transfer.test/api/rpc',{
+    method:'POST',body:JSON.stringify(trRequest())
+  })).status,404);
 });
