@@ -2,6 +2,8 @@
  * Test-only M08 source-positional closing Cash Session computation.
  *
  * Single parameterized SQL read over disposable local Workerd/D1 tables.
+ * Explicitly materialize reuse-heavy CTEs to avoid Workerd SQLite planner
+ * re-expansion hitting the maximum nested subquery depth.
  * The frozen GAS's physical Session Open marker boundaries are preserved.
  * Requires importer-normalized JSON arrays (or empty strings) for linked IDs.
  * No D1 write, public RPC, production schema, auth decision or posting.
@@ -10,7 +12,7 @@ const ID=/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 const SQL=`
 WITH
   args(tenant_id,session_id) AS (VALUES(?,?)),
-  sessions AS (
+  sessions AS MATERIALIZED (
     SELECT s.*,
       CASE WHEN trim(s.opening_entry_ids)='' THEN '[]'
            WHEN json_valid(s.opening_entry_ids) THEN s.opening_entry_ids
@@ -21,14 +23,14 @@ WITH
     FROM m08_positional_sessions s
     JOIN args a ON a.tenant_id=s.tenant_id
   ),
-  cash AS (
+  cash AS MATERIALIZED (
     SELECT c.* FROM m08_positional_cash c
     JOIN args a ON a.tenant_id=c.tenant_id
   ),
-  target AS (
+  target AS MATERIALIZED (
     SELECT s.* FROM sessions s JOIN args a ON a.session_id=s.session_id
   ),
-  usage AS (
+  usage AS MATERIALIZED (
     SELECT s.session_id,'opening' AS phase,trim(j.value) AS entry_id
     FROM sessions s, json_each(s.opening_json) j
     WHERE j.type='text' AND trim(j.value)<>''
@@ -37,27 +39,27 @@ WITH
     FROM sessions s, json_each(s.closing_json) j
     WHERE j.type='text' AND trim(j.value)<>''
   ),
-  opening_links AS (
+  opening_links AS MATERIALIZED (
     SELECT DISTINCT u.entry_id FROM usage u JOIN args a
       ON u.session_id=a.session_id
     WHERE u.phase='opening'
   ),
-  closing_links AS (
+  closing_links AS MATERIALIZED (
     SELECT DISTINCT u.entry_id FROM usage u JOIN args a
       ON u.session_id=a.session_id
     WHERE u.phase='closing'
   ),
-  marker AS (
+  marker AS MATERIALIZED (
     SELECT COUNT(*) AS n,MIN(c.legacy_row) AS first_row
     FROM cash c JOIN args a ON c.reference=a.session_id
     WHERE c.type='Session Open'
   ),
-  next_marker AS (
+  next_marker AS MATERIALIZED (
     SELECT MIN(c.legacy_row) AS next_row
     FROM cash c,marker m
     WHERE c.type='Session Open' AND c.legacy_row>m.first_row
   ),
-  native_window AS (
+  native_window AS MATERIALIZED (
     SELECT c.legacy_row,c.entry_id,
       c.credit_cents-c.debit_cents AS movement
     FROM cash c,marker m,next_marker n
@@ -79,7 +81,7 @@ WITH
         )
       )
   ),
-  late_closing AS (
+  late_closing AS MATERIALIZED (
     SELECT c.entry_id,c.credit_cents-c.debit_cents AS movement
     FROM closing_links cl JOIN cash c ON c.entry_id=cl.entry_id
     WHERE c.is_deleted=0
@@ -88,7 +90,7 @@ WITH
         SELECT 1 FROM native_window n WHERE n.entry_id=cl.entry_id
       )
   ),
-  calculated AS (
+  calculated AS MATERIALIZED (
     SELECT t.status,t.counted_cents,
       t.opening_cents
         + COALESCE((SELECT SUM(movement) FROM native_window),0)
