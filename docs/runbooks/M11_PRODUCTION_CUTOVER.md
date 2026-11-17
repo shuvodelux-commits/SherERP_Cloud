@@ -12,6 +12,8 @@
 - There is **no approved production D1 cutover, Worker routing plan, staff export or complete M10 signed report** in this runbook. This first M11 PR performs no deployment, mutation, release-secret access or live data inspection.
 - For current work, do not point the old GAS or Google Sheets at Workers, do not enable incomplete RPC routes and do not modify original source records.
 
+**Pre-Gate BP0 — GitHub release-control-plane protection:** The [M11 evidence matrix](M11_RELEASE_READINESS_MATRIX.md#gate-bp0--require-actual-github-main-protection-before-release-approval) records a 2026-11-17 actual GitHub API finding: `main.protected=false`, required status checks not enforced. Before accepting release GO, the repository administrator must activate and independently verify a protected `main` PR/review/status-check rule and inspect staging environment approval rules. This is separate from full CI passing voluntarily and does not authorize production or remote D1. See [M11 issue #306](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/306) for the dated evidence. No branch setting is changed by this runbook.
+
 ## Gate 0 — Decide release authority before any live action
 
 **GO requires owner review of signed M10 acceptance evidence** for complete 49-group source mapping, row counts/IDs, FIFO/OVERSOLD stock, all gross Party accounts (including advances, owner equity and loans), returns, balances, cash/bank, invoices, permissions, original UX/printing, security and p95/D1 budgets. Zero unexplained critical discrepancies, no unresolved identity links on posted obligations, and a successful realistic staging rehearsal are mandatory. Source protected USERS/ROLES export and credential handling require separate explicit authorization.
