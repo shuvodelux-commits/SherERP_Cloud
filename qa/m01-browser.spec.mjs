@@ -979,3 +979,108 @@ test('M01 Step 2: mobile touch drag reorders widgets without horizontal overflow
     await saveArtifact(page,'hisabiq-dashboard-step2-touch-390.png');
   }finally{await page.close();}
 });
+
+
+test('M01 Step 3: today's sales and recent sales open actual invoices with scoped dates and return navigation',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await authorizeDashboardStep2_(page,'STEP3-ADMIN','STEP3-SHOP');
+    const dates=await page.evaluate(()=>{
+      const d=new Date(),y=new Date(d);y.setDate(d.getDate()-1);
+      const iso=v=>[v.getFullYear(),String(v.getMonth()+1).padStart(2,'0'),
+        String(v.getDate()).padStart(2,'0')].join('-');
+      return {today:iso(d),yesterday:iso(y)};
+    });
+    await page.locator('[data-hdb-widget="today-sales"] [data-hdb-route="sales"]').click();
+    assert.equal(await page.locator('#page-sales').isVisible(),true);
+    assert.equal(await page.locator('#smDateFrom').inputValue(),dates.today);
+    assert.equal(await page.locator('#smDateTo').inputValue(),dates.today);
+    assert.match(await page.locator('#hdb-drilldown-context').innerText(),/Today's Sales/);
+    await saveArtifact(page,'hisabiq-dashboard-step3-sales-1440.png');
+    await page.locator('#hdb-drilldown-context button[data-hdb-back]').click();
+    assert.equal(await page.locator('#page-dashboard').isVisible(),true);
+    await page.locator('[data-hdb-widget="recent-sales"] [data-hdb-route="sales"]').click();
+    assert.equal(await page.locator('#smDateFrom').inputValue(),dates.yesterday);
+    assert.equal(await page.locator('#smDateTo').inputValue(),dates.today);
+    assert.match(await page.locator('#hdb-drilldown-context').innerText(),/Recent Sales/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('M01 Step 3: 14-day sales trend and profit use the original Reports tab and source date range',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  try{
+    await page.goto(server.url);
+    await authorizeDashboardStep2_(page,'STEP3-ADMIN','STEP3-SHOP');
+    const dates=await page.evaluate(()=>{
+      const d=new Date(),a=new Date(d);a.setDate(d.getDate()-13);
+      const iso=v=>[v.getFullYear(),String(v.getMonth()+1).padStart(2,'0'),
+        String(v.getDate()).padStart(2,'0')].join('-');
+      return {today:iso(d),start:iso(a)};
+    });
+    assert.equal(await page.locator('[data-hdb-widget="gross-profit"] [data-hdb-value="unavailable"]').innerText(),'—',
+      'gross profit is unavailable until the reviewed backend read exists');
+    await page.locator('[data-hdb-widget="sales-trend"] [data-hdb-route="reports"]').click();
+    assert.equal(await page.locator('#page-reports').isVisible(),true);
+    assert.equal(await page.locator('#rptFrom').inputValue(),dates.start);
+    assert.equal(await page.locator('#rptTo').inputValue(),dates.today);
+    assert.equal(await page.locator('#rptSales').isVisible(),true);
+    assert.match(await page.locator('#hdb-drilldown-context').innerText(),/14 days/);
+    await page.locator('#hdb-drilldown-context button[data-hdb-back]').click();
+    await page.locator('[data-hdb-widget="gross-profit"] [data-hdb-route="reports"]').click();
+    assert.equal(await page.locator('#rptFrom').inputValue(),dates.today);
+    assert.equal(await page.locator('#rptTo').inputValue(),dates.today);
+    assert.equal(await page.locator('#rptProfit').isVisible(),true);
+    assert.match(await page.locator('#hdb-drilldown-context').innerText(),/Gross Profit/);
+  }finally{await page.close();}
+});
+
+test('M01 Step 3: restricted and signed-out actors cannot jump to unauthorized records',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.goto(server.url);
+    await authorizeDashboardStep2_(page,'STEP3-LIMITED','STEP3-SHOP');
+    await page.evaluate(()=>{
+      window.allowedModules=['customers'];
+      window.navItems_=[{key:'customers',children:[{key:'customers'}]},
+        {key:'sales',children:[{key:'sales'}]},{key:'reports'}];
+    });
+    await page.locator('[data-hdb-widget="today-sales"] [data-hdb-route="sales"]').click();
+    assert.equal(await page.locator('#page-dashboard').isVisible(),true,
+      'blocked card must not trigger original router redirect');
+    assert.equal(await page.locator('#hdb-navigation-status').isVisible(),true);
+    assert.match(await page.locator('#hdb-navigation-status').innerText(),/not authorized|permission/i);
+    await page.locator('[data-hdb-widget="receivable"] [data-hdb-route="customers"]').click();
+    assert.equal(await page.locator('#page-customers').isVisible(),true);
+    assert.match(await page.locator('#hdb-drilldown-context').innerText(),/not a due-only filtered list/i);
+    await page.locator('#hdb-drilldown-context button[data-hdb-back]').click();
+    await page.evaluate(()=>{
+      window.authToken='';window.currentUser=null;
+      document.getElementById('loginOverlay').hidden=false;
+    });
+    await page.locator('[data-hdb-widget="payable"] [data-hdb-route="suppliers"]').evaluate(n=>n.click());
+    assert.equal(await page.locator('#page-dashboard').isVisible(),true);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('M01 Step 3: mobile low stock and cash drilldowns disclose unfiltered native data',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+  try{
+    await page.goto(server.url);
+    await authorizeDashboardStep2_(page,'STEP3-MOBILE','STEP3-SHOP');
+    await page.locator('[data-hdb-widget="low-stock"] [data-hdb-route="products"]').click();
+    assert.equal(await page.locator('#page-products').isVisible(),true);
+    assert.match(await page.locator('#hdb-drilldown-context').innerText(),/low-stock-only filter is not available/i);
+    await saveArtifact(page,'hisabiq-dashboard-step3-products-390.png');
+    await page.locator('#hdb-drilldown-context button[data-hdb-back]').click();
+    await page.locator('[data-hdb-widget="cash"] [data-hdb-route="daybook"]').click();
+    assert.equal(await page.locator('#page-daybook').isVisible(),true);
+    assert.match(await page.locator('#hdb-drilldown-context').innerText(),/cash balance is not the same as today's net/i);
+    const width=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+    assert.ok(width<=2,'no horizontal overflow at 390px: '+width);
+  }finally{await page.close();}
+});
