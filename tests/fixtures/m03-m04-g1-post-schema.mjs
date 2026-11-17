@@ -29,8 +29,7 @@ export const M03_G1_POST_DDL=Object.freeze([
   `CREATE UNIQUE INDEX synthetic_m03_g2_one_active_session
     ON synthetic_m03_g1_cash_sessions(business_id)
     WHERE status IN ('Starting','Open','Closing')`,
-  // SQL-level safeguard for even a direct test-only INSERT; no JS preflight.
-  // SQL-level safeguard for even a direct test-only INSERT; no JS preflight.
+  // Even a direct test-only INSERT must obey the current session.
   `CREATE TRIGGER synthetic_m03_g2_cash_session_required
     BEFORE INSERT ON operation_receipts
     WHEN NOT EXISTS (
