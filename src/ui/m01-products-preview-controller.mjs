@@ -105,7 +105,13 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
 
   function managedUnits(){
     const items=globalThis.prodState?.units||[];
-    return items.filter(x=>x?.name).map(x=>({'Unit Name':String(x.name),Status:'Active'}));
+    return items.filter(x=>x?.name).map(x=>{
+      // A stale or explicitly inactive managed Unit must never become
+      // Active just because this is a read-only browser preview.
+      const specified=['status','Status'].filter(key=>Object.hasOwn(x,key));
+      const active=specified.every(key=>x[key]==='Active');
+      return {'Unit Name':String(x.name),Status:active?'Active':'Inactive'};
+    });
   }
   function refreshAnchorChoices(){
     const stock=unit.value||'Pcs',pack=byId('m01CaseUnit').value.trim()||'Box';
