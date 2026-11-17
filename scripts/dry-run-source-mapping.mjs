@@ -94,6 +94,61 @@ const REVIEW_CRITICAL_FIELDS=Object.freeze({
  LOGS:['Timestamp','Context','Message']
 });
 
+
+// One DISTINCT proposed logical data model per original source group.
+// These are review labels, explicitly NOT existing D1 tables or migrations.
+const LOGICAL_D1_PROPOSALS=Object.freeze({
+  "PRODUCTS": "product-master-revision-and-raw-history",
+  "BUNDLE_COMPONENTS": "bundle-component-recipe-version-history",
+  "SALE_BUNDLE_COMPONENTS": "sold-bundle-component-revision-history",
+  "SUPPLIERS": "party-supplier-legacy-link-and-gross-accounts",
+  "SUPPLIER_LEDGER": "supplier-payable-advance-ledger-history",
+  "STOCK_LOTS": "purchase-lot-stock-and-fifo-provenance",
+  "SALE_ITEM_LOTS": "invoice-line-original-lot-consumption",
+  "STOCK_LOT_COST_CORRECTIONS": "original-lot-cost-correction-audit",
+  "PURCHASES": "purchase-header-payment-and-original-ids",
+  "PURCHASE_ITEMS": "purchase-line-source-units-and-cost-history",
+  "SALES": "invoice-header-customer-and-original-payment",
+  "SALE_PAYMENTS": "split-tender-and-application-history",
+  "SALE_POSTING_JOURNAL": "original-operation-idempotency-journal",
+  "SALES_DRAFTS": "sales-draft-original-json-and-version-history",
+  "SALES_DRAFT_AUDIT": "draft-actor-version-historical-audit",
+  "SALE_ITEMS": "invoice-line-source-unit-and-price-history",
+  "CUSTOMERS": "party-customer-legacy-link-and-advance",
+  "CUSTOMER_LEDGER": "customer-receivable-advance-ledger-history",
+  "EXPENSES": "expense-source-payment-and-liability-history",
+  "EXPENSE_CATEGORIES": "expense-category-source-identity-history",
+  "EXPENSE_PAYEES": "party-payee-identity-without-auto-liability",
+  "CASH_BOOK": "cash-debit-credit-original-entry-history",
+  "STOCK_MOVEMENT": "original-product-stock-movement-audit",
+  "SETTINGS": "tenant-settings-exact-key-value-history",
+  "SALES_RETURN": "original-sale-return-operation-and-version",
+  "SALES_RETURN_ITEMS": "original-invoice-line-lot-return-allocations",
+  "PURCHASE_RETURN": "original-purchase-return-document-history",
+  "PURCHASE_RETURN_ITEMS": "original-purchase-lot-return-allocations",
+  "CASH_SESSIONS": "cash-session-open-close-explanation-history",
+  "INVOICE_EDIT_LOG": "original-invoice-edit-before-after-audit",
+  "USERS": "staff-original-identity-and-credential-provenance",
+  "ROLES": "staff-original-role-permission-policy-history",
+  "SESSIONS": "staff-original-session-revocation-history",
+  "LOGS": "idless-error-log-raw-event-history",
+  "DELETE_LOG": "original-deletion-actor-and-reason-audit",
+  "OPENING_BALANCE_EDIT_LOG": "historical-opening-balance-edits-without-cash",
+  "BANK_ACCOUNTS": "bank-account-original-opening-and-current-history",
+  "BANK_BOOK": "bank-debit-credit-account-entry-history",
+  "BANK_TRANSFERS": "bank-source-destination-transfer-history",
+  "FINANCE_TRANSACTIONS": "owner-lender-borrower-obligation-history",
+  "FINANCE_PERSONS": "party-finance-owner-lender-borrower-roles",
+  "PRODUCT_CATEGORIES": "product-category-source-identity-history",
+  "PRODUCT_UNITS": "product-unit-source-identity-history",
+  "VENDORS": "party-vendor-gross-payable-and-receivable",
+  "VENDOR_SOURCING": "supplier-independent-vendor-stock-sourcing",
+  "VENDOR_LEDGER": "vendor-gross-dues-and-receivables-ledger",
+  "VENDOR_RETURNS": "vendor-sourced-item-return-history",
+  "VENDOR_ISSUES": "vendor-consignment-issue-source-history",
+  "VENDOR_RETURNS_RECEIVED": "vendor-return-receipt-source-history"
+});
+
 export const M02_GROSS_ACCOUNT_SCOPES=Object.freeze([
  'CUSTOMER_RECEIVABLE_AND_ADVANCE','SUPPLIER_PAYABLE_AND_ADVANCE',
  'VENDOR_PAYABLE','VENDOR_RECEIVABLE','OWNER_EQUITY_AND_DRAWINGS',
@@ -152,6 +207,8 @@ export function buildM02SourceMappingReview({
 }={}){
  const current=requireTrustedInventory(schema,coverage,pinnedSourceCommit);
  const lanes=buildOwnership();
+ if(Object.keys(LOGICAL_D1_PROPOSALS).length!==49||schema.tables.some(g=>!Object.hasOwn(LOGICAL_D1_PROPOSALS,g.sheetKey)))
+  reject('incomplete logical source mapping');
  const groups=schema.tables.map((source,i)=>{
   const lane=lanes.get(source.sheetKey),state=coverage.rows[i];
   const critical=REVIEW_CRITICAL_FIELDS[source.sheetKey]||[];
@@ -172,6 +229,8 @@ export function buildM02SourceMappingReview({
    downstreamOwner:lane.owner,
    sharedD1ImplementationOwner:'M03',
    reconciliationReview:lane.reconcile,
+   proposedLogicalD1Model:LOGICAL_D1_PROPOSALS[source.sheetKey],
+   proposedModelIsDeployed:false,
    existingTargetTable:state.targetTable,
    currentD1Evidence:state.status,
    proposedPreservationApproach:'full-fidelity source-row archive + M03-reviewed operational projection (proposal only)',
