@@ -411,8 +411,48 @@
       if(ev.key!=='ArrowUp'&&ev.key!=='ArrowDown')return;
       ev.preventDefault();moveInDialog(w.id,ev.key==='ArrowUp'?-1:1);
     });
+    function updateDropTarget(point){
+      dialog.querySelectorAll('.hdb-drop-target').forEach(function(r){r.classList.remove('hdb-drop-target');});
+      var target=touchTarget(point,w.kind);
+      if(target && target.dataset.hdbId!==w.id){
+        target.classList.add('hdb-drop-target');
+        dragTouch.target=target.dataset.hdbId;
+      }else dragTouch.target=null;
+    }
+    function finishTouchDrag(point){
+      if(!dragTouch || dragTouch.id!==w.id)return;
+      if(point)updateDropTarget(point);
+      var target=dragTouch.target;
+      clearTouchDrag();li.classList.remove('hdb-dragging');
+      if(target)doReorder(w.id,target);
+    }
+    // Native touch events remain reliable even when a mobile browser cancels
+    // its Pointer Events stream for a scroll or gesture.
+    grip.addEventListener('touchstart',function(ev){
+      if(dialog.hidden || !ev.changedTouches.length)return;
+      ev.preventDefault();
+      dragTouch={id:w.id,kind:w.kind,pointerId:'touch',target:null};
+      li.classList.add('hdb-dragging');
+    },{passive:false});
+    grip.addEventListener('touchmove',function(ev){
+      if(!dragTouch||dragTouch.pointerId!=='touch'||dragTouch.id!==w.id)return;
+      ev.preventDefault();
+      if(ev.changedTouches.length)updateDropTarget(ev.changedTouches[0]);
+    },{passive:false});
+    grip.addEventListener('touchend',function(ev){
+      if(!dragTouch||dragTouch.pointerId!=='touch'||dragTouch.id!==w.id)return;
+      ev.preventDefault();
+      finishTouchDrag(ev.changedTouches[0]);
+    },{passive:false});
+    grip.addEventListener('touchcancel',function(){
+      if(dragTouch&&dragTouch.pointerId==='touch'&&dragTouch.id===w.id){
+        clearTouchDrag();li.classList.remove('hdb-dragging');
+      }
+    });
+    // Pen devices use Pointer Events, while mouse continues using native
+    // draggable rows. Touch is handled above to avoid pointercancel races.
     grip.addEventListener('pointerdown',function(ev){
-      if(ev.pointerType==='mouse'||ev.button!==0||dialog.hidden)return;
+      if(ev.pointerType==='mouse'||ev.pointerType==='touch'||ev.button!==0||dialog.hidden)return;
       ev.preventDefault();
       dragTouch={id:w.id,kind:w.kind,pointerId:ev.pointerId,target:null};
       try{grip.setPointerCapture(ev.pointerId);}catch(_){}
@@ -420,21 +460,16 @@
     });
     grip.addEventListener('pointermove',function(ev){
       if(!dragTouch||dragTouch.pointerId!==ev.pointerId||dragTouch.id!==w.id)return;
-      ev.preventDefault();
-      dialog.querySelectorAll('.hdb-drop-target').forEach(function(r){r.classList.remove('hdb-drop-target');});
-      var target=touchTarget(ev,w.kind);
-      if(target && target.dataset.hdbId!==w.id){
-        target.classList.add('hdb-drop-target');dragTouch.target=target.dataset.hdbId;
-      }else dragTouch.target=null;
+      ev.preventDefault();updateDropTarget(ev);
     });
     grip.addEventListener('pointerup',function(ev){
       if(!dragTouch||dragTouch.pointerId!==ev.pointerId||dragTouch.id!==w.id)return;
-      var target=dragTouch.target;
-      clearTouchDrag();li.classList.remove('hdb-dragging');
-      if(target)doReorder(w.id,target);
+      finishTouchDrag(ev);
     });
     grip.addEventListener('pointercancel',function(){
-      clearTouchDrag();li.classList.remove('hdb-dragging');
+      if(dragTouch&&dragTouch.pointerId!=='touch'&&dragTouch.id===w.id){
+        clearTouchDrag();li.classList.remove('hdb-dragging');
+      }
     });
     li.addEventListener('dragstart',function(ev){
       if(ev.target.closest && ev.target.closest('[data-hdb-action]:not([data-hdb-action="drag-grip"])')){
