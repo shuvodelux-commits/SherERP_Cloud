@@ -169,7 +169,13 @@ export function createD1LegacyAuthRpc(db,{now=Date.now,normalizeMobile}={}){
       const verified=await validateSessionWithD1(db,{token,nowMs:time});
       if(!verified.authenticated)return failure(EXPIRED);
       const profile=await sourceProfile(db,token,time);
-      return profile?ok(profile):failure(EXPIRED);
+      if(!profile){
+        // An unusable source role must not leave a core-valid bearer alive.
+        // Login already revokes this state; restore must fail closed too.
+        await revokeSessionWithD1(db,{token,nowMs:time});
+        return failure(EXPIRED);
+      }
+      return ok(profile);
     },
     async logout(token){
       const time=now();
