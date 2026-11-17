@@ -65,8 +65,14 @@ try {
       rptState.loaded.rptSales=true;
       if(window.__m09PreviewMarkLoaded)window.__m09PreviewMarkLoaded('rptSales');
     });
-    await page.locator('#rptTo').fill('2026-11-16');
-    await page.locator('#rptTo').dispatchEvent('change');
+    // The preserved mobile UI hides the native date input behind its touch
+    // wrapper. Dispatch real bubbling DOM events without altering source.
+    await page.evaluate(()=>{
+      const el=document.getElementById('rptTo');
+      el.value='2026-11-16';
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+      el.dispatchEvent(new Event('change',{bubbles:true}));
+    });
     const cacheAfterEdit=await page.evaluate(()=>rptState.loaded.rptSales);
     const cacheInvalidated=cacheAfterEdit===false;
     const beforeStalePrint=await page.evaluate(()=>window.__m09PrintCalls);
