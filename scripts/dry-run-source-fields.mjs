@@ -35,7 +35,7 @@ function semanticHazard(sourceGroup,name){
   return 'sensitive-identifier';
  if(name==='Allowed Modules'||name==='Permissions'||/ JSON$/.test(name))
   return 'structured-source-text';
- if(/^(?:Is Deleted|Is Backdated|Is Backdated|Status|Is Backdated)$/i.test(name))
+ if(/^(?:Is Deleted|Is Backdated|Status)$/i.test(name))
   return 'state-flag';
  if(/^(?:Delete Reason|Deleted At|Deleted By|Reversed At|Reversed By)$/i.test(name))
   return 'deletion-provenance';
@@ -45,7 +45,7 @@ function semanticHazard(sourceGroup,name){
   return 'version-revision';
  if(/^(?:Current Stock|Minimum Stock|Original Quantity|Remaining Quantity|Matched Historical Quantity|Quantity|Quantity In|Quantity Out|Quantity Per Set|Return Quantity|Sets Sold|Component Quantity Sold)$/.test(name))
   return 'stock-quantity';
- if(/(?:Price|Amount|Debit|Credit|Balance|Cash|Receivable|Due|Discount|Cost|Value|Subtotal|Grand Total|Line Total|Tendered|Applied|Change Amount|Variance|Total Value|Profit)/i.test(name))
+ if(/(?:Price|Amount|Debit|Credit|Balance|Cash|Receivable|Due|Discount|Cost|COGS|Delta|Value|Subtotal|Grand Total|Line Total|Tendered|Applied|Change Amount|Variance|Total Value|Profit)/i.test(name))
   return 'financial-amount';
  if(/(?:^Date$|^Time$|Timestamp|Date$| At$|Last Login$|Last Activity$|Expires At$)/.test(name))
   return 'chronology-text';
