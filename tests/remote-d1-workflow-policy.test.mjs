@@ -12,8 +12,8 @@ test('remote workflow is manual only, main only, protected environment, confirma
 });
 
 test('remote migration is never an automatic deploy, restore, or production migration',()=>{
-  assert.match(workflow,/d1 migrations apply shererp-operational-staging-20261118 --remote --config wrangler\.staging\.jsonc/);
-  assert.match(workflow,/d1 time-travel info shererp-operational-staging-20261118/);
+  assert.match(workflow,/d1 migrations apply shererp-staging-db --remote --config wrangler\.staging\.jsonc/);
+  assert.match(workflow,/d1 time-travel info shererp-staging-db/);
   assert.doesNotMatch(workflow,/d1 time-travel restore|wrangler\.jsonc(?:\s|$)/);
   assert.doesNotMatch(workflow,/\bwrangler(?:@\S+)? deploy\b/);
   assert.match(workflow,/d1 list --json/);
