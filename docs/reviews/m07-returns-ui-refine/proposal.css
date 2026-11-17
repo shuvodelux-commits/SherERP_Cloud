@@ -29,6 +29,12 @@
   outline-offset: 2px;
 }
 @media (max-width: 540px) {
+  #page-returns #rtInvoiceSearchPanel > div[style*="display:flex"] > .erp-search-clear-field,
+  #page-returns #rtCustomerSearchPanel > div[style*="display:flex"] > .erp-search-clear-field {
+    grid-column: 1 / -1;
+    min-width: 0;
+    width: 100%;
+  }
   #page-returns #rtInvoiceSearchPanel > div[style*="display:flex"],
   #page-returns #rtCustomerSearchPanel > div[style*="display:flex"] {
     grid-template-columns: minmax(0,1fr) minmax(0,1fr);

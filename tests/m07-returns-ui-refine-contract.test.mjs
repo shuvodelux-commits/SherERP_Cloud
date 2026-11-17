@@ -42,3 +42,24 @@ test('M07 UI proposed CSS is preview-only and must not modify auth, posting or s
  assert.doesNotMatch(css,/(?:#app|\.login-overlay|#page-purchase|#page-pos|#page-reports)/);
  assert.ok(css.split(/\r?\n/).filter(x=>x.trim()).length<100,'small scoped CSS only');
 });
+
+
+test('M07 compiled Returns search-clear span occupies the full mobile grid row',()=>{
+ const css=read('docs/reviews/m07-returns-ui-refine/proposal.css');
+ const script=read('qa/m07-returns-ui-refine-preview.mjs');
+ // M01 compiled frontend wraps the original input inside a direct-child span.
+ // Styling the input alone cannot span the parent search grid columns.
+ for(const panel of ['rtInvoiceSearchPanel','rtCustomerSearchPanel']){
+  const parent='#page-returns #'+panel+' > div[style*="display:flex"]';
+  assert.ok(css.includes(parent+' > .erp-search-clear-field'),
+   'mobile CSS must target the compiled direct-child wrapper in '+panel);
+ }
+ assert.match(css,/\.erp-search-clear-field\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s,
+  'compiled wrapper must span both mobile columns');
+ assert.match(script,/row\.children/,
+  'search row actions must be direct child buttons; M01 adds a nested global clear');
+ assert.doesNotMatch(script,/row\.querySelectorAll\(['"]button['"]\)/,
+  'nested hidden clear is not a Find/Clear search action');
+ assert.match(script,/metrics\.actions\.length\s*,\s*2/,
+  'exactly two native Find/Clear actions expected in each search mode');
+});

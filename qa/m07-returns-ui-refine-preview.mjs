@@ -66,7 +66,7 @@ try{
        mode==='customer'?'rtCustomerSearchPanel':'rtInvoiceSearchPanel');
       const row=panel.querySelector('div[style*="display:flex"]');
       const input=panel.querySelector('input');
-      const buttons=[...row.querySelectorAll('button')];
+      const buttons=[...row.children].filter(el=>el.tagName==='BUTTON');
       const box=el=>{const b=el.getBoundingClientRect();return {
        x:Math.round(b.x),right:Math.round(b.right),top:Math.round(b.top),
        width:Math.round(b.width),height:Math.round(b.height)};};
@@ -80,6 +80,7 @@ try{
         !!document.getElementById('rtRefundMethod')};
      },mode);
      assert.equal(metrics.originalIdentifiersIntact,true,'never remove original Return cart, refund inputs or confirmation');
+     assert.equal(metrics.actions.length,2,'exactly two original Find/Clear actions');
      if(refined){
       assert.equal(metrics.horizontalClipping,false,'refinement must not clip at '+viewport.width);
       if(viewport.width<=540){
