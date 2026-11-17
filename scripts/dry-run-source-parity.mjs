@@ -8,10 +8,10 @@
  * Original export and private snapshots stay solely with the caller.
  */
 import {createHash} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {readLocalJsonFile} from './dry-run-safe-input.mjs';
 
 const BASELINE=JSON.parse(readFileSync(new URL('../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
 const SOURCE_COMMIT=JSON.parse(readFileSync(new URL('../docs/baseline/source-manifest.json',import.meta.url),'utf8')).source.commit;
@@ -595,10 +595,9 @@ export function reviewOfflineSourceReferences({schema,pinnedSourceCommit,sourceE
 async function main(){
  // Explicit paths only: never fetch source over network or query production.
  if(process.argv.length===4&&process.argv[2]==='--references'){
-  const sourceText=await readFile(resolve(process.argv[3]),'utf8');
+  const sourceExport=await readLocalJsonFile(process.argv[3]);
   const review=reviewOfflineSourceReferences({
-   schema:BASELINE,pinnedSourceCommit:SOURCE_COMMIT,
-   sourceExport:JSON.parse(sourceText)
+   schema:BASELINE,pinnedSourceCommit:SOURCE_COMMIT,sourceExport
   });
   process.stdout.write(JSON.stringify(review,null,2)+'\n');
   if(review.humanReviewRequired)process.exitCode=1;
@@ -606,12 +605,12 @@ async function main(){
  }
  if(process.argv.length!==4)reject('REQUIRE_TWO_EXPLICIT_LOCAL_EXPORT_PATHS');
  const [sourcePath,candidatePath]=process.argv.slice(2);
- const [sourceText,candidateText]=await Promise.all([
-  readFile(resolve(sourcePath),'utf8'),readFile(resolve(candidatePath),'utf8')
+ const [sourceExport,candidateExport]=await Promise.all([
+  readLocalJsonFile(sourcePath),readLocalJsonFile(candidatePath)
  ]);
  const report=reviewOfflineSourceParity({
   schema:BASELINE,pinnedSourceCommit:SOURCE_COMMIT,
-  sourceExport:JSON.parse(sourceText),candidateExport:JSON.parse(candidateText)
+  sourceExport,candidateExport
  });
  process.stdout.write(JSON.stringify(report,null,2)+'\n');
  if(!report.exactTextParity)process.exitCode=1;
