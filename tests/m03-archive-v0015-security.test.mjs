@@ -12,7 +12,7 @@ const checksum=(group,rows)=>createHash('sha256').update(JSON.stringify([
  group,FROZEN_SOURCE_COLUMNS[group],rows.map(x=>[x.sheetRow,x.cells])
 ])).digest('hex');
 const proof=createHash('sha256').update('synthetic-only M10 evidence').digest('hex');
-const err=/constraint|forbidden|immutable|STAGING|SEALED|tenant|scope|group|COUNT|UNIQUE|CHECK|FOREIGN/i;
+const err=/constraint|forbidden|immutable|deleted|seal|STAGING|SEALED|tenant|scope|group|COUNT|UNIQUE|CHECK|FOREIGN/i;
 function fresh(){
  const db=new DatabaseSync(':memory:');
  db.exec('PRAGMA foreign_keys=ON');
