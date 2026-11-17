@@ -264,3 +264,34 @@ test('Run 4 private Worker HTTP boundary rejects supplied clock, tenant, actor a
   assert.equal(JSON.stringify(denied.body).includes('auth_users'),false);
   assert.deepEqual(await state(),before);
 });
+
+test('private Workerd D1 master creation aborts before issuing behind original PCAT and PUNT floors',async()=>{
+  const route='/__m04_master__/private-rpc';
+  for(const spec of [
+    {table:'product_categories',idColumn:'category_id',nameColumn:'category_name',
+      id:'PCAT-000090',name:'Legacy Inventory',method:'addProductCategory',
+      request:'Safety Gloves',operation:'OP-RPC-STALE-CATEGORY'},
+    {table:'product_units',idColumn:'unit_id',nameColumn:'unit_name',
+      id:'PUNT-000090',name:'Legacy Carton',method:'addProductUnit',
+      request:'Square Metres',operation:'OP-RPC-STALE-UNIT'}
+  ]){
+    // The original master row is already in D1; a stale counter MUST NOT
+    // create a lower original-style source ID or partially burn a receipt.
+    const row=await DB.prepare(
+      'SELECT COALESCE(MAX(legacy_sheet_row),1)+1 AS next FROM '+spec.table
+    ).first();
+    assert.equal((await DB.prepare(
+      'INSERT INTO '+spec.table+'('+spec.idColumn+','+spec.nameColumn+
+      ',status,legacy_sheet_row) VALUES(?,?,?,?)'
+    ).bind(spec.id,spec.name,'Active',row.next).run()).success,true);
+    const before=await state();
+    const result=await call(route,{
+      fnName:spec.method,
+      args:[token.ADMIN,{name:spec.request,operationId:spec.operation}]
+    });
+    assert.equal(result.status,503,'source master counter floor must deny '+spec.method);
+    assert.equal(result.body.success,false);
+    assert.deepEqual(await state(),before,
+      'D1 must not alter source row, counter, intent or receipt on floor mismatch');
+  }
+});
