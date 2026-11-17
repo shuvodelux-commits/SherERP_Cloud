@@ -215,3 +215,57 @@ test('Products table uses M05 source metadata when available and preserves fallb
   await page.locator('#prodTable').screenshot({path:join(EVIDENCE_DIR,'products-desktop-after-stock-table.png'),animations:'disabled'});
  }finally{await page.close();}
 });
+
+
+test('existing source-verified multi-unit Product Edit never enables the legacy Save path',async()=>{
+ const page=await openProductModal(1440);
+ try{
+  await page.evaluate(()=>{
+   globalThis.prodState.products=[{
+     'Product ID':'P-ADV-EDIT','Product Type':'Standard',
+     'Current Stock':45,
+     'M05 Stock Preview':{
+       productId:'P-ADV-EDIT',
+       unitMasters:[{'Unit Name':'Box',Status:'Active'},{'Unit Name':'Pcs',Status:'Active'}],
+       unitRelations:[{leftQty:1,leftUnit:'Box',rightQty:20,rightUnit:'Pcs'}]
+     }
+   }];
+   globalThis.prodState.editingId='P-ADV-EDIT';
+   const modal=document.getElementById('prodModal');
+   modal.hidden=true;modal.hidden=false;
+  });
+  await page.waitForFunction(()=>document.getElementById('prodSaveBtn').disabled===true);
+  assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save unavailable');
+  assert.match(await page.locator('#m01PreviewReadOnly').textContent(),/existing.*(multi-unit|Tiles)|revision-aware.*edit/i);
+  assert.equal(await page.locator('#m01PreviewReadOnly').isVisible(),true);
+  assert.equal(await page.locator('#prodStock').isVisible(),true,'read-only legacy stock remains inspectable');
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','multi');
+  assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','single');
+  assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true,'switching selector cannot bypass edit guard');
+ }finally{await page.close();}
+});
+
+test('stale or malformed M05 metadata also blocks legacy editing while plain Products stay editable',async()=>{
+ const page=await openProductModal(1440);
+ try{
+  await page.evaluate(()=>{
+   globalThis.prodState.products=[
+     {'Product ID':'P-STALE','M05 Stock Preview':null,'Current Stock':20},
+     {'Product ID':'P-PLAIN','Current Stock':20}
+   ];
+   globalThis.prodState.editingId='P-STALE';
+   document.getElementById('m01ProductUnitMode').dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await page.waitForFunction(()=>document.getElementById('prodSaveBtn').disabled);
+  assert.equal(await page.locator('#m01PreviewReadOnly').isVisible(),true);
+  await page.evaluate(()=>{
+   globalThis.prodState.editingId='P-PLAIN';
+   const modal=document.getElementById('prodModal');
+   modal.hidden=true;modal.hidden=false;
+  });
+  await page.waitForFunction(()=>!document.getElementById('prodSaveBtn').disabled);
+  assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save Product');
+  assert.equal(await page.locator('#m01PreviewReadOnly').isVisible(),false);
+ }finally{await page.close();}
+});
