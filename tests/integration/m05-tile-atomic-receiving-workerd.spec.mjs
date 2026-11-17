@@ -1,7 +1,8 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
-import {M05_TILE_RECEIVE_DDL} from '../fixtures/m05-tile-receiving-schema.mjs';
+import {M05_TILE_RECEIVE_DDL,M05_TILE_RECEIVE_INSERT_SQL} from '../fixtures/m05-tile-receiving-schema.mjs';
+import {previewTilePurchaseLineCandidateD1} from '../../src/modules/m05-tile-purchase-line-preview.js';
 import {createSyntheticTileReceivingPoster} from '../fixtures/m05-tile-receiving-contract.mjs';
 import {row,insertSql,values} from '../fixtures/m02-tile-measurement-rows.mjs';
 
@@ -109,6 +110,34 @@ test('changed price or unit revision after read is rejected by the SQL statement
  }}).post(input('OP-TILE-STALE-VERSION-001','M05-TILE-STALE-VERSION')),/NEEDS_REVIEW/);
  assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-STALE-VERSION'")).pcs,10);
  assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-STALE-VERSION'")).n,0);
+});
+test('real SQL rejects a forged Pcs count even when input and price snapshots are otherwise valid',async()=>{
+ await seed('M05-TILE-FORGE');
+ const quote=await previewTilePurchaseLineCandidateD1({DB,productId:'M05-TILE-FORGE',request:pack});
+ await assert.rejects(()=>DB.prepare(M05_TILE_RECEIVE_INSERT_SQL).bind(
+  'OP-TILE-FORGE-0001','PUR-OP-TILE-FORGE-0001','ACT-1','f'.repeat(64),
+  'SUP-1','M05-TILE-FORGE',1,1,0,
+  52,2,3,'Sqft','38.00',134267,JSON.stringify(pack),
+  JSON.stringify(quote.quantity.measurementSnapshot),
+  JSON.stringify(quote.purchasePreview.priceSnapshot),'2026-11-17'
+ ).run(),/unverified|constraint|mismatch/i);
+ assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-FORGE'")).pcs,10);
+ assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-FORGE'")).n,0);
+});
+test('real SQL refuses an old 25-piece quote after product activates a 24-piece revision',async()=>{
+ await seed('M05-TILE-REV-RACE');
+ await DB.batch([
+  DB.prepare("INSERT INTO product_unit_profiles(product_id,revision,stock_unit_name) VALUES('M05-TILE-REV-RACE',2,'Pcs')"),
+  DB.prepare("INSERT INTO product_unit_conversions(product_id,revision,conversion_id,unit_name,factor_text) VALUES('M05-TILE-REV-RACE',2,'CTN','Box','24')"),
+  DB.prepare(insertSql).bind(...values(row('M05-TILE-REV-RACE',{
+   revision:2,pieces_per_box:24,width_text:'12'
+  })))
+ ]);
+ await assert.rejects(()=>poster({beforeBatch:async()=>{
+  await DB.prepare("UPDATE products SET current_unit_revision=2 WHERE product_id='M05-TILE-REV-RACE'").run();
+ }}).post(input('OP-TILE-REV-RACE-001','M05-TILE-REV-RACE')),/NEEDS_REVIEW/);
+ assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-REV-RACE'")).pcs,10);
+ assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-REV-RACE'")).n,0);
 });
 test('unreviewed supplier link, inactive supplier and closed session are SQL-level blockers',async()=>{
  await seed('M05-TILE-PARTY');
