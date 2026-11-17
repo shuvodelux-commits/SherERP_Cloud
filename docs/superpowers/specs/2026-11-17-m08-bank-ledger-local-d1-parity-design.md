@@ -1,0 +1,17 @@
+# M08 Bank Ledger source parity on real local Workerd/D1
+
+**Workstream:** M08 / #66; coordination #456; previous PR #469 merged at `9bb2f7e69b54e69f88d821cf3455850b9cce5b89`. **Main base:** `bcd2d3adbd03f35612c50c1a144a472b1683b412`. **Frozen original:** Mohim_ERP `29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, `BankBook.gs`, `BankLedger.gs`.
+
+## 12-sentence implementation overview
+
+The existing M08 Bank Ledger projection passes source-oracle Node tests but has not been fed by real local D1. This slice validates that projection from disposable tenant-scoped D1 records without introducing a production bank writer. Source identities and physical row provenance remain stable even when SQL insertion order changes. Bank Book monetary input is stored as integer cents and mapped back into the original record shape. Account balances come from stored account balances rather than an accidental ledger sum. Only active bank and mobile banking accounts contribute to the bank total. Historical opening rows must replace, rather than double-count, the account opening figure. Manually reversed entries survive with their same-account reversal mirror, while deletion-voided entries without a mirror disappear from the statement. A reversal in another bank account must not resurrect a voided transaction. Ledger ordering follows canonical Asia/Dhaka dates and Entry ID with correct running balance and backdated metadata. Duplicate imported account and Bank Book IDs, malformed date fields and incomplete/untrusted identity requests fail closed. All tests use synthetic local Workerd/D1 data and the pinned GAS oracle, with no routes, shared schema, production bindings, or financial posting.
+
+## File ownership and design
+
+**Only M08-owned paths:** `tests/fixtures/m08-d1-bank-ledger-schema.mjs`, `tests/fixtures/m08-d1-bank-ledger-preview.mjs`, `tests/integration/m08-d1-positional-cash-workerd.spec.mjs` (reuse existing isolated local D1 harness and M08-owned workflow unchanged), this design and its plan. Account and Book fixture tables are named `m08_bank_*` and are dropped/reseeded per test. Do not alter `src/db`, migrations, shared `src/rpc`, Worker entry, public API, Cloudflare binding, `legacy/source` or any M03 posting files.
+
+The adapter makes **two parameterized tenant-bound SQL SELECTs in a D1.batch** for all local account/book rows. It rejects duplicate source identities (per tenant), maps rows into original source-shaped records and delegates to existing M08 pure `bankStatement`, `bankCurrentBalance` and `totalActiveBankBalance`. This test-only adapter cannot authorize a user, preserve any production transaction lock or write a real bank transfer; future M03 integration owns those protections.
+
+**Acceptance:** RED test imports absent M08 fixtures and produces actual Workerd `ERR_MODULE_NOT_FOUND`; GREEN source oracle/hand-checked cases cover opening/void/reversal, chronological ordering, backdate, monthly default/reversed filters, drift detection, account inactive/mobile totals, empty/missing account, cross-tenant duplicate source IDs, malformed records, prompt-only tenant injection, unchanged D1 before/after, and no Worker RPC (404). All PR checks pass on the final head before merge.
+
+**Dependencies and gate:** M02-P reviewed gross role accounts, M03/M04 atomic account/RBAC and M06 cash-session interfaces remain blocked. This fixture is a self-contained source-faithful read proof, **not** an M08 production launch, authorization, transfer writer, or account migration. No automatic cross-role settlement is enabled.

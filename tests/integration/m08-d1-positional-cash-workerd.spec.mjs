@@ -11,6 +11,11 @@ import {previewD1PositionalCashReconciliation}
 import {previewD1SQLPositionalClosing}
   from '../fixtures/m08-sql-positional-close-read.mjs';
 
+import {M08_BANK_DDL}
+  from '../fixtures/m08-d1-bank-ledger-schema.mjs';
+import {previewD1BankLedger}
+  from '../fixtures/m08-d1-bank-ledger-preview.mjs';
+
 const oracle=loadPinnedGASFunctions({
   'Utils.gs':['roundMoney_'],
   'CashReconciliation.gs':[
@@ -369,4 +374,295 @@ test('M08 SQL invalid tenant/session request fails before SQL and keeps both tab
     tenantId:'SHOP-A',sessionId:'S1'
   }),/D1/);
   assert.deepEqual(await snapshot(),unchanged);
+});
+
+
+/** M08 #66 — Bank Book/Bank Ledger real local D1 source parity.
+ * All M08 bank schema tables are disposable and never deployed to D1.
+ */
+const bankAccount=(id,opening,current,status='Active',other={})=>({
+  'Bank Account ID':id,'Account Name':id+' display',
+  'Bank Name':'Demo Bank','Account Number':'9999',
+  'Account Type':'Bank','Opening Balance':opening,
+  'Current Balance':current,'Status':status,...other
+});
+const bankEntry=(id,accountId,date,credit='',debit='',other={})=>({
+  'Entry ID':id,'Bank Account ID':accountId,'Date':date,
+  'Type':'Deposit','Reference':'','Description':'',
+  'Credit':credit,'Debit':debit,'Status':'Active',
+  'Reversal Of':'','Notes':'','Created By':'','Created At':'',
+  'Is Backdated':false,'Backdated Days':0,'Backdated Reason':'',
+  ...other
+});
+const bankRequest=(accountId,overrides={})=>({
+  tenantId:'SHOP-A',accountId,from:'2026-11-01',
+  to:'2026-11-17',today:'2026-11-17',...overrides
+});
+const bankCents=value=>Math.round(Number(value||0)*100);
+const bankTables=['m08_bank_book','m08_bank_accounts'];
+async function bankReset(){
+  for(const table of bankTables)await DB.prepare('DROP TABLE IF EXISTS '+table).run();
+  for(const ddl of M08_BANK_DDL)await DB.prepare(ddl).run();
+}
+async function bankSeed(tenant,accounts,entries){
+  for(const [index,account] of accounts.slice().reverse().entries()){
+    const row=accounts.length-index;
+    await DB.prepare(
+      'INSERT INTO m08_bank_accounts VALUES (?,?,?,?,?,?,?,?,?,?)'
+    ).bind(tenant,row,account['Bank Account ID'],account['Account Name'],
+      account['Bank Name'],account['Account Number'],
+      bankCents(account['Opening Balance']),bankCents(account['Current Balance']),
+      account.Status,account['Account Type']).run();
+  }
+  for(const [index,entry] of entries.slice().reverse().entries()){
+    const row=entries.length-index;
+    await DB.prepare(
+      'INSERT INTO m08_bank_book VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).bind(tenant,row,entry['Entry ID'],entry['Bank Account ID'],
+      entry.Date,entry.Type,entry.Reference,entry.Description,
+      bankCents(entry.Debit),bankCents(entry.Credit),entry.Status,
+      entry['Reversal Of'],entry.Notes,entry['Created By'],
+      entry['Created At'],entry['Is Backdated']?1:0,
+      Number(entry['Backdated Days']||0),entry['Backdated Reason']).run();
+  }
+}
+async function bankSnapshot(){
+  return {
+    accounts:(await DB.prepare(
+      'SELECT * FROM m08_bank_accounts ORDER BY tenant_id,legacy_row'
+    ).all()).results.map(x=>({...x})),
+    book:(await DB.prepare(
+      'SELECT * FROM m08_bank_book ORDER BY tenant_id,legacy_row'
+    ).all()).results.map(x=>({...x}))
+  };
+}
+function sourceBankLedger(accounts,entries,request){
+  const fn=loadPinnedGASFunctions({
+    'BankLedger.gs':['getBankLedger']
+  },{
+    requirePermission_:(token,module,action)=>{
+      assert.deepEqual([token,module,action],['fixture','bank','view']);
+    },
+    sanitizeInput_:v=>v==null?'':String(v).trim(),
+    formatDate_:()=>request.today,
+    safeDateOnly_:v=>v,
+    getAllRows_:group=>{
+      if(group==='BANK_ACCOUNTS')return accounts;
+      if(group==='BANK_BOOK')return entries;
+      throw Error('Unexpected source group '+group);
+    },
+    ok_:data=>({success:true,data}),
+    fail_:message=>({success:false,message}),
+    logError_:(label,error)=>{throw Error(label+': '+error.message);}
+  });
+  const outcome=fn.getBankLedger('fixture',{
+    bankAccountId:request.accountId,from:request.from,to:request.to
+  });
+  assert.equal(outcome.success,true,outcome.message);
+  return plain(outcome.data);
+}
+async function assertBankSource(tenant,accounts,entries,request){
+  const beforeState=await bankSnapshot();
+  const result=await previewD1BankLedger(DB,{...request,tenantId:tenant});
+  assert.deepEqual(result.statement,sourceBankLedger(accounts,entries,request));
+  const sourceBankBalance=loadPinnedGASFunctions({
+    'Utils.gs':['roundMoney_'],
+    'BankBook.gs':['getBankBalance_','getTotalBankBalance_']
+  },{getAllRows_:group=>{
+    assert.equal(group,'BANK_ACCOUNTS');return accounts;
+  }});
+  assert.equal(result.bankBalance,
+    sourceBankBalance.getBankBalance_(request.accountId));
+  assert.equal(result.activeBankTotal,
+    sourceBankBalance.getTotalBankBalance_());
+  assert.deepEqual(await bankSnapshot(),beforeState,
+    'Bank Ledger projection must not write any D1 record');
+  return result;
+}
+
+test('M08 Bank D1 preserves opening row, same-account manual reversal, void and true source chronology',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',100,140),bankAccount('B',50,50)];
+  const entries=[
+    bankEntry('BB-000001','A','2026-11-01',100,'',{'Type':'Opening Balance'}),
+    bankEntry('BB-000002','A','2026-11-13',80,'',{'Type':'Transfer In'}),
+    bankEntry('BB-000003','A','2026-11-13','',20,{'Type':'Purchase Payment'}),
+    bankEntry('BB-000004','A','2026-11-13','',10,{'Status':'Reversed'}),
+    bankEntry('BB-000005','A','2026-11-14',30,'',{'Status':'Reversed'}),
+    bankEntry('BB-000006','A','2026-11-14','',30,{'Reversal Of':'BB-000005'}),
+    bankEntry('BB-000007','A','2026-11-15','',20),
+    bankEntry('BB-000008','B','2026-11-14',10)
+  ];
+  await bankSeed('SHOP-A',accounts,entries);
+  const result=await assertBankSource('SHOP-A',accounts,entries,
+    bankRequest('A',{from:'2026-11-13',to:'2026-11-15'}));
+  const ledger=result.statement;
+  assert.equal(ledger.openingBalance,100);
+  assert.equal(ledger.closingBalance,140);
+  assert.equal(ledger.totalCredit,110);
+  assert.equal(ledger.totalDebit,70);
+  assert.equal(ledger.entryCount,5);
+  assert.deepEqual(ledger.entries.map(r=>r.entryId),
+    ['BB-000007','BB-000006','BB-000005','BB-000003','BB-000002']);
+  assert.equal(ledger.integrity.balanced,true);
+  assert.equal(result.bankBalance,140);
+});
+
+test('M08 Bank D1 falls back to historical account opening exactly once if no opening entry',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',200,255)];
+  const entries=[
+    bankEntry('BB-000002','A','2026-11-10',75),
+    bankEntry('BB-000003','A','2026-11-15','',20)
+  ];
+  await bankSeed('SHOP-A',accounts,entries);
+  const r=await assertBankSource('SHOP-A',accounts,entries,
+    bankRequest('A',{from:'2026-11-15',to:'2026-11-15'}));
+  assert.equal(r.statement.openingBalance,275);
+  assert.equal(r.statement.closingBalance,255);
+  assert.equal(r.statement.entries[0].balance,255);
+  assert.equal(r.statement.integrity.hasOpeningRow,false);
+});
+
+test('M08 Bank D1 never resurrects voided entries using reversal in a different bank account',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',100,105),bankAccount('B',200,150)];
+  const entries=[
+    bankEntry('BB-000001','A','2026-11-14',50,'',{'Status':'Reversed'}),
+    bankEntry('BB-000002','B','2026-11-14','',50,{'Reversal Of':'BB-000001'}),
+    bankEntry('BB-000003','A','2026-11-15',5)
+  ];
+  await bankSeed('SHOP-A',accounts,entries);
+  const r=await assertBankSource('SHOP-A',accounts,entries,bankRequest('A'));
+  assert.deepEqual(r.statement.entries.map(x=>x.entryId),['BB-000003']);
+  assert.equal(r.statement.closingBalance,105);
+});
+
+test('M08 Bank D1 date/Entry ID ordering, reversed date ranges and missing date defaults match GAS',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',0,0)];
+  const entries=[
+    bankEntry('BB-000010','A','2026-11-12',50,'',{'Created By':'clerk'}),
+    bankEntry('BB-000002','A','2026-11-12','',50,{
+      'Is Backdated':true,'Backdated Days':5,'Backdated Reason':'Adjustment'
+    })
+  ];
+  await bankSeed('SHOP-A',accounts,entries);
+  const r=await assertBankSource('SHOP-A',accounts,entries,
+    bankRequest('A',{from:'2026-11-15',to:'2026-11-01'}));
+  assert.deepEqual(r.statement.range,{from:'2026-11-01',to:'2026-11-15'});
+  assert.deepEqual(r.statement.entries.map(x=>[x.entryId,x.balance]),
+    [['BB-000010',0],['BB-000002',-50]]);
+  assert.equal(r.statement.entries[0].isBackdated,false);
+  assert.equal(r.statement.entries[1].backdatedDays,5);
+  const fallback=await assertBankSource('SHOP-A',accounts,entries,
+    bankRequest('A',{from:'bad',to:''}));
+  assert.deepEqual(fallback.statement.range,
+    {from:'2026-11-01',to:'2026-11-17'});
+});
+
+test('M08 Bank D1 reports stored-balance drift without changing source rows',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',100,105)];
+  const entries=[bankEntry('BB-000001','A','2026-11-15',10)];
+  await bankSeed('SHOP-A',accounts,entries);
+  const r=await assertBankSource('SHOP-A',accounts,entries,bankRequest('A'));
+  assert.deepEqual(r.statement.integrity,{
+    computedBalance:110,storedBalance:105,drift:5,
+    balanced:false,hasOpeningRow:false
+  });
+});
+
+test('M08 Bank D1 inactive account and mobile bank total are tenant-local and source-faithful',async()=>{
+  await bankReset();
+  const a=[
+    bankAccount('A',0,140),bankAccount('B',0,-20),
+    bankAccount('C',0,900,'Inactive'),
+    bankAccount('MOBILE',0,2.50,'Active',{'Account Type':'Mobile Banking'})
+  ];
+  const b=[bankAccount('A',0,700),bankAccount('B',0,800,'Inactive')];
+  await bankSeed('SHOP-A',a,[]);
+  await bankSeed('SHOP-B',b,[]);
+  const ra=await assertBankSource('SHOP-A',a,[],bankRequest('C'));
+  const rb=await assertBankSource('SHOP-B',b,[],
+    bankRequest('A',{tenantId:'SHOP-B'}));
+  assert.equal(ra.activeBankTotal,122.50);
+  assert.equal(ra.bankBalance,900);
+  assert.equal(rb.activeBankTotal,700);
+  assert.equal(rb.statement.integrity.storedBalance,700);
+});
+
+test('M08 Bank D1 two tenants with same Account/Book IDs never share ledger history',async()=>{
+  await bankReset();
+  const accountsA=[bankAccount('A',100,110)];
+  const entriesA=[bankEntry('BB-SAME','A','2026-11-15',10)];
+  const accountsB=[bankAccount('A',200,170)];
+  const entriesB=[bankEntry('BB-SAME','A','2026-11-15','',30)];
+  await bankSeed('SHOP-A',accountsA,entriesA);
+  await bankSeed('SHOP-B',accountsB,entriesB);
+  const a=await assertBankSource('SHOP-A',accountsA,entriesA,bankRequest('A'));
+  const b=await assertBankSource('SHOP-B',accountsB,entriesB,
+    bankRequest('A',{tenantId:'SHOP-B'}));
+  assert.equal(a.statement.closingBalance,110);
+  assert.equal(b.statement.closingBalance,170);
+  assert.equal(a.statement.entries[0].credit,10);
+  assert.equal(b.statement.entries[0].debit,30);
+});
+
+test('M08 Bank D1 duplicate imported Account ID or Bank Book Entry ID fails closed',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',100,110)];
+  const entries=[bankEntry('BB-X','A','2026-11-15',10)];
+  await bankSeed('SHOP-A',accounts,entries);
+  await DB.prepare(
+    "INSERT INTO m08_bank_book VALUES ('SHOP-A',999,'BB-X','A','2026-11-15','Deposit','','',0,300,'Active','','','','',0,0,'')"
+  ).run();
+  await assert.rejects(()=>previewD1BankLedger(DB,bankRequest('A')),
+    /Duplicate Bank Book Entry ID/);
+  await DB.prepare("DELETE FROM m08_bank_book WHERE legacy_row=999").run();
+  await DB.prepare(
+    "INSERT INTO m08_bank_accounts VALUES ('SHOP-A',999,'A','Duplicate','Demo','9999',0,0,'Active','Bank')"
+  ).run();
+  await assert.rejects(()=>previewD1BankLedger(DB,bankRequest('A')),
+    /Duplicate Bank Account ID/);
+});
+
+test('M08 Bank D1 invalid source date and unknown account fail closed without mutation',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',0,5)];
+  const entries=[bankEntry('BB-001','A','2026-11-15',5)];
+  await bankSeed('SHOP-A',accounts,entries);
+  const stable=await bankSnapshot();
+  await assert.rejects(()=>previewD1BankLedger(DB,bankRequest('MISSING')),
+    /Bank account not found/);
+  assert.deepEqual(await bankSnapshot(),stable);
+  await DB.prepare(
+    "UPDATE m08_bank_book SET date_text='2026-11-15T01:00:00Z' WHERE entry_id='BB-001'"
+  ).run();
+  const bad=await bankSnapshot();
+  await assert.rejects(()=>previewD1BankLedger(DB,bankRequest('A')),
+    /canonical YYYY-MM-DD/);
+  assert.deepEqual(await bankSnapshot(),bad);
+});
+
+test('M08 Bank D1 empty ledger, SQL injection shape, missing binding and no public Worker route',async()=>{
+  await bankReset();
+  const accounts=[bankAccount('A',0,0)];
+  await bankSeed('SHOP-A',accounts,[]);
+  const valid=bankRequest('A');
+  const r=await assertBankSource('SHOP-A',accounts,[],valid);
+  assert.deepEqual(r.statement.entries,[]);
+  assert.equal(r.statement.entryCount,0);
+  const beforeState=await bankSnapshot();
+  for(const invalid of [
+    null,{}, {...valid,tenantId:'SHOP-A; DROP TABLE'},
+    {...valid,accountId:''}, {...valid,from:Promise.resolve('2026-11-01')},
+    {...valid,today:'2026-11-17T00:00:00Z'},
+    {...valid,sql:'DROP TABLE m08_bank_book'}
+  ])await assert.rejects(()=>previewD1BankLedger(DB,invalid),TypeError);
+  await assert.rejects(()=>previewD1BankLedger(null,valid),/D1/);
+  assert.equal((await worker.fetch('https://m08-bank.test/api/rpc',{
+    method:'POST',body:JSON.stringify(valid)
+  })).status,404);
+  assert.deepEqual(await bankSnapshot(),beforeState);
 });
