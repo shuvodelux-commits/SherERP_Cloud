@@ -152,7 +152,7 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
  // M03 #544 proposed SQL is NOT a deployed migration. Prove the unchanged
  // proposal's triggers under actual disposable local Workerd/D1, after all
  // earlier five-case prerequisites have completed. Do not alter the number
- // of test() calls; the M11 six-shard coverage oracle expects exactly five.
+ // of test cases; the M11 six-shard coverage oracle expects exactly five.
  await DB.prepare('DROP TABLE m03_private_source_rows').run();
  await DB.prepare('DROP TABLE m03_private_source_seals').run();
  const reviewedSql=readFileSync(new URL('../../docs/schema/m03-private-source-archive.proposed.sql',import.meta.url),'utf8');
