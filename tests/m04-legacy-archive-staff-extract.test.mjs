@@ -105,9 +105,9 @@ test('source Role date-cell numeric metadata is mandatory; no fabricated source 
 test('whole-archive row integrity failure rejects before private staff output',()=>{
  const db=fixture();
  try{
-  db.exec('UPDATE legacy_sales SET __row_sha256="bad" WHERE __excel_row=2');
-  // No sales source rows in synthetic fixture: mutate actual SESSIONS row instead.
-  db.exec('UPDATE legacy_sessions SET __row_sha256="bad" WHERE __excel_row=2');
+  // A tampered SESSIONS row also invalidates the original archive, even
+  // though the extractor must never return its bearer token.
+  db.exec("UPDATE legacy_sessions SET __row_sha256='bad' WHERE __excel_row=2");
   assert.throws(()=>extractPrivateLegacyStaffFromArchive(db),/M04 private staff archive extraction rejected/);
  }finally{db.close();}
 });
