@@ -39,7 +39,7 @@ test('thenables, accessors and non-plain D1 result classes fail without invoking
     {source:new Date('2026-11-17T00:00:00Z')},
     {source:new Map([['key','private']])},
     Object.defineProperty({},'hidden',{value:'SECRET',enumerable:false}),
-    Object.assign({},JSON.parse('{"__proto__":"injected"}'))
+    JSON.parse('{"__proto__":"injected"}')
   ])assert.throws(()=>assertFullyResolvedRpcValue(invalid),/unresolved|invalid|unsupported|RPC.*response/i);
   assert.equal(invoked,0,'transport cannot run an accessor or a thenable');
 });
