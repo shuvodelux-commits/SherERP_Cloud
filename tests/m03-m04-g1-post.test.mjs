@@ -317,3 +317,70 @@ test('G2 even a direct synthetic receipt INSERT cannot bypass DB Cash Session gu
     assert.deepEqual(x.state(),before);
   }finally{x.close();}
 });
+
+test('G3 SQL-atomic commit persists exactly one immutable stock movement and balanced ledger for a stable operation',async()=>{
+  const x=fixture();try{
+    assert.equal((await x.post.post_(intent(ADMIN,'OP-G3-VALID'))).status,'COMMITTED');
+    assert.deepEqual(x.db.prepare(`SELECT business_id,operation_id,sku,units_out
+      FROM synthetic_m03_g1_stock_movements ORDER BY operation_id`).all(),[
+      {business_id:'BUSINESS-A',operation_id:'OP-G3-VALID',sku:'PIPE-1',units_out:1}
+    ]);
+    const prior=x.state();
+    // Historical stock can legitimately change after this sale.
+    x.db.exec("UPDATE synthetic_m03_g1_stock SET available=0 WHERE business_id='BUSINESS-A'");
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G3-VALID')),{status:'REPLAY',
+      operationId:'OP-G3-VALID',resultRef:'SYNTH-OP-G3-VALID'});
+    assert.deepEqual(x.state().receipts,prior.receipts);
+    assert.deepEqual(x.state().journals,prior.journals);
+  }finally{x.close();}
+});
+
+test('G3 missing original stock movement refuses replay even with intact immutable receipt and balanced journal',async()=>{
+  const x=fixture();try{
+    await x.post.post_(intent(ADMIN,'OP-G3-LOST-MOVEMENT'));
+    x.db.exec('DROP TRIGGER synthetic_m03_g3_movement_immutable_delete');
+    x.db.exec("DELETE FROM synthetic_m03_g1_stock_movements WHERE operation_id='OP-G3-LOST-MOVEMENT'");
+    const before=x.state();
+    await assert.rejects(()=>x.post.post_(intent(ADMIN,'OP-G3-LOST-MOVEMENT')),
+      /NEEDS_REVIEW|integrity|movement/i);
+    assert.deepEqual(x.state(),before);
+  }finally{x.close();}
+});
+
+test('G3 missing journal leg fails closed rather than returning REPLAY or posting again',async()=>{
+  const x=fixture();try{
+    await x.post.post_(intent(ADMIN,'OP-G3-LOST-JOURNAL'));
+    x.db.exec('DROP TRIGGER synthetic_m03_g1_journal_immutable_delete');
+    x.db.exec("DELETE FROM synthetic_m03_g1_journal WHERE operation_id='OP-G3-LOST-JOURNAL' AND account_kind='sales_revenue'");
+    const before=x.state();
+    await assert.rejects(()=>x.post.post_(intent(ADMIN,'OP-G3-LOST-JOURNAL')),
+      /NEEDS_REVIEW|integrity|journal/i);
+    assert.deepEqual(x.state(),before);
+  }finally{x.close();}
+});
+
+test('G3 altered journal cents fail replay integrity despite matching parent hash',async()=>{
+  const x=fixture();try{
+    await x.post.post_(intent(ADMIN,'OP-G3-CENTS'));
+    x.db.exec('DROP TRIGGER synthetic_m03_g1_journal_immutable_update');
+    x.db.exec("UPDATE synthetic_m03_g1_journal SET signed_cents=signed_cents+1 WHERE operation_id='OP-G3-CENTS' AND account_kind='cash'");
+    const before=x.state();
+    await assert.rejects(()=>x.post.post_(intent(ADMIN,'OP-G3-CENTS')),
+      /NEEDS_REVIEW|integrity|journal/i);
+    assert.deepEqual(x.state(),before);
+  }finally{x.close();}
+});
+
+test('G3 stock movement is append-only, and a late movement failure rolls back receipt, stock and cash',async()=>{
+  const x=fixture();try{
+    await x.post.post_(intent(ADMIN,'OP-G3-IMMUTABLE'));
+    assert.throws(()=>x.db.exec("DELETE FROM synthetic_m03_g1_stock_movements"),/immutable/i);
+    assert.throws(()=>x.db.exec("UPDATE synthetic_m03_g1_stock_movements SET units_out=3"),/immutable/i);
+    x.db.exec(`CREATE TRIGGER synthetic_m03_g3_fail_late BEFORE INSERT ON synthetic_m03_g1_stock_movements
+      BEGIN SELECT RAISE(ABORT,'synthetic G3 late movement failure'); END`);
+    const before=x.state();
+    await assert.rejects(()=>x.post.post_(intent(ADMIN,'OP-G3-LATE')),
+      /NEEDS_REVIEW|late movement/i);
+    assert.deepEqual(x.state(),before);
+  }finally{x.close();}
+});
