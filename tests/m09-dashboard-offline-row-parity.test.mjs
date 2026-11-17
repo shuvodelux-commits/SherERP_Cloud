@@ -179,3 +179,30 @@ test('no DB, RPC, financial projection or raw source values can leave this M09 p
     assert.notEqual(value,undefined);
   assert.doesNotMatch(JSON.stringify(out),/accountSourceId|signedMinor|fingerprint|id":/);
 });
+
+test('equal source/import snapshots still reject orphan Customer and Supplier ledger source links',()=>{
+  const data=complete();
+  for(const side of ['sourceGroups','importedGroups']){
+    data[side].CUSTOMER_LEDGER[0].accountSourceId='C-ORPHAN';
+    data[side].SUPPLIER_LEDGER[0].accountSourceId='S-ORPHAN';
+  }
+  const out=audit(data);
+  assert.equal(out.ready,false);
+  assert.equal(out.evidenceComplete,false,
+    'matching orphan source IDs cannot establish even offline referential parity');
+  for(const side of ['SOURCE','IMPORTED']){
+    assert.ok(codes(out,'CUSTOMER_LEDGER').includes(side+'_ORPHAN_ACCOUNT_LINK'));
+    assert.ok(codes(out,'SUPPLIER_LEDGER').includes(side+'_ORPHAN_ACCOUNT_LINK'));
+  }
+  assert.doesNotMatch(JSON.stringify(out),/C-ORPHAN|S-ORPHAN/);
+
+  // A soft-deleted historical master is a valid original identity for
+  // preserved ledger audit history, not a reason to erase the transaction.
+  const history=complete();
+  for(const side of ['sourceGroups','importedGroups']){
+    history[side].CUSTOMERS[0].deleted=true;
+    history[side].SUPPLIERS[0].deleted=true;
+  }
+  assert.deepEqual(codes(audit(history),'CUSTOMER_LEDGER'),[]);
+  assert.deepEqual(codes(audit(history),'SUPPLIER_LEDGER'),[]);
+});
