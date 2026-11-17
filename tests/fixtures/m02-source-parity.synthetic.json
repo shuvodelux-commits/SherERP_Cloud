@@ -1,0 +1,250 @@
+{
+  "note": "Synthetic-only non-personal samples; all missing header cells are filled with empty text by tests. Never use as a production export.",
+  "rows": [
+    {
+      "group": "PRODUCTS",
+      "sheetRow": 2,
+      "values": {
+        "Product ID": "000P-001",
+        "Product Name": "তারের রোল",
+        "Unit": "Gira",
+        "Barcode": "000088",
+        "Purchase Price": "04.375",
+        "Selling Price": "025.000",
+        "Current Stock": "37.000",
+        "Is Deleted": "FALSE"
+      }
+    },
+    {
+      "group": "PRODUCT_CATEGORIES",
+      "sheetRow": 2,
+      "values": {
+        "Category ID": "000C-001",
+        "Category Name": "Electrical"
+      }
+    },
+    {
+      "group": "PRODUCT_UNITS",
+      "sheetRow": 2,
+      "values": {
+        "Unit ID": "000U-001",
+        "Unit Name": "Gira"
+      }
+    },
+    {
+      "group": "CUSTOMERS",
+      "sheetRow": 2,
+      "values": {
+        "Customer ID": "000-P1",
+        "Customer Name": "Synthetic Rahim",
+        "Phone": "01700000000",
+        "Opening Balance": "-001.25",
+        "Current Due": "0002.50"
+      }
+    },
+    {
+      "group": "SUPPLIERS",
+      "sheetRow": 4,
+      "values": {
+        "Supplier ID": "000-S1",
+        "Supplier Name": "Synthetic Rahim",
+        "Phone": "01700000000",
+        "Opening Balance": "050.000",
+        "Current Due": "003.00"
+      }
+    },
+    {
+      "group": "VENDORS",
+      "sheetRow": 6,
+      "values": {
+        "Vendor ID": "000-V1",
+        "Vendor Name": "Synthetic Rahim",
+        "Phone": "01700000000",
+        "Current Due": "007.00",
+        "Current Receivable": "005.00"
+      }
+    },
+    {
+      "group": "FINANCE_PERSONS",
+      "sheetRow": 3,
+      "values": {
+        "Person ID": "000-F1",
+        "Person Name": "Synthetic Rahim",
+        "Roles": "Owner,Lender",
+        "Person Type": "Owner"
+      }
+    },
+    {
+      "group": "EXPENSE_PAYEES",
+      "sheetRow": 7,
+      "values": {
+        "Payee ID": "000-E1",
+        "Payee Name": "Synthetic Rahim",
+        "Phone": "01700000000"
+      }
+    },
+    {
+      "group": "PURCHASES",
+      "sheetRow": 2,
+      "values": {
+        "Purchase ID": "PUR-001",
+        "Date": "2026-01-01",
+        "Supplier ID": "000-S1",
+        "Grand Total": "0120.500"
+      }
+    },
+    {
+      "group": "PURCHASE_ITEMS",
+      "sheetRow": 2,
+      "values": {
+        "Purchase ID": "PUR-001",
+        "Product ID": "000P-001",
+        "Quantity": "1.00",
+        "Line Total": "0120.500"
+      }
+    },
+    {
+      "group": "PURCHASE_ITEMS",
+      "sheetRow": 3,
+      "values": {
+        "Purchase ID": "PUR-001",
+        "Product ID": "000P-001",
+        "Quantity": "2.00",
+        "Line Total": "0241.000"
+      }
+    },
+    {
+      "group": "STOCK_LOTS",
+      "sheetRow": 2,
+      "values": {
+        "Lot ID": "LOT-001",
+        "Product ID": "000P-001",
+        "Original Quantity": "016.000",
+        "Remaining Quantity": "014.000"
+      }
+    },
+    {
+      "group": "SALES",
+      "sheetRow": 2,
+      "values": {
+        "Invoice ID": "INV-001",
+        "Customer ID": "000-P1",
+        "Grand Total": "023.00",
+        "Date": "2026-01-04",
+        "Time": "09:00:00"
+      }
+    },
+    {
+      "group": "SALE_ITEMS",
+      "sheetRow": 2,
+      "values": {
+        "Invoice ID": "INV-001",
+        "Product ID": "000P-001",
+        "Quantity": "1",
+        "Line Total": "23.00"
+      }
+    },
+    {
+      "group": "SALE_ITEMS",
+      "sheetRow": 3,
+      "values": {
+        "Invoice ID": "INV-001",
+        "Product ID": "000P-001",
+        "Quantity": "1",
+        "Line Total": "23.00"
+      }
+    },
+    {
+      "group": "SALE_ITEM_LOTS",
+      "sheetRow": 2,
+      "values": {
+        "Invoice ID": "INV-001",
+        "Product ID": "000P-001",
+        "Lot ID": "LOT-001",
+        "Quantity": "1"
+      }
+    },
+    {
+      "group": "SETTINGS",
+      "sheetRow": 2,
+      "values": {
+        "Key": "secret-not-printed",
+        "Value": "synthetic-password-secret-MUST-NOT-PRINT"
+      }
+    },
+    {
+      "group": "USERS",
+      "sheetRow": 2,
+      "values": {
+        "User ID": "STAFF-001",
+        "Mobile Number": "01900000000",
+        "Password Hash": "synthetic-hash-MUST-NOT-PRINT"
+      }
+    },
+    {
+      "group": "LOGS",
+      "sheetRow": 2,
+      "values": {
+        "Timestamp": "2026-01-01T00:00:00.000+06:00",
+        "Context": "SYNTHETIC_ONLY",
+        "Message": "synthetic-sensitive-text-MUST-NOT-PRINT"
+      }
+    },
+    {
+      "group": "CASH_BOOK",
+      "sheetRow": 3,
+      "values": {
+        "Entry ID": "CB-001",
+        "Date": "2026-01-04",
+        "Amount": "023.00"
+      }
+    },
+    {
+      "group": "BANK_BOOK",
+      "sheetRow": 4,
+      "values": {
+        "Entry ID": "BB-001",
+        "Date": "2026-01-04",
+        "Bank Account ID": "BANK-001"
+      }
+    },
+    {
+      "group": "FINANCE_TRANSACTIONS",
+      "sheetRow": 3,
+      "values": {
+        "Finance ID": "FIN-001",
+        "Date": "2026-01-04",
+        "Person": "Synthetic Rahim",
+        "Amount": "100.00"
+      }
+    },
+    {
+      "group": "SALES_DRAFTS",
+      "sheetRow": 4,
+      "values": {
+        "Draft ID": "DR-001",
+        "Items JSON": "[{\"p\":\"000P-001\"}]"
+      }
+    },
+    {
+      "group": "VENDOR_LEDGER",
+      "sheetRow": 3,
+      "values": {
+        "Ledger ID": "VL-001",
+        "Vendor ID": "000-V1",
+        "Debit": "7.00",
+        "Credit": "5.00"
+      }
+    },
+    {
+      "group": "CUSTOMER_LEDGER",
+      "sheetRow": 8,
+      "values": {
+        "Ledger ID": "CL-001",
+        "Customer ID": "000-P1",
+        "Debit": "2.00",
+        "Credit": "1.00"
+      }
+    }
+  ]
+}
