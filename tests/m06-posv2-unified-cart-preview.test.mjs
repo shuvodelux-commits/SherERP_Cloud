@@ -133,6 +133,32 @@ test('one POS V2 cart previews Standard Bag/Box/Pcs plus Tile Carton/Pcs/Sqft as
  }finally{db.close();}
 });
 
+test('POS V2 Tile requested Sqft rounds UP to physical Pcs and Box while exact price follows fulfilled area',async()=>{
+ const db=sqlite();try{
+  seedTile(db);
+  const input=mixed();
+  input.lines[1].request={mode:'area',requestedSqft:'35.50',fulfillment:'loose'};
+  input.discount='0';
+  input.payments=[];
+  const loose=await preview(input,snapshot(db));
+  assert.equal(loose.lines[1].quantityLabel,'2 Carton + 4 Pcs · 36.00 Sqft');
+  assert.deepEqual([loose.lines[1].boxes,loose.lines[1].extraPieces],['2','4']);
+  assert.deepEqual(loose.lines[1].requestedSqft,{numerator:'71',denominator:'2'});
+  assert.deepEqual(loose.lines[1].actualSqft,{numerator:'36',denominator:'1'});
+  assert.equal(loose.lines[1].lineAmountMinor,'136800');
+  assert.equal(loose.grandTotal,2708);
+  assert.equal(loose.allocation.paymentStatus,'Due');
+  input.lines[1].request={mode:'area',requestedSqft:'35.50',fulfillment:'box-only'};
+  const cartons=await preview(input,snapshot(db));
+  assert.equal(cartons.lines[1].quantityLabel,'3 Carton · 50.00 Sqft');
+  assert.deepEqual([cartons.lines[1].boxes,cartons.lines[1].extraPieces],['3','0']);
+  assert.equal(cartons.lines[1].baseQty,75);
+  assert.equal(cartons.lines[1].lineAmountMinor,'190000');
+  assert.equal(cartons.grandTotal,3240);
+  assert.equal(cartons.postingAllowed,false);
+ }finally{db.close();}
+});
+
 test('legacy POS V2 single-unit item stays one sale line and all-Due remains source-compatible',async()=>{
  const input={lines:[{
   kind:'Standard',productId:'P-PIPE',claimedBaseQty:2,
