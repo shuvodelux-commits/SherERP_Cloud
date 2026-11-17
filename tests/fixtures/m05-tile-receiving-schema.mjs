@@ -1,3 +1,4 @@
+import {M05_TILE_EXACT_MONEY_GUARD_SQL} from './m05-tile-exact-money-sql.mjs';
 /**
  * LOCAL TEST FIXTURE ONLY — not a numbered migration, deployable inventory
  * writer, staff authorization design or general financial account model.
@@ -111,6 +112,7 @@ BEGIN
        AND u.stock_purchase_override_text=NEW.unit_price_text)
     ))
    )
+   ${M05_TILE_EXACT_MONEY_GUARD_SQL}
  );
  SELECT RAISE(ABORT,'m05-tile-supplier-party-or-session-invalid')
  WHERE NOT EXISTS(
