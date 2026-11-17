@@ -138,3 +138,13 @@ test('M01 Step 2: drag targets always derive group kind from the widget registry
   assert.doesNotMatch(runtime,/\bw\.kind\b/,
     'persisted layout entries have only id and visible; w.kind is undefined');
 });
+
+
+test('M01 Step 2 UI refine RED: compact mobile switches and top-first focus for long customizer',async t=>{
+  const html=await compiled(t);
+  assert.match(html,/<h2 id="hdb-dialog-title" tabindex="-1">/);
+  assert.match(html,/\.hdb-switch\s*\{[^}]*min-height:\s*19px\s*!important/,
+    'mobile generic button minimum height must not stretch a 19px switch');
+  assert.match(html,/dialog\.querySelector\('#hdb-dialog-title'\)\.focus\(\)/,
+    'dialog must open and return focus at its heading rather than auto-scrolling to the footer');
+});
