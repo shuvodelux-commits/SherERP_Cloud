@@ -148,3 +148,41 @@ test('M01 Step 2 UI refine RED: compact mobile switches and top-first focus for 
   assert.match(html,/dialog\.querySelector\('#hdb-dialog-title'\)\.focus\(\)/,
     'dialog must open and return focus at its heading rather than auto-scrolling to the footer');
 });
+
+
+test('M01 Step 3 RED: source-backed dashboard route registry, auth guard and context controls',async t=>{
+  const html=await compiled(t);
+  assert.match(html,/function hdbRouteAllowed\(/,
+    'dashboard must verify actual native route permission before calling goToPage');
+  assert.match(html,/function hdbGoToDetail\(/,
+    'dashboard routes use a centralized, source-aware drilldown mapping');
+  assert.match(html,/function hdbApplyDateScope\(/,
+    'supported original Sales / Reports filters use local date boundaries');
+  assert.match(html,/function hdbContextBanner\(/,
+    'native destination displays which dashboard summary originated the visit');
+  assert.match(html,/id="hdb-navigation-status"/,
+    'blocked or unavailable navigation is announced in an accessible in-page status');
+  assert.match(html,/var hdbRouteAllowlist=Object\.freeze\(/,
+    'only known, reviewed source page IDs can be opened');
+  assert.match(html,/smDateFrom/);
+  assert.match(html,/smDateTo/);
+  assert.match(html,/rptState\.activeTab/);
+  assert.match(html,/rptProfit/);
+  assert.match(html,/rptSales/);
+  assert.match(html,/firstReachableKey_|navGroupFor_/,
+    'dashboard must reuse existing native navigation rather than invent an allowlist authority');
+  assert.doesNotMatch(html,/demoBalance|fakeInvoices|sampleSalesRow|hardcodedGrossProfit/);
+});
+
+test('M01 Step 3 RED: preserve immutable dashboard summary and separate financial roles',async t=>{
+  const html=await compiled(t);
+  for(const id of ['dashSales','dashDue','dashPayable','dashBorrowerReceivable',
+    'dashOutstandingLoan','dashCash','dashLowStockCount']){
+    assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
+  }
+  assert.match(html,/function dashLoad\(\)/);
+  assert.match(html,/serverCall\('getDashboardStats', authToken\)/);
+  assert.match(html,/data-hdb-widget="receivable"[\s\S]{0,300}data-hdb-route="customers"/);
+  assert.match(html,/data-hdb-widget="payable"[\s\S]{0,300}data-hdb-route="suppliers"/);
+  assert.match(html,/data-hdb-widget="borrower-receivable"[\s\S]{0,300}data-hdb-route="financePersonLedger"/);
+});
