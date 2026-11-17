@@ -175,3 +175,22 @@ test('CLI prints deterministic metadata-only report and does not modify source i
  assert.notEqual(unsupported.status,0);
  assert.equal(readFileSync(new URL('../docs/baseline/schema-inventory.json',import.meta.url),'utf8'),original);
 });
+
+test('every group has a distinct proposed logical D1 model and still requires integrator review',()=>{
+ const r=review();
+ const values=r.groups.map(g=>g.proposedLogicalD1Model);
+ assert.equal(values.length,49);
+ assert.ok(values.every(x=>typeof x==='string'&&x.length>=12&&/^[a-z0-9-]+$/.test(x)));
+ assert.equal(new Set(values).size,49);
+ for(const group of r.groups){
+  assert.equal(group.proposedModelIsDeployed,false);
+  assert.equal(group.sharedD1ImplementationOwner,'M03');
+  assert.equal(group.operationalFieldMappingApproved,false);
+ }
+ assert.equal(get(r,'PRODUCTS').proposedLogicalD1Model,'product-master-revision-and-raw-history');
+ assert.equal(get(r,'VENDORS').proposedLogicalD1Model,'party-vendor-gross-payable-and-receivable');
+ assert.equal(get(r,'FINANCE_TRANSACTIONS').proposedLogicalD1Model,'owner-lender-borrower-obligation-history');
+ assert.equal(get(r,'SALE_PAYMENTS').proposedLogicalD1Model,'split-tender-and-application-history');
+ assert.equal(get(r,'STOCK_LOTS').proposedLogicalD1Model,'purchase-lot-stock-and-fifo-provenance');
+ assert.equal(get(r,'LOGS').proposedLogicalD1Model,'idless-error-log-raw-event-history');
+});
