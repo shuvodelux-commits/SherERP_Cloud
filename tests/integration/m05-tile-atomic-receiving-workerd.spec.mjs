@@ -89,10 +89,11 @@ test('Box, Pcs and manufacturer-Sqft purchase prices preserve exact line totals 
   });
  }
 });
-test('area-entry receiving, price authority overrides and malformed physical claims fail before stock writes',async()=>{
+test('invalid area and malformed physical claims fail before stock writes',async()=>{
  await seed('M05-TILE-MODE');
  for(const request of [
-  {mode:'area',requestedSqft:'35.50',fulfillment:'loose'},
+  {mode:'area',requestedSqft:'0',fulfillment:'loose'},
+  {mode:'area',requestedSqft:'35.50',fulfillment:'unsupported'},
   {mode:'pack',boxes:'0',extraPieces:'0'},
   {mode:'pack',boxes:'1.5',extraPieces:'0'}
  ]) await assert.rejects(()=>poster().post(input('OP-TILE-MODE-001','M05-TILE-MODE',{request})));
@@ -215,4 +216,89 @@ test('tampered supplier-credit amount is rejected inside SQL, with original pric
   assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_movements WHERE product_id='"+entry.id+"'")).n,0);
   assert.equal((await scalar("SELECT payable_paisa FROM m05_tile_test_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,supplierBefore);
  }
+});
+
+
+test('Sqft-entered nominal 35.50 with loose pieces commits 54 Pcs, with exact BDT due and original request',async()=>{
+ await seed('M05-TILE-AREA-LOOSE');
+ const request={mode:'area',requestedSqft:'35.50',fulfillment:'loose'};
+ const quote=await previewTilePurchaseLineCandidateD1({DB,productId:'M05-TILE-AREA-LOOSE',request});
+ assert.equal(quote.purchasePreview.receivedPcs,'54');
+ assert.equal(quote.purchasePreview.lineAmountMinor,'136800');
+ const op='OP-TILE-AREA-LOOSE-0001';
+ const result=await poster().post(input(op,'M05-TILE-AREA-LOOSE',{request}));
+ assert.equal(result.status,'COMMITTED');
+ assert.deepEqual(await scalar("SELECT pcs,version FROM m05_tile_test_stock WHERE product_id='M05-TILE-AREA-LOOSE'"),{pcs:64,version:2});
+ const receipt=await scalar("SELECT boxes,extra_pieces,received_pcs,line_amount_paisa,request_snapshot_json FROM m05_tile_test_receipts WHERE operation_id='"+op+"'");
+ assert.deepEqual({boxes:receipt.boxes,extra:receipt.extra_pieces,pcs:receipt.received_pcs,paisa:receipt.line_amount_paisa},
+  {boxes:2,extra:4,pcs:54,paisa:136800});
+ assert.deepEqual(JSON.parse(receipt.request_snapshot_json),request);
+ assert.equal((await scalar("SELECT received_pcs FROM m05_tile_test_lots WHERE product_id='M05-TILE-AREA-LOOSE'")).received_pcs,54);
+ assert.equal((await scalar("SELECT debit_paisa FROM m05_tile_test_supplier_ledger WHERE purchase_id='PUR-"+op+"'")).debit_paisa,136800);
+});
+test('Sqft-entered nominal 35.50 box-only commits three full 25-piece Cartons with unchanged price and history',async()=>{
+ await seed('M05-TILE-AREA-BOX');
+ const request={mode:'area',requestedSqft:'35.50',fulfillment:'box-only'};
+ const op='OP-TILE-AREA-BOX-0001';
+ const result=await poster().post(input(op,'M05-TILE-AREA-BOX',{request}));
+ assert.equal(result.status,'COMMITTED');
+ const row=await scalar("SELECT boxes,extra_pieces,received_pcs,line_amount_paisa FROM m05_tile_test_receipts WHERE operation_id='"+op+"'");
+ assert.deepEqual(row,{boxes:3,extra_pieces:0,received_pcs:75,line_amount_paisa:190000});
+ assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-AREA-BOX'")).pcs,85);
+});
+test('Sqft-entered verified manufacturer coverage conserves exact Pcs and supplier amount',async()=>{
+ await seed('M05-TILE-AREA-MFR',{manufacturer:true});
+ const request={mode:'area',requestedSqft:'35.50',fulfillment:'loose'};
+ const quote=await previewTilePurchaseLineCandidateD1({DB,productId:'M05-TILE-AREA-MFR',request});
+ assert.equal(quote.purchasePreview.receivedPcs,'54');
+ const op='OP-TILE-AREA-MFR-0001';
+ assert.equal((await poster().post(input(op,'M05-TILE-AREA-MFR',{request}))).status,'COMMITTED');
+ const receipt=await scalar("SELECT received_pcs,line_amount_paisa,measurement_snapshot_json FROM m05_tile_test_receipts WHERE operation_id='"+op+"'");
+ assert.equal(receipt.received_pcs,54);
+ assert.equal(String(receipt.line_amount_paisa),quote.purchasePreview.lineAmountMinor);
+ assert.equal(JSON.parse(receipt.measurement_snapshot_json).manufacturerEvidence,'synthetic-verified-label');
+});
+test('SQL independently rejects underdelivery for area demand with otherwise genuine price and revision',async()=>{
+ await seed('M05-TILE-AREA-FORGE');
+ const request={mode:'area',requestedSqft:'35.50',fulfillment:'loose'};
+ const quote=await previewTilePurchaseLineCandidateD1({DB,productId:'M05-TILE-AREA-FORGE',request});
+ const op='OP-TILE-AREA-FORGE-0001';
+ await assert.rejects(()=>DB.prepare(M05_TILE_RECEIVE_INSERT_SQL).bind(
+  op,'PUR-'+op,'ACT-1','a'.repeat(64),'SUP-1','M05-TILE-AREA-FORGE',
+  1,1,0,53,2,3,'Sqft','38.00',134267,JSON.stringify(request),
+  JSON.stringify(quote.quantity.measurementSnapshot),
+  JSON.stringify(quote.purchasePreview.priceSnapshot),'2026-11-17'
+ ).run(),/unverified|area|physical|quantity|mismatch|constraint/i);
+ assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-AREA-FORGE'")).pcs,10);
+ assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-AREA-FORGE'")).n,0);
+ assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_lots WHERE product_id='M05-TILE-AREA-FORGE'")).n,0);
+});
+test('unsupported Sqft decimal precision fails closed and never increments physical stock',async()=>{
+ await seed('M05-TILE-AREA-PRECISION');
+ for(const requestedSqft of ['35.50001','1001','0','1e3','35.50 ','01.25']){
+  const op='OP-TILE-AREA-PREC-0001';
+  await assert.rejects(()=>poster().post(input(op,'M05-TILE-AREA-PRECISION',{
+   request:{mode:'area',requestedSqft,fulfillment:'loose'}
+  })));
+ }
+ assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-AREA-PRECISION'")).pcs,10);
+ assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-AREA-PRECISION'")).n,0);
+});
+
+
+test('direct SQL cannot bypass the 1000 Sqft receiving bound with otherwise correct whole pieces',async()=>{
+ await seed('M05-TILE-AREA-BOUND');
+ const request={mode:'area',requestedSqft:'1000.0001',fulfillment:'loose'};
+ const quote=await previewTilePurchaseLineCandidateD1({DB,productId:'M05-TILE-AREA-BOUND',request});
+ const op='OP-TILE-AREA-BOUND-001';
+ await assert.rejects(()=>DB.prepare(M05_TILE_RECEIVE_INSERT_SQL).bind(
+  op,'PUR-'+op,'ACT-1','b'.repeat(64),'SUP-1','M05-TILE-AREA-BOUND',
+  1,1,0,Number(quote.purchasePreview.receivedPcs),
+  Number(quote.quantity.boxes),Number(quote.quantity.extraPieces),
+  'Sqft',quote.purchasePreview.unitPriceText,Number(quote.purchasePreview.lineAmountMinor),
+  JSON.stringify(request),JSON.stringify(quote.quantity.measurementSnapshot),
+  JSON.stringify(quote.purchasePreview.priceSnapshot),'2026-11-17'
+ ).run(),/area|quantity|unverified|bound|constraint/i);
+ assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-AREA-BOUND'")).pcs,10);
+ assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-AREA-BOUND'")).n,0);
 });
