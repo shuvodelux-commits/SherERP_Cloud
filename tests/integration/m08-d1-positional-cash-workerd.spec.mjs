@@ -8,6 +8,9 @@ import {previewD1PositionalCashReconciliation}
   from '../fixtures/m08-d1-positional-cash-preview.mjs';
 
 // Frozen GAS oracle runs only on synthetic source-shaped fixtures.
+import {previewD1SQLPositionalClosing}
+  from '../fixtures/m08-sql-positional-close-read.mjs';
+
 const oracle=loadPinnedGASFunctions({
   'Utils.gs':['roundMoney_'],
   'CashReconciliation.gs':[
@@ -215,5 +218,155 @@ test('malformed identity fails closed, test Worker exposes no reconciliation rou
   assert.equal((await worker.fetch('https://m08.test/api/rpc',{
     method:'POST',body:JSON.stringify({tenantId:'SHOP-A',sessionId:'S1'})
   })).status,404);
+  assert.deepEqual(await snapshot(),unchanged);
+});
+
+
+// #452: one read-only D1 SQL statement must reproduce the pinned source
+// physical marker-window algorithm without relying on a JS preflight read.
+async function sqlParity(tenant,id,sessions,entries){
+  const originalSessions=sessions.slice().sort((a,b)=>a._rowIndex-b._rowIndex);
+  const originalCash=entries.slice().sort((a,b)=>a._rowIndex-b._rowIndex);
+  const source=originalSessions.find(x=>x['Session ID']===id);
+  const expected=plain(oracle.cashReconciliationRecalculateClosedSession_(
+    source,originalSessions,originalCash
+  ));
+  const unchanged=await snapshot();
+  const result=await previewD1SQLPositionalClosing(DB,{
+    tenantId:tenant,sessionId:id
+  });
+  assert.deepEqual(result,{sessionId:id,recalculated:expected});
+  assert.deepEqual(await snapshot(),unchanged,'SQL proof must not mutate D1');
+  return result.recalculated;
+}
+
+test('M08 SQL source row order: window, opening exclusion, other session use and late close',async()=>{
+  const sessions=[
+    session('S1',2,{'Counted Cash':143,
+      'Opening Explanation Entry IDs':'["opening"]',
+      'Closing Explanation Entry IDs':'["late"]'}),
+    session('S2',3,{'Closing Explanation Entry IDs':'["foreign"]'})
+  ];
+  const entries=[
+    marker(2,'S1',{Date:'2050-01-01'}),
+    cash(3,'sale',30,0,'Sale',{Date:'2050-02-01'}),
+    cash(4,'expense',0,10,'Expense',{Date:'1990-01-01'}),
+    cash(5,'opening',9),cash(6,'foreign',70),
+    cash(7,'deleted',400,0,'Sale',{'Is Deleted':'TRUE'}),
+    cash(8,'old-adjustment',25,0,'Day Close Adjustment'),
+    marker(9,'S2',{Date:'1970-01-01'}),
+    cash(10,'late',15,0,'Sale',{Date:'1975-01-01'}),
+    cash(11,'unlinked-future',999)
+  ];
+  await seed('SHOP-A',sessions,entries);
+  assert.deepEqual(await sqlParity('SHOP-A','S1',sessions,entries),
+    {expected:135,variance:8});
+});
+
+test('M08 SQL source window counts in-window closing only once and late closing once despite repeated JSON IDs',async()=>{
+  const sessions=[
+    session('S1',2,{'Counted Cash':116,
+      'Closing Explanation Entry IDs':'["inside","inside","late"]'})
+  ];
+  const entries=[
+    marker(2,'S1'),cash(3,'inside',7),cash(4,'normal',0),
+    marker(5,'NEXT'),cash(6,'late',9)
+  ];
+  await seed('SHOP-A',sessions,entries);
+  assert.deepEqual(await sqlParity('SHOP-A','S1',sessions,entries),
+    {expected:116,variance:0});
+});
+
+test('M08 SQL preserves counted zero vs absent and retains other-session linked exclusion',async()=>{
+  const sessions=[
+    session('S1',2,{'Counted Cash':0}),
+    session('S2',3,{'Status':'Closing','Counted Cash':'',
+      'Opening Explanation Entry IDs':'["opening"]'}),
+    session('S3',4,{'Closing Explanation Entry IDs':'["shared"]'})
+  ];
+  const entries=[
+    marker(2,'S1'),cash(3,'s1',10),
+    marker(4,'S2'),cash(5,'opening',5),
+    cash(6,'shared',40),cash(7,'regular',10),
+    marker(8,'S3'),cash(9,'unlinked-s3',100)
+  ];
+  await seed('SHOP-A',sessions,entries);
+  assert.deepEqual(await sqlParity('SHOP-A','S1',sessions,entries),
+    {expected:110,variance:-110});
+  assert.deepEqual(await sqlParity('SHOP-A','S2',sessions,entries),
+    {expected:110,variance:''});
+});
+
+test('M08 SQL tenant isolation with identical source Session IDs and Entry IDs',async()=>{
+  const sa=[session('S1',2,{'Counted Cash':110})];
+  const sb=[session('S1',2,{'Opening Cash':200,'Counted Cash':230})];
+  const a=[marker(2,'S1'),cash(3,'shared',10)];
+  const b=[marker(2,'S1'),cash(3,'shared',30)];
+  await seed('SHOP-A',sa,a);
+  await seed('SHOP-B',sb,b);
+  assert.deepEqual(await sqlParity('SHOP-A','S1',sa,a),
+    {expected:110,variance:0});
+  assert.deepEqual(await sqlParity('SHOP-B','S1',sb,b),
+    {expected:230,variance:0});
+});
+
+test('M08 SQL no marker / no eligible closing session yields null; duplicate marker refuses',async()=>{
+  const sessions=[session('S1',2),session('S2',3,{'Status':'Open'})];
+  const entries=[marker(2,'S1'),cash(3,'sale',10)];
+  await seed('SHOP-A',sessions,entries);
+  assert.deepEqual(await previewD1SQLPositionalClosing(
+    DB,{tenantId:'SHOP-A',sessionId:'MISSING'}),
+    {sessionId:'MISSING',recalculated:null});
+  assert.deepEqual(await sqlParity('SHOP-A','S2',sessions,entries),null);
+  await DB.prepare(
+    "INSERT INTO m08_positional_cash VALUES('SHOP-A',5,'mark-dupe','Session Open','S1',0,0,0,'2026-11-16')"
+  ).run();
+  await assert.rejects(()=>previewD1SQLPositionalClosing(
+    DB,{tenantId:'SHOP-A',sessionId:'S1'}),/Duplicate Session Open marker/);
+});
+
+test('M08 SQL rejects duplicate nonblank original Cash Book and Cash Session IDs',async()=>{
+  const sessions=[session('S1')];
+  const entries=[marker(2,'S1'),cash(3,'reused',1),cash(4,'reused',2)];
+  await seed('SHOP-A',sessions,entries);
+  await assert.rejects(()=>previewD1SQLPositionalClosing(
+    DB,{tenantId:'SHOP-A',sessionId:'S1'}),/Duplicate Cash Book Entry ID/);
+  await DB.prepare("DELETE FROM m08_positional_cash WHERE legacy_row=4").run();
+  await DB.prepare(
+    "INSERT INTO m08_positional_sessions VALUES('SHOP-A',3,'S1','Closed',10000,10000,'','')"
+  ).run();
+  await assert.rejects(()=>previewD1SQLPositionalClosing(
+    DB,{tenantId:'SHOP-A',sessionId:'S1'}),/Duplicate Cash Session ID/);
+});
+
+test('M08 SQL malformed linked ID import and wrong JSON element type refuse without writing',async()=>{
+  const sessions=[session('S1',2,{'Closing Explanation Entry IDs':'["sale"]'})];
+  const entries=[marker(2,'S1'),cash(3,'sale',10)];
+  await seed('SHOP-A',sessions,entries);
+  assert.deepEqual(await sqlParity('SHOP-A','S1',sessions,entries),
+    {expected:110,variance:-10});
+  const bad=['sale,another','{oops','[5]','{"entryId":"sale"}'];
+  for(const text of bad){
+    await DB.prepare("UPDATE m08_positional_sessions SET closing_entry_ids=? WHERE tenant_id='SHOP-A'")
+      .bind(text).run();
+    const unchanged=await snapshot();
+    await assert.rejects(()=>previewD1SQLPositionalClosing(
+      DB,{tenantId:'SHOP-A',sessionId:'S1'}),/Invalid canonical linked Cash IDs/);
+    assert.deepEqual(await snapshot(),unchanged);
+  }
+});
+
+test('M08 SQL invalid tenant/session request fails before SQL and keeps both tables unchanged',async()=>{
+  await seed('SHOP-A',[session('S1')],[marker(2,'S1'),cash(3,'sale',10)]);
+  const unchanged=await snapshot();
+  for(const request of [
+    null,{}, {tenantId:'SHOP-A;DROP',sessionId:'S1'},
+    {tenantId:'SHOP-A',sessionId:'S1',sql:'DELETE FROM cash'},
+    {tenantId:'SHOP-A',sessionId:''},
+    {tenantId:'SHOP-A',sessionId:Promise.resolve('S1')}
+  ])await assert.rejects(()=>previewD1SQLPositionalClosing(DB,request),TypeError);
+  await assert.rejects(()=>previewD1SQLPositionalClosing(null,{
+    tenantId:'SHOP-A',sessionId:'S1'
+  }),/D1/);
   assert.deepEqual(await snapshot(),unchanged);
 });
