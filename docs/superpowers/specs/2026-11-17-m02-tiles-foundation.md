@@ -197,5 +197,5 @@ Owner/M03 review items before protected DDL:
 
 - Existing readProductCatalogCandidateD1 already exposes product and immutable unit-profile/conversion candidates; consume/extend it.
 - Existing M10 source-freeze and rehearsal modules compare supplied evidence; they are not exporters or all-group D1 importers.
-- Baseline M10 general evidence requires idDigest for every group, while LOGS has no original ID. Open PR #432 addresses position-only LOGS provenance in that broader gate; do not manufacture a LOGS ID to satisfy the old shape.
+- Baseline M10 general evidence requires idDigest for every group, while LOGS has no original ID. PR #432 addresses position-only LOGS provenance in that broader gate and is included in the refreshed main; reuse it and never manufacture a LOGS ID to satisfy the old shape.
 - A complete revision needs a reviewed sealing/activation contract: immutable UPDATE/DELETE alone does not prove that conversion children cannot be appended after activation. Validate this in the shared M03 schema writer before any transactional use.

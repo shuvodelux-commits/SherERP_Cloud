@@ -58,8 +58,18 @@ export function planReviewedSplitSaleUpdate(snapshot,{canEditSales}={}){
     throw new Error('Reviewed split Sale Update requires payment detail version 1.');
 
   const sale=snapshot.sales.find(row=>String(row['Invoice ID'])===id);
-  const savedPaid=salePaymentPaisa_(sale['Paid Amount'],'Paid Amount',false);
-  const savedDue=salePaymentPaisa_(sale['Due Amount'],'Due Amount',false);
+  // An imported invoice with unreconciled original checkout cannot be
+  // used as the basis for another financial correction.
+  let savedPaid,savedDue;
+  try{
+    const savedGrand=salePaymentPaisa_(sale['Grand Total'],'Grand Total',false);
+    savedPaid=salePaymentPaisa_(sale['Paid Amount'],'Paid Amount',false);
+    savedDue=salePaymentPaisa_(sale['Due Amount'],'Due Amount',false);
+    if(!Number.isSafeInteger(savedPaid+savedDue)||savedPaid+savedDue!==savedGrand)
+      throw new Error('Unreconciled original checkout');
+  }catch{
+    throw new Error('NEEDS_REVIEW: original reviewed Sale Update checkout totals mismatch');
+  }
   const currentPaid=salePaymentPaisa_(
     settlement.paidAmount,'Current paid amount',false);
   const currentDue=salePaymentPaisa_(

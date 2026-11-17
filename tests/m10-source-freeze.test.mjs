@@ -7,10 +7,13 @@ import {assessM10RehearsalEvidence} from '../src/migration/m10-rehearsal-gate.js
 const inventory=JSON.parse(readFileSync(new URL('../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
 const pin='29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2';
 const digest=n=>n.toString(16).padStart(64,'0');
-const groups=()=>inventory.tables.map((x,i)=>({
-  sheetKey:x.sheetKey,rowCount:i===0?0:i+1,
-  rowDigest:digest(i+1),idDigest:digest(i+1000)
-}));
+const groups=()=>inventory.tables.map((x,i)=>x.sheetKey==='LOGS'
+  ?{sheetKey:'LOGS',rowCount:i===0?0:i+1,
+    rowDigest:digest(i+1),positionDigest:digest(i+1000),
+    identityKind:'SOURCE_ROW_POSITION_ONLY'}
+  :{sheetKey:x.sheetKey,rowCount:i===0?0:i+1,
+    rowDigest:digest(i+1),idDigest:digest(i+1000)}
+);
 const pass=(id,date,rows=groups())=>({
   snapshotId:id,capturedAt:date,sourceCommit:pin,groups:rows
 });

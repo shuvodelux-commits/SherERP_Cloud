@@ -41,10 +41,9 @@ function number(value,key){
   return n||0;
 }
 function id(value){
-  if(value!==undefined && value!==null &&
-    !['string','number','boolean'].includes(typeof value))
+  if(typeof value!=='string' || !value.trim())
     throw new TypeError('Invalid trusted Stock Report Product ID');
-  return String(value);
+  return value;
 }
 function sortedByDesc(group,key){
   return Object.keys(group).map(k=>group[k])

@@ -6,9 +6,12 @@ import {assessM10RehearsalEvidence} from '../src/migration/m10-rehearsal-gate.js
 const inventory=JSON.parse(readFileSync(new URL('../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
 const sourceCommit='29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2';
 const pin=(n)=>n.toString(16).padStart(64,'0');
-const groups=()=>inventory.tables.map((row,index)=>({
-  sheetKey:row.sheetKey,rowCount:index+1,rowDigest:pin(index+1),idDigest:pin(index+1001)
-}));
+const groups=()=>inventory.tables.map((row,index)=>row.sheetKey==='LOGS'
+  ?{sheetKey:'LOGS',rowCount:index+1,rowDigest:pin(index+1),
+    positionDigest:pin(index+1001),identityKind:'SOURCE_ROW_POSITION_ONLY'}
+  :{sheetKey:row.sheetKey,rowCount:index+1,rowDigest:pin(index+1),
+    idDigest:pin(index+1001)}
+);
 const coverage=(reconciled=true)=>({
   formatVersion:1,sourceCommit,
   summary:{sourceGroups:inventory.tables.length,fullyReconciled:reconciled?inventory.tables.length:0},
@@ -65,7 +68,7 @@ test('missing private source and D1 readback evidence fails closed',()=>{
   assert.equal(issue(r,'IDENTITY_REVIEW_EVIDENCE_MISSING'),1);
 });
 
-test('all 49 source groups require matching row counts, row hashes and original-ID hashes',()=>{
+test('all 49 source groups require counts/content and authentic ID or position provenance',()=>{
   for(const [field,code,value] of [
     ['rowCount','GROUP_ROW_COUNT_MISMATCH',999],
     ['rowDigest','GROUP_ROW_DIGEST_MISMATCH',pin(5555)],

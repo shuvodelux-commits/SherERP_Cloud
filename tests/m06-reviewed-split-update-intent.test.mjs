@@ -198,3 +198,25 @@ test('source original Customer ID cannot be replaced by a same-phone different P
   assert.equal(result.preview.invoiceId,id);
   assert.equal(Object.hasOwn(result.preview,'customerId'),false);
 });
+
+
+test('reviewed split Sale Update refuses unreconciled original checkout before proposing any correction',()=>{
+  for(const mutate of [
+    d=>{
+      d.sales[0]['Due Amount']='30.01';
+      d.currentSettlement.dueAmount=30.01;
+    },
+    d=>{
+      d.sales[0]['Grand Total']='99.99';
+    }
+  ]){
+    const data=fixture();
+    mutate(data);
+    const before=copy(data);
+    assert.throws(
+      ()=>planReviewedSplitSaleUpdate(data,{canEditSales:true}),
+      /NEEDS_REVIEW: original reviewed Sale Update checkout totals mismatch/
+    );
+    assert.deepEqual(data,before,'Rejected historical source must remain unmodified');
+  }
+});

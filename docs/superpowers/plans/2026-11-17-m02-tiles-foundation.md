@@ -141,3 +141,5 @@ revisions using actual D1 without inventing measurement persistence or stock.
 ### Verified continuation evidence
 
 See `docs/reviews/2026-11-17-m02-tiles-contract-verification.md` for observed RED/GREEN, runtime, review and remaining gates. Local Node 22 suite: 2,473 passed; tiles: 27 unit + 3 real local Workerd/D1 composition tests. Existing catalog D1 suite: 5 passed. Latest main was merged without conflicts. Exact-head hosted CI must be checked after publication; M02 as a whole remains incomplete.
+
+- Latest-main refresh: merged main c73c333c51ea0e90e8fac73c63efb4e906c43d54 without conflicts; Node 22/UTC full suite **2,525 passed, zero failed/skipped**.

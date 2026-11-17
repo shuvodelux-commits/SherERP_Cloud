@@ -40,17 +40,42 @@ function checkedInventory(inventory,coverage) {
   return {keys,reconciled};
 }
 
+function exactSummary(row,fields){
+  if(!object(row)||
+    ![Object.prototype,null].includes(Object.getPrototypeOf(row)))return false;
+  const keys=Reflect.ownKeys(row);
+  return keys.length===fields.length&&
+    keys.every(k=>typeof k==='string'&&fields.includes(k))&&
+    fields.every(k=>{
+      const d=Object.getOwnPropertyDescriptor(row,k);
+      return d?.enumerable===true&&Object.hasOwn(d,'value');
+    });
+}
+
 function checkedSummary(rows){
   if(!Array.isArray(rows))fail();
   const index=new Map();
   let duplicates=0;
   for(const row of rows){
-    if(!object(row)||Object.keys(row).sort().join(',')!=='idDigest,rowCount,rowDigest,sheetKey'||
-      typeof row.sheetKey!=='string'||!GROUP.test(row.sheetKey)||
-      !count(row.rowCount)||typeof row.rowDigest!=='string'||!DIGEST.test(row.rowDigest)||
-      typeof row.idDigest!=='string'||!DIGEST.test(row.idDigest))fail();
-    if(index.has(row.sheetKey))duplicates++;
-    else index.set(row.sheetKey,row);
+    // Read sheetKey only from an own *data* descriptor. An id-less LOGS
+    // physical position must never be disguised as a source business ID.
+    const descriptor=object(row)?
+      Object.getOwnPropertyDescriptor(row,'sheetKey'):null;
+    const key=descriptor&&Object.hasOwn(descriptor,'value')?
+      descriptor.value:null;
+    if(typeof key!=='string'||!GROUP.test(key))fail();
+    const positional=key==='LOGS';
+    const fields=positional?
+      ['sheetKey','rowCount','rowDigest','positionDigest','identityKind']:
+      ['sheetKey','rowCount','rowDigest','idDigest'];
+    if(!exactSummary(row,fields)||
+      !count(row.rowCount)||typeof row.rowDigest!=='string'||
+      !DIGEST.test(row.rowDigest)||
+      (positional?row.identityKind!=='SOURCE_ROW_POSITION_ONLY'||
+        typeof row.positionDigest!=='string'||!DIGEST.test(row.positionDigest):
+        typeof row.idDigest!=='string'||!DIGEST.test(row.idDigest)))fail();
+    if(index.has(key))duplicates++;
+    else index.set(key,row);
   }
   return {index,duplicates};
 }
@@ -125,7 +150,10 @@ export function assessM10RehearsalEvidence({
       if(!a||!b)continue;
       if(a.rowCount!==b.rowCount)add('GROUP_ROW_COUNT_MISMATCH');
       if(a.rowDigest!==b.rowDigest)add('GROUP_ROW_DIGEST_MISMATCH');
-      if(a.idDigest!==b.idDigest)add('GROUP_ID_DIGEST_MISMATCH');
+      if(sheetKey==='LOGS'){
+        if(a.positionDigest!==b.positionDigest)
+          add('GROUP_POSITION_PROVENANCE_MISMATCH');
+      }else if(a.idDigest!==b.idDigest)add('GROUP_ID_DIGEST_MISMATCH');
     }
     complete=source.duplicates===0&&d1.duplicates===0&&
       sourceExtras.length===0&&d1Extras.length===0&&

@@ -61,3 +61,13 @@ there is still no tile measurement table, inventory writer, transaction
 posting, return/refund or print integration in this PR. Financial/Party
 account policy, measurement schema review, revision sealing, all 49-group
 imports and actual private-data reconciliation retain their existing gates.
+
+## Latest-main revalidation
+
+The repository advanced while the implementation was being reviewed. Main
+`c73c333c51ea0e90e8fac73c63efb4e906c43d54` was merged without conflicts and
+the full CI-equivalent Node 22/UTC suite passed again: **2,525 tests, zero
+failures, zero skips**. This supersedes the earlier 2,473-test baseline above.
+The source/helper tree published through GitHub was checked against the local
+tested Git tree; hashes matched exactly before this latest main refresh.
+Final hosted CI is checked separately on the published refreshed head.
