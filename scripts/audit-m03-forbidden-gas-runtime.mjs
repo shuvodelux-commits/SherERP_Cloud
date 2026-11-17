@@ -60,7 +60,10 @@ function memberChain(node){
  if(node?.type!=='MemberExpression')return null;
  const prefix=memberChain(node.object);
  if(!prefix)return null;
- const key=literalKey(node.property);
+ // A computed Identifier is a VARIABLE, not a literal property name.
+ // Treat globalThis[serviceName] as unresolved until explicitly reviewed.
+ const key=node.computed && node.property?.type==='Identifier'
+  ? null : literalKey(node.property);
  return key===null?null:[...prefix,key];
 }
 function isPropertyKeyOnly(node,parents){
