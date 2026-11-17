@@ -274,3 +274,112 @@ test('private display output never exports FIFO lot IDs, purchase costs, source 
   assert.equal(result.lines.every(x=>x.postingAllowed===false),true);
  }finally{db.close();}
 });
+
+
+const auditedModule=await import('../src/modules/m06-posv2-unified-checkout-audit.js')
+ .then(x=>x.auditPosV2UnifiedCheckoutSnapshot)
+ .catch(e=>{if(e?.code==='ERR_MODULE_NOT_FOUND')return undefined;throw e;});
+const auditCheckout=(candidate)=>{
+ assert.equal(typeof auditedModule,'function','M06 unified checkout integrity audit is missing');
+ return auditedModule(candidate);
+};
+async function auditFixture(db){
+ seedTile(db);
+ return preview(mixed(),snapshot(db));
+}
+
+test('audit: authentic mixed-unit and Tile quote reconciles base stock, exact money and split tender',async()=>{
+ const db=sqlite();try{
+  const result=await auditFixture(db);
+  const audited=auditCheckout(result);
+  assert.equal(audited.ready,true,JSON.stringify(audited.issues));
+  assert.deepEqual(audited.issues,[]);
+  assert.equal(audited.summary.lineCount,2);
+  assert.equal(audited.summary.grandAmountMinor,'264000');
+  assert.equal(audited.summary.paidAmountMinor,'264000');
+  assert.equal(audited.summary.changeAmountMinor,'16000');
+ }finally{db.close();}
+});
+
+test('audit: saved line, subtotal, discount and Grand Total cannot disagree by one paisa',async()=>{
+ const db=sqlite();try{
+  const valid=await auditFixture(db);
+  const variants=[
+   [x=>{x.lines[1].lineAmountMinor='134268';},'LINE_AMOUNT_MISMATCH'],
+   [x=>{x.subtotal=2682.68;},'SUBTOTAL_MISMATCH'],
+   [x=>{x.discount=42.68;},'GRAND_TOTAL_MISMATCH'],
+   [x=>{x.grandTotal=2639.99;},'GRAND_TOTAL_MISMATCH']
+  ];
+  for(const [change,code] of variants){
+   const corrupt=structuredClone(valid);change(corrupt);
+   const out=auditCheckout(corrupt);
+   assert.equal(out.ready,false,code);
+   assert.ok(out.issues.some(x=>x.code===code),JSON.stringify(out.issues));
+  }
+ }finally{db.close();}
+});
+
+test('audit: frozen Standard factor and Tile Box/Pcs physical area snapshots conserve quantity',async()=>{
+ const db=sqlite();try{
+  const valid=await auditFixture(db);
+  const variants=[
+   [x=>{x.lines[0].unitBreakdownSnapshot[0].factor=999;},'STANDARD_BASE_MISMATCH'],
+   [x=>{x.lines[1].baseQty=54;},'TILE_PACK_MISMATCH'],
+   [x=>{x.lines[1].measurementSnapshot.piecesPerBox=24;},'TILE_PACK_MISMATCH'],
+   [x=>{x.lines[1].actualSqft.denominator='0';},'INVALID_TILE_AREA']
+  ];
+  for(const [change,code] of variants){
+   const corrupt=structuredClone(valid);change(corrupt);
+   const out=auditCheckout(corrupt);
+   assert.equal(out.ready,false,code);
+   assert.ok(out.issues.some(x=>x.code===code),JSON.stringify(out.issues));
+  }
+ }finally{db.close();}
+});
+
+test('audit: split tender, Cash change and due cannot drift from original source allocation',async()=>{
+ const db=sqlite();try{
+  const valid=await auditFixture(db);
+  const variants=[
+   [x=>{x.allocation.paidAmount=2639.99;},'PAYMENT_TOTAL_MISMATCH'],
+   [x=>{x.allocation.changeAmount=159.99;},'CHANGE_TOTAL_MISMATCH'],
+   [x=>{x.allocation.payments[2].change=159.99;},'CASH_TENDER_MISMATCH'],
+   [x=>{x.allocation.payments[0].applied=499;},'APPLIED_TOTAL_MISMATCH']
+  ];
+  for(const [change,code] of variants){
+   const corrupt=structuredClone(valid);change(corrupt);
+   const out=auditCheckout(corrupt);
+   assert.equal(out.ready,false,code);
+   assert.ok(out.issues.some(x=>x.code===code),JSON.stringify(out.issues));
+  }
+ }finally{db.close();}
+});
+
+test('audit: no duplicate product, privilege promotion or private lot evidence is accepted',async()=>{
+ const db=sqlite();try{
+  const valid=await auditFixture(db);
+  const variants=[
+   [x=>{x.lines[1].productId=x.lines[0].productId;},'DUPLICATE_PRODUCT'],
+   [x=>{x.postingAllowed=true;},'POSTING_AUTHORITY'],
+   [x=>{x.lines[0].postingAllowed=true;},'POSTING_AUTHORITY'],
+   [x=>{x.lines[0].fifoDraws=[{lotId:'PRIVATE-1',baseQty:1}];},'PRIVATE_POSTING_EVIDENCE']
+  ];
+  for(const [change,code] of variants){
+   const corrupt=structuredClone(valid);change(corrupt);
+   const out=auditCheckout(corrupt);
+   assert.equal(out.ready,false,code);
+   assert.ok(out.issues.some(x=>x.code===code),JSON.stringify(out.issues));
+  }
+ }finally{db.close();}
+});
+
+test('audit: accessor-backed nested snapshot is rejected without calling attacker getters',async()=>{
+ const db=sqlite();try{
+  const valid=await auditFixture(db);let invoked=0;
+  Object.defineProperty(valid.lines[1].measurementSnapshot,'piecesPerBox',{
+   enumerable:true,get(){invoked++;throw new Error('EXECUTED_GETTER');}
+  });
+  assert.throws(()=>auditCheckout(valid),/accessor|invalid|trusted/i);
+  assert.equal(invoked,0);
+ }finally{db.close();}
+});
