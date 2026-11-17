@@ -330,11 +330,14 @@
     if(from===to || !definitions[from] || !definitions[to] ||
        definitions[from].kind!==definitions[to].kind)return;
     var a=widgets.findIndex(function(w){return w.id===from;});
-    if(a<0)return;
+    var originalTarget=widgets.findIndex(function(w){return w.id===to;});
+    if(a<0||originalTarget<0)return;
+    var movingForward=a<originalTarget;
     var selected=widgets.splice(a,1)[0];
     var b=widgets.findIndex(function(w){return w.id===to;});
-    widgets.splice(b,0,selected);
-    persist();render();announce('Moved '+from+' before '+to);
+    // Drop before a preceding row, or after a following row.
+    widgets.splice(movingForward?b+1:b,0,selected);
+    persist();render();announce('Reordered '+from+' '+(movingForward?'later':'earlier'));
     return true;
   }
   function editTools(id){
