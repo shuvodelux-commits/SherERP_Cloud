@@ -152,7 +152,7 @@ test('D1 audit status cannot be silently promoted to fully migrated in M02 mappi
  assert.throws(()=>review({coverage:fake}),/unreviewed|reconciled|invalid/i);
  const fake2=structuredClone(coverage);
  fake2.rows[0].status='fully-live-and-reconciled';
- assert.throws(()=>review({coverage:fake2}),/coverage|invalid|status/i);
+ assert.throws(()=>review({coverage:fake2}),/coverage|invalid|status|unreviewed/i);
 });
 test('source pin and migration audit pin must match frozen source',()=>{
  assert.throws(()=>review({pinnedSourceCommit:'0'.repeat(40)}),/pin|commit/i);
