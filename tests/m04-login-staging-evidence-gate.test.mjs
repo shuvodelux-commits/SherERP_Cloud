@@ -16,7 +16,7 @@ function sample(){
     preview:config('wrangler.preview.jsonc'),
     staging:config('wrangler.staging.jsonc'),
     observed:{
-      databaseId:'aa04618e-1639-4cb9-bdf5-7b967d8b968b',
+      databaseId:'74102df7-dd31-4999-81d5-69bca42f0424',
       workerName:'shererp-cloud-staging',
       releaseSha,
       migrationNames:[
