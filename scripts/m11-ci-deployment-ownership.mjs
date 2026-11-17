@@ -18,7 +18,7 @@ const MANUAL='remote-d1-staging.yml';
 // Reviewed Git blob on main before M11-13. Any change requires a new M11 owner review.
 const APPROVED_STAGING_BLOB='cd8ef338cf2e532f43c12fffc01654452917fe60';
 const blobSha=content=>createHash('sha1')
-  .update('blob '+Buffer.byteLength(content,'utf8')+'\\0','utf8')
+  .update('blob '+Buffer.byteLength(content,'utf8')+String.fromCharCode(0),'utf8')
   .update(content,'utf8').digest('hex');
 const EXPECTED=new Set(['cloudflare-preview.yml',MANUAL]);
 const ALLOWED_STAGING_SECRETS=new Set([
