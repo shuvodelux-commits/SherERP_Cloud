@@ -104,8 +104,10 @@ export function auditLegacyStaffImport(users,roles) {
        !Number.isSafeInteger(roleCount) || roleCount<0 ||
        // Original export arrays may contain only dense numeric rows and
        // their built-in length. Any hidden/named/symbol key is out of scope.
-       Reflect.ownKeys(users).length!==userCount+1 ||
-       Reflect.ownKeys(roles).length!==roleCount+1)
+       // Missing numeric entries retain the existing ROW_MALFORMED code
+       // at the row reader; only surplus array metadata is a bad snapshot.
+       Reflect.ownKeys(users).length>userCount+1 ||
+       Reflect.ownKeys(roles).length>roleCount+1)
       return invalidSnapshot;
   } catch {
     return invalidSnapshot;
