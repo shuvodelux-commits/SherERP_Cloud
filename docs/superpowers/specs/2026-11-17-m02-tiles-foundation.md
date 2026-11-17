@@ -152,4 +152,42 @@ Pure tiles tests cover dimensions/packs, exact ceilings, manufacturer policy, hi
 They do not prove D1 constraints, importer completeness, transaction concurrency, return refunds or print parity.
 Existing local Workerd suites can prove only their exercised existing fixtures.
 M02 is not complete until all owner checklist items have separately linked source/schema/import/real-D1/CI evidence.
-Exact next M03 task: review and accept the M02 source/Party account/schema contracts, then add awaited product-unit-revision + measurement read adapters behind the existing internal-only boundary, with source-shaped DTOs and real local D1 snapshot consistency; no public RPC activation.
+Exact next M03 task: review and accept the M02 source/Party account/schema contracts. After the measurement migration is approved, extend the existing src/db/product-catalog-d1-read.js::readProductCatalogCandidateD1 rather than duplicate its already implemented product/unit-revision projection. Load measurement and the named pack conversion from the same reviewed immutable revision, verify source-shaped DTO and consistency on actual local D1, and continue through the existing internal-only boundary; no public RPC activation.
+
+## M02-P protected account review packet
+
+This is an approval proposal, not executed financial DDL. Reuse existing src/party/gross-balance-preflight.js and gross-checkpoint-parity.js, including their exact SOURCE_CURRENT vs HISTORICAL_OPENING distinction.
+
+| Exact source channel | Current checkpoint direction | Opening handling |
+| --- | --- | --- |
+| CUSTOMERS.Current Due | Positive CUSTOMER_RECEIVABLE; negative CUSTOMER_ADVANCE | Opening Balance is a separate HISTORICAL_OPENING comparison, not an additional current-due posting |
+| SUPPLIERS.Current Due | Positive SUPPLIER_PAYABLE; negative SUPPLIER_ADVANCE | Preserve signed Opening Balance baseline independently; no current Cash/Bank |
+| VENDORS.Current Due | Nonnegative VENDOR_PAYABLE | Never infer a net opening from Current Receivable |
+| VENDORS.Current Receivable | Nonnegative VENDOR_RECEIVABLE | Separate gross source channel |
+| FINANCE_PERSONS / finance Owner types | OWNER_EQUITY or source negative OWNER_ADVANCE checkpoint | Opening Owner Capital is historical, not current cash turnover |
+| FINANCE_PERSONS / finance Lender types | LENDER_LOAN_PAYABLE or source negative LENDER_CREDIT | Opening Loan stays historical |
+| FINANCE_PERSONS / finance Borrower types | BORROWER_LOAN_RECEIVABLE or source negative BORROWER_CREDIT | Opening Borrower Loan stays historical |
+| EXPENSE_PAYEES | No automatic money account | Identity role alone never creates debt |
+
+These labels are existing checkpoint categories; negative finance categories must not be silently reclassified into newly authorized loans, receivables or payouts.
+Owner withdrawal remains distinct source history from investment; a signed checkpoint does not erase its original transaction classification.
+
+Proposed source-account identity has a stable internal ID, original Party legacy-link ID, exact role/channel/contract, BDT currency in the initial single-business database, and immutable provenance. It must reference existing Party/link identity and allow one source finance person to retain separate Owner/Lender/Borrower channels.
+Do not put a mutable authoritative balance on parties or duplicate native ledger entries into an independently authoritative journal.
+Original Current Due is a reconciliation checkpoint, not an event to post in addition to imported opening+native movements.
+If a complete native history cannot reproduce a checkpoint, quarantine/report the discrepancy; do not invent a balancing cash entry.
+A final account/obligation schema must preserve original transaction references, direction, audit and native contract grouping before choosing any new posting model.
+
+Owner/M03 review items before protected DDL:
+- Confirm this exact source channel/sign mapping and initial one-business-per-D1 scope.
+- Approve source-account metadata/read projection separately from any new financial entry writer; keep one authoritative engine.
+- Confirm treatment of incomplete native history and unidentified loan contracts: manual review rather than synthetic identity/obligation allocation.
+- Review the proposed NEW-tile calculation policy and area-return confirmation policy before downstream financial posting.
+- Cross-role settlement stays disabled with no exceptions in this task.
+
+## Reuse and conflict findings
+
+- Existing readProductCatalogCandidateD1 already exposes product and immutable unit-profile/conversion candidates; consume/extend it.
+- Existing M10 source-freeze and rehearsal modules compare supplied evidence; they are not exporters or all-group D1 importers.
+- Baseline M10 general evidence requires idDigest for every group, while LOGS has no original ID. Open PR #432 addresses position-only LOGS provenance in that broader gate; do not manufacture a LOGS ID to satisfy the old shape.
+- A complete revision needs a reviewed sealing/activation contract: immutable UPDATE/DELETE alone does not prove that conversion children cannot be appended after activation. Validate this in the shared M03 schema writer before any transactional use.

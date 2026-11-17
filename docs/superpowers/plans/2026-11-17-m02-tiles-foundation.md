@@ -112,7 +112,7 @@ flowchart TD
 
 ## Task 5 — Integration and final acceptance (M02-E)
 
-- [ ] Freeze M03 adapter DTO/schema version and single-authority posting boundary.
+- [ ] Freeze M03 adapter DTO/schema version and single-authority posting boundary; extend existing readProductCatalogCandidateD1 for measurements instead of duplicating the product/unit reader.
 - [ ] Review purchase/sales/returns/invoice contracts in the spec; do not activate downstream workflows.
 - [ ] Reconcile all checklist items from the owner's M02 request with exact CI and local D1 evidence.
 - [ ] Open small dependency-ordered PRs; no duplicate already-merged work, no auto-merge of protected financial changes.
@@ -124,3 +124,5 @@ flowchart TD
 - Existing PR #434 owns pure price-anchor profile work; no conflicting changes planned.
 - Ruling: this branch leaves protected source/finance SQL untouched until the required M02-P/M03 review, and implements the safely independent pure tiles contract first.
 - RED/GREEN and exact-head links will be recorded in the PR after observed results.
+
+- Review checkpoint: existing M03 reader reused; protected account/sign review packet added. Initial RED Foundation run 43992235035 remains queued at observation; no production implementation or RED/GREEN claim.
