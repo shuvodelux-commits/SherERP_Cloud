@@ -25,7 +25,7 @@ test('every PR Node runner uses lockfile-keyed npm tarball cache; no node_module
  for(const file of files){
   const y=read('.github/workflows/'+file);
   if(!/^\s*pull_request:\s*$/m.test(y)||!y.includes('actions/setup-node@v4'))continue;
-  const segments=y.split(/^\s+- uses: actions\/setup-node@v4\s*$/m).slice(1);
+  const segments=y.split(/^\s+(?:-\s*)?uses: actions\/setup-node@v4\s*$/m).slice(1);
   for(const segment of segments){
    const block=segment.split(/^\s+- (?:name:|uses:|run:)/m)[0];
    assert.match(block,/cache:\s*['"]?npm['"]?/,file+' must cache downloaded npm packages');
