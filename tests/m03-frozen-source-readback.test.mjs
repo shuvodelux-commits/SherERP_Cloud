@@ -670,6 +670,20 @@ test('M03 Run 8 private sealed ID seed composes with SQL-authorized PCAT PUNT is
   assert.deepEqual(committed(),prior,'replay must not insert another immutable intent');
   assert.equal(floor('PRODUCT_CATEGORIES'),categoryFloor+1);
   assert.equal(floor('PRODUCT_UNITS'),unitFloor+1);
+  // A caller without a current persisted M04 session cannot see a committed
+  // receipt or burn another ID, even after the 38-family historical seed.
+  const sealedIntents=committed();
+  await assert.rejects(()=>master.createCategory_({
+   token:'b'.repeat(64),nowMs,operationId:'OP-RUN8-UNKNOWN',name:'Hidden'
+  }),/Denied|authorization/i);
+  assert.deepEqual(committed(),sealedIntents);
+  assert.equal(floor('PRODUCT_CATEGORIES'),categoryFloor+1);
+  // A formerly valid actor also loses replay rights immediately on revoke.
+  db.sql.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
+   .run(nowMs,tokenHash);
+  await assert.rejects(()=>master.createCategory_(categoryRequest),/Denied|authorization/i);
+  assert.deepEqual(committed(),sealedIntents);
+  assert.equal(floor('PRODUCT_CATEGORIES'),categoryFloor+1);
   assert.deepEqual(await createFrozenSourceReadback(db.env).readAllSourceGroups(),originalSource,
    'the 49 immutable historic source groups must not be modified by new master records');
   // An authenticated, nondeployable proof cannot promote import/source authority.
