@@ -122,6 +122,8 @@ test('desktop product modal previews 2 Box 5 Pcs without changing legacy Save or
   await chooseProductPreviewOption(page,'m01ProductUnitMode','multi');
   await page.locator('#m01StockPreview').getByText('2 Box 5 Pcs',{exact:false}).waitFor();
   await captureProductPreview(page,'products-desktop-after-multiunit');
+  await page.locator('#m01StockPreview').scrollIntoViewIfNeeded();
+  await captureProductPreview(page,'products-desktop-after-multiunit-preview');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
   assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save unavailable');
   assert.equal(await page.locator('#prodSaveBtn').evaluate(el=>getComputedStyle(el).cursor),'not-allowed');
@@ -141,6 +143,8 @@ test('Tiles 24x24 and 25 Pcs per Box project 5 Box 3 Pcs and 512.00 Sqft',async(
   await page.locator('#m01OpeningBase').fill('3');
   await page.locator('#m01StockPreview').getByText('5 Box 3 Pcs · 512.00 Sqft',{exact:false}).waitFor();
   await captureProductPreview(page,'products-desktop-after-tiles');
+  await page.locator('#m01StockPreview').scrollIntoViewIfNeeded();
+  await captureProductPreview(page,'products-desktop-after-tiles-preview');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
  }finally{await page.close();}
 });
@@ -201,5 +205,7 @@ test('Products table uses M05 source metadata when available and preserves fallb
   });
   await page.waitForFunction(()=>document.querySelector('#prodTableBody tr:first-child td:nth-child(5)')?.textContent==='2 Box 5 Pcs');
   assert.equal(await page.locator('#prodTableBody tr:nth-child(2) td:nth-child(5)').textContent(),'45 Pcs');
+  await mkdir(EVIDENCE_DIR,{recursive:true});
+  await page.locator('#prodTable').screenshot({path:join(EVIDENCE_DIR,'products-desktop-after-stock-table.png'),animations:'disabled'});
  }finally{await page.close();}
 });
