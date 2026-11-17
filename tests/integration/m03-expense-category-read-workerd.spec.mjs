@@ -6,6 +6,8 @@ import {createLegacyCatalogReadAdapter}
   from '../../src/db/legacy-catalog-read.js';
 import {createGuardedExpenseCategoryStatusAdapter}
   from '../../src/db/expense-category-status-update.js';
+import {createGuardedExpenseCategoryTextUpdateAdapter}
+  from '../../src/db/expense-category-text-update.js';
 import {importSourceExpenseCategoriesWithD1}
   from '../../src/db/expense-category-source-import.js';
 import publicWorker from '../../src/index.js';
@@ -142,4 +144,35 @@ test('real local Workerd/D1 source status CAS updates only reviewed expense taxo
     method:'POST',headers:{Origin:'https://erp.invalid','Content-Type':'application/json'},
     body:JSON.stringify({fnName:'setExpenseCategoryStatus',args:['a'.repeat(64),'EXCAT-1','Active']})
   }),{DB})).status,501,'no public expense RPC');
+  // M03 Run 2 name/description extension: same REAL local Workerd D1
+  // suite, no extra test/shard count and no public endpoint.
+  const textEdit=createGuardedExpenseCategoryTextUpdateAdapter({DB});
+  const expense3={sourceId:'EXCAT-3',name:'বিদ্যুৎ বিল',description:'ফি',
+    status:'',createdAt:''};
+  await assert.rejects(()=>textEdit.updateRowFields_('EXPENSE_CATEGORIES',3,
+    {'Category Name':'  দোকান ভাড়া  ',Description:'changed'},
+    {sourceId:'EXCAT-2',name:'দোকান ভাড়া',description:'',
+      status:'Inactive',createdAt:''}),/duplicate|already exists/i);
+  assert.equal(await textEdit.updateRowFields_('EXPENSE_CATEGORIES',4,
+    {'Category Name':'  বিদ্যুৎ ও জ্বালানি  ',Description:'  মাসিক ফি  '},
+    expense3),undefined);
+  const afterText=await reader().getAllRows_('EXPENSE_CATEGORIES');
+  assert.deepEqual(afterText[2],{
+    ...rows[2],'Category Name':'বিদ্যুৎ ও জ্বালানি',Description:'মাসিক ফি'
+  });
+  assert.equal(afterText[0]['Category ID'],'EXCAT-1');
+  assert.equal(afterText[0].Status,'Inactive');
+  assert.equal(afterText[1]['Category ID'],'EXCAT-2');
+  assert.equal(await count(),3);
+  await assert.rejects(()=>textEdit.updateRowFields_('EXPENSE_CATEGORIES',4,
+    {'Category Name':'Stale edit',Description:'no'},expense3),
+    /stale|unsafe|refus|review|invalid/i);
+  assert.equal((await DB.prepare('SELECT category_name FROM expense_categories WHERE category_id=?')
+    .bind('EXCAT-3').first()).category_name,'বিদ্যুৎ ও জ্বালানি');
+  const noRpc=await publicWorker.fetch(new Request('https://erp.invalid/api/rpc',{
+    method:'POST',headers:{Origin:'https://erp.invalid','Content-Type':'application/json'},
+    body:JSON.stringify({fnName:'updateExpenseCategory',
+      args:['a'.repeat(64),'EXCAT-3',{name:'ATTACK',description:'secret'}]})
+  }),{DB});
+  assert.equal(noRpc.status,501,'private name edit cannot become public RPC');
 });
