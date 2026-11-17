@@ -28,5 +28,19 @@ export function patchHisabiqDashboard(html,template){
   }
   if(/<\?(?:!=|=)/.test(template))
     throw new Error('Unsafe templating in compiled dashboard');
-  return html.replace(DASHBOARD,DASHBOARD+'\n'+template+'\n');
+  // Inline scripts execute as parsed: mount the UI before original source
+  // markup, but execute the dashboard runtime only AFTER dashLoad and its
+  // 10 source cells have been declared. This also makes observers attach.
+  const runtimeMarker='<script id="hisabiq-dashboard-runtime">';
+  const scriptAt=template.indexOf(runtimeMarker);
+  if(scriptAt<0 || template.indexOf(runtimeMarker,scriptAt+1)!==-1)
+    throw new Error('Missing or duplicate compiled dashboard runtime');
+  const markup=template.slice(0,scriptAt);
+  const runtime=template.slice(scriptAt);
+  const dashboardAt=html.indexOf(DASHBOARD)+DASHBOARD.length;
+  const closeAt=html.indexOf('</section>',dashboardAt);
+  if(closeAt<0 || !html.slice(dashboardAt,closeAt).includes('function dashLoad()'))
+    throw new Error('Original source Dashboard closure changed');
+  return html.slice(0,dashboardAt)+'\n'+markup+'\n'+
+    html.slice(dashboardAt,closeAt)+'\n'+runtime+'\n'+html.slice(closeAt);
 }
