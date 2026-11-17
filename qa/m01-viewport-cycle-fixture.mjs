@@ -6,7 +6,7 @@ export const M01_RESPONSIVE_VIEWPORT_STAGES=Object.freeze([
     name:'phone-portrait-375x812',width:375,height:812,isPhone:true,tab:'customer'
   }),
   Object.freeze({
-    name:'coarse-landscape-812x375',width:812,height:375,isPhone:true,tab:'payment'
+    name:'coarse-landscape-812x375',width:812,height:375,isPhone:true
   }),
   Object.freeze({
     name:'touch-tablet-768x1024',width:768,height:1024,isPhone:false
