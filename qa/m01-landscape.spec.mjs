@@ -497,3 +497,126 @@ test('M01 original POS V2 keyboard tabs and no-match search never create a sale'
     });
   }
 });
+
+
+test('M01 Run 2 authenticated POS V2 stays role-safe through phone landscape tablet phone transitions',async t=>{
+  // RED-first coverage: add the independent M01-only stage fixture after the
+  // test-only commit has shown the expected missing-import failure in Chromium.
+  const {M01_RESPONSIVE_VIEWPORT_STAGES}=
+    await import('./m01-viewport-cycle-fixture.mjs');
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]},
+    {key:'bank',label:'Bank',sidebarGroup:4,sidebarOrder:50}
+  ];
+  const page=await browser.newPage({
+    viewport:{width:375,height:812},isMobile:true,hasTouch:true
+  });
+  try{
+    const {calls}=await installM01SyntheticNavigation(page,{
+      allowedModules:['dashboard','pos'],
+      permissions:{dashboard:{view:true},pos:{view:true}},
+      navItems
+    });
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.locator('#loginMobile').fill('01710000001');
+    await page.locator('#loginPassword').fill('m01-synthetic-only');
+    const loginReply=page.waitForResponse(response=>
+      response.url().endsWith('/api/rpc') &&
+      response.request().postDataJSON()?.fnName==='login');
+    await page.locator('#loginSubmitBtn').tap();
+    assert.equal((await loginReply).status(),200);
+    await page.waitForFunction(()=>
+      document.getElementById('loginOverlay')?.hidden===true);
+    await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+    await page.waitForFunction(()=>
+      currentPage==='posv2' &&
+      document.body.classList.contains('pos-v2-active'));
+    assert.equal(await page.evaluate(()=>posState.cart.length),0);
+
+    for(const stage of M01_RESPONSIVE_VIEWPORT_STAGES){
+      await t.test(stage.name,async()=>{
+        await page.setViewportSize({width:stage.width,height:stage.height});
+        await page.waitForFunction(()=>
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--app-viewport-height').trim()===
+          Math.round(window.visualViewport?.height||window.innerHeight)+'px');
+        const state=await page.evaluate(()=>({
+          mobile:isPhoneViewport_(),
+          currentPage,
+          posClass:document.body.classList.contains('pos-v2-active'),
+          cartLength:posState.cart.length,
+          overlayHidden:document.getElementById('loginOverlay')?.hidden===true,
+          appVisible:getComputedStyle(document.getElementById('app')).visibility!=='hidden',
+          bankItems:document.querySelectorAll(
+            '#navList .nav-item[data-page="bank"]').length,
+          restrictedAddHidden:document.getElementById('v2AddProductBtn')?.hidden===true,
+          viewportHeight:getComputedStyle(document.documentElement)
+            .getPropertyValue('--app-viewport-height').trim()
+        }));
+        assert.equal(state.mobile,stage.isPhone,
+          stage.name+' must follow original coarse-phone predicate');
+        assert.equal(state.currentPage,'posv2');
+        assert.equal(state.posClass,true);
+        assert.equal(state.cartLength,0);
+        assert.equal(state.overlayHidden,true);
+        assert.equal(state.appVisible,true);
+        assert.equal(state.bankItems,0,'forbidden Bank navigation must stay absent');
+        assert.equal(state.restrictedAddHidden,true,
+          'Clerk cannot reveal Products-add across viewport changes');
+
+        if(stage.isPhone){
+          const mobilePos=page.locator(
+            '#mobileBottomNav [data-mobile-page="pos"]');
+          assert.equal(await mobilePos.isVisible(),true);
+          const workflowTabs=page.locator('#page-pos .pos-v2-workflow-tabs');
+          if(stage.tab){
+            assert.equal(await workflowTabs.isVisible(),true,
+              'the narrow phone layout must provide workflow tabs');
+            const tab=workflowTabs.locator('[data-pos-v2-tab="'+stage.tab+'"]');
+            await tab.tap();
+            assert.equal(await tab.getAttribute('aria-selected'),'true');
+            assert.equal(await page.locator('#page-pos')
+              .getAttribute('data-pos-v2-tab-state'),stage.tab);
+            if(stage.tab==='cart'){
+              const searchRect=await page.locator('#posSearch').boundingBox();
+              assert.ok(searchRect && searchRect.width>0 &&
+                searchRect.x>=-1 && searchRect.x+searchRect.width<=stage.width+1,
+                stage.name+' cart search must fit phone horizontal bounds');
+            }
+          }else{
+            assert.equal(await workflowTabs.isVisible(),false,
+              'original wide coarse-landscape hides narrow-only workflow tabs');
+          }
+        }else{
+          assert.equal(await page.evaluate(()=>isPhoneViewport_()),false);
+          assert.equal(await page.locator(
+            '#navList .nav-item[data-page="pos"]').count(),1,
+            'tablet must retain source desktop-mode role-filtered POS group');
+        }
+        assert.equal(await page.locator('#v2AddProductBtn').isVisible(),false,
+          'restricted Add Product must be visually hidden, not only hidden attribute');
+        const evidence=await captureM01NavEvidence(page,
+          'run2-viewport-'+stage.name);
+        assert.deepEqual(evidence.viewport,{width:stage.width,height:stage.height});
+        assert.ok(evidence.screenshotBytes>1500);
+        assert.equal(evidence.loginHidden,true);
+        assert.equal(evidence.appVisible,true);
+        assert.equal(evidence.bankNavCount,0);
+      });
+    }
+    await page.evaluate(()=>goToPage('bank'));
+    assert.equal(await page.evaluate(()=>currentPage),'dashboard',
+      'forbidden Bank direct navigation must fall back safely');
+    assert.equal(calls.filter(call=>call.fnName==='login').length,1,
+      'responsive transitions must not trigger a new authentication request');
+    assert.equal(calls.filter(call=>
+      /^(?:saveSale|createSale|completeSale|postSale|submitSale|saveSalePayment)$/i
+        .test(call.fnName||'')).length,0,
+      'viewport changes and POS tabs must never post sales or payments');
+  }finally{await page.close();}
+});
