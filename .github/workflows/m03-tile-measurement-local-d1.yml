@@ -1,0 +1,22 @@
+name: M03 private tile-measurement revision D1 read (local-only)
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tile-measurement-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Node SQLite tile measurement read regression
+        run: node --test tests/m03-tile-measurement-d1-read.test.mjs
+      - name: Install pinned local Workerd runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Real local Workerd D1 history and read-only proof
+        run: node --test tests/integration/m03-tile-measurement-workerd.spec.mjs
