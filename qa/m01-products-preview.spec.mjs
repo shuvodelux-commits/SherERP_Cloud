@@ -173,6 +173,38 @@ test('Tiles requested area is rounded to actual physical Pcs and visible on 390p
  }finally{await page.close();}
 });
 
+test('inactive managed Product Unit is not silently promoted in compiled Product preview',async()=>{
+ const page=await openProductModal(1440);
+ try{
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','multi');
+  await page.locator('#m01StockPreview').getByText('2 Box 5 Pcs',{exact:false}).waitFor();
+  for(const invalidStatus of ['Inactive','Archived']){
+   await page.evaluate(status=>{
+    globalThis.prodState.units=globalThis.prodState.units.map(item=>({
+      ...item,status:item.name==='Box'?status:'Active'
+    }));
+    document.getElementById('m01CaseSize').dispatchEvent(new Event('input',{bubbles:true}));
+   },invalidStatus);
+   await page.waitForFunction(()=>{
+    const node=document.getElementById('m01StockPreview');
+    return node.classList.contains('m01-error')&&/Box|inactive|active Product Unit/i.test(node.textContent);
+   });
+   assert.doesNotMatch(await page.locator('#m01StockPreview').innerText(),/2 Box 5 Pcs/,
+     'inactive or unknown unit must never show a validated stock breakdown');
+   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
+  }
+  await page.evaluate(()=>{
+   globalThis.prodState.units=globalThis.prodState.units.map(item=>({
+     ...item,status:'Active'
+   }));
+   document.getElementById('m01CaseSize').dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.locator('#m01StockPreview').getByText('2 Box 5 Pcs',{exact:false}).waitFor();
+  assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true,
+    'a restored valid preview is still not a server-authorized Save');
+ }finally{await page.close();}
+});
+
 test('manufacturer coverage requires source evidence and never posts stock',async()=>{
  const page=await openProductModal(1440);
  try{
