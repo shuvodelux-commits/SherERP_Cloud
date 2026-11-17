@@ -88,7 +88,9 @@ function validRow(record,group){
       return false;
     if(Object.hasOwn(FINANCE_KINDS,group) &&
        (!FINANCE_KINDS[group].has(values.accountKind) ||
-        !stringId(values.accountSourceId) ||
+        (group==='FINANCE_TRANSACTIONS'
+          ? values.accountSourceId!==null && !stringId(values.accountSourceId)
+          : !stringId(values.accountSourceId)) ||
         typeof values.signedMinor!=='string' ||
         !SIGNED_MINOR.test(values.signedMinor)))
       return false;
@@ -141,6 +143,10 @@ function scanSide(root,group,side,issues){
       if(seenIds.has(id))add(issues,'AMBIGUOUS_HISTORICAL_'+suffix+'_ID');
       seenIds.add(id);
     }
+    // Older finance source rows predate additive Person ID. Preserve their
+    // physical history but never claim an inferred identity as reviewed.
+    if(group==='FINANCE_TRANSACTIONS' && row.accountSourceId===null)
+      add(issues,suffix+'_UNRESOLVED_LEGACY_FINANCE_ID');
   }
   return rows;
 }

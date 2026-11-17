@@ -206,3 +206,44 @@ test('equal source/import snapshots still reject orphan Customer and Supplier le
   assert.deepEqual(codes(audit(history),'CUSTOMER_LEDGER'),[]);
   assert.deepEqual(codes(audit(history),'SUPPLIER_LEDGER'),[]);
 });
+
+test('historical finance rows without original Person ID remain unresolved, never auto-matched',()=>{
+  const data=complete();
+  for(const side of ['sourceGroups','importedGroups'])
+    data[side].FINANCE_TRANSACTIONS[0].accountSourceId=null;
+  const out=audit(data);
+  const issues=codes(out,'FINANCE_TRANSACTIONS');
+  assert.equal(out.ready,false);
+  assert.equal(out.evidenceComplete,false);
+  assert.ok(issues.includes('SOURCE_UNRESOLVED_LEGACY_FINANCE_ID'));
+  assert.ok(issues.includes('IMPORTED_UNRESOLVED_LEGACY_FINANCE_ID'));
+  assert.ok(!issues.includes('INVALID_SOURCE_ROWS'));
+  assert.ok(!issues.includes('INVALID_IMPORTED_ROWS'));
+  assert.doesNotMatch(JSON.stringify(out),/F-1|OWNER_EQUITY|signedMinor/);
+
+  const drift=complete();
+  drift.sourceGroups.FINANCE_TRANSACTIONS[0].accountSourceId=null;
+  const mismatched=codes(audit(drift),'FINANCE_TRANSACTIONS');
+  assert.ok(mismatched.includes('SOURCE_UNRESOLVED_LEGACY_FINANCE_ID'));
+  assert.ok(mismatched.includes('PARTY_SOURCE_LINK_DRIFT'),
+    'a fabricated import ID must not silently resolve historical finance identity');
+
+  const deleted=complete();
+  for(const side of ['sourceGroups','importedGroups']){
+    deleted[side].FINANCE_TRANSACTIONS[0].deleted=true;
+    deleted[side].FINANCE_TRANSACTIONS[0].accountSourceId=null;
+  }
+  assert.ok(codes(audit(deleted),'FINANCE_TRANSACTIONS')
+    .includes('SOURCE_UNRESOLVED_LEGACY_FINANCE_ID'),
+    'deleted historical finance row remains part of physical source proof');
+
+  const customer=complete();
+  for(const side of ['sourceGroups','importedGroups'])
+    customer[side].CUSTOMER_LEDGER[0].accountSourceId=null;
+  assert.ok(codes(audit(customer),'CUSTOMER_LEDGER').includes('INVALID_SOURCE_ROWS'));
+  assert.ok(codes(audit(customer),'CUSTOMER_LEDGER').includes('INVALID_IMPORTED_ROWS'));
+
+  const blank=complete();
+  blank.sourceGroups.FINANCE_TRANSACTIONS[0].accountSourceId='';
+  assert.ok(codes(audit(blank),'FINANCE_TRANSACTIONS').includes('INVALID_SOURCE_ROWS'));
+});
