@@ -470,9 +470,9 @@ test('M03 Run 6 RED: wrong floor, wrong prefix, extra family, absent family and 
   const deny=async()=>assert.rejects(()=>audit.auditFreshSeed_(args),run6Denied);
   sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=0 WHERE id_key='PRODUCTS'").run();
   await deny();
-  sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=5 WHERE id_key='PRODUCTS'").run();
+  sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=6 WHERE id_key='PRODUCTS'").run();
   await deny();
-  sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=4,prefix='WRONG' WHERE id_key='PRODUCTS'").run();
+  sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=5,prefix='WRONG' WHERE id_key='PRODUCTS'").run();
   await deny();
   sql.prepare("UPDATE synthetic_m03_id_counters SET prefix='PRD' WHERE id_key='PRODUCTS'").run();
   sql.prepare("INSERT INTO synthetic_m03_id_counters VALUES ('TENANT-A','SESSIONS','BAD',0)").run();
@@ -480,8 +480,8 @@ test('M03 Run 6 RED: wrong floor, wrong prefix, extra family, absent family and 
   sql.prepare("DELETE FROM synthetic_m03_id_counters WHERE id_key='SESSIONS'").run();
   sql.prepare("DELETE FROM synthetic_m03_id_counters WHERE id_key='PRODUCT_UNITS'").run();
   await deny();
-  assert.throws(()=>createM03PrivateSourceFloorAudit(db.env,'TENANT-Z'),
-   /rejected|tenant|not allowed/i);
+  await assert.rejects(()=>createM03PrivateSourceFloorAudit(db.env,'TENANT-Z')
+   .auditFreshSeed_(args),run6Denied);
  }finally{db.close();}
 });
 test('M03 Run 6 RED: prior receipt, changed original counter and untrusted caller flags never approve issuer',async()=>{
