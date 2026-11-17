@@ -81,6 +81,14 @@ test('transport denies untrusted actor, time, business, action and unknown field
   assert.equal(invoked,0);
 });
 
+test('original required-name failures retain their source envelope without a source ID',async()=>{
+  const expected={success:false,message:'Category name is required.'};
+  const x=await getResult('addProductCategory',[TOKEN,data('   ')],{
+    productMasterBridge:{invoke:()=>expected}
+  });
+  assert.deepEqual(x,{status:200,body:expected});
+});
+
 test('private transport returns generic failure for invalid/secret or unresolved output',async()=>{
   for(const output of [
     null,{success:true,data:{id:'PCAT-000017',name:'Tools',secret:'private'}},
