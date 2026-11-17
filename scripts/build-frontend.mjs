@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import {patchHisabiqDashboard} from './patch-hisabiq-dashboard.mjs';
 
 /** Expand only GAS HtmlService includes; never execute arbitrary template code. */
 export async function buildFrontend({sourceDir, outputDir}) {
@@ -37,7 +38,13 @@ export async function buildFrontend({sourceDir, outputDir}) {
     }
     return output;
   };
-  const html=await expand('index');
+  const original=await expand('index');
+  // The new dashboard is an isolated compiled-only enhancement; the pinned
+  // legacy HTML and dashboard RPC/DOM identifiers remain untouched.
+  const dashboardTemplate=original.includes('id="page-dashboard"')
+    ? await readFile(new URL('../src/ui/hisabiq-dashboard.html',import.meta.url),'utf8')
+    : '';
+  const html=patchHisabiqDashboard(original,dashboardTemplate);
   await mkdir(dest,{recursive:true});
   const outputPath=join(dest,'index.html');
   await writeFile(outputPath,html,'utf8');
