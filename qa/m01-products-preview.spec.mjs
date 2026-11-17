@@ -96,7 +96,9 @@ async function chooseProductPreviewOption(page,id,value){
   const index=await native.locator('option').evaluateAll((options,wanted)=>
     options.findIndex(option=>option.value===wanted),value);
   assert.ok(index>=0,'expected source-backed option '+value);
-  await page.locator('#'+id+' + .touch-select-trigger').click();
+  const trigger=page.locator('#'+id+' + .touch-select-trigger');
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
   const option=page.locator('#touchSelectMenuGlobal button[data-touch-option-index="'+index+'"]');
   assert.equal(await option.isVisible(),true,'visible original touch-picker option');
   // The frozen ERP closes open pickers on window scroll. Playwright's
