@@ -31,22 +31,22 @@ const REVIEWED=Object.freeze({
   // Historical diagnostics/audit readers return immutable source-shaped
   // text evidence only; those group identities are NOT current posting data.
   'src/db/legacy-error-log-read.js':Object.freeze([
-    'all','findRows_','findFirstRow_','findRow_'
+    'all','readSourceRows','findRows_','findFirstRow_','findRow_'
   ]),
   'src/db/delete-log-audit-read.js':Object.freeze([
-    'all','findRows_','findFirstRow_','findRow_'
+    'all','sourceRows','findRows_','findFirstRow_','findRow_'
   ]),
   'src/db/invoice-edit-audit-read.js':Object.freeze([
-    'all','findRows_','findFirstRow_','findRow_'
+    'all','rowsFor','findRows_','findFirstRow_','findRow_'
   ]),
   'src/db/sales-draft-audit-read.js':Object.freeze([
-    'all','findRows_','findFirstRow_','findRow_'
+    'all','sourceRows','findRows_','findFirstRow_','findRow_'
   ]),
   'src/db/opening-balance-edit-audit-read.js':Object.freeze([
-    'all','findRows_','findFirstRow_','findRow_'
+    'all','sourceRows','findRows_','findFirstRow_','findRow_'
   ]),
   'src/db/stock-lot-cost-history-read.js':Object.freeze([
-    'all','findRows_','findFirstRow_','findRow_'
+    'all','sourceRows','findRows_','findFirstRow_','findRow_'
   ])
 });
 export const REVIEWED_AWAIT_FILES=Object.freeze(Object.keys(REVIEWED));
@@ -57,12 +57,12 @@ const EXPECTED_SITES=Object.freeze({
   'src/modules/product-master-options.js':4,
   'src/modules/source-app-shell-reader.js':1,
   'src/rpc/internal-daybook-bootstrap.js':1,
-  'src/db/legacy-error-log-read.js':4,
-  'src/db/delete-log-audit-read.js':4,
-  'src/db/invoice-edit-audit-read.js':4,
-  'src/db/sales-draft-audit-read.js':4,
-  'src/db/opening-balance-edit-audit-read.js':4,
-  'src/db/stock-lot-cost-history-read.js':4
+  'src/db/legacy-error-log-read.js':6,
+  'src/db/delete-log-audit-read.js':6,
+  'src/db/invoice-edit-audit-read.js':6,
+  'src/db/sales-draft-audit-read.js':6,
+  'src/db/opening-balance-edit-audit-read.js':6,
+  'src/db/stock-lot-cost-history-read.js':6
 });
 
 
@@ -96,7 +96,12 @@ function allAwaitedCalls(source,required) {
         const fnIndex=parents.lastIndexOf(fn);
         const awaited=fnIndex>=0 &&
           parents.slice(fnIndex+1).some(ancestor=>ancestor.type==='AwaitExpression');
-        if(!fn?.async || !awaited)throw deny();
+        const directlyReturned=fnIndex>=0 &&
+          parents.slice(fnIndex+1).some(ancestor=>
+            ancestor.type==='ReturnStatement' && ancestor.argument===node);
+        // An async function adopts a DIRECTLY returned Promise. Calling
+        // sourceRows() in another expression without await is not safe.
+        if(!fn?.async || (!awaited && !directlyReturned))throw deny();
         visited.set(name,visited.get(name)+1);
       }
     }
@@ -150,7 +155,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
       [path,readFileSync(new URL(path,root),'utf8')]
     ));
     const out=auditReviewedM03AwaitChains(sources);
-    if(out.awaitedCallSites!==39)throw deny();
+    if(out.awaitedCallSites!==51)throw deny();
     process.stdout.write('M03 reviewed awaited slice: '+out.files+
       ' source files / '+out.awaitedCallSites+
       ' awaited calls (NOT full 394-function conversion)\n');
