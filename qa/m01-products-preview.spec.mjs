@@ -64,7 +64,12 @@ async function openProductModal(width){
   window.prodState.units=['Pcs','Box','Carton'].map(name=>({id:name,name}));
   get('prodPurchasePrice').value='100';
   get('prodSellingPrice').value='160';
-  const modal=get('prodModal');modal.hidden=false;modal.style.display='flex';
+  const modal=get('prodModal');
+  // Synthetic unauthenticated fixture: promote only this fixed overlay out of
+  // the protected app shell, as the original Manage Units modal already does.
+  // Do not remove/change the real Worker auth boundary or expose a save route.
+  document.body.appendChild(modal);
+  modal.hidden=false;modal.style.display='flex';
  });
  return page;
 }
