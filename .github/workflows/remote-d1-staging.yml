@@ -65,7 +65,7 @@ jobs:
           node scripts/guard-remote-staging.mjs verify-identity "$RUNNER_TEMP/staging-db-list.json"
       - name: Inspect remote staging schema (SELECT only)
         run: |
-          npx --yes wrangler@4.161.0 d1 execute shererp-operational-staging-20261118 --remote --config wrangler.staging.jsonc --json --command "SELECT COUNT(*) AS existing_user_tables FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*';" > "$RUNNER_TEMP/staging-before.json"
+          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --remote --config wrangler.staging.jsonc --json --command "SELECT COUNT(*) AS existing_user_tables FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*';" > "$RUNNER_TEMP/staging-before.json"
           node scripts/guard-remote-staging.mjs inspect "$RUNNER_TEMP/staging-before.json"
       - name: Refuse migration unless remote staging has zero user tables
         if: inputs.operation == 'apply'
@@ -73,13 +73,13 @@ jobs:
       - name: Record recovery point before any remote write
         if: inputs.operation == 'apply'
         run: |
-          npx --yes wrangler@4.161.0 d1 time-travel info shererp-operational-staging-20261118 --json --config wrangler.staging.jsonc > "$RUNNER_TEMP/staging-before-bookmark.json"
+          npx --yes wrangler@4.161.0 d1 time-travel info shererp-staging-db --json --config wrangler.staging.jsonc > "$RUNNER_TEMP/staging-before-bookmark.json"
           node scripts/guard-remote-staging.mjs bookmark "$RUNNER_TEMP/staging-before-bookmark.json"
       - name: Apply two approved migrations to remote staging D1 only
         if: inputs.operation == 'apply'
-        run: npx --yes wrangler@4.161.0 d1 migrations apply shererp-operational-staging-20261118 --remote --config wrangler.staging.jsonc
+        run: npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --remote --config wrangler.staging.jsonc
       - name: Verify remote staging schema after apply (SELECT only)
         if: inputs.operation == 'apply'
         run: |
-          npx --yes wrangler@4.161.0 d1 execute shererp-operational-staging-20261118 --remote --config wrangler.staging.jsonc --json --command "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review')) AS app_tables, (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('trg_party_role_delete_forbidden','trg_party_cross_source_verification','trg_party_legacy_identity_immutable','trg_party_legacy_link_delete_forbidden')) AS history_triggers;" > "$RUNNER_TEMP/staging-after.json"
+          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --remote --config wrangler.staging.jsonc --json --command "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('settings','product_categories','product_units','parties','party_roles','party_legacy_links','party_identity_review')) AS app_tables, (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations, (SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('trg_party_role_delete_forbidden','trg_party_cross_source_verification','trg_party_legacy_identity_immutable','trg_party_legacy_link_delete_forbidden')) AS history_triggers;" > "$RUNNER_TEMP/staging-after.json"
           node scripts/guard-remote-staging.mjs verify-schema "$RUNNER_TEMP/staging-after.json"
