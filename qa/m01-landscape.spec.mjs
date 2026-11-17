@@ -135,3 +135,85 @@ test('original landscape login stays touch-operable at wide and compact phone si
     });
   }
 });
+
+
+test('M01 synthetic Clerk mobile and tablet navigation keeps source role filtering',async t=>{
+  // Deliberately import inside only this test: first RED is the missing
+  // M01-owned browser fixture, while unrelated original browser tests run.
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+
+  for(const {name,width,height,phone} of [
+    {name:'phone-375x812',width:375,height:812,phone:true},
+    {name:'landscape-812x375',width:812,height:375,phone:true},
+    {name:'tablet-768x1024',width:768,height:1024,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:true,hasTouch:true
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page);
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const loginReply=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').tap();
+        assert.equal((await loginReply).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        await page.locator('#navList .nav-item[data-page="reports"]').waitFor();
+        assert.equal(await page.locator('#navList .nav-item[data-page="bank"]').count(),0,
+          'Clerk cannot see Bank in desktop sidebar');
+        assert.equal(await page.locator('#navList .nav-item[data-page="dashboard"]').count(),1);
+        assert.equal(await page.evaluate(()=>isPhoneViewport_()),phone);
+        assert.equal(calls.filter(x=>x.fnName==='login').length,1,
+          'viewport parity must need only one synthetic login');
+
+        if(phone){
+          for(const key of ['pos','sales','products']){
+            assert.equal(await page.locator(
+              '#mobileBottomNav [data-mobile-page="'+key+'"]').isVisible(),false,
+              'unauthorized '+key+' primary button must be hidden');
+          }
+          const more=page.locator('#mobileBottomNav [data-mobile-page="more"]');
+          assert.equal(await more.isVisible(),true);
+          await more.tap();
+          await page.locator('#mobileMoreSheet:not([hidden])').waitFor();
+          assert.equal(await page.locator(
+            '#mobileMoreList [data-mobile-target="reports"]').count(),1);
+          assert.equal(await page.locator(
+            '#mobileMoreList [data-mobile-target="bank"]').count(),0);
+          await page.locator(
+            '#mobileMoreList [data-mobile-target="reports"]').tap();
+          assert.equal(await page.locator('#mobileMoreSheet').isVisible(),false);
+          assert.equal(await page.evaluate(()=>currentPage),'reports');
+          assert.equal(await page.locator(
+            '#mobileBottomNav [data-mobile-page="more"]').getAttribute('aria-current'),'page');
+        }else{
+          // The 768px touch tablet remains the source's desktop-mode shell.
+          assert.equal(await page.locator('#navList .nav-item[data-page="reports"]').count(),1);
+          await page.evaluate(()=>goToPage('reports'));
+          assert.equal(await page.evaluate(()=>currentPage),'reports');
+        }
+
+        // Direct client navigation still falls back from denied Bank.
+        await page.evaluate(()=>goToPage('bank'));
+        assert.equal(await page.evaluate(()=>currentPage),'dashboard',
+          'the browser must never navigate to an unauthorized Bank view');
+        const capture=await captureM01NavEvidence(page,name);
+        assert.equal(capture.viewport.width,width);
+        assert.equal(capture.viewport.height,height);
+        assert.ok(capture.screenshotBytes>1500,'reviewable screenshot evidence');
+        assert.equal(capture.loginHidden,true);
+        assert.equal(capture.appVisible,true);
+        assert.equal(capture.bankNavCount,0);
+      }finally{
+        await page.close();
+      }
+    });
+  }
+});
