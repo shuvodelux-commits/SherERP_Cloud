@@ -270,3 +270,19 @@ test('G3 real Workerd: stock movement drift also refuses replay; late movement f
   assert.deepEqual(await snapshot(),before);
   await DB.prepare('DROP TRIGGER synthetic_m03_g3_fault').run();
 });
+
+test('G4 Workerd D1 issues one source invoice ID with authorized sale and stable replay',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=2 WHERE business_id='BUSINESS-A'").run();
+  await DB.prepare("UPDATE synthetic_m03_g1_cash_sessions SET status='Open' WHERE business_id='BUSINESS-A'").run();
+  const counter=async()=>(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  const before=await counter();
+  const inputValue=input(SECOND,'OP-G4-WORKER-1');
+  assert.equal((await posting.post_(inputValue)).status,'COMMITTED');
+  assert.equal(await counter(),before+1);
+  const row=await DB.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id=?").bind('OP-G4-WORKER-1').first();
+  assert.equal(row.source_invoice_id,'INV-'+String(before+1).padStart(6,'0'));
+  const prior=await snapshot();
+  assert.equal((await posting.post_(inputValue)).status,'REPLAY');
+  assert.equal(await counter(),before+1);
+  assert.deepEqual(await snapshot(),prior);
+});
