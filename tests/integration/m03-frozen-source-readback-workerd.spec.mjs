@@ -5,6 +5,9 @@ import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
 import {createFrozenSourceReadback} from '../../src/db/m03-frozen-source-readback.js';
 import {createSealedSourceLookup} from '../../src/db/m03-sealed-source-lookup.js';
+import {createM03PrivateIdEvidenceReconciler} from '../../src/db/m03-private-id-evidence-reconcile.js';
+import {M02_ID_FAMILIES} from '../../scripts/dry-run-id-floor.mjs';
+import {captureM02IdEvidenceFreeze} from '../../scripts/dry-run-id-evidence-freeze.mjs';
 import {reviewOfflineSourceParity} from '../../scripts/dry-run-source-parity.mjs';
 
 const source=JSON.parse(readFileSync(new URL('../../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
@@ -170,6 +173,12 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
 
  const staged=sourceData();
  staged.groups.LOGS.rows=rows;
+ // The source-parity fixture deliberately has arbitrary original-ID strings.
+ // Use independent synthetic canonical IDs for this final Run 5 D1 gate.
+ for(const family of M02_ID_FAMILIES){
+  const group=staged.groups[family.sourceGroup];
+  group.rows.forEach((r,i)=>{r.cells[0]=family.prefix+'-'+String(i+1).padStart(6,'0');});
+ }
  for(const sheet of source.tables){
   const sourceGroup=sheet.sheetKey;
   const {headers:fields,rows:original}=staged.groups[sourceGroup];
@@ -230,4 +239,40 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
  assert.deepEqual(await createFrozenSourceReadback({DB}).readAllSourceGroups(),staged);
  const archiveRoute=await worker.fetch('http://m03.local/__m03_test__/source-archive');
  assert.equal(archiveRoute.status,404);
+
+ // Run 5: re-read all 49 sealed groups from real local D1. The M02 salted
+ // commitments come from separate synthetic ID/Property evidence, not D1.
+ const idEvidence={
+  formatVersion:1,sourceCommit:pin,groups:{},counters:{},declaredSourceCounts:{}
+ };
+ for(const family of M02_ID_FAMILIES){
+  const group=staged.groups[family.sourceGroup];
+  idEvidence.groups[family.sourceGroup]=group.rows.map(r=>({
+   sheetRow:r.sheetRow,id:r.cells[0]
+  }));
+  idEvidence.counters[family.sourceGroup]=String(group.rows.length+3);
+  idEvidence.declaredSourceCounts[family.sourceGroup]=group.rows.length;
+ }
+ const freezeManifest=captureM02IdEvidenceFreeze({
+  schema:source,pinnedSourceCommit:pin,evidence:idEvidence,salt:'ac'.repeat(32)
+ });
+ const reviewer=createM03PrivateIdEvidenceReconciler({DB});
+ const beforeCount=(await DB.prepare('SELECT COUNT(*) AS n FROM m03_private_source_rows').first()).n;
+ const status=await reviewer.reconcile_({idEvidence,freezeManifest});
+ assert.equal(status.localD1ArchiveMatchesSuppliedIdFreeze,true);
+ assert.equal(status.independentSourceCaptureVerified,false);
+ assert.equal(status.sourceToD1Reconciled,false);
+ assert.equal(status.idIssuanceAuthorized,false);
+ assert.equal(status.productionReady,false);
+ const tampered=structuredClone(idEvidence);
+ tampered.counters.SALES='77';
+ await assert.rejects(()=>reviewer.reconcile_({
+  idEvidence:tampered,freezeManifest
+ }),/M03 private original ID evidence rejected/);
+ const falseRows=structuredClone(idEvidence);
+ falseRows.groups.PRODUCTS[0].id='PRD-000099';
+ await assert.rejects(()=>reviewer.reconcile_({
+  idEvidence:falseRows,freezeManifest
+ }),/M03 private original ID evidence rejected/);
+ assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM m03_private_source_rows').first()).n,beforeCount);
 });

@@ -4,6 +4,10 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createFrozenSourceReadback} from '../src/db/m03-frozen-source-readback.js';
+import {createM03PrivateIdEvidenceReconciler} from '../src/db/m03-private-id-evidence-reconcile.js';
+import {M02_ID_FAMILIES} from '../scripts/dry-run-id-floor.mjs';
+import {captureM02IdEvidenceFreeze} from '../scripts/dry-run-id-evidence-freeze.mjs';
+
 import {FROZEN_SOURCE_COLUMNS,FROZEN_SOURCE_COMMIT} from '../src/db/m03-frozen-source-headers.js';
 import {reviewOfflineSourceParity} from '../scripts/dry-run-source-parity.mjs';
 
@@ -321,4 +325,106 @@ test('page resource budget rejects a correctly sealed 8MiB+ cell before any part
    return true;
   });
  });
+});
+
+function run5Evidence(){
+ const source=original();
+ const product=source.groups.PRODUCTS;
+ const historical={sheetRow:19,cells:product.headers.map(()=>'')};
+ historical.cells[product.headers.indexOf('Is Deleted')]='TRUE';
+ product.rows.push(historical);
+ const evidence={formatVersion:1,sourceCommit:pin,groups:{},counters:{},declaredSourceCounts:{}};
+ for(const f of M02_ID_FAMILIES){
+  const rows=source.groups[f.sourceGroup].rows;
+  rows.forEach((row,i)=>{row.cells[0]=f.prefix+'-'+String(i+1).padStart(6,'0');});
+  evidence.groups[f.sourceGroup]=rows.map(row=>({sheetRow:row.sheetRow,id:row.cells[0]}));
+  evidence.declaredSourceCounts[f.sourceGroup]=rows.length;
+  evidence.counters[f.sourceGroup]=String(rows.length+3);
+ }
+ const manifest=captureM02IdEvidenceFreeze({
+  schema,pinnedSourceCommit:pin,evidence,salt:'ab'.repeat(32)
+ });
+ return {source,evidence,manifest};
+}
+const run5Denied=/M03 private original ID evidence rejected/;
+const change=x=>structuredClone(x);
+
+test('M03 Run 5 RED: exact 49 sealed D1 groups reconcile 38 ID families and frozen counters without enabling posting',async()=>{
+ const x=run5Evidence(),db=fixtureDb(x.source);
+ try{
+  const adapter=createM03PrivateIdEvidenceReconciler(db.env);
+  const result=await adapter.reconcile_({idEvidence:x.evidence,freezeManifest:x.manifest});
+  assert.deepEqual(result,{
+   formatVersion:1,sourceGroups:49,idFamilies:38,localD1ArchiveMatchesSuppliedIdFreeze:true,
+   independentSourceCaptureVerified:false,sourceToD1Reconciled:false,
+   idIssuanceAuthorized:false,publicRpcEnabled:false,productionReady:false
+  });
+  assert.ok(db.statements.every(s=>s.startsWith('SELECT ')));
+  assert.equal(x.source.groups.PRODUCTS.rows.at(-1).cells[0],'PRD-000002');
+  assert.equal(x.source.groups.PRODUCTS.rows.at(-1).cells[13],'TRUE');
+ }finally{db.close();}
+});
+
+test('M03 Run 5 RED: independently sealed archive differs from otherwise self-consistent original-ID freeze',async()=>{
+ const x=run5Evidence(),db=fixtureDb(x.source);
+ try{
+  const evidence=change(x.evidence),manifest=change(x.manifest);
+  const old=evidence.groups.PRODUCTS[0].id;
+  evidence.groups.PRODUCTS[0].id='PRD-000009';
+  evidence.counters.PRODUCTS='10';
+  // Freeze the wrong source snapshot: internally valid but NOT actual D1.
+  const wrong=captureM02IdEvidenceFreeze({schema,pinnedSourceCommit:pin,evidence,
+   salt:manifest.salt});
+  const adapter=createM03PrivateIdEvidenceReconciler(db.env);
+  await assert.rejects(()=>adapter.reconcile_({
+   idEvidence:evidence,freezeManifest:wrong
+  }),run5Denied);
+  assert.notEqual(old,evidence.groups.PRODUCTS[0].id);
+ }finally{db.close();}
+});
+
+test('M03 Run 5 RED: counter tamper, deleted ID omission, forged root and duplicate original ID are denied',async()=>{
+ const x=run5Evidence(),db=fixtureDb(x.source);
+ try{
+  const adapter=createM03PrivateIdEvidenceReconciler(db.env);
+  const attacks=[
+   ()=>{const e=change(x.evidence);e.counters.SALES='77';return {idEvidence:e,freezeManifest:x.manifest};},
+   ()=>{const e=change(x.evidence);e.groups.PRODUCTS.pop();e.declaredSourceCounts.PRODUCTS--;
+     return {idEvidence:e,freezeManifest:x.manifest};},
+   ()=>{const m=change(x.manifest);m.rootDigest='0'.repeat(64);
+     return {idEvidence:x.evidence,freezeManifest:m};},
+   ()=>{const e=change(x.evidence);e.groups.PRODUCTS[1].id=e.groups.PRODUCTS[0].id;
+     return {idEvidence:e,freezeManifest:x.manifest};},
+   ()=>({idEvidence:{...x.evidence,counters:{...x.evidence.counters,SALES:null}},
+     freezeManifest:x.manifest})
+  ];
+  for(const attack of attacks)
+   await assert.rejects(()=>adapter.reconcile_(attack()),run5Denied);
+ }finally{db.close();}
+});
+
+test('M03 Run 5 RED: forged input, unbound D1 and unknown caller flags never expose original IDs or salts',async()=>{
+ const x=run5Evidence(),db=fixtureDb(x.source);
+ try{
+  const adapter=createM03PrivateIdEvidenceReconciler(db.env);
+  for(const patch of [
+   {actorId:'ADMIN'}, {skipSeals:true},{idIssuanceAuthorized:true}
+  ])await assert.rejects(()=>adapter.reconcile_({
+   idEvidence:x.evidence,freezeManifest:x.manifest,...patch
+  }),run5Denied);
+  await assert.rejects(()=>adapter.reconcile_(),run5Denied);
+  await assert.rejects(()=>adapter.reconcile_({
+   idEvidence:x.evidence,freezeManifest:x.manifest
+  },{allowProduction:true}),run5Denied);
+  assert.throws(()=>createM03PrivateIdEvidenceReconciler({}),/D1 database binding unavailable/);
+  db.sql.prepare("UPDATE m03_private_source_rows SET cells_json='[]' WHERE source_group='PRODUCTS' AND legacy_sheet_row=19").run();
+  await assert.rejects(()=>adapter.reconcile_({
+   idEvidence:x.evidence,freezeManifest:x.manifest
+  }),e=>{
+   assert.match(e.message,run5Denied);
+   for(const secret of ['PRD-000002',x.manifest.salt,x.manifest.rootDigest])
+    assert.ok(!e.message.includes(secret));
+   return true;
+  });
+ }finally{db.close();}
 });
