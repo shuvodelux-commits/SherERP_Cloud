@@ -90,6 +90,7 @@ function projectVendor(row,ledger){
   // Source GAS sorts by Date/Created At; D1's immutable legacy_row handles
   // ties because rows were loaded in physical order and modern sort is stable.
   const ascending=active.map(entry=>({
+    _rowIndex:entry.legacy_row,
     'Ledger ID':entry.ledger_id,
     Date:entry.date_text,
     'Vendor ID':entry.vendor_id,
@@ -145,6 +146,7 @@ function projectPayee(requested,payees,expenses){
         total=accumulate(total,e.amount_cents);
       return {
         expenseId:e.expense_id,
+        payeeId:e.payee_id, // Original EXPENSES['Ledger ID'], never inferred from name.
         amount:e.amount_cents/100,
         paymentMethod:e.payment_method,
         status:e.status,
