@@ -221,6 +221,18 @@ test('M03 #621 real local Workerd D1 authenticated Products bootstrap preserves 
   assert.equal(display621(a.products[0]),'Shortage: 2 Box 5 Pcs');
   await insert621("UPDATE synthetic_m03_product_stock SET physical_qty_text='45' WHERE product_id='PRD-000010'");
  });
+ await t.test('original single-unit fractional Feet stock survives without invented conversions',async()=>{
+  await insert621("UPDATE synthetic_m03_product_stock SET physical_qty_text='12.5' WHERE product_id='PRD-000013'");
+  const plain=await call621(T621.A);
+  assert.equal(plain.products[3]['Current Stock'],12.5);
+  assert.equal(plain.products[3].Unit,'Feet');
+  assert.equal(plain.products[3]['M05 Stock Preview'],undefined);
+  assert.equal(plain.products[3]['Stock Value'],37.5);
+  await insert621("UPDATE synthetic_m03_product_stock SET physical_qty_text='12' WHERE product_id='PRD-000013'");
+  await insert621("UPDATE synthetic_m03_product_stock SET physical_qty_text='45.5' WHERE product_id='PRD-000010'");
+  await assert.rejects(()=>call621(T621.A),reject621);
+  await insert621("UPDATE synthetic_m03_product_stock SET physical_qty_text='45' WHERE product_id='PRD-000010'");
+ });
  await t.test('stale Tile measurement, mismatched pack and missing coverage cannot fabricate sqft',async()=>{
   const original=(await DB.prepare("SELECT measurement_json FROM synthetic_m03_tile_current WHERE product_id='PRD-000011'").first()).measurement_json;
   const tile=JSON.parse(original);
