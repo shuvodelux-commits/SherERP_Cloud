@@ -124,8 +124,8 @@ test('verified source role directory retains role ID and history without inventi
   const byName=name=>result.roles.find(row=>row.name===name);
   assert.deepEqual(byName('Cashier'),{
     name:'Cashier',status:'Inactive',
-    sourceRoleId:'ROL-PROV-1',sourceCreatedAt:roleCreated,
-  },'both original Role ID and Created At are preserved exactly');
+    sourceRoleId:'ROL-PROV-1',sourceCreatedAt:roleCreated,allowedModules:[],
+  },'verified source role with no visible modules retains an empty list');
   assert.deepEqual(byName('M04IncompleteRole'),{
     name:'M04IncompleteRole',status:'Inactive',
   },'an incomplete provenance pair must not be invented');
@@ -202,4 +202,72 @@ test('staff directory projects verified Created By, Created At and blank or pres
     'credential_version','token_hash','permissions_json',password]){
     assert.equal(serialized.includes(secret),false,'private field escaped: '+secret);
   }
+});
+
+
+test('verified Roles directory displays only consistent source module names, never action grants',async()=>{
+  const {createOfflinePasswordCredential,loginWithD1}=await import('../../src/auth/d1-auth-core.js');
+  const {readRoleDirectoryPreviewWithD1}=await import('../../src/auth/d1-role-directory.js');
+  const nowMs=1_800_350_000_000;
+  const password='SyntheticRoleModuleListing!2026';
+  const cred=await createOfflinePasswordCredential(password);
+  await DB.prepare(`INSERT INTO auth_users
+    (user_id,full_name,phone_key,role_name,status,password_hash,password_salt,password_iterations)
+    VALUES ('USR-M04-MODULE-VIEW','Synthetic Roles Viewer','01790000997','Administrator',
+      'Active',?,?,?)`)
+    .bind(cred.passwordHash,cred.passwordSalt,cred.iterations).run();
+
+  const viewProducts=JSON.stringify({
+    products:{view:true,add:false,edit:false,delete:'disabled',backdate:'unlimited'},
+    settings:{view:false,add:true,edit:false,delete:'disabled',backdate:'disabled'},
+  });
+  const inconsistent=JSON.stringify({
+    products:{view:false,add:false,edit:false,delete:'disabled',backdate:'unlimited'},
+  });
+  await DB.prepare(`INSERT INTO auth_roles
+    (role_name,status,source_role_id,source_created_at_iso,allowed_modules,permissions_json)
+    VALUES ('M04ReviewedModules','Active','ROL-M04-MODULES',?,'products',?),
+      ('M04InvalidNavigation','Active','ROL-M04-MISMATCH',?,'products',?),
+      ('M04MalformedModules','Active','ROL-M04-MALFORMED',?,'products','invalid-json'),
+      ('M04NativeModules','Active',NULL,NULL,'products',?),
+      ('M04IncompleteModules','Active','ROL-M04-PARTIAL',NULL,'products',?)`)
+    .bind(roleCreated,viewProducts,roleCreated,inconsistent,roleCreated,viewProducts,viewProducts).run();
+
+  const session=await loginWithD1(DB,{phoneKey:'01790000997',password,nowMs});
+  assert.equal(session.authenticated,true);
+  assert.deepEqual(await readRoleDirectoryPreviewWithD1(DB,{
+    token:'forged',nowMs:nowMs+1000,
+  }),{authorized:false});
+  const preview=await readRoleDirectoryPreviewWithD1(DB,{
+    token:session.token,nowMs:nowMs+1000,
+  });
+  assert.equal(preview.authorized,true);
+  assert.equal(preview.partial,true,'read remains a partial internal Roles bootstrap');
+  const byName=name=>preview.roles.find(row=>row.name===name);
+  assert.deepEqual(byName('M04ReviewedModules'),{
+    name:'M04ReviewedModules',status:'Active',
+    sourceRoleId:'ROL-M04-MODULES',sourceCreatedAt:roleCreated,
+    allowedModules:['products'],
+  });
+  assert.deepEqual(byName('M04InvalidNavigation'),{
+    name:'M04InvalidNavigation',status:'Active',
+    sourceRoleId:'ROL-M04-MISMATCH',sourceCreatedAt:roleCreated,
+  },'inconsistent view grants never appear as a source module list');
+  assert.deepEqual(byName('M04MalformedModules'),{
+    name:'M04MalformedModules',status:'Active',
+    sourceRoleId:'ROL-M04-MALFORMED',sourceCreatedAt:roleCreated,
+  },'malformed permissions JSON is not returned or presented as verified');
+  assert.deepEqual(byName('M04NativeModules'),{
+    name:'M04NativeModules',status:'Active',
+  },'native D1 role cannot claim original source module history');
+  assert.deepEqual(byName('M04IncompleteModules'),{
+    name:'M04IncompleteModules',status:'Active',
+  },'incomplete source provenance cannot claim historical module names');
+  for(const role of preview.roles){
+    assert.equal(Object.hasOwn(role,'permissions'),false);
+    assert.equal(Object.hasOwn(role,'permissionsJson'),false);
+    assert.equal(Object.hasOwn(role,'authVersion'),false);
+  }
+  assert.equal(JSON.stringify(preview).includes('invalid-json'),false);
+  assert.equal(JSON.stringify(preview).includes(password),false);
 });
