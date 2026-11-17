@@ -1185,3 +1185,48 @@ test('M01 dashboard tablet 768px: named regions, three-column metrics and access
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+
+test('M01 dashboard same-actor session-token turnover redacts stale source summaries (synthetic UI only)',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  const sales=page.locator('#hisabiq-dashboard [data-hdb-value="dashSales"]');
+  const due=page.locator('#hisabiq-dashboard [data-hdb-value="dashDue"]');
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await authorizeDashboardStep2_(page,'SAME-ACTOR','SAME-TENANT');
+    await page.evaluate(()=>{
+      document.getElementById('dashSales').textContent='OLD-SESSION-SALES-120';
+      document.getElementById('dashDue').textContent='OLD-SESSION-DUE-80';
+    });
+    await page.waitForFunction(()=>document.querySelector('#hisabiq-dashboard [data-hdb-value="dashSales"]')?.textContent==='OLD-SESSION-SALES-120');
+    assert.equal(await due.innerText(),'OLD-SESSION-DUE-80');
+
+    // Synthetic credential rotation does not switch the user or tenant identity.
+    // Old source DOM callbacks must not be mirrored before focus/auth sync fires.
+    await page.evaluate(async()=>{
+      window.authToken='m01-new-session-token';
+      document.getElementById('dashSales').textContent='OLD-CALLBACK-SALES-999';
+      document.getElementById('dashDue').textContent='OLD-CALLBACK-DUE-888';
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+    });
+    assert.equal(await sales.innerText(),'—','same actor/tenant token change must deny old source cell rendering');
+    assert.equal(await due.innerText(),'—');
+
+    // Focusing synchronizes identity and actively clears the legacy source DOM.
+    await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    assert.equal(await page.locator('#dashSales').innerText(),'--',
+      'old session source values must be discarded after session turnover');
+    assert.equal(await page.locator('#dashDue').innerText(),'--');
+    assert.equal(await sales.innerText(),'—');
+
+    // Synthetic new-session source load is still allowed after sync.
+    await page.evaluate(()=>{
+      document.getElementById('dashSales').textContent='NEW-SESSION-SALES-55';
+      document.getElementById('dashDue').textContent='NEW-SESSION-DUE-20';
+    });
+    await page.waitForFunction(()=>document.querySelector('#hisabiq-dashboard [data-hdb-value="dashSales"]')?.textContent==='NEW-SESSION-SALES-55');
+    assert.equal(await due.innerText(),'NEW-SESSION-DUE-20');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
