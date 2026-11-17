@@ -123,6 +123,13 @@ export function planMultiUnitPosLine(intent,snapshot){
   const resolved=resolveProductUnitBreakdown_(
     product,intent.unitBreakdown,intent.claimedBaseQty,conversions);
   const baseQty=resolved.baseQty;
+  // A positive historical FIFO lot is not automatically available stock:
+  // existing OVERSOLD obligations may already consume the net balance.
+  // The frozen vendor planner also respects this net-owned ceiling.
+  const netOwnedAvailable=Math.max(0,Number(product['Current Stock']));
+  if(intent.shortageMode==='Own' && baseQty>netOwnedAvailable+0.0000001){
+    throw new Error('Owned stock shortage: choose Negative or Vendor sourcing explicitly.');
+  }
   const fifo=intent.shortageMode==='Vendor'
     ?planSaleVendorConsumption_(id,baseQty,lots,product)
     :planStockConsumption_(id,baseQty,lots,product);
