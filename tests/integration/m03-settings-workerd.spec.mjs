@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createSettingsReadAdapter} from '../../src/db/settings-read.js';
+import {verifyM03D1FoundationSchema} from '../../src/db/d1-schema-preflight.js';
 import {createSourceShapedAppShellReader} from '../../src/modules/source-app-shell-reader.js';
 import {createGuardedShellSettingsUpdateAdapter} from '../../src/db/settings-update.js';
 
@@ -233,4 +234,19 @@ test('real local D1 shell respects read freshness and isolates deep nested nav m
   assert.equal(third.data.shopName,'Latest');
   assert.deepEqual(third.data.navItems,before,'no cached navigation mutation');
   assert.equal((await records()).length,2);
+});
+
+
+test('Run1 real local Workerd D1 verifies only reviewed structural foundation columns without business reads',async()=>{
+  const before=await DB.prepare('SELECT COUNT(*) AS n FROM settings').first();
+  const proof=await verifyM03D1FoundationSchema({DB});
+  assert.deepEqual(proof,{
+    scope:'read-only-structural-metadata',status:'STRUCTURAL_ONLY',
+    requiredTables:13,requiredColumns:65
+  });
+  const after=await DB.prepare('SELECT COUNT(*) AS n FROM settings').first();
+  assert.deepEqual(after,before);
+  const live=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8')+
+    readFileSync(new URL('../../src/rpc/registry.js',import.meta.url),'utf8');
+  assert.equal(live.includes('verifyM03D1FoundationSchema'),false);
 });
