@@ -1,0 +1,31 @@
+name: M03 stock lot cost historical source read (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  private-stock-lot-cost-history:
+    name: Verify source history on real isolated Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked Node modules
+        run: npm ci --no-audit --no-fund
+      - name: Test 16-column M03 source-shaped history contract
+        run: node --test tests/m03-stock-lot-cost-history-read.test.mjs
+      - name: Install pinned isolated local D1 runner
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Test frozen M02 history import to private M03 read on Workerd D1
+        run: node --test tests/integration/m03-stock-lot-cost-history-read-workerd.spec.mjs
