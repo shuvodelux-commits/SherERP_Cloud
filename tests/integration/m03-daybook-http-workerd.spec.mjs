@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
 import publicWorker from '../../src/index.js';
+import {assertFullyResolvedRpcValue} from '../../src/rpc/awaited-response-boundary.js';
 
 const server=createTestHarness({workers:[{
   configPath:'./wrangler.m03-daybook-http-test.jsonc'
@@ -88,6 +89,7 @@ test('real HTTP to local Workerd/D1 returns exact original Day Book data without
       }}
     });
     assert.equal(r.body.data.then,undefined);
+    assert.equal(assertFullyResolvedRpcValue(r.body),true);
     assert.doesNotMatch(JSON.stringify(r),/SECRET_|JWT|auth_users|token_hash/);
   }
 });
@@ -164,4 +166,14 @@ test('test route cannot appear at public paths; source Settings never mutated',a
   assert.equal(cfg.main,'tests/fixtures/m03-daybook-http-worker.mjs');
   assert.equal(cfg.d1_databases[0].database_id,'00000000-0000-0000-0000-000000000336');
   assert.equal(preview.d1_databases,undefined);
+});
+
+test('real Workerd/D1 RPC response boundary rejects an unawaited nested D1 result without exposing it',async()=>{
+  const good=await rpc('getDayBookBootstrap',[ADMIN]);
+  assert.equal(good.status,200);
+  assert.equal(assertFullyResolvedRpcValue(good.body),true);
+  const nested={success:true,data:{...good.body.data,modules:[...modules,Promise.resolve('NOT_A_SOURCE_MODULE')]}};
+  assert.throws(()=>assertFullyResolvedRpcValue(nested),/unresolved|invalid|RPC.*response/i);
+  const publicScript=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8');
+  assert.equal(publicScript.includes('awaited-response-boundary'),false);
 });
