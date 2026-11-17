@@ -202,6 +202,21 @@ function validateReturnAncestry(side,groups,issues){
   }
 }
 
+// Link ledgers to historical original masters on *each* side independently.
+// Soft-deleted masters remain valid provenance for prior ledger entries.
+function validateAccountAncestry(side,groups,issues){
+  const prefix=side==='source'?'SOURCE':'IMPORTED';
+  for(const [master,ledger] of [
+    ['CUSTOMERS','CUSTOMER_LEDGER'],['SUPPLIERS','SUPPLIER_LEDGER']
+  ]){
+    if(!groups[master] || !groups[ledger])continue;
+    const sourceIds=new Set(groups[master].map(row=>row.id));
+    for(const entry of groups[ledger])
+      if(!sourceIds.has(entry.accountSourceId))
+        add(issues[ledger],prefix+'_ORPHAN_ACCOUNT_LINK');
+  }
+}
+
 /**
  * Input: {sourceGroups:{SALES:[...], ...},
  *         importedGroups:{SALES:[...], ...}}
@@ -230,9 +245,9 @@ export function auditM09DashboardOfflineRowParity(input){
   }
   for(const side of ['source','imported']){
     const selections=Object.create(null);
-    for(const group of ['SALES','SALES_RETURN','SALES_RETURN_ITEMS'])
-      selections[group]=scans[group][side];
+    for(const group of GROUPS)selections[group]=scans[group][side];
     validateReturnAncestry(side,selections,issues);
+    validateAccountAncestry(side,selections,issues);
   }
   const groups=GROUPS.map(key=>{
     const issueCodes=[...issues[key]];
