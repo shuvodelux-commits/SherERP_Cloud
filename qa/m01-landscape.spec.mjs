@@ -282,8 +282,24 @@ test('M01 Playwright original POS V2 navigation and workflow parity at phone tab
           'V2 must use the source operational #page-pos, not a second checkout');
         await page.locator('#posSearch').waitFor({state:'visible'});
         await page.locator('#v2DraftsBtn').waitFor({state:'attached'});
+        const addProductState=await page.evaluate(()=>{
+          const button=document.getElementById('v2AddProductBtn');
+          return {
+            productAddAllowed:hasActionPermission_('products','add'),
+            hiddenAttribute:button?.hasAttribute('hidden'),
+            hiddenProperty:button?.hidden,
+            computedDisplay:button?getComputedStyle(button).display:null
+          };
+        });
+        assert.equal(addProductState.productAddAllowed,false,
+          'the test Clerk must have no Products add grant');
+        assert.equal(addProductState.hiddenProperty,true,
+          'POS must set the restricted button hidden property');
+        // Capture the source/CSS defect before failing, not just the passing UI.
+        await captureM01NavEvidence(page,'posv2-permission-leak-'+name);
         assert.equal(await page.locator('#v2AddProductBtn').isVisible(),false,
-          'POS role does not grant Products add authority');
+          'restricted POS Add Product must be absent from visual UI; state='+
+          JSON.stringify(addProductState));
         assert.equal(await page.locator('#posCompleteBtn').count(),1);
         assert.equal(await page.locator('#page-pos .pos-v2-workflow-tabs [data-pos-v2-tab]').count(),3);
 
