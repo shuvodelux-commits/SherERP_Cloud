@@ -176,7 +176,7 @@ test('M09 gate exactly tracks shipped Dashboard widgets and frozen source group 
   const sourceGroups=readFileSync(
     new URL('../legacy/source/Config.gs',import.meta.url),'utf8');
   for(const group of GROUPS)
-    assert.match(sourceGroups,new RegExp('\\\\b'+group+'\\\\b'),
+    assert.match(sourceGroups,new RegExp('\\b'+group+'\\b'),
       'unrecognized frozen source group '+group);
   const browserWidgets=[...new Set(
     [...ui.matchAll(/data-hdb-widget="([^"]+)"/g)].map(match=>match[1])
