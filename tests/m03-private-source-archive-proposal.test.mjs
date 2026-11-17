@@ -71,8 +71,8 @@ async function withDb(fn){const db=fresh();try{return await fn(db);}finally{db.c
 test('RED: proposed source archive schema is strict, pinned, local and contains exactly two compatible tables',async()=>{
  assert.equal(groups.length,49);
  assert.equal(Object.values(FROZEN_SOURCE_COLUMNS).reduce((sum,h)=>sum+h.length,0),659);
- const executableSchema=schema.replace(/^\\s*--[^\\n]*(?:\\n|$)/gm,'');
- assert.doesNotMatch(executableSchema,/CREATE\\s+VIEW|CREATE\\s+VIRTUAL\\s+TABLE|\\bATTACH\\b|DROP\\s+TABLE|https?:\\/\\/|public\\s+rpc/i);
+ const executableSchema=schema.replace(/^\s*--[^\n]*(?:\n|$)/gm,'');
+ assert.doesNotMatch(executableSchema,/CREATE\s+VIEW|CREATE\s+VIRTUAL\s+TABLE|\bATTACH\b|DROP\s+TABLE|https?:\/\/|public\s+rpc/i);
  await withDb(db=>{
   const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'm03_private_source_%' ORDER BY name").all().map(x=>x.name);
   assert.deepEqual(tables,['m03_private_source_rows','m03_private_source_seals']);
