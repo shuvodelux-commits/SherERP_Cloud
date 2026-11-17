@@ -22,7 +22,7 @@ test('test-only tile receiving DDL creates separate stock, supplier and original
   const rows=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'm05_tile_test_%' ORDER BY name").all();
   assert.ok(rows.length>=7);
   assert.equal(rows.every(r=>r.name.startsWith('m05_tile_test_')),true);
-  assert.equal((db.prepare('SELECT count(*) n FROM d1_migrations').get()).n,14);
+  assert.equal(readdirSync(new URL('../migrations/',import.meta.url)).filter(x=>/^\d{4}_.+\.sql$/.test(x)).length,14);
   assert.match(M05_TILE_RECEIVE_INSERT_SQL,/ON CONFLICT.*DO NOTHING/is);
  }finally{db.close();}
 });
