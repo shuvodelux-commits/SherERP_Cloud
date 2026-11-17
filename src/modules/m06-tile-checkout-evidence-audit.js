@@ -48,8 +48,14 @@ function exactMinor(value){
   return n<=MAX_PAISA?n:null;
 }
 function fraction(a,b){
-  return !!a&&!!b&&a.numerator===b.numerator&&
-    a.denominator===b.denominator;
+  if(!a||!b)return false;
+  // Nested saved rational evidence must meet the same no-accessor contract
+  // as the parent Tile quote. Never read an inherited/getter numerator.
+  record(a,'Tile rational fraction');
+  if(!Object.hasOwn(a,'numerator')||!Object.hasOwn(a,'denominator')||
+     typeof a.numerator!=='string'||typeof a.denominator!=='string')
+    return false;
+  return a.numerator===b.numerator&&a.denominator===b.denominator;
 }
 function sameOptionalFraction(a,b){
   return (a===null||a===undefined)&&(b===null||b===undefined)||
