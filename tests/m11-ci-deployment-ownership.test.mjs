@@ -147,7 +147,7 @@ test('Pages publishing by Wrangler is not a permitted PR preview deployment path
     'wrangler pages deploy ./dist --dry-run'
   ]){
     const workflows=added('m11-pages-publish.yml',
-      'on:\\n  pull_request:\\njobs:\\n  publish:\\n    steps:\\n      - run: '+cmd+'\\n');
+      'on:\n  pull_request:\njobs:\n  publish:\n    steps:\n      - run: '+cmd+'\n');
     checkBlocked(examine({workflows}),'M11_CI_DEPLOY_COMMAND_BLOCKED');
   }
 });
@@ -159,19 +159,19 @@ test('direct Worker version upload and version deployment are publication operat
     'wrangler versions upload --dry-run --config wrangler.preview.jsonc'
   ]){
     const workflows=added('m11-versions-publish.yml',
-      'on:\\n  push:\\njobs:\\n  upload:\\n    steps:\\n      - run: '+cmd+'\\n');
+      'on:\n  push:\njobs:\n  upload:\n    steps:\n      - run: '+cmd+'\n');
     checkBlocked(examine({workflows}),'M11_CI_DEPLOY_COMMAND_BLOCKED');
   }
 });
 
 test('legacy Wrangler publish may not become a second GitHub deployment owner',()=>{
   const workflows=added('m11-legacy-publish.yml',
-    'on:\\n  pull_request:\\njobs:\\n  publish:\\n    steps:\\n      - run: npx wrangler publish --env production\\n');
+    'on:\n  pull_request:\njobs:\n  publish:\n    steps:\n      - run: npx wrangler publish --env production\n');
   checkBlocked(examine({workflows}),'M11_CI_DEPLOY_COMMAND_BLOCKED');
 });
 
 test('an allowed Worker dry-run does not conceal a separate Pages publish on the same line',()=>{
   const workflows=added('m11-bundle-then-deploy.yml',
-    'on:\\n  pull_request:\\njobs:\\n  publish:\\n    steps:\\n      - run: npx wrangler deploy --dry-run --config wrangler.preview.jsonc && npx wrangler pages deploy ./dist\\n');
+    'on:\n  pull_request:\njobs:\n  publish:\n    steps:\n      - run: npx wrangler deploy --dry-run --config wrangler.preview.jsonc && npx wrangler pages deploy ./dist\n');
   checkBlocked(examine({workflows}),'M11_CI_DEPLOY_COMMAND_BLOCKED');
 });
