@@ -18,7 +18,7 @@ test('M01 Reports Print must wrap only the original active report loader in comp
   assert.match(compiled,/window\.print\(\)/,'original print lifecycle remains intact');
 });
 
-test('M01 Reports source-anchored patch installs controller once, is repeatable and freezes original bytes',()=>{
+test('M01 Reports source-anchored patch installs controller once, is repeatable and freezes original bytes',async()=>{
   const compiled=patchM01ReportPrintSafety(reports,syntheticController);
   assert.match(compiled,/window\.__m01ReportPrintState=\{\}/);
   assert.equal(patchM01ReportPrintSafety(compiled,syntheticController),compiled);
