@@ -21,7 +21,7 @@ const DIGEST=/^[a-f0-9]{64}$/;
 const REVIEW=/^review\/[A-Za-z0-9][A-Za-z0-9._/-]{5,127}$/;
 const MIGRATION=/^[0-9]{4}_[a-z0-9_]+\.sql$/;
 const TABLE=/^[a-z][a-z0-9_]*$/;
-const CAUTION='Documentary aggregate check only: independently verify protected source freezes, real D1 schema, staff provenance, owner approvals, private Worker identity and exact deployment. This report never authorizes migration, staff import, deployment or cutover.';
+const CAUTION='Documentary aggregate check only: independently verify protected source freezes, real D1 schema, staff provenance, owner approvals, restricted Worker identity and exact deployment. This report never authorizes migration, staff import, deployment or cutover.';
 
 function ownRecord(input,expected){
   try{
