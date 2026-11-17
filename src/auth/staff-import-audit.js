@@ -19,12 +19,19 @@ const USER_FIELDS=[
 const ROLE_FIELDS=[
   'Role ID','Role Name','Allowed Modules','Permissions','Status',
 ];
+// The standalone structural audit is used before the full protected
+// provenance importer. Its only optional fields are approved frozen source
+// provenance, never arbitrary export extensions or hidden secret columns.
+const USER_ALLOWED_FIELDS=new Set([
+  ...USER_FIELDS,'Created By','Created At','Last Login',
+]);
+const ROLE_ALLOWED_FIELDS=new Set([...ROLE_FIELDS,'Created At']);
 const filled=value=>typeof value==='string' && value.trim().length>0;
 const validStatus=value=>value==='Active' || value==='Inactive';
 const validMobile=value=>filled(value) ||
   (typeof value==='number' && Number.isSafeInteger(value) && value>0);
 
-function extractOwnData(row, requiredFields) {
+function extractOwnData(row, requiredFields, allowedFields) {
   // Only ordinary JSON/snapshot rows are accepted. Never execute accessors
   // or inherit data; a malicious Proxy fails closed as a malformed record.
   if (!row || typeof row!=='object' || Array.isArray(row)) return null;
@@ -32,8 +39,12 @@ function extractOwnData(row, requiredFields) {
     const prototype=Object.getPrototypeOf(row);
     if (prototype!==Object.prototype && prototype!==null) return null;
     for(const key of Reflect.ownKeys(row)) {
+      // Reject unknown, symbol and nonenumerable fields without reading them.
+      // The later D1 import already requires the exact protected schema.
+      if(typeof key!=='string' || !allowedFields.has(key))return null;
       const descriptor=Object.getOwnPropertyDescriptor(row,key);
-      if (!descriptor || !Object.hasOwn(descriptor,'value')) return null;
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor,'value'))
+        return null;
     }
     const values=Object.create(null);
     for(const field of requiredFields){
@@ -47,11 +58,11 @@ function extractOwnData(row, requiredFields) {
   }
 }
 
-function sheetRow(rows,index,fields) {
+function sheetRow(rows,index,fields,allowedFields) {
   try {
     const descriptor=Object.getOwnPropertyDescriptor(rows,String(index));
     if (!descriptor || !Object.hasOwn(descriptor,'value')) return null;
-    return extractOwnData(descriptor.value,fields);
+    return extractOwnData(descriptor.value,fields,allowedFields);
   } catch {
     return null;
   }
@@ -105,7 +116,7 @@ export function auditLegacyStaffImport(users,roles) {
   // Build an exact source-name lookup, but detect case-folded conflicts for
   // operator review. Administrator is built in: it has no ROLES row.
   for(let i=0;i<roleCount;i++){
-    const row=sheetRow(roles,i,ROLE_FIELDS);
+    const row=sheetRow(roles,i,ROLE_FIELDS,ROLE_ALLOWED_FIELDS);
     if(!row){
       addIssue(issues,'role',i,'ROW_MALFORMED');
       continue;
@@ -134,7 +145,7 @@ export function auditLegacyStaffImport(users,roles) {
   }
 
   for(let i=0;i<userCount;i++){
-    const row=sheetRow(users,i,USER_FIELDS);
+    const row=sheetRow(users,i,USER_FIELDS,USER_ALLOWED_FIELDS);
     if(!row){
       addIssue(issues,'user',i,'ROW_MALFORMED');
       continue;
