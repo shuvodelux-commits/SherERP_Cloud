@@ -54,7 +54,7 @@ const CLOSE_PATCHED=[
   '  }'
 ].join('\n');
 const KEY_ORIGINAL="      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMobileMore_(); });";
-const KEY_PATCHED=KEY_ORIGINAL+\`\n      // Keyboard modal scope: no Tab navigation into underlying ERP controls.
+const KEY_PATCHED=KEY_ORIGINAL+`\n      // Keyboard modal scope: no Tab navigation into underlying ERP controls.
       document.addEventListener('keydown', function (event) {
         if (event.key !== 'Tab') return;
         var sheet = document.getElementById('mobileMoreSheet');
@@ -78,7 +78,7 @@ const KEY_PATCHED=KEY_ORIGINAL+\`\n      // Keyboard modal scope: no Tab navigat
           event.preventDefault();
           first.focus();
         }
-      });\`;
+      });`;
 
 export function patchM01Accessibility(html){
   if(typeof html!=='string')throw new TypeError('Missing compiled original UI');
