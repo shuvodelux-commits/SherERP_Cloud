@@ -1016,10 +1016,10 @@ test('M04 A05 SQL-current grant proof rejects duplicate and escaped-equivalent J
       json:'{"sales":{"add":true,"add":false}}',expected:false},
     {label:'escaped-equivalent nested action duplicate',
       operation:'sales.add',
-      json:String.raw`{"sales":{"add":true,"\\u0061dd":false}}`,expected:false},
+      json:String.raw`{"sales":{"add":true,"\u0061dd":false}}`,expected:false},
     {label:'escaped-equivalent top-level module duplicate',
       operation:'sales.add',
-      json:String.raw`{"sales":{"add":true},"\\u0073ales":{"add":false}}`,expected:false},
+      json:String.raw`{"sales":{"add":true},"\u0073ales":{"add":false}}`,expected:false},
     {label:'duplicate product action',operation:'products.add',
       json:'{"products":{"add":true,"add":false}}',expected:false},
   ];
