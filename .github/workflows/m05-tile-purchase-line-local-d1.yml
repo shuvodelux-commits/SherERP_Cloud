@@ -1,0 +1,23 @@
+name: M05 private tile purchase-line quote (local-only)
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tile-purchase-readonly:
+    name: Exact unit pricing with SQLite and actual Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: SQLite exact purchase quote test
+        run: node --test tests/m05-tile-purchase-line-preview.test.mjs
+      - name: Install pinned local Workerd test runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Real local Workerd D1 purchase price and quantity proof
+        run: node --test tests/integration/m05-tile-purchase-line-workerd.spec.mjs
