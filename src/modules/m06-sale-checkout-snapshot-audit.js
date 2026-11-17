@@ -56,6 +56,7 @@ export function auditMixedUnitSaleCheckoutSnapshot(preview){
     }
     if(!positive(line.baseQty)||!nonnegative(line.unitPrice))
       add('INVALID_BASE_SALE_LINE',i);
+    if(!identifier(line.stockUnit))add('INVALID_STOCK_UNIT',i);
     if(!['Own','Negative','Vendor'].includes(line.shortageMode))
       add('INVALID_SHORTAGE_MODE',i);
 
@@ -138,7 +139,7 @@ export function auditMixedUnitSaleCheckoutSnapshot(preview){
     add('PAID_DUE_MISMATCH');
   let appliedTotal=0,changeTotal=0,cashRows=0;
   let validApplied=true,validChange=true;
-  const paymentIds=new Set();
+  const paymentIds=new Set(),paymentOrders=new Set(),positivePayments=[];
   if(allocation.payments.length>20)add('TOO_MANY_PAYMENT_ROWS');
   for(const row of allocation.payments){
     if(!identifier(row.rowId))add('INVALID_PAYMENT_ROW_ID');
@@ -146,15 +147,25 @@ export function auditMixedUnitSaleCheckoutSnapshot(preview){
       if(paymentIds.has(row.rowId))add('DUPLICATE_PAYMENT_ROW_ID');
       paymentIds.add(row.rowId);
     }
+    const order=row.rowOrder;
+    if(!Number.isSafeInteger(order)||order<1||order>20)
+      add('INVALID_PAYMENT_ROW_ORDER');
+    else{
+      if(paymentOrders.has(order))add('DUPLICATE_PAYMENT_ROW_ORDER');
+      paymentOrders.add(order);
+    }
     const tender=paisa(row.tendered),applied=paisa(row.applied),change=paisa(row.change);
     if(tender===null||applied===null||change===null){
       add('INVALID_PAYMENT_ROW_AMOUNT');validApplied=false;validChange=false;continue;
     }
+    if(applied===0&&!(row.method==='Cash'&&tender>0&&change===tender))
+      add('UNEXPECTED_ZERO_PAYMENT_ROW');
+    if(applied>0)positivePayments.push(row);
     appliedTotal+=applied;
     if(!Number.isSafeInteger(appliedTotal))validApplied=false;
     if(row.method==='Cash'){
       cashRows++;
-      if(row.bankAccountId)add('CASH_ACCOUNT_MISMATCH');
+      if(row.bankAccountId||row.bankAccountName)add('CASH_ACCOUNT_MISMATCH');
       if(tender!==applied+change)add('CASH_TENDER_MISMATCH');
       changeTotal+=change;
       if(!Number.isSafeInteger(changeTotal))validChange=false;
@@ -171,8 +182,21 @@ export function auditMixedUnitSaleCheckoutSnapshot(preview){
     add('CASH_CHANGE_MISMATCH');
   if(paid!==null&&due!==null){
     const expected=due===0?'Paid':paid===0?'Due':'Partial';
+    const expectedType=due===0?'Cash':paid>0?'Partial':'Due';
     if(allocation.paymentStatus!==expected)add('PAYMENT_STATUS_MISMATCH');
+    if(allocation.paymentType!==expectedType)add('PAYMENT_TYPE_MISMATCH');
   }
+  // Frozen normalizeSalePayments_ uses only positive applied rows for its
+  // header. Cash fully returned as change is retained as a child but does
+  // not compete with a single positive Bank/Mobile method.
+  const sole=positivePayments.length===1?positivePayments[0]:null;
+  const expectedMethod=sole?sole.method:positivePayments.length?'Multiple':'';
+  if(allocation.paymentMethod!==expectedMethod)add('PAYMENT_METHOD_MISMATCH');
+  const expectedAccountId=sole?sole.bankAccountId:'';
+  const expectedAccountName=sole?sole.bankAccountName:'';
+  if(allocation.bankAccountId!==expectedAccountId||
+     allocation.bankAccountName!==expectedAccountName)
+    add('PAYMENT_HEADER_ACCOUNT_MISMATCH');
   return {
     ready:issues.length===0,issues,
     summary:{
