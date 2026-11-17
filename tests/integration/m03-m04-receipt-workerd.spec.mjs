@@ -1,3 +1,4 @@
+import '../fixtures/m03-m04-g1-post-workerd-suite.mjs'; // M03 G1 real M04 auth + SQL-atomic synthetic stock/journal proof.
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
