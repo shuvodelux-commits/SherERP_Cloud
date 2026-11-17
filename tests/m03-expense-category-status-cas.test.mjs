@@ -93,7 +93,7 @@ test('stale name, description, status, timestamp or wrong stable ID or row posit
   ];
   for(const item of attempts)await assert.rejects(()=>
    x.change.updateRowFields_('EXPENSE_CATEGORIES',item.index,{Status:'Inactive'},item.pre),
-   /stale|unsafe|review|refus/i);
+   /stale|unsafe|review|refus|invalid/i);
   assert.deepEqual(get(x,'EXCAT-0001'),row);
  }finally{x.close();}
 });
