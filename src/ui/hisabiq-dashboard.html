@@ -1,0 +1,432 @@
+<!-- M01 HisabIQ dashboard parity: compiled-only overlay; preserved original fields follow. -->
+<style id="hisabiq-dashboard-style">
+  #page-dashboard > .stat-grid, #page-dashboard > .mobile-quick-actions { display: none !important; }
+  #page-dashboard .hdb [hidden] { display: none !important; }
+  #page-dashboard .hdb {
+    --hdb-ink: #192c3b; --hdb-muted: #667786; --hdb-border: #e2e9ec;
+    --hdb-teal: #087f78; --hdb-bg: #f4f8f8;
+    max-width: 1440px; margin: 0 auto; color: var(--hdb-ink);
+    font-family: Inter, "Noto Sans Bengali", sans-serif; display: grid; gap: 16px;
+  }
+  .hdb * { box-sizing: border-box; }
+  .hdb-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+  .hdb-head h1 { font-size:24px; line-height:1.22; margin:0; font-weight:700; letter-spacing:-.03em; }
+  .hdb-head .hdb-bn { font-family:"Noto Sans Bengali",sans-serif; color:#81909b; font-size:12px; margin:2px 0 0; }
+  .hdb-head p { margin:6px 0 0; font-size:12px; color:var(--hdb-muted); }
+  .hdb-actions { display:flex; gap:7px; align-items:center; }
+  .hdb button { font-family:inherit; }
+  .hdb-btn { border:1px solid #d4dee1; background:white; border-radius:7px; padding:7px 12px; color:var(--hdb-ink); font-size:12px; font-weight:600; min-height:34px; cursor:pointer; }
+  .hdb-btn:hover { background:#edf7f6; border-color:#a4c8c6; }
+  .hdb-btn-primary { background:var(--hdb-teal); border-color:var(--hdb-teal); color:white; }
+  .hdb-btn-primary:hover { color:white; background:#096c66; }
+  .hdb-btn:focus-visible,.hdb-widget:focus-visible,.hdb button:focus-visible { outline:2px solid var(--hdb-teal); outline-offset:2px; }
+  .hdb-edit-hint { border:1px solid #b4dbd8; background:#edfbf9; border-radius:8px; padding:9px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; color:#086b64; font-size:12px; }
+  .hdb-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .hdb-widget-wrap { position:relative; min-width:0; }
+  .hdb-widget { display:flex; flex-direction:column; width:100%; min-height:121px; height:100%; border:1px solid var(--hdb-border); padding:14px; border-radius:12px; background:white; text-align:left; box-shadow:0 1px 3px rgba(13,42,52,.045); color:var(--hdb-ink); cursor:pointer; text-decoration:none; transition:border-color .14s ease, box-shadow .14s ease; }
+  .hdb-widget:hover { border-color:#a7c3c8; box-shadow:0 3px 11px rgba(15,49,57,.065); }
+  .hdb-widget-top { display:flex; justify-content:space-between; gap:7px; align-items:flex-start; }
+  .hdb-widget-label { font-size:12px; font-weight:600; color:#536677; line-height:1.4; }
+  .hdb-widget-label small { display:block; color:#8d9ba6; font-size:11px; font-weight:400; line-height:1.45; }
+  .hdb-icon { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; border-radius:8px; background:#e9f7f5; color:#087f78; font-size:17px; line-height:1; font-weight:600; }
+  .hdb-widget[data-hdb-tone="warning"] .hdb-icon { background:#fef3db; color:#ba7914; }
+  .hdb-widget[data-hdb-tone="danger"] .hdb-icon { background:#ffeded; color:#c43b3b; }
+  .hdb-widget[data-hdb-tone="ink"] .hdb-icon { background:#edf1f5; color:#40546b; }
+  .hdb-amount { margin-top:9px; display:block; font-size:22px; font-weight:700; letter-spacing:-.035em; line-height:1.25; font-variant-numeric:normal; }
+  .hdb-foot { display:block; margin-top:4px; font-size:11px; color:#7c8996; line-height:1.4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hdb-panels { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
+  .hdb-panel { border:1px solid var(--hdb-border); border-radius:12px; background:white; overflow:hidden; box-shadow:0 1px 3px rgba(13,42,52,.045); min-width:0; }
+  .hdb-panel-head { display:flex; justify-content:space-between; gap:10px; align-items:start; padding:14px 16px; }
+  .hdb-panel-head h2 { font-size:14px; font-weight:700; margin:0; line-height:1.35; }
+  .hdb-panel-head p { margin:3px 0 0; color:#81909b; font-size:11px; }
+  .hdb-panel-link { border:0; background:none; color:#087f78; font-size:11px; font-weight:600; cursor:pointer; text-decoration:none; white-space:nowrap; }
+  .hdb-panel-link:hover { text-decoration:underline; }
+  .hdb-legend { color:#71818d; display:flex; gap:12px; font-size:11px; margin:0 16px 8px; }
+  .hdb-legend i { display:inline-block; background:#087f78; width:7px; height:7px; border-radius:50%; margin-right:4px; }
+  .hdb-legend i:nth-of-type(2) { background:#93a4af; }
+  .hdb-panel-empty { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:184px; border-top:1px solid #f1f3f5; padding:22px; gap:8px; }
+  .hdb-panel-empty .hdb-empty-icon { font-size:25px; color:#a1b3bd; }
+  .hdb-panel-empty strong { font-size:12px; color:#617585; font-weight:600; }
+  .hdb-panel-empty span { font-size:11px; color:#87949f; max-width:270px; line-height:1.45; }
+  .hdb-panel[data-hdb-widget="recent-sales"] .hdb-panel-empty,.hdb-panel[data-hdb-widget="dues"] .hdb-panel-empty { min-height:210px; }
+  .hdb-extra { display:flex; gap:8px; flex-wrap:wrap; }
+  .hdb-quick { display:none; }
+  .hdb-empty-all { text-align:center; border:1px dashed #cfdbdd; background:white; border-radius:12px; padding:32px; }
+  .hdb-empty-all h2 { margin:0 0 5px; font-size:16px; }
+  .hdb-empty-all p { margin:0 0 13px; font-size:12px; color:var(--hdb-muted); }
+  .hdb.is-editing .hdb-widget { pointer-events:none; opacity:.86; }
+  .hdb-edit-tools { position:absolute; z-index:1; top:7px; right:7px; display:flex; align-items:center; gap:2px; background:white; padding:3px; border:1px solid #d6e6e4; border-radius:7px; box-shadow:0 3px 12px #0b413d19; }
+  .hdb-edit-tools button { border:0; background:white; color:#536a74; cursor:pointer; min-width:28px; min-height:28px; border-radius:5px; padding:3px 5px; font-size:14px; }
+  .hdb-edit-tools button:hover { color:#086f67; background:#eaf7f5; }
+  .hdb.is-editing .hdb-widget-wrap { outline:2px dashed #6cc1ba; border-radius:12px; outline-offset:-2px; }
+  .hdb-dialog-mask { position:fixed; inset:0; z-index:3000; display:flex; justify-content:center; align-items:center; padding:15px; background:#142b3c87; }
+  .hdb-dialog { background:white; color:var(--hdb-ink); width:min(100%,610px); max-height:min(86vh,760px); overflow:auto; padding:22px; border-radius:12px; box-shadow:0 18px 50px #142b3c37; }
+  .hdb-dialog h2 { margin:0; font-size:19px; }
+  .hdb-dialog-desc { color:var(--hdb-muted); margin:5px 0 20px; font-size:12px; }
+  .hdb-dialog-grid { display:grid; grid-template-columns:1fr; gap:20px; }
+  .hdb-dialog h3 { margin:0 0 9px; color:#84929e; text-transform:uppercase; font-size:11px; letter-spacing:.045em; }
+  .hdb-dialog-list { list-style:none; display:grid; gap:6px; padding:0; margin:0; }
+  .hdb-dialog-row { display:flex; align-items:center; gap:7px; padding:8px; border:1px solid var(--hdb-border); border-radius:8px; background:white; cursor:grab; min-width:0; }
+  .hdb-dialog-row.hdb-dragging { opacity:.48; }
+  .hdb-grip { color:#8c9aa5; font-size:18px; cursor:grab; }
+  .hdb-dialog-label { flex:1; font-size:12px; min-width:0; }
+  .hdb-dialog-label small { display:block; font-size:10px; color:#96a2ad; }
+  .hdb-switch { position:relative; width:32px; height:19px; flex-shrink:0; border:0; border-radius:20px; background:#d0d9dd; cursor:pointer; }
+  .hdb-switch::after { content:""; position:absolute; top:3px; left:3px; width:13px; height:13px; border-radius:50%; background:white; transition:left .12s ease; }
+  .hdb-switch[aria-checked="true"] { background:#087f78; }
+  .hdb-switch[aria-checked="true"]::after { left:16px; }
+  .hdb-dialog-footer { display:flex; justify-content:space-between; gap:10px; margin-top:20px; flex-wrap:wrap; }
+  .hdb-linklike { background:none; border:0; cursor:pointer; text-decoration:underline; color:#087f78; font-size:12px; }
+  @media(min-width:768px){ .hdb-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); } .hdb-dialog-grid { grid-template-columns:1fr 1fr; } }
+  @media(min-width:1024px){ .hdb-panels { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(min-width:1280px){ .hdb-metrics { grid-template-columns:repeat(6,minmax(0,1fr)); } .hdb-panels { grid-template-columns:repeat(3,minmax(0,1fr)); } .hdb-panel[data-hdb-wide="true"] { grid-column:span 2; } }
+  @media(max-width:600px){ .hdb-head h1 { font-size:20px; } .hdb-widget { padding:12px; min-height:116px; } .hdb-amount { font-size:19px; } .hdb-widget-label { font-size:11px; } .hdb-quick { display:flex; gap:7px; overflow-x:auto; } .hdb-quick button { flex:1; min-width:58px; } .hdb-dialog { padding:16px; } .hdb-head { align-items:center; } }
+  @media(prefers-reduced-motion:reduce){ .hdb-widget,.hdb-switch::after { transition:none; } }
+</style>
+
+<div class="hdb" id="hisabiq-dashboard">
+  <header class="hdb-head">
+    <div>
+      <h1>Dashboard</h1>
+      <div class="hdb-bn">ড্যাশবোর্ড</div>
+      <p id="hdb-subtitle">Your business · Today's overview</p>
+    </div>
+    <div class="hdb-actions">
+      <button type="button" class="hdb-btn" id="hisabiq-dashboard-customize" data-hdb-action="customize">☷ Customize</button>
+      <button type="button" class="hdb-btn" id="hdb-all-widgets" data-hdb-action="show-hidden" hidden>⊞ All widgets</button>
+      <button type="button" class="hdb-btn hdb-btn-primary" data-hdb-action="finish" hidden>✓ Done</button>
+    </div>
+  </header>
+  <div class="hdb-quick" aria-label="Quick actions">
+    <button type="button" class="hdb-btn" data-hdb-route="posv2">POS</button>
+    <button type="button" class="hdb-btn" data-hdb-route="sales">Sales</button>
+    <button type="button" class="hdb-btn" data-hdb-route="purchase">Purchase</button>
+    <button type="button" class="hdb-btn" data-hdb-route="customers">Payment</button>
+  </div>
+  <div class="hdb-edit-hint" id="hdb-edit-hint" hidden>
+    <span>Use arrows to move cards or hide unused widgets. Changes save automatically.</span>
+    <button type="button" class="hdb-linklike" data-hdb-action="show-hidden">Show hidden</button>
+  </div>
+  <div class="hdb-metrics" id="hisabiq-dashboard-metrics">
+    <div class="hdb-widget-wrap" data-hdb-widget="today-sales" data-hdb-kind="metric">
+      <button type="button" class="hdb-widget" data-hdb-tone="teal" data-hdb-route="sales">
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Today's Sales<small>আজকের বিক্রি</small></span><span class="hdb-icon" aria-hidden="true">↗</span></span>
+        <strong class="hdb-amount" data-hdb-value="dashSales">—</strong><span class="hdb-foot">Sales invoices · View details</span>
+      </button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="receivable" data-hdb-kind="metric">
+      <button type="button" class="hdb-widget" data-hdb-tone="ink" data-hdb-route="customers">
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Receivable<small>পাওনা</small></span><span class="hdb-icon" aria-hidden="true">↙</span></span>
+        <strong class="hdb-amount" data-hdb-value="dashDue">—</strong><span class="hdb-foot">Customer dues · View ledger</span>
+      </button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="payable" data-hdb-kind="metric">
+      <button type="button" class="hdb-widget" data-hdb-tone="warning" data-hdb-route="suppliers">
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Payable<small>দেনা</small></span><span class="hdb-icon" aria-hidden="true">↗</span></span>
+        <strong class="hdb-amount" data-hdb-value="dashPayable">—</strong><span class="hdb-foot">Supplier dues · View ledger</span>
+      </button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="cash" data-hdb-kind="metric">
+      <button type="button" class="hdb-widget" data-hdb-tone="ink" data-hdb-route="daybook">
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Cash in Hand<small>হাতে নগদ</small></span><span class="hdb-icon" aria-hidden="true">৳</span></span>
+        <strong class="hdb-amount" data-hdb-value="dashCash">—</strong><span class="hdb-foot">Day Book · View cash activity</span>
+      </button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="gross-profit" data-hdb-kind="metric">
+      <button type="button" class="hdb-widget" data-hdb-tone="teal" data-hdb-route="reports">
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Gross Profit<small>মোট লাভ</small></span><span class="hdb-icon" aria-hidden="true">%</span></span>
+        <strong class="hdb-amount" data-hdb-value="unavailable">—</strong><span class="hdb-foot">View profit reports</span>
+      </button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="low-stock" data-hdb-kind="metric">
+      <button type="button" class="hdb-widget" data-hdb-tone="danger" data-hdb-route="products">
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Low Stock<small>স্টক কম</small></span><span class="hdb-icon" aria-hidden="true">▤</span></span>
+        <strong class="hdb-amount" data-hdb-value="dashLowStockCount">—</strong><span class="hdb-foot">Below minimum · View products</span>
+      </button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="today-collection" data-hdb-kind="metric" hidden>
+      <button type="button" class="hdb-widget" data-hdb-tone="teal" data-hdb-route="daybook"><span class="hdb-widget-top"><span class="hdb-widget-label">Today Collection<small>আজকের আদায়</small></span><span class="hdb-icon">৳</span></span><strong class="hdb-amount" data-hdb-value="dashCollection">—</strong><span class="hdb-foot">View Day Book</span></button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="today-expense" data-hdb-kind="metric" hidden>
+      <button type="button" class="hdb-widget" data-hdb-tone="warning" data-hdb-route="expenseList"><span class="hdb-widget-top"><span class="hdb-widget-label">Today Expense<small>আজকের খরচ</small></span><span class="hdb-icon">↗</span></span><strong class="hdb-amount" data-hdb-value="dashExpense">—</strong><span class="hdb-foot">View expenses</span></button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="today-purchase" data-hdb-kind="metric" hidden>
+      <button type="button" class="hdb-widget" data-hdb-tone="ink" data-hdb-route="purchase"><span class="hdb-widget-top"><span class="hdb-widget-label">Today Purchase<small>আজকের কেনা</small></span><span class="hdb-icon">▤</span></span><strong class="hdb-amount" data-hdb-value="dashPurchase">—</strong><span class="hdb-foot">View purchases</span></button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="borrower-receivable" data-hdb-kind="metric" hidden>
+      <button type="button" class="hdb-widget" data-hdb-tone="ink" data-hdb-route="financePersonLedger"><span class="hdb-widget-top"><span class="hdb-widget-label">Borrower Receivable<small>ঋণ দেওয়া পাওনা</small></span><span class="hdb-icon">↙</span></span><strong class="hdb-amount" data-hdb-value="dashBorrowerReceivable">—</strong><span class="hdb-foot">Separate borrower ledger</span></button>
+    </div>
+    <div class="hdb-widget-wrap" data-hdb-widget="outstanding-loan" data-hdb-kind="metric" hidden>
+      <button type="button" class="hdb-widget" data-hdb-tone="warning" data-hdb-route="finance"><span class="hdb-widget-top"><span class="hdb-widget-label">Outstanding Loan<small>ঋণের দেনা</small></span><span class="hdb-icon">↗</span></span><strong class="hdb-amount" data-hdb-value="dashOutstandingLoan">—</strong><span class="hdb-foot">Separate loan account</span></button>
+    </div>
+  </div>
+
+  <div class="hdb-panels" id="hisabiq-dashboard-panels">
+    <section class="hdb-panel hdb-widget-wrap" data-hdb-widget="sales-trend" data-hdb-kind="panel" data-hdb-wide="true">
+      <div class="hdb-panel-head"><div><h2>Sales trend</h2><p>Last 14 days · বিক্রির ধারা</p></div><button type="button" class="hdb-panel-link" data-hdb-route="reports">View reports</button></div>
+      <div class="hdb-legend"><span><i></i>Sales</span><span><i></i>Gross profit</span></div>
+      <div class="hdb-panel-empty"><span class="hdb-empty-icon" aria-hidden="true">⌁</span><strong>Sales trend unavailable</strong><span>Waiting for an authenticated, date-scoped sales and profit read.</span></div>
+    </section>
+    <section class="hdb-panel hdb-widget-wrap" data-hdb-widget="cashflow" data-hdb-kind="panel">
+      <div class="hdb-panel-head"><div><h2>Cashflow</h2><p>Cash in vs out · নগদ প্রবাহ</p></div><button type="button" class="hdb-panel-link" data-hdb-route="daybook">Day Book</button></div>
+      <div class="hdb-legend"><span><i></i>In</span><span><i></i>Out</span></div>
+      <div class="hdb-panel-empty"><span class="hdb-empty-icon" aria-hidden="true">↕</span><strong>Cashflow history unavailable</strong><span>No safe monthly cashflow time series is connected yet.</span></div>
+    </section>
+    <section class="hdb-panel hdb-widget-wrap" data-hdb-widget="recent-sales" data-hdb-kind="panel" data-hdb-wide="true">
+      <div class="hdb-panel-head"><div><h2>Recent sales</h2><p>Today and yesterday</p></div><button type="button" class="hdb-panel-link" data-hdb-route="sales">Manage sales</button></div>
+      <div class="hdb-panel-empty"><span class="hdb-empty-icon" aria-hidden="true">▤</span><strong>Recent invoices unavailable</strong><span>Open Sales for authorized invoice details; no demo invoices are shown.</span></div>
+    </section>
+    <section class="hdb-panel hdb-widget-wrap" data-hdb-widget="dues" data-hdb-kind="panel">
+      <div class="hdb-panel-head"><div><h2>Dues to collect</h2><p>Oldest first · বকেয়া আদায়</p></div><button type="button" class="hdb-panel-link" data-hdb-route="customers">All customers</button></div>
+      <div class="hdb-panel-empty"><span class="hdb-empty-icon" aria-hidden="true">↙</span><strong>Customer due rows unavailable</strong><span>Open customer ledgers until a permission-checked dues list is integrated.</span></div>
+    </section>
+  </div>
+
+  <div class="hdb-empty-all" id="hdb-empty-all" hidden><h2>Your dashboard is empty</h2><p>Turn widgets back on to see your numbers.</p><button type="button" class="hdb-btn hdb-btn-primary" data-hdb-action="show-hidden">Choose widgets</button></div>
+
+  <div class="hdb-dialog-mask" id="hisabiq-dashboard-dialog" role="dialog" aria-modal="true" aria-label="Customize dashboard" aria-labelledby="hdb-dialog-title" hidden>
+    <div class="hdb-dialog">
+      <h2 id="hdb-dialog-title">Customize dashboard</h2>
+      <p class="hdb-dialog-desc">Drag to reorder, switch off what you don't need. <span lang="bn">যা দরকার, শুধু তা-ই দেখুন।</span></p>
+      <div class="hdb-dialog-grid">
+        <section><h3>Metric cards</h3><ul class="hdb-dialog-list" data-hdb-list="metric"><li draggable="true" class="hdb-dialog-row">Today's Sales</li></ul></section>
+        <section><h3>Panels</h3><ul class="hdb-dialog-list" data-hdb-list="panel"></ul></section>
+      </div>
+      <div class="hdb-dialog-footer">
+        <button type="button" class="hdb-btn" data-hdb-action="reset">↺ Reset to default</button>
+        <button type="button" class="hdb-btn hdb-btn-primary" data-hdb-action="dialog-close">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="hisabiq-dashboard-runtime">
+(function(){
+  'use strict';
+  var root=document.getElementById('hisabiq-dashboard');
+  if(!root || root.dataset.hdbReady==='true')return;
+  root.dataset.hdbReady='true';
+  var metrics=document.getElementById('hisabiq-dashboard-metrics');
+  var panels=document.getElementById('hisabiq-dashboard-panels');
+  var dialog=document.getElementById('hisabiq-dashboard-dialog');
+  var defaults=[
+    ['today-sales','metric',true],['receivable','metric',true],['payable','metric',true],
+    ['cash','metric',true],['gross-profit','metric',true],['low-stock','metric',true],
+    ['sales-trend','panel',true],['cashflow','panel',true],['recent-sales','panel',true],['dues','panel',true],
+    ['today-collection','metric',false],['today-expense','metric',false],['today-purchase','metric',false],
+    ['borrower-receivable','metric',false],['outstanding-loan','metric',false]
+  ];
+  var elements=Object.create(null),definitions=Object.create(null);
+  defaults.forEach(function(item){
+    var node=root.querySelector('[data-hdb-widget="'+item[0]+'"]');
+    if(!node)throw Error('HisabIQ dashboard widget missing: '+item[0]);
+    elements[item[0]]=node;
+    definitions[item[0]]={id:item[0],kind:item[1],visible:item[2]};
+  });
+  var widgets=[],editing=false,storedKey=null,focusReturn=null;
+  function defaultLayout(){return defaults.map(function(w){return {id:w[0],visible:w[2]};});}
+  function identityKey(){
+    if(typeof authToken!=='string' || !authToken || !currentUser)return null;
+    var user=String(currentUser.id||currentUser.userId||currentUser.mobile||'').trim();
+    var store=String(currentUser.tenantId||currentUser.businessId||
+      (document.getElementById('shopNameLabel')||{}).textContent||'').trim();
+    if(!user || !store)return null;
+    return 'shererp.hisabiq.dashboard.v1:'+encodeURIComponent(store)+':'+encodeURIComponent(user);
+  }
+  function restore(key){
+    var basic=defaultLayout();
+    if(!key)return basic;
+    try{
+      var saved=JSON.parse(localStorage.getItem(key));
+      if(!Array.isArray(saved))return basic;
+      var seen=Object.create(null),ordered=[];
+      saved.forEach(function(w){
+        if(!w||typeof w.id!=='string'||!definitions[w.id]||seen[w.id]||typeof w.visible!=='boolean')return;
+        seen[w.id]=true;ordered.push({id:w.id,visible:w.visible});
+      });
+      basic.forEach(function(w){if(!seen[w.id])ordered.push(w);});
+      return ordered;
+    }catch(_){return basic;}
+  }
+  function persist(){
+    if(!storedKey)return;
+    try{localStorage.setItem(storedKey,JSON.stringify(widgets));}catch(_){}
+  }
+  function syncIdentity(){
+    var next=identityKey();
+    if(next===storedKey)return;
+    storedKey=next;
+    widgets=restore(next);
+    render();
+  }
+  function ordered(kind){
+    return widgets.filter(function(w){return definitions[w.id].kind===kind;});
+  }
+  function doMove(id,delta){
+    var kind=definitions[id].kind;
+    var active=ordered(kind).filter(function(w){return w.visible;});
+    var pos=active.findIndex(function(w){return w.id===id;});
+    var target=active[pos+delta];
+    if(!target)return;
+    var at=widgets.findIndex(function(w){return w.id===id;});
+    var to=widgets.findIndex(function(w){return w.id===target.id;});
+    var temp=widgets[at];widgets[at]=widgets[to];widgets[to]=temp;
+    persist();render();
+  }
+  function toggle(id){
+    widgets=widgets.map(function(w){return w.id===id?{id:w.id,visible:!w.visible}:w;});
+    persist();render();
+  }
+  function doReorder(from,to){
+    if(from===to || !definitions[from] || !definitions[to] ||
+       definitions[from].kind!==definitions[to].kind)return;
+    var i=widgets.findIndex(function(w){return w.id===from;});
+    var j=widgets.findIndex(function(w){return w.id===to;});
+    var selected=widgets.splice(i,1)[0];
+    var destination=widgets.findIndex(function(w){return w.id===to;});
+    widgets.splice(destination,0,selected);
+    persist();render();
+  }
+  function editTools(id){
+    var toolbar=document.createElement('div');
+    toolbar.className='hdb-edit-tools';
+    [['move-prev','←','Move '+id+' earlier'],['move-next','→','Move '+id+' later'],
+      ['hide','⊘','Hide '+id]].forEach(function(config){
+      var btn=document.createElement('button');btn.type='button';
+      btn.textContent=config[1];btn.title=config[2];btn.setAttribute('aria-label',config[2]);
+      btn.dataset.hdbAction=config[0];btn.dataset.hdbId=id;toolbar.appendChild(btn);
+    });
+    return toolbar;
+  }
+  function renderGroup(kind,container){
+    ordered(kind).forEach(function(w){
+      var node=elements[w.id];node.hidden=!w.visible;
+      var tools=node.querySelector('.hdb-edit-tools');
+      if(tools)tools.remove();
+      if(editing && w.visible)node.appendChild(editTools(w.id));
+      container.appendChild(node);
+    });
+    container.hidden=!ordered(kind).some(function(w){return w.visible;});
+  }
+  function makeDialogRow(w){
+    var node=elements[w.id];
+    var label=node.querySelector('.hdb-widget-label')||node.querySelector('.hdb-panel-head h2');
+    var small=node.querySelector('.hdb-widget-label small')||node.querySelector('.hdb-panel-head p');
+    var li=document.createElement('li');li.className='hdb-dialog-row';li.draggable=true;
+    li.setAttribute('draggable','true');li.dataset.hdbId=w.id;
+    var grip=document.createElement('span');grip.className='hdb-grip';
+    grip.textContent='⠿';grip.setAttribute('aria-hidden','true');li.appendChild(grip);
+    var name=document.createElement('span');name.className='hdb-dialog-label';
+    name.appendChild(document.createTextNode(label?label.childNodes[0].textContent.trim():w.id));
+    if(small){var hint=document.createElement('small');hint.textContent=small.textContent;name.appendChild(hint);}
+    li.appendChild(name);
+    var sw=document.createElement('button');sw.type='button';sw.className='hdb-switch';
+    sw.setAttribute('role','switch');sw.setAttribute('aria-checked',w.visible?'true':'false');
+    sw.setAttribute('aria-label','Show '+w.id);sw.dataset.hdbAction='toggle';sw.dataset.hdbId=w.id;
+    li.appendChild(sw);
+    li.addEventListener('dragstart',function(ev){
+      li.classList.add('hdb-dragging');
+      ev.dataTransfer.setData('text/plain',w.id);
+      ev.dataTransfer.effectAllowed='move';
+    });
+    li.addEventListener('dragend',function(){li.classList.remove('hdb-dragging');});
+    li.addEventListener('dragover',function(ev){ev.preventDefault();ev.dataTransfer.dropEffect='move';});
+    li.addEventListener('drop',function(ev){
+      ev.preventDefault();
+      var from=ev.dataTransfer.getData('text/plain');
+      if(definitions[from] && definitions[from].kind===definitions[w.id].kind)doReorder(from,w.id);
+    });
+    return li;
+  }
+  function renderDialog(){
+    ['metric','panel'].forEach(function(kind){
+      var list=dialog.querySelector('[data-hdb-list="'+kind+'"]');
+      list.replaceChildren();
+      ordered(kind).forEach(function(w){list.appendChild(makeDialogRow(w));});
+    });
+  }
+  function render(){
+    root.classList.toggle('is-editing',editing);
+    renderGroup('metric',metrics);renderGroup('panel',panels);
+    root.querySelector('#hdb-empty-all').hidden=widgets.some(function(w){return w.visible;});
+    root.querySelector('#hdb-edit-hint').hidden=!editing;
+    root.querySelector('#hisabiq-dashboard-customize').hidden=editing;
+    root.querySelector('[data-hdb-action="finish"]').hidden=!editing;
+    root.querySelector('#hdb-all-widgets').hidden=!editing;
+    renderDialog();
+    hydrate();
+  }
+  function hydrate(){
+    root.querySelectorAll('[data-hdb-value]').forEach(function(output){
+      var id=output.dataset.hdbValue;
+      if(id==='unavailable'){output.textContent='—';return;}
+      var original=document.getElementById(id);
+      var value=original && original.textContent?original.textContent.trim():'';
+      output.textContent=value && value!=='--' ? value : '—';
+    });
+    var shop=document.getElementById('shopNameLabel');
+    var store=shop&&shop.textContent&&shop.textContent.trim();
+    var date=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+    root.querySelector('#hdb-subtitle').textContent=date+' · '+(store||'Your business');
+  }
+  function openDialog(){
+    focusReturn=document.activeElement;
+    renderDialog();dialog.hidden=false;
+    dialog.querySelector('[data-hdb-action="dialog-close"]').focus();
+  }
+  function closeDialog(){
+    dialog.hidden=true;
+    if(focusReturn && typeof focusReturn.focus==='function')focusReturn.focus();
+    focusReturn=null;
+  }
+  function navigate(route){
+    if(!authToken || !currentUser || !document.getElementById('loginOverlay').hidden)return;
+    if(typeof goToPage==='function')goToPage(route);
+  }
+  root.addEventListener('click',function(ev){
+    var button=ev.target.closest('[data-hdb-action]');
+    if(button && root.contains(button)){
+      var action=button.dataset.hdbAction,id=button.dataset.hdbId;
+      if(action==='customize'){editing=true;render();return;}
+      if(action==='finish'){editing=false;render();return;}
+      if(action==='show-hidden'){openDialog();return;}
+      if(action==='dialog-close'){closeDialog();return;}
+      if(action==='reset'){widgets=defaultLayout();persist();render();return;}
+      if(action==='toggle' && definitions[id]){toggle(id);return;}
+      if(action==='hide' && definitions[id]){toggle(id);return;}
+      if(action==='move-prev' && definitions[id]){doMove(id,-1);return;}
+      if(action==='move-next' && definitions[id]){doMove(id,1);return;}
+    }
+    var link=ev.target.closest('[data-hdb-route]');
+    if(link && root.contains(link) && !editing){navigate(link.dataset.hdbRoute);}
+  });
+  dialog.addEventListener('click',function(ev){if(ev.target===dialog)closeDialog();});
+  dialog.addEventListener('keydown',function(ev){
+    if(ev.key==='Escape'){ev.preventDefault();closeDialog();return;}
+    if(ev.key!=='Tab')return;
+    var focusable=Array.prototype.slice.call(dialog.querySelectorAll('button:not([hidden])'));
+    if(!focusable.length)return;
+    var first=focusable[0],last=focusable[focusable.length-1];
+    if(ev.shiftKey && document.activeElement===first){ev.preventDefault();last.focus();}
+    else if(!ev.shiftKey && document.activeElement===last){ev.preventDefault();first.focus();}
+  });
+  var source=document.querySelector('#page-dashboard > .stat-grid');
+  if(source){
+    var watcher=new MutationObserver(hydrate);
+    watcher.observe(source,{subtree:true,characterData:true,childList:true});
+  }
+  var label=document.getElementById('shopNameLabel');
+  if(label){
+    var scopeWatcher=new MutationObserver(function(){syncIdentity();hydrate();});
+    scopeWatcher.observe(label,{childList:true,characterData:true,subtree:true});
+  }
+  window.addEventListener('focus',syncIdentity);
+  var login=document.getElementById('loginOverlay');
+  if(login){
+    var authWatcher=new MutationObserver(syncIdentity);
+    authWatcher.observe(login,{attributes:true,attributeFilter:['hidden']});
+  }
+  widgets=defaultLayout();
+  render();syncIdentity();
+})();
+</script>
