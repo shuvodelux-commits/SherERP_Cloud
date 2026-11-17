@@ -16,7 +16,8 @@ const groups=[
   'SALES','SALES_RETURN','SALES_RETURN_ITEMS','CUSTOMER_LEDGER',
   'PURCHASES','PURCHASE_RETURN','PURCHASE_RETURN_ITEMS','SUPPLIER_LEDGER',
   'PRODUCTS','STOCK_LOTS','CASH_BOOK','BANK_BOOK','BANK_ACCOUNTS',
-  'SALE_ITEMS','SALE_ITEM_LOTS','VENDOR_SOURCING','EXPENSES','SALE_BUNDLE_COMPONENTS'
+  'SALE_ITEMS','SALE_ITEM_LOTS','VENDOR_SOURCING','EXPENSES','SALE_BUNDLE_COMPONENTS',
+  'FINANCE_TRANSACTIONS'
 ];
 const reviewKeys=[
   'authBoundaryReviewed','tenantBoundaryReviewed','sourceSnapshotReviewed',
@@ -56,11 +57,25 @@ test('M09 gates six source-shaped reports, never emits plausible partial totals'
   assert.deepEqual(report(result,'cashbank').missingGroups,
     ['CASH_BOOK','BANK_BOOK','BANK_ACCOUNTS']);
   assert.deepEqual(report(result,'balancesheet').missingGroups,
-    ['CASH_BOOK','BANK_ACCOUNTS','STOCK_LOTS']);
+    ['CASH_BOOK','BANK_ACCOUNTS','STOCK_LOTS','FINANCE_TRANSACTIONS']);
   assert.deepEqual(report(result,'profit').missingGroups,
     ['SALES','SALE_ITEMS','SALES_RETURN','SALES_RETURN_ITEMS','SALE_ITEM_LOTS',
      'VENDOR_SOURCING','EXPENSES','SALE_BUNDLE_COMPONENTS',
      'CUSTOMER_LEDGER','SUPPLIER_LEDGER']);
+});
+
+test('M09 Balance Sheet requires source Finance Transactions underlying owner capital and loan',()=>{
+  const evidence=verified();
+  delete evidence.sourceGroups.FINANCE_TRANSACTIONS;
+  const x=inspect(evidence);
+  assert.deepEqual(report(x,'balancesheet').missingGroups,['FINANCE_TRANSACTIONS']);
+  assert.equal(report(x,'balancesheet').evidenceComplete,false);
+  assert.equal(report(x,'balancesheet').ready,false);
+  assert.equal(report(x,'stock').evidenceComplete,true);
+  // Original FinanceModule.gs derives both owner/loan from activeRows_('FINANCE_TRANSACTIONS').
+  const y=inspect(verified());
+  assert.equal(report(y,'balancesheet').evidenceComplete,true);
+  assert.equal(report(y,'balancesheet').ready,false);
 });
 
 test('M09 imported row-count drift and missing review block only dependent reports',()=>{
