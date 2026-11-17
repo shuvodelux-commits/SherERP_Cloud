@@ -192,3 +192,17 @@ test('existing single-unit source behavior remains independent of tiles',()=>{
     {'Product ID':'LEGACY',Unit:'Feet'},[],7,[]
   ),{baseQty:7,snapshot:[],components:[],hasBreakdown:false});
 });
+
+test('dimension units cannot be coerced from an array or object',()=>{
+  for(const dimensionUnit of [['in'],{toString:()=> 'in'}])
+    assert.throws(()=>resolveTileQuantity(tile({dimensionUnit}),pack()),/dimension unit/i);
+});
+
+test('pricing generated large coverage does not reparse it as an input decimal',()=>{
+  const out=priceTileQuantity(tile({
+    length:'100000000000000000000000',width:'100000000000000000000000'
+  }),pack('0','1'),'Sqft','0');
+  assert.equal(out.lineAmountMinor,'0');
+  assert.equal(out.displayQuantityAmountMinor,'0');
+  assert.equal(out.quantity.pieces,'1');
+});
