@@ -85,15 +85,32 @@ async function openProductModal(width){
  return page;
 }
 
+async function chooseProductPreviewOption(page,id,value){
+ const native=page.locator('#'+id);
+ // The frozen original ERP enhances selects with a visible touch-picker and
+ // hides the native select. Exercise that real control in Chromium instead of
+ // waiting on a deliberately invisible native input.
+ if(await native.isVisible()){
+  await native.selectOption(value);
+ }else{
+  const index=await native.locator('option').evaluateAll((options,wanted)=>
+    options.findIndex(option=>option.value===wanted),value);
+  assert.ok(index>=0,'expected source-backed option '+value);
+  await page.locator('#'+id+' + .touch-select-trigger').click();
+  await page.locator('#touchSelectMenuGlobal button[data-touch-option-index="'+index+'"]').click();
+ }
+ assert.equal(await native.inputValue(),value);
+}
+
 test('desktop product modal previews 2 Box 5 Pcs without changing legacy Save or Bundle controls',async()=>{
  const page=await openProductModal(1440);
  try{
   assert.equal(await page.locator('#m01ProductUnitMode').count(),1);
-  await page.selectOption('#m01ProductUnitMode','multi');
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','multi');
   await page.locator('#m01StockPreview').getByText('2 Box 5 Pcs',{exact:false}).waitFor();
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
   assert.equal(await page.locator('#prodBundleEditor').count(),1);
-  await page.selectOption('#m01ProductUnitMode','single');
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','single');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),false);
  }finally{await page.close();}
 });
@@ -101,7 +118,7 @@ test('desktop product modal previews 2 Box 5 Pcs without changing legacy Save or
 test('Tiles 24x24 and 25 Pcs per Box project 5 Box 3 Pcs and 512.00 Sqft',async()=>{
  const page=await openProductModal(1440);
  try{
-  await page.selectOption('#m01ProductUnitMode','tiles');
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','tiles');
   await page.locator('#m01TilesPerBox').fill('25');
   await page.locator('#m01OpeningCase').fill('5');
   await page.locator('#m01OpeningBase').fill('3');
@@ -113,9 +130,9 @@ test('Tiles 24x24 and 25 Pcs per Box project 5 Box 3 Pcs and 512.00 Sqft',async(
 test('Tiles requested area is rounded to actual physical Pcs and visible on 390px phone',async()=>{
  const page=await openProductModal(390);
  try{
-  await page.selectOption('#m01ProductUnitMode','tiles');
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','tiles');
   await page.locator('#m01TilesPerBox').fill('25');
-  await page.selectOption('#m01OpeningMode','area');
+  await chooseProductPreviewOption(page,'m01OpeningMode','area');
   await page.locator('#m01RequestedSqft').fill('355.00');
   await page.locator('#m01StockPreview').getByText('3 Box 14 Pcs · 356.00 Sqft',{exact:false}).waitFor();
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
@@ -132,8 +149,8 @@ test('Tiles requested area is rounded to actual physical Pcs and visible on 390p
 test('manufacturer coverage requires source evidence and never posts stock',async()=>{
  const page=await openProductModal(1440);
  try{
-  await page.selectOption('#m01ProductUnitMode','tiles');
-  await page.selectOption('#m01CoveragePolicy','manufacturer');
+  await chooseProductPreviewOption(page,'m01ProductUnitMode','tiles');
+  await chooseProductPreviewOption(page,'m01CoveragePolicy','manufacturer');
   await page.locator('#m01StockPreview').getByText(/evidence|manufacturer|mismatch/i).waitFor();
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
  }finally{await page.close();}
