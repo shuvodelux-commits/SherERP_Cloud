@@ -12,7 +12,7 @@
 
 ## Constraints
 - Base `main@826f63662588f2961d70a7e0859b6e5fa94516ae`; verify fresh main and open PRs before implementation/merge.
-- M03 exclusive shared-SQL integrator. Only change this plan and `tests/m03-frozen-source-readback.test.mjs`; do not edit `src/db`, actual migrations, `src/rpc`, `src/auth`, Worker/production Wrangler or GitHub Actions.
+- M03 exclusive shared-SQL integrator. Only change this plan, `tests/m03-frozen-source-readback.test.mjs` and the existing final case of `tests/integration/m03-frozen-source-readback-workerd.spec.mjs`; do not edit `src/db`, actual migrations, `src/rpc`, `src/auth`, Worker/production Wrangler or GitHub Actions.
 - This is **a characterization/integration acceptance test** of already-merged implementations, not a new production feature. If it succeeds immediately, that is a useful seam verification, **not fabricated RED→GREEN**. If it fails because real interfaces differ, record the concrete RED and repair only the missing independent behavior through test-first scoped code.
 - Never treat synthetic 49-group/38-family fixtures as custody-approved source-data migration. `independentSourceCaptureVerified`, `sourceToD1Reconciled`, `idIssuanceAuthorized`, `publicRpcEnabled` and `productionReady` remain **false**.
 - All source IDs and initial counters are synthetic. Never read private GAS/Sheets or commit real source records.
@@ -43,7 +43,19 @@
 - [ ] Assert generated IDs follow `max(original source historical sequence, frozen property counter) + 1`, stable same-actor replay returns unchanged counters and intent/receipt counts, and frozen source archive record counts/checksums remain identical.
 - [ ] Run `node --test tests/m03-frozen-source-readback.test.mjs` and inspect output. Fix test setup errors, do not modify production SQL merely to make a test pass. A behavior regression requires real RED→GREEN and a narrow M03-owned follow-up.
 
-### Task 2 — Full CI and security verification
+### Task 2 — Same-state REAL Workerd/D1 source-seed to authenticated issuer integration
+
+**Files**
+- Modify: `tests/integration/m03-frozen-source-readback-workerd.spec.mjs` final fifth case only (do not add or remove test cases; M03's six-shard CI relies on this exact spec membership).
+- Reuse: `SYNTHETIC_M03_ID_DDL`, `SYNTHETIC_M03_M04_AUTHORIZED_MASTER_DDL`, `createM04AuthorizedProductMasterCreator`. Apply no production schema change or new test Worker.
+
+- [ ] After the final Run 7 installer succeeds in the original sealed 49-group Workerd database, replace only its still-empty preliminary receipts schema with the exact existing synthetic ID receipts/triggers. Keep the **same 38 seeded counter rows**.
+- [ ] Activate the existing master actor-stamp trigger and use already-migrated local auth and Product master tables. Import ONLY synthetic original PCAT/PUNT category/unit master rows with original physical positions and canonical IDs.
+- [ ] Seed a synthetic current M04 Administrator session, create category and unit in **the same D1** through M04 SQL authority; assert new source IDs strictly above frozen property floors, actor-stamped immutable receipts and same-token exact replays consume no further IDs.
+- [ ] Assert unknown and revoked bearer denial, zero extra counters/receipts, all 49 sealed groups unchanged and no public RPC route. Keep `publicRpcEnabled:false`, `idIssuanceAuthorized:false`, `productionReady:false`.
+- [ ] Verify actual Workerd via already-required M03 shard-6 in full GitHub Actions; inspect exact test names/results. If real D1 produces a different behavior than native Node, record platform RED and fix only the narrow issue under TDD.
+
+### Task 3 — Full CI and security verification
 
 **Files**
 - No additional code changes unless a confirmed behavior gap requires a separate RED→GREEN patch.
