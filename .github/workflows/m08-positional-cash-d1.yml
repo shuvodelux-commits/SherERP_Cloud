@@ -1,0 +1,24 @@
+name: M08 source positional Cash Session parity local Workerd D1 (read-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  m08-positional-local-d1:
+    name: M08 positional Cash Session source parity (local D1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned local-only Wrangler
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Run positional source parity against real local Workerd D1
+        run: node --test tests/integration/m08-d1-positional-cash-workerd.spec.mjs
