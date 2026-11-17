@@ -104,6 +104,11 @@ export function projectSaleForUpdate(invoiceId,snapshot,{canEditSales}={}){
   if(!sale)throw new Error('Invoice not found.');
   if(deleted(sale))throw new Error('This invoice has been deleted.');
   const detailVersion=String(sale['Payment Detail Version']||'').trim();
+  // Unknown saved detail formats must never be reinterpreted as legacy
+  // single-payment sales; that would hide original Cash/Bank allocations.
+  if(detailVersion && detailVersion!=='1'){
+    throw new Error('NEEDS_REVIEW: unsupported historical sale payment detail version in Update Mode');
+  }
   const payments=detailVersion==='1'
     ?readSalePaymentBreakdown_(sale,snapshot.paymentRows.filter(row=>String(row['Invoice ID'])===invoiceId))
     :[];
