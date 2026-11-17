@@ -79,6 +79,11 @@ function reviewCall(node){
   throw deny();
  }
  const name=propertyName(callee);
+ // Promise.all is a native combinator, not a D1 terminal. Its enclosed
+ // DB calls are inspected separately and must inherit the *same* async
+ // function's await (a deferred callback cannot borrow that await).
+ if(name==='all' && callee.object?.type==='Identifier' &&
+    callee.object.name==='Promise')return null;
  if(name==='prepare' && isDB(callee.object))return null;
  if(!TERMINALS.has(name))return null;
  if(name==='batch'||name==='exec'){
