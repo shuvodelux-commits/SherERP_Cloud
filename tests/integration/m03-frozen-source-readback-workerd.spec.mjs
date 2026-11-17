@@ -197,8 +197,10 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
  assert.deepEqual(sealedArchive,staged);
  assert.equal(sealedArchive.groups.LOGS.rows.length,1001);
  assert.equal(sealedArchive.groups.LOGS.rows[512].sheetRow,517);
- assert.equal(sealedArchive.groups.PRODUCTS.headers.length,19);
- assert.equal(sealedArchive.groups.CUSTOMERS.headers.length,16);
+ assert.deepEqual(sealedArchive.groups.PRODUCTS.headers,
+  source.tables.find(table=>table.sheetKey==='PRODUCTS').columns);
+ assert.deepEqual(sealedArchive.groups.CUSTOMERS.headers,
+  source.tables.find(table=>table.sheetKey==='CUSTOMERS').columns);
  assert.equal((await DB.prepare(
   "SELECT COUNT(*) AS n FROM m03_private_source_seals WHERE status='SEALED'"
  ).first()).n,49);
