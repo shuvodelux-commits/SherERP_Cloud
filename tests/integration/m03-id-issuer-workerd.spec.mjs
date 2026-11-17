@@ -48,7 +48,9 @@ before(async()=>{
     ['TENANT-B','PRODUCT_CATEGORIES','PCAT',2],
     ['TENANT-A','PRODUCT_UNITS','PUNT',0],
     ['TENANT-D','PRODUCT_CATEGORIES','PCAT',0],
-    ['TENANT-E','PRODUCT_CATEGORIES','PCAT',Number.MAX_SAFE_INTEGER]
+    ['TENANT-E','PRODUCT_CATEGORIES','PCAT',Number.MAX_SAFE_INTEGER],
+    ['TENANT-W','PRODUCT_CATEGORIES','FORGED',0],
+    ['TENANT-Q','SESSIONS','SES',0]
   ]){
     assert.equal((await insert.bind(...seed).run()).success,true);
   }
@@ -131,6 +133,10 @@ test('missing and exhausted counters fail closed, never leaving orphan issue rec
   const before=await snapshot();
   assert.equal((await call('/__m03_id__/no-counter')).status,409);
   assert.equal((await call('/__m03_id__/e-exhausted')).status,409);
+  // Both rows deliberately exist in test D1: the guard must reject them
+  // BEFORE the original INSERT can fire a sequence-increment trigger.
+  assert.equal((await call('/__m03_id__/wrong-prefix')).status,409);
+  assert.equal((await call('/__m03_id__/unknown-family')).status,409);
   assert.deepEqual(await snapshot(),before);
 });
 

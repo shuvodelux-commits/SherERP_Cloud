@@ -1,4 +1,5 @@
 import {requireD1Binding} from './d1-binding.js';
+import {originalSourceIdPrefix} from './m03-source-id-families.js';
 
 /**
  * M03 synthetic D1 counter proof, not registered on live RPC or production DB.
@@ -6,7 +7,11 @@ import {requireD1Binding} from './d1-binding.js';
  * the counter and stamp an immutable receipt on each successful INSERT.
  */
 const CLAIM=`INSERT INTO synthetic_m03_id_receipts
-  (tenant_id,id_key,operation_id,intent_hash) VALUES (?,?,?,?)
+  (tenant_id,id_key,operation_id,intent_hash)
+  SELECT ?,?,?,? WHERE EXISTS (
+    SELECT 1 FROM synthetic_m03_id_counters
+    WHERE tenant_id=? AND id_key=? AND prefix=?
+  )
   ON CONFLICT(tenant_id,id_key,operation_id) DO NOTHING`;
 const RECEIPT=`SELECT receipt.intent_hash,receipt.issued_sequence,counter.prefix
   FROM synthetic_m03_id_receipts AS receipt
@@ -37,11 +42,17 @@ export function createAtomicSourceIdIssuer(env,tenantId){
         throw new TypeError('Invalid source ID family, operation ID or intent hash');
       }
 
-      // The AFTER INSERT SQL trigger runs counter increment + receipt stamp
-      // in the SAME SQLite statement. ON CONFLICT does not fire the trigger
-      // for a stable replay, so the sequence is not consumed twice.
+      const expectedPrefix=originalSourceIdPrefix(idKey);
+      if(expectedPrefix===null)
+        throw new TypeError('Unapproved original source ID family');
+
+      // The original Config-pinned prefix guard is INSIDE the same INSERT
+      // that fires counter/receipt triggers: a forged counter prefix cannot
+      // consume a sequence. No JS preflight read or arbitrary family alias.
+      // ON CONFLICT is a stable replay and does not fire the claim trigger.
       const write=await DB.prepare(CLAIM)
-        .bind(tenantId,idKey,operationId,intentHash).run();
+        .bind(tenantId,idKey,operationId,intentHash,
+          tenantId,idKey,expectedPrefix).run();
       if(write?.success!==true)
         throw new Error('Unknown D1 source ID claim outcome; retry same operation ID');
 
@@ -52,7 +63,8 @@ export function createAtomicSourceIdIssuer(env,tenantId){
       if(!row||row.intent_hash!==intentHash)
         throw new Error('Source ID intent collision or missing D1 receipt');
       if(!Number.isSafeInteger(row.issued_sequence)||row.issued_sequence<1 ||
-         typeof row.prefix!=='string'||!PREFIX.test(row.prefix)){
+         typeof row.prefix!=='string'||!PREFIX.test(row.prefix)||
+         row.prefix!==expectedPrefix){
         throw new Error('Invalid D1 source ID receipt sequence or prefix');
       }
       return {

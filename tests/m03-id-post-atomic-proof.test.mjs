@@ -41,11 +41,12 @@ test('one awaited source SALES claim, receipt and exact scoped journal verify co
   });
   assert.equal(mock.sqls.length,3);
   assert.match(mock.sqls[0],/^INSERT INTO synthetic_m03_id_receipts/i);
+  assert.match(mock.sqls[0],/WHERE tenant_id=\? AND id_key=\? AND prefix=\?/);
   assert.match(mock.sqls[1],/^SELECT receipt\./i);
   assert.match(mock.sqls[2],/^SELECT\b/i);
   assert.match(mock.sqls[2],/synthetic_m03_post_journal/);
   assert.deepEqual(mock.binds,[
-    ['TENANT-A','SALES','OP-ONE',HASH],
+    ['TENANT-A','SALES','OP-ONE',HASH,'TENANT-A','SALES','INV'],
     ['TENANT-A','SALES','OP-ONE'],
     ['TENANT-A','OP-ONE']
   ]);
