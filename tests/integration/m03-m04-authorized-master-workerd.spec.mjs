@@ -230,6 +230,12 @@ test('Run 4 private Worker HTTP boundary rejects supplied clock, tenant, actor a
     token.ADMIN,{name:'Conduit',operationId:'OP-RPC-CONDUIT'}
   ]};
   const before=await state();
+  assert.deepEqual(await call(route,{
+    fnName:'addProductCategory',args:[
+      token.ADMIN,{name:'   ',operationId:'OP-RPC-EMPTY'}
+    ]
+  }),{status:200,body:{success:false,message:'Category name is required.'}});
+  assert.deepEqual(await state(),before);
   for(const attack of [
     {...valid,nowMs:9_000_000_000_000},
     {...valid,actorId:'ADMIN'},
