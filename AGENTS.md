@@ -90,3 +90,9 @@ Do not generate placeholder features as if production complete. If a module is n
 - https://developers.cloudflare.com/d1/reference/migrations/
 - https://developers.cloudflare.com/workers/static-assets/binding/
 - https://developers.cloudflare.com/d1/reference/time-travel/
+
+## M01–M11 simultaneous-chat coordination — mandatory (2026-11-17)
+
+All module chats must read [docs/PARALLEL_EXECUTION.md](docs/PARALLEL_EXECUTION.md) **before each new scoped task**. The owner has opened separate chats for M01–M11. They may work concurrently only in non-overlapping module-owned branches: isolated contracts, offline/import/parity tests, original UI QA and nondeployable local-D1 proofs are approved preparation. **Do not start eleven independent shared transaction writers.** Shared source schema and D1 migrations, src/db, src/rpc, Worker entry, invoice/stock IDs and atomic financial posting have a **single M03 integration owner**; M02 contributes reviewed source semantics and M04 contributes session/RBAC contracts. M05–M09 must not ship real writes/public RPC until the current docs/M03_PARALLEL_READINESS.md evidence gate is satisfied. M10/M11 are rehearsal/runbooks only until separate production approval.
+
+Every chat: check current main/open PRs and its existing GitHub issue; declare module, exact file ownership, read/write scope, dependencies, current base SHA, TDD proof and merge sequence in its PR using .github/pull_request_template.md. One issue/objective/branch/PR at a time; open isolated PRs against main, never count child-to-feature merge as code on main, reverify source files after merge. Concurrent conflicts on protected files stop that lane and go to the M03 integrator. Never bypass full CI, Party account separation, Cash Session, FIFO/returns/idempotency, original UI or data safety for speed. The existing parallel-preparation-ready status **does not** mean production or parallel-transaction-ready.

@@ -4,6 +4,8 @@
 
 **Approved architecture amendment:** [ADR-007 — Unified Party](architecture/ADR-007-unified-party-relationships.md) is mandatory for customer/supplier/vendor/finance/payee-related D1 work; see [Superpowers execution plan](superpowers/plans/2026-11-14-unified-party-migration.md). One identity, seven combinable roles, separate financial accounts; never auto-net. Manual settlement is later opt-in with explicit permission and approval.
 
+Parallel-chat operating rules: see [M01–M11 Parallel Execution Rules](PARALLEL_EXECUTION.md). Parallel *preparation* is authorized; parallel production transaction writers remain blocked by [M03 Parallel Readiness](M03_PARALLEL_READINESS.md) until the explicit shared-kernel/auth/source reconciliation gate is passed.
+
 ## Delivery rules
 
 - Each Mxx below is a separate pull request or a small series of PRs; do not merge a single giant port.
