@@ -14,7 +14,8 @@ function fixture(){
     INSERT INTO parties(party_id,display_name,status,created_at) VALUES
       ('P-A','Shared Name','ACTIVE','2026-11-17'),
       ('P-B','Shared Name','ACTIVE','2026-11-17'),
-      ('P-HIST','Old Customer','INACTIVE','2026-11-17');
+      ('P-HIST','Old Customer','INACTIVE','2026-11-17'),
+      ('P-DISPUTED','Old Vendor','ACTIVE','2026-11-17');
     INSERT INTO party_legacy_links
       (source_group,source_id,legacy_sheet_row,party_id,link_basis,created_at)
     VALUES('CUSTOMERS','CUS-0007',2,'P-A','ORIGINAL_RECORD','2026-11-17');
@@ -29,7 +30,7 @@ function fixture(){
     VALUES('FINANCE_PERSONS','FPER-10',11,'P-HIST','ORIGINAL_RECORD','2026-11-17');
     INSERT INTO party_legacy_links
       (source_group,source_id,legacy_sheet_row,party_id,link_basis,status,created_at)
-    VALUES('VENDORS','VEN-13',5,'P-B','ORIGINAL_RECORD','DISPUTED','2026-11-17');
+    VALUES('VENDORS','VEN-13',5,'P-DISPUTED','ORIGINAL_RECORD','DISPUTED','2026-11-17');
   `);
   const queries=[];
   const DB={prepare(query){
