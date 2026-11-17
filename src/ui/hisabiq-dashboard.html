@@ -24,6 +24,14 @@
   .hdb-btn-primary:hover { color:white; background:#096c66; }
   .hdb-btn:focus-visible,.hdb-widget:focus-visible,.hdb button:focus-visible { outline:2px solid var(--hdb-teal); outline-offset:2px; }
   .hdb-edit-hint { border:1px solid #b4dbd8; background:#edfbf9; border-radius:8px; padding:9px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; color:#086b64; font-size:12px; }
+  .hdb-nav-status { margin:0; padding:10px 13px; border:1px solid #dfc1a0; background:#fff7eb; border-radius:8px; color:#69460f; font-size:12px; line-height:1.55; }
+  .hdb-origin-banner { display:flex; flex-wrap:wrap; gap:10px 15px; justify-content:space-between; align-items:center; border:1px solid #b2d8d3; border-radius:9px; background:#eaf6f4; padding:10px 13px; margin-bottom:14px; color:#174f4c; font-family:"Geist","Hind Siliguri",system-ui,sans-serif; }
+  .hdb-origin-banner > div { display:grid; gap:3px; min-width:0; }
+  .hdb-origin-banner strong { font-size:12px; font-weight:650; }
+  .hdb-origin-banner span { font-size:11px; line-height:1.5; max-width:750px; }
+  .hdb-origin-banner button { background:#fff; border:1px solid #a9c9c5; color:#0a625c; padding:7px 10px; min-height:34px; border-radius:6px; cursor:pointer; font-weight:600; font-size:12px; }
+  .hdb-origin-banner button:focus-visible { outline:2px solid #0d7c74; outline-offset:2px; }
+  @media print { .hdb-origin-banner { display:none!important; } }
   .hdb-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
   .hdb-widget-wrap { position:relative; min-width:0; }
   .hdb-widget { display:flex; flex-direction:column; width:100%; min-height:121px; height:100%; border:1px solid var(--hdb-border); padding:14px; border-radius:12px; background:white; text-align:left; box-shadow:0 1px 3px rgba(13,42,52,.045); color:var(--hdb-ink); cursor:pointer; text-decoration:none; transition:border-color .14s ease, box-shadow .14s ease; }
@@ -116,6 +124,7 @@
       <button type="button" class="hdb-btn hdb-btn-primary" data-hdb-action="finish" hidden>✓ Done</button>
     </div>
   </header>
+  <p id="hdb-navigation-status" class="hdb-nav-status" role="status" aria-live="polite" hidden></p>
   <div class="hdb-quick" aria-label="Quick actions">
     <button type="button" class="hdb-btn" data-hdb-route="posv2">POS</button>
     <button type="button" class="hdb-btn" data-hdb-route="sales">Sales</button>
@@ -551,9 +560,144 @@
        focusReturn.isConnected && !focusReturn.hidden)focusReturn.focus();
     focusReturn=null;
   }
-  function navigate(route){
-    if(!authToken || !currentUser || !document.getElementById('loginOverlay').hidden)return;
-    if(typeof goToPage==='function')goToPage(route);
+  // Known native UI routes only. This is a client convenience guard, not a
+  // substitute for per-RPC server permission checks.
+  var hdbRouteAllowlist=Object.freeze({
+    sales:1,customers:1,suppliers:1,daybook:1,reports:1,products:1,
+    purchase:1,expenseList:1,finance:1,financePersonLedger:1,posv2:1
+  });
+  function hdbRouteAllowed(route){
+    if(!Object.prototype.hasOwnProperty.call(hdbRouteAllowlist,route))return false;
+    var host=document.getElementById('page-'+(route==='posv2'?'pos':route));
+    if(!host)return false;
+    var cover=document.getElementById('loginOverlay');
+    if(typeof authToken!=='string'||!authToken||!currentUser||!cover||!cover.hidden)return false;
+    if(typeof allowedModules==='undefined')return false;
+    if(allowedModules===null)return true;
+    if(!Array.isArray(allowedModules)||typeof navGroupFor_!=='function')return false;
+    var group=navGroupFor_(route);
+    if(!group)return false;
+    if(Array.isArray(group.children)){
+      var child=group.children.find(function(item){return item.key===route;});
+      return !!child && typeof subNavVisible_==='function' &&
+        subNavVisible_(child,group.key);
+    }
+    return typeof navItemVisible_==='function' && navItemVisible_(group);
+  }
+  function hdbIsoLocal(date){
+    return String(date.getFullYear())+'-'+String(date.getMonth()+1).padStart(2,'0')+
+      '-'+String(date.getDate()).padStart(2,'0');
+  }
+  function hdbApplyDateScope(widgetId,route){
+    var today=new Date(),todayIso=hdbIsoLocal(today);
+    if(route==='sales' && (widgetId==='today-sales'||widgetId==='recent-sales')){
+      var from=new Date(today);
+      if(widgetId==='recent-sales')from.setDate(today.getDate()-1);
+      var fromInput=document.getElementById('smDateFrom');
+      var toInput=document.getElementById('smDateTo');
+      if(fromInput&&toInput){fromInput.value=hdbIsoLocal(from);toInput.value=todayIso;}
+      return widgetId==='recent-sales'
+        ?'Invoices dated '+hdbIsoLocal(from)+' to '+todayIso+'; source-authorized Sales records only.'
+        :'Invoices dated '+todayIso+'; source-authorized Sales records only.';
+    }
+    if(route==='reports' && (widgetId==='gross-profit'||widgetId==='sales-trend')){
+      var fromReport=new Date(today);
+      if(widgetId==='sales-trend')fromReport.setDate(today.getDate()-13);
+      var reportFrom=document.getElementById('rptFrom');
+      var reportTo=document.getElementById('rptTo');
+      if(reportFrom&&reportTo){reportFrom.value=hdbIsoLocal(fromReport);reportTo.value=todayIso;}
+      var active=widgetId==='gross-profit'?'rptProfit':'rptSales';
+      document.querySelectorAll('#page-reports .tab-btn[data-tab]').forEach(function(btn){
+        btn.classList.toggle('active',btn.dataset.tab===active);
+      });
+      document.querySelectorAll('#page-reports .tab-panel').forEach(function(panel){
+        panel.hidden=panel.id!==active;
+      });
+      if(typeof rptState!=='undefined'&&rptState){
+        rptState.activeTab=active;
+        rptState.loaded={};
+      }
+      return widgetId==='gross-profit'
+        ?'Profit report for '+todayIso+'. Actual profit depends on authorized lot-cost coverage.'
+        :'Sales report for the last 14 days ('+hdbIsoLocal(fromReport)+' to '+todayIso+
+          '). This is the source report, not a fabricated dashboard chart.';
+    }
+    // Do not invent read-side filters which the original modules lack.
+    var nativeInfo={
+      receivable:'Customer list — not a due-only filtered list. Open an individual authorized customer ledger for detail.',
+      dues:'Customer list — not a due-only filtered list. Open an individual authorized customer ledger for detail.',
+      payable:'Supplier list — not a payable-only filtered list. Borrower and customer accounts remain separate.',
+      'low-stock':'Products list — a low-stock-only filter is not available in the source UI. Inspect the Stock column.',
+      cash:"Day Book defaults to today; cash balance is not the same as today's net. Adjust dates for older activity.",
+      cashflow:'Day Book opens its own date-filtered cash and bank transactions. The dashboard chart series is unavailable.',
+      'today-collection':'Day Book shows original cash and bank transactions; adjust dates to check collection history.',
+      'today-expense':'Original Expense History; adjust its available source filters for specific transactions.',
+      'today-purchase':"Original Purchases module; use source records for today's purchases.",
+      'borrower-receivable':'Original Finance Person Ledger. Borrower balances do not auto-net against supplier dues.',
+      'outstanding-loan':'Original Business Finance accounts; distinct lender, borrower and owner roles stay separate.'
+    };
+    return nativeInfo[widgetId]||'Native ERP module. Details are visible only when their original read permissions are authorized.';
+  }
+  function hdbContextBanner(route,title,description){
+    var old=document.getElementById('hdb-drilldown-context');
+    if(old)old.remove();
+    var host=document.getElementById('page-'+(route==='posv2'?'pos':route));
+    if(!host)return;
+    var banner=document.createElement('div');
+    banner.id='hdb-drilldown-context';
+    banner.className='hdb-origin-banner';
+    banner.setAttribute('role','region');
+    banner.setAttribute('aria-label','Dashboard drilldown context');
+    var copy=document.createElement('div');
+    var heading=document.createElement('strong');heading.textContent='From Dashboard · '+title;
+    var scope=document.createElement('span');scope.textContent=description;
+    copy.appendChild(heading);copy.appendChild(scope);banner.appendChild(copy);
+    var back=document.createElement('button');
+    back.type='button';back.dataset.hdbBack='';
+    back.textContent='← Back to Dashboard';
+    back.setAttribute('aria-label','Back to Dashboard');
+    back.addEventListener('click',function(){
+      banner.remove();
+      if(typeof goToPage==='function')goToPage('dashboard');
+    });
+    banner.appendChild(back);
+    host.insertBefore(banner,host.firstChild);
+  }
+  function hdbGoToDetail(route,widgetId){
+    var status=root.querySelector('#hdb-navigation-status');
+    if(!hdbRouteAllowed(route)){
+      status.hidden=false;
+      status.textContent='You are not authorized to view this detail module, or this detail view is unavailable.';
+      return false;
+    }
+    status.hidden=true;status.textContent='';
+    var titles={
+      'today-sales':"Today's Sales",'receivable':'Receivable','payable':'Payable',
+      cash:'Cash in Hand','gross-profit':'Gross Profit','low-stock':'Low Stock',
+      'sales-trend':'Sales Trend',cashflow:'Cashflow','recent-sales':'Recent Sales',
+      dues:'Dues to Collect','today-collection':"Today's Collection",
+      'today-expense':"Today's Expense",'today-purchase':"Today's Purchase",
+      'borrower-receivable':'Borrower Receivable','outstanding-loan':'Outstanding Loan'
+    };
+    var desc=hdbApplyDateScope(widgetId,route);
+    if(typeof goToPage!=='function')return false;
+    goToPage(route);
+    if(typeof currentPage==='string'&&currentPage!==route){
+      status.hidden=false;status.textContent='This detail module is not available to your account.';
+      return false;
+    }
+    // Native Sales filter listeners may already be mounted after an earlier visit.
+    if(route==='sales'&&(widgetId==='today-sales'||widgetId==='recent-sales')){
+      ['smDateFrom','smDateTo'].forEach(function(id){
+        var input=document.getElementById(id);
+        if(input)input.dispatchEvent(new Event('input',{bubbles:true}));
+      });
+    }
+    hdbContextBanner(route,titles[widgetId]||route,desc);
+    return true;
+  }
+  function navigate(route,widgetId){
+    return hdbGoToDetail(route,widgetId);
   }
   root.addEventListener('click',function(ev){
     var changed=syncIdentity();
@@ -575,7 +719,10 @@
       if(action==='drag-grip')return;
     }
     var link=ev.target.closest('[data-hdb-route]');
-    if(link && root.contains(link) && !editing){navigate(link.dataset.hdbRoute);}
+    if(link && root.contains(link) && !editing){
+      var widget=link.closest('[data-hdb-widget]');
+      navigate(link.dataset.hdbRoute,widget?widget.dataset.hdbWidget:'');
+    }
   });
   dialog.addEventListener('click',function(ev){if(ev.target===dialog)closeDialog();});
   dialog.addEventListener('keydown',function(ev){
