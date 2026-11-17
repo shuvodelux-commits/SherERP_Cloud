@@ -97,6 +97,35 @@ function ownRow(rows,index){
   }
 }
 
+// A source-freeze proof must not certify two wrappers around the same
+// protected capture. Only compare object identity, never credential values.
+function aliasesAcrossCaptures(a,b){
+  if(a.users===b.users || a.roles===b.roles)return true;
+  try{
+    const seen=new Set();
+    for(const rows of [a.users,a.roles]){
+      const length=Object.getOwnPropertyDescriptor(rows,'length')?.value;
+      if(!Number.isSafeInteger(length))return true;
+      for(let i=0;i<length;i++){
+        const row=ownRow(rows,i);
+        if(!row)return true;
+        seen.add(row);
+      }
+    }
+    for(const rows of [b.users,b.roles]){
+      const length=Object.getOwnPropertyDescriptor(rows,'length')?.value;
+      if(!Number.isSafeInteger(length))return true;
+      for(let i=0;i<length;i++){
+        const row=ownRow(rows,i);
+        if(!row || seen.has(row))return true;
+      }
+    }
+    return false;
+  }catch{
+    return true;
+  }
+}
+
 function differentRows(first,second,fields,index){
   const a=ownRow(first,index),b=ownRow(second,index);
   for(const field of fields){
@@ -115,7 +144,7 @@ function differentRows(first,second,fields,index){
 export function auditStableLegacyStaffFreeze(first,confirmation){
   if(first===confirmation)return invalid();
   const a=sourceArrays(first),b=sourceArrays(confirmation);
-  if(!a || !b)return invalid();
+  if(!a || !b || aliasesAcrossCaptures(a,b))return invalid();
   try{
     const firstAudit=auditLegacyStaffProvenance(first);
     const secondAudit=auditLegacyStaffProvenance(confirmation);
