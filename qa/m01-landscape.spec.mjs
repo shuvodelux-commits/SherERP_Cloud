@@ -573,16 +573,25 @@ test('M01 Run 2 authenticated POS V2 stays role-safe through phone landscape tab
           const mobilePos=page.locator(
             '#mobileBottomNav [data-mobile-page="pos"]');
           assert.equal(await mobilePos.isVisible(),true);
-          const tab=page.locator(
-            '#page-pos .pos-v2-workflow-tabs [data-pos-v2-tab="'+stage.tab+'"]');
-          await tab.tap();
-          assert.equal(await tab.getAttribute('aria-selected'),'true');
-          assert.equal(await page.locator('#page-pos')
-            .getAttribute('data-pos-v2-tab-state'),stage.tab);
-          const searchRect=await page.locator('#posSearch').boundingBox();
-          assert.ok(searchRect && searchRect.width>0 &&
-            searchRect.x>=-1 && searchRect.x+searchRect.width<=stage.width+1,
-            stage.name+' search must remain within phone horizontal bounds');
+          const workflowTabs=page.locator('#page-pos .pos-v2-workflow-tabs');
+          if(stage.tab){
+            assert.equal(await workflowTabs.isVisible(),true,
+              'the narrow phone layout must provide workflow tabs');
+            const tab=workflowTabs.locator('[data-pos-v2-tab="'+stage.tab+'"]');
+            await tab.tap();
+            assert.equal(await tab.getAttribute('aria-selected'),'true');
+            assert.equal(await page.locator('#page-pos')
+              .getAttribute('data-pos-v2-tab-state'),stage.tab);
+            if(stage.tab==='cart'){
+              const searchRect=await page.locator('#posSearch').boundingBox();
+              assert.ok(searchRect && searchRect.width>0 &&
+                searchRect.x>=-1 && searchRect.x+searchRect.width<=stage.width+1,
+                stage.name+' cart search must fit phone horizontal bounds');
+            }
+          }else{
+            assert.equal(await workflowTabs.isVisible(),false,
+              'original wide coarse-landscape hides narrow-only workflow tabs');
+          }
         }else{
           assert.equal(await page.evaluate(()=>isPhoneViewport_()),false);
           assert.equal(await page.locator(
