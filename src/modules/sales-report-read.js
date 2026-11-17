@@ -53,7 +53,7 @@ function dateOnly(value){
 }
 function isDeleted(row){
   const status=field(row,'Is Deleted');
-  return status===true || status==='TRUE';
+  return status===true || String(status||'').toUpperCase()==='TRUE';
 }
 function sortedByDesc(map,key){
   return Object.keys(map)

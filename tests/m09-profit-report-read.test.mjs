@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 
 const reports=readFileSync(new URL('../legacy/source/Reports.gs',import.meta.url),'utf8');
 const utils=readFileSync(new URL('../legacy/source/Utils.gs',import.meta.url),'utf8');
+const frozenDelete=readFileSync(new URL('../legacy/source/DeleteEngine.gs',import.meta.url),'utf8');
 const html=readFileSync(new URL('../legacy/source/reports.html',import.meta.url),'utf8');
 function native(text,name){
   const start=text.indexOf('function '+name+'(');
@@ -17,6 +18,7 @@ const computeStart=reports.indexOf('function computeProfit_(');
 const computeEnd=reports.indexOf('/** filters = { from, to }. FIFO-costed profit',computeStart);
 assert.ok(computeStart>0 && computeEnd>computeStart);
 const sourceCode=[
+  native(frozenDelete,'isDeleted_'),
   ...['roundMoney_','economicReturnLineAmount_','isValidNonNegativeNumber_',
     'duplicateSalesInvoiceIdMap_','assertUniqueSalesInvoiceIds_']
     .map(n=>native(utils,n)),
@@ -101,7 +103,6 @@ function oracle(snapshot,filters,today='2026-11-15'){
     },
     activeSalesReturnItems_:()=>snapshot.saleReturnItems,
     computeSettlementDiscountProfit_:()=>snapshot.settlementDiscount,
-    isDeleted_:row=>row['Is Deleted']===true||row['Is Deleted']==='TRUE',
     safeDateOnly_:value=>value==null?'':String(value).slice(0,10),
     sanitizeInput_:value=>value==null?'':String(value).trim(),
     formatDate_:()=>today,
@@ -305,4 +306,26 @@ test('projection does not mutate snapshots, query D1, create RPCs or change orig
   const source=readFileSync(new URL('../src/modules/profit-report-read.js',import.meta.url),'utf8');
   assert.doesNotMatch(source,/\b(?:fetch|prepare|batch|exec)\s*\(/);
   assert.doesNotMatch(source,/function\s+getProfitReport\s*\(/);
+});
+
+
+test('frozen DeleteEngine excludes mixed-case deleted invoices from Profit and FIFO coverage',()=>{
+  const s=fixture();
+  s.allSales[0]['Is Deleted']='true';
+  s.allSales[1]['Is Deleted']='TrUe';
+  const original=clone(s);
+  const result=parity(s);
+  assert.equal(result.totals.invoices,0);
+  assert.equal(result.totals.grossSales,0);
+  assert.equal(result.totals.cogs,0);
+  assert.equal(result.coverage.invoicesInRange,0);
+  assert.deepEqual(s,original);
+});
+
+test('frozen DeleteEngine retains explicitly false and zero source Sales in Profit',()=>{
+  for(const status of ['false','FALSE',false,0,'']){
+    const s=fixture();
+    s.allSales[0]['Is Deleted']=status;
+    assert.equal(parity(s).totals.invoices,2);
+  }
 });
