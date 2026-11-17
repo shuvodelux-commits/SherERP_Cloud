@@ -51,10 +51,9 @@ test('M03 aggregate check is fail-closed across six parallel local Workerd/D1 sh
 test('M03 private frozen-source Workerd readback must execute exactly once in required CI',()=>{
  const name='m03-frozen-source-readback-workerd.spec.mjs';
  const ci=read(workflow);
- const listed=[...ci.matchAll(/tests\\/integration\\/([a-z0-9-]+\\.spec\\.mjs)/g)].map(x=>x[1]);
- assert.equal(listed.filter(item=>item===name).length,1,'the four-case source readback must run in one real Workerd shard');
+ assert.equal(ci.split('tests/integration/'+name).length-1,1,'the four-case source readback must run in one real Workerd shard');
  const suite=read('tests/integration/'+name);
- assert.equal((suite.match(/^test\\(/gm)||[]).length,4,'the source-readback suite must retain all four safety cases');
+ assert.equal(suite.split('test(').length-1,4,'the source-readback suite must retain all four safety cases');
  assert.match(suite,/createFrozenSourceReadback/);
  assert.match(suite,/readAllSourceGroups/);
 });
