@@ -308,3 +308,48 @@ test('protected staff preflight rejects unknown, hidden and symbol export column
   assert.equal(auditLegacyStaffImport(approved.users,approved.roles).preflightPass,true,
     'reviewed source provenance columns remain eligible');
 });
+
+
+test('M04 protected staff preflight rejects unapproved array-level export metadata',()=>{
+  const secret='PRIVATE-NOT-FOR-AUDIT-ARRAY-OUTPUT-338';
+  const modifiers=[
+    {
+      name:'named USERS array field',
+      change:(source)=>{source.users['SESSIONS']=secret;},
+    },
+    {
+      name:'named ROLES array field',
+      change:(source)=>{source.roles['Private Role Dump']=secret;},
+    },
+    {
+      name:'symbol USERS array field',
+      change:(source)=>{source.users[Symbol('hidden-bearer')]=secret;},
+    },
+    {
+      name:'nonenumerable ROLES array field',
+      change:(source)=>Object.defineProperty(source.roles,'secret',{
+        value:secret,enumerable:false,
+      }),
+    },
+    {
+      name:'array ownKeys Proxy error',
+      change:(source)=>{source.users=new Proxy(source.users,{
+        ownKeys(){throw new Error(secret);}
+      });},
+    },
+  ];
+  for(const {name,change} of modifiers){
+    const source=sample();
+    change(source);
+    const result=auditLegacyStaffImport(source.users,source.roles);
+    assert.equal(result.preflightPass,false,name);
+    assert.deepEqual(result.issues,[{
+      scope:'snapshot',row:null,code:'SNAPSHOT_INVALID',
+    }],name);
+    assert.equal(JSON.stringify(result).includes(secret),false,
+      'no unreviewed array metadata or Proxy message may be returned');
+  }
+  const source=sample();
+  assert.equal(auditLegacyStaffImport(source.users,source.roles).preflightPass,
+    true,'ordinary dense source arrays must remain accepted');
+});
