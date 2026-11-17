@@ -959,3 +959,29 @@ test('roles.edit eligibility preview enforces source action separately from view
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM auth_roles').first()).n,
     before.n,'eligibility preview must never write roles');
 });
+
+
+test('M04 SQL/JS permission ambiguity: duplicate-role JSON cannot yield a D1 login profile',async()=>{
+  const at=NOW+5_300_000;
+  const conflicting='{"sales":{"view":true,"add":true},"sales":{"view":true,"add":false}}';
+  const roleName='M04DuplicateJsonSQLGrant';
+  const userId='USR-RPC-DUP-ROLE';
+  await db.prepare(`INSERT INTO auth_roles
+    (role_name,status,permissions_json,allowed_modules)
+    VALUES (?,'Active',?,'sales')`).bind(roleName,conflicting).run();
+  await seed(userId,'01710000141',roleName);
+
+  // SQLite JSON1 selects the first duplicate key while JSON.parse selects
+  // the last; source-auth metadata must not accept this conflicting role.
+  const sql=await db.prepare(`SELECT json_type(?,'$.sales.add') AS grantType`)
+    .bind(conflicting).first();
+  assert.equal(sql.grantType,'true');
+  const result=await rpc('login',['01710000141',SECRET],at);
+  assert.deepEqual(result,{
+    status:200,
+    body:{success:false,message:'Sign-in role configuration is unavailable.'},
+  });
+  const outstanding=await db.prepare(`SELECT COUNT(*) AS n FROM auth_sessions
+    WHERE user_id=? AND revoked_at_ms IS NULL`).bind(userId).first();
+  assert.equal(outstanding.n,0,'invalid duplicate-key role must not leave a live bearer');
+});
