@@ -125,11 +125,13 @@ test('desktop product modal previews 2 Box 5 Pcs without changing legacy Save or
   await page.locator('#m01StockPreview').scrollIntoViewIfNeeded();
   await captureProductPreview(page,'products-desktop-after-multiunit-preview');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
+  assert.equal(await page.locator('#prodStock').locator('xpath=..').isHidden(),true,'legacy single-stock field hidden in advanced mode');
   assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save unavailable');
   assert.equal(await page.locator('#prodSaveBtn').evaluate(el=>getComputedStyle(el).cursor),'not-allowed');
   assert.equal(await page.locator('#prodBundleEditor').count(),1);
   await chooseProductPreviewOption(page,'m01ProductUnitMode','single');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),false);
+  assert.equal(await page.locator('#prodStock').locator('xpath=..').isVisible(),true,'legacy stock restored in single-unit mode');
   assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save Product');
  }finally{await page.close();}
 });
@@ -206,6 +208,7 @@ test('Products table uses M05 source metadata when available and preserves fallb
   await page.waitForFunction(()=>document.querySelector('#prodTableBody tr:first-child td:nth-child(5)')?.textContent==='2 Box 5 Pcs');
   assert.equal(await page.locator('#prodTableBody tr:nth-child(2) td:nth-child(5)').textContent(),'45 Pcs');
   await mkdir(EVIDENCE_DIR,{recursive:true});
+  await page.evaluate(()=>{document.getElementById('prodModal').hidden=true});
   await page.locator('#prodTable').screenshot({path:join(EVIDENCE_DIR,'products-desktop-after-stock-table.png'),animations:'disabled'});
  }finally{await page.close();}
 });
