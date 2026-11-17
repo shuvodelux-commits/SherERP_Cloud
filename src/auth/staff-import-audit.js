@@ -101,7 +101,11 @@ export function auditLegacyStaffImport(users,roles) {
     userCount=users.length;
     roleCount=roles.length;
     if(!Number.isSafeInteger(userCount) || userCount<0 ||
-       !Number.isSafeInteger(roleCount) || roleCount<0)
+       !Number.isSafeInteger(roleCount) || roleCount<0 ||
+       // Original export arrays may contain only dense numeric rows and
+       // their built-in length. Any hidden/named/symbol key is out of scope.
+       Reflect.ownKeys(users).length!==userCount+1 ||
+       Reflect.ownKeys(roles).length!==roleCount+1)
       return invalidSnapshot;
   } catch {
     return invalidSnapshot;
