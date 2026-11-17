@@ -75,7 +75,7 @@ test('extra original conversion columns are retained but never approved for proj
 });
 test('tampering with cell text, cell metadata or source digest fails closed',()=>{
  const alterations=[
-  'UPDATE legacy_products SET "Product ID" = "UNAUTHORIZED_CHANGE" WHERE __excel_row=2',
+  "UPDATE legacy_products SET \"Product ID\" = 'UNAUTHORIZED_CHANGE' WHERE __excel_row=2",
   "UPDATE legacy_products SET __cells_json = '{ }' WHERE __excel_row=2",
   "UPDATE legacy_products SET __row_sha256 = '0' WHERE __excel_row=2"
  ];
