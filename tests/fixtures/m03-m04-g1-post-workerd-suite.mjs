@@ -225,3 +225,47 @@ test('G2 real Workerd D1: closed session preserves stable prior receipt replay w
     operationId:'OP-G2-CLOSED'});
   assert.deepEqual(await snapshot(),after);
 });
+
+test('G3 real Workerd: posted receipt includes stock movement and replays after unrelated stock changes',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_cash_sessions SET status='Open' WHERE business_id='BUSINESS-A'").run();
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=3 WHERE business_id='BUSINESS-A'").run();
+  assert.equal((await posting.post_(input(SECOND,'OP-G3-WORKER'))).status,'COMMITTED');
+  const movements=(await DB.prepare(`SELECT business_id,operation_id,sku,units_out
+    FROM synthetic_m03_g1_stock_movements WHERE operation_id=?`)
+    .bind('OP-G3-WORKER').all()).results;
+  assert.deepEqual(movements,[{
+    business_id:'BUSINESS-A',operation_id:'OP-G3-WORKER',sku:'PIPE-1',units_out:1
+  }]);
+  const before=await snapshot();
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=0 WHERE business_id='BUSINESS-A'").run();
+  assert.deepEqual(await posting.post_(input(SECOND,'OP-G3-WORKER')),{
+    status:'REPLAY',operationId:'OP-G3-WORKER',resultRef:'SYNTH-OP-G3-WORKER'
+  });
+  const after=await snapshot();
+  assert.deepEqual(after.receipts,before.receipts);
+  assert.deepEqual(after.journal,before.journal);
+});
+
+test('G3 real Workerd: missing child journal leg makes prior receipt NEEDS_REVIEW without another posting',async()=>{
+  await DB.prepare('DROP TRIGGER synthetic_m03_g1_journal_immutable_delete').run();
+  await DB.prepare(`DELETE FROM synthetic_m03_g1_journal
+    WHERE operation_id=? AND account_kind='sales_revenue'`).bind('OP-G3-WORKER').run();
+  const afterDeletion=await snapshot();
+  await assert.rejects(()=>posting.post_(input(SECOND,'OP-G3-WORKER')),
+    /NEEDS_REVIEW|integrity|journal/i);
+  assert.deepEqual(await snapshot(),afterDeletion);
+});
+
+test('G3 real Workerd: stock movement drift also refuses replay; late movement fault rolls back',async()=>{
+  await DB.prepare('DROP TRIGGER synthetic_m03_g3_movement_immutable_delete').run();
+  await DB.prepare('DELETE FROM synthetic_m03_g1_stock_movements WHERE operation_id=?')
+    .bind('OP-G3-WORKER').run();
+  await assert.rejects(()=>posting.post_(input(SECOND,'OP-G3-WORKER')),
+    /NEEDS_REVIEW|integrity|movement/i);
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=1 WHERE business_id='BUSINESS-A'").run();
+  await DB.prepare(`CREATE TRIGGER synthetic_m03_g3_fault BEFORE INSERT ON synthetic_m03_g1_stock_movements
+    BEGIN SELECT RAISE(ABORT,'G3 forced movement failure'); END`).run();
+  const before=await snapshot();
+  await assert.rejects(()=>posting.post_(input(SECOND,'OP-G3-ROLLBACK')),/NEEDS_REVIEW/i);
+  assert.deepEqual(await snapshot(),before);
+});
