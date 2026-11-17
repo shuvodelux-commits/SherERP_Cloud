@@ -9,6 +9,9 @@ import {createM03PrivateIdEvidenceReconciler} from '../../src/db/m03-private-id-
 import {createM03PrivateSourceFloorAudit} from '../../src/db/m03-private-source-floor-audit.js';
 import {createM03PrivateSourceFloorInstaller} from '../../src/db/m03-private-source-floor-install.js';
 import {M02_ID_FAMILIES} from '../../scripts/dry-run-id-floor.mjs';
+import {SYNTHETIC_M03_ID_DDL} from '../fixtures/m03-id-issuer-schema.mjs';
+import {SYNTHETIC_M03_M04_AUTHORIZED_MASTER_DDL} from '../fixtures/m03-m04-authorized-master-schema.mjs';
+import {createM04AuthorizedProductMasterCreator} from '../../src/modules/m04-authorized-product-master-create.js';
 import {captureM02IdEvidenceFreeze} from '../../scripts/dry-run-id-evidence-freeze.mjs';
 import {reviewOfflineSourceParity} from '../../scripts/dry-run-source-parity.mjs';
 
@@ -365,4 +368,82 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
  assert.equal((await floorInstaller.installFreshSynthetic_(floorArgs)).localSyntheticD1FloorsInstalled,true);
 
  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM m03_private_source_rows').first()).n,beforeCount);
+
+ // M03 Run 8: SAME Workerd/D1 instance, SAME 38 counters just installed
+ // through the sealed 49-group source evidence. Complete the *existing*
+ // nondeployable M03/M04 master fixture on this database without resetting the
+ // counters. Receipt table is still empty: replace only its preliminary
+ // Run 6 read-only schema with the original synthetic issuer receipt schema.
+ assert.equal((await DB.prepare('DROP TABLE synthetic_m03_id_receipts').run()).success,true);
+ for(const ddl of SYNTHETIC_M03_ID_DDL.slice(1))
+  assert.equal((await DB.prepare(ddl).run()).success,true);
+ for(const ddl of SYNTHETIC_M03_M04_AUTHORIZED_MASTER_DDL.slice(SYNTHETIC_M03_ID_DDL.length))
+  assert.equal((await DB.prepare(ddl).run()).success,true);
+
+ for(const [group,table,id,name] of [
+  ['PRODUCT_CATEGORIES','product_categories','category_id','category_name'],
+  ['PRODUCT_UNITS','product_units','unit_id','unit_name']
+ ]){
+  for(const row of staged.groups[group].rows){
+   assert.equal((await DB.prepare(
+    'INSERT INTO '+table+'(legacy_sheet_row,'+id+','+name+',status,created_at) VALUES(?,?,?,?,?)'
+   ).bind(row.sheetRow,row.cells[0],row.cells[1],row.cells[2]||'Active',
+    row.cells[3]||null).run()).success,true);
+  }
+ }
+ const adminToken='a'.repeat(64),nowMs=1_800_000_000_000;
+ const tokenHash=createHash('sha256').update(Buffer.from(adminToken,'hex')).digest('hex');
+ assert.equal((await DB.prepare(
+  "INSERT INTO auth_users(user_id,full_name,phone_key,role_name,status,password_hash,password_salt,password_iterations) VALUES(?,?,?,?,'Active',?,?,210000)"
+ ).bind('RUN8-ADMIN','Run8 Synthetic Administrator','01710000001','Administrator',
+  'ab'.repeat(32),'cd'.repeat(24)).run()).success,true);
+ assert.equal((await DB.prepare(
+  'INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,role_auth_version,credential_version,created_at_ms,last_activity_at_ms,expires_at_ms) VALUES(?,?,1,NULL,1,?,?,?)'
+ ).bind(tokenHash,'RUN8-ADMIN',nowMs-90_000,nowMs-30_000,nowMs+600_000).run()).success,true);
+ const floor=key=>DB.prepare(
+  'SELECT current_sequence FROM synthetic_m03_id_counters WHERE tenant_id=? AND id_key=?'
+ ).bind('TENANT-A',key).first();
+ const categoryFloor=(await floor('PRODUCT_CATEGORIES')).current_sequence;
+ const unitFloor=(await floor('PRODUCT_UNITS')).current_sequence;
+ assert.equal(categoryFloor,Number(idEvidence.counters.PRODUCT_CATEGORIES));
+ assert.equal(unitFloor,Number(idEvidence.counters.PRODUCT_UNITS));
+ const master=createM04AuthorizedProductMasterCreator({DB},{businessId:'TENANT-A'});
+ const categoryRequest={token:adminToken,nowMs,operationId:'OP-RUN8-WORKER-CAT',name:'Safety Tools'};
+ const unitRequest={token:adminToken,nowMs,operationId:'OP-RUN8-WORKER-UNIT',name:'Sqft'};
+ const category=await master.createCategory_(categoryRequest);
+ const unit=await master.createUnit_(unitRequest);
+ assert.deepEqual(category,{success:true,data:{
+  id:'PCAT-'+String(categoryFloor+1).padStart(6,'0'),name:'Safety Tools'
+ }});
+ assert.deepEqual(unit,{success:true,data:{
+  id:'PUNT-'+String(unitFloor+1).padStart(6,'0'),name:'Sqft'
+ }});
+ assert.equal((await floor('PRODUCT_CATEGORIES')).current_sequence,categoryFloor+1);
+ assert.equal((await floor('PRODUCT_UNITS')).current_sequence,unitFloor+1);
+ const immutable=(await DB.prepare(
+  'SELECT id_key,operation_id,actor_id,result_id FROM synthetic_m03_master_intents ORDER BY id_key,operation_id'
+ ).all()).results;
+ assert.equal(immutable.length,2);
+ assert(immutable.every(entry=>entry.actor_id==='RUN8-ADMIN'));
+ assert.deepEqual(await master.createCategory_(categoryRequest),category);
+ assert.deepEqual(await master.createUnit_(unitRequest),unit);
+ assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM synthetic_m03_master_intents').first()).n,2);
+ assert.equal((await floor('PRODUCT_CATEGORIES')).current_sequence,categoryFloor+1);
+ assert.equal((await floor('PRODUCT_UNITS')).current_sequence,unitFloor+1);
+ await assert.rejects(()=>master.createCategory_({
+  token:'b'.repeat(64),nowMs,operationId:'OP-RUN8-WORKER-UNKNOWN',name:'Hidden'
+ }),/Denied|authorization/i);
+ assert.equal((await DB.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
+  .bind(nowMs,tokenHash).run()).success,true);
+ await assert.rejects(()=>master.createCategory_(categoryRequest),/Denied|authorization/i);
+ assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM synthetic_m03_master_intents').first()).n,2);
+ assert.equal((await floor('PRODUCT_CATEGORIES')).current_sequence,categoryFloor+1);
+ assert.deepEqual(await createFrozenSourceReadback({DB}).readAllSourceGroups(),staged);
+ assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM m03_private_source_rows').first()).n,beforeCount);
+ // Private, synthetic success is never import authority, production readiness,
+ // or a new public Worker RPC route.
+ assert.equal(seeded.idIssuanceAuthorized,false);
+ assert.equal(seeded.publicRpcEnabled,false);
+ assert.equal(seeded.productionReady,false);
+ assert.equal((await worker.fetch('http://m03.local/api/rpc')).status,404);
 });
