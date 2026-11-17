@@ -1,0 +1,3184 @@
+{
+  "formatVersion": 1,
+  "auditedAt": "2026-11-17",
+  "targetBaseline": "a7acd1013c3c90a4482bd1d8571193d18640a206",
+  "canonicalSource": {
+    "repository": "shuvodelux-commits/Mohim_ERP",
+    "commit": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+    "inventory": "docs/baseline/schema-inventory.json",
+    "columns": 659
+  },
+  "summary": {
+    "groups": 49,
+    "unmapped": 30,
+    "catalogOnly": 4,
+    "auditOnly": 5,
+    "diagnosticOnly": 1,
+    "identityOnly": 5,
+    "authLocalOnly": 3,
+    "productArchiveOnly": 1,
+    "fullyHistoricallyReconciled": 0
+  },
+  "limitations": "Gap matrix based on exact frozen headers and versioned candidate DDL. All unverified semantics, account review, ownership and historical reconciliation gaps are explicit. This is not a completed mapping/production certificate.",
+  "rows": [
+    {
+      "sourceGroup": "PRODUCTS",
+      "sourceSheet": "Products",
+      "originalHeaders": [
+        "Product ID",
+        "Product Name",
+        "Brand",
+        "Category",
+        "Unit",
+        "Barcode",
+        "Purchase Price",
+        "Selling Price",
+        "Current Stock",
+        "Minimum Stock",
+        "Status",
+        "Created At",
+        "Updated At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Product Type",
+        "Bundle Revision"
+      ],
+      "destinationTables": [
+        "legacy_product_snapshots",
+        "products",
+        "product_unit_profiles",
+        "product_unit_conversions"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Product ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0012_legacy_product_snapshots.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "source_profile TEXT NOT NULL CHECK (source_profile IN ('canonical','supplementary')),",
+          "legacy_sheet_row INTEGER NOT NULL CHECK (legacy_sheet_row >= 2),",
+          "product_id TEXT NOT NULL CHECK (length(trim(product_id)) > 0),",
+          "product_name TEXT NOT NULL DEFAULT '',",
+          "brand_text TEXT NOT NULL DEFAULT '',",
+          "category_text TEXT NOT NULL DEFAULT '',",
+          "unit_text TEXT NOT NULL DEFAULT '',",
+          "barcode_text TEXT NOT NULL DEFAULT '',",
+          "purchase_price_text TEXT NOT NULL DEFAULT '',",
+          "selling_price_text TEXT NOT NULL DEFAULT '',",
+          "current_stock_text TEXT NOT NULL DEFAULT '',",
+          "minimum_stock_text TEXT NOT NULL DEFAULT '',",
+          "status_text TEXT NOT NULL DEFAULT '',",
+          "created_at_text TEXT NOT NULL DEFAULT '',",
+          "updated_at_text TEXT NOT NULL DEFAULT '',",
+          "is_deleted_text TEXT NOT NULL DEFAULT '',",
+          "deleted_by TEXT NOT NULL DEFAULT '',",
+          "deleted_at_text TEXT NOT NULL DEFAULT '',",
+          "delete_reason TEXT NOT NULL DEFAULT '',",
+          "product_type_text TEXT NOT NULL DEFAULT '',",
+          "bundle_revision_text TEXT NOT NULL DEFAULT '',",
+          "purchase_price_unit_text TEXT NOT NULL DEFAULT '',",
+          "selling_price_unit_text TEXT NOT NULL DEFAULT '',",
+          "stock_unit_purchase_price_override_text TEXT NOT NULL DEFAULT '',",
+          "stock_unit_selling_price_override_text TEXT NOT NULL DEFAULT '',",
+          "stock_view_unit_text TEXT NOT NULL DEFAULT '',",
+          "stock_entry_unit_text TEXT NOT NULL DEFAULT '',",
+          "minimum_stock_unit_text TEXT NOT NULL DEFAULT '',"
+        ],
+        "scope": "product-source-archive-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At",
+          "Updated At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Purchase Price",
+          "Selling Price",
+          "Current Stock",
+          "Minimum Stock"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "product-source-archive-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No tiles measurement DDL; no authorized stock/price writer; supplementary source profile cannot be silently imported as canonical."
+    },
+    {
+      "sourceGroup": "BUNDLE_COMPONENTS",
+      "sourceSheet": "Bundle Components",
+      "originalHeaders": [
+        "Bundle Product ID",
+        "Component Product ID",
+        "Quantity Per Set",
+        "Unit",
+        "Revision",
+        "Status",
+        "Updated At"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Bundle Product ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Updated At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity Per Set"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALE_BUNDLE_COMPONENTS",
+      "sourceSheet": "Sale Bundle Components",
+      "originalHeaders": [
+        "Invoice ID",
+        "Bundle Product ID",
+        "Bundle Revision",
+        "Component Product ID",
+        "Quantity Per Set",
+        "Sets Sold",
+        "Component Quantity Sold",
+        "Unit",
+        "Created At"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Invoice ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity Per Set",
+          "Component Quantity Sold"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SUPPLIERS",
+      "sourceSheet": "Suppliers",
+      "originalHeaders": [
+        "Supplier ID",
+        "Supplier Name",
+        "Phone",
+        "Address",
+        "Opening Balance",
+        "Current Due",
+        "Notes",
+        "Status",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [
+        "party_legacy_links"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Supplier ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0002_party_identity.sql",
+        "declaredColumns": [
+          "link_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "source_group TEXT NOT NULL CHECK(source_group IN",
+          "source_id TEXT NOT NULL CHECK(length(trim(source_id))>0),",
+          "legacy_sheet_row INTEGER CHECK(legacy_sheet_row IS NULL OR legacy_sheet_row>=2),",
+          "party_id TEXT NOT NULL REFERENCES parties(party_id) ON DELETE RESTRICT,",
+          "link_basis TEXT NOT NULL CHECK(link_basis IN ('ORIGINAL_RECORD','HUMAN_VERIFIED')),",
+          "reviewed_by TEXT,",
+          "reviewed_at TEXT,",
+          "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','DISPUTED','RETIRED')),",
+          "created_at TEXT NOT NULL,"
+        ],
+        "scope": "party-identity-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Opening Balance",
+          "Current Due"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "party-identity-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Independent Party accounts/advances/obligations and original source money mappings are missing; M02-P/M03 review required before finance SQL."
+    },
+    {
+      "sourceGroup": "SUPPLIER_LEDGER",
+      "sourceSheet": "Supplier Ledger",
+      "originalHeaders": [
+        "Ledger ID",
+        "Date",
+        "Supplier ID",
+        "Supplier Name",
+        "Type",
+        "Reference",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Payment Method",
+        "Payment Amount",
+        "Discount Amount",
+        "Discount Reason",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Ledger ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Balance",
+          "Payment Amount",
+          "Discount Amount",
+          "Discount Reason"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Discount Reason",
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "STOCK_LOTS",
+      "sourceSheet": "Stock Lots",
+      "originalHeaders": [
+        "Lot ID",
+        "Product ID",
+        "Product Name",
+        "Purchase ID",
+        "Purchase Date",
+        "Purchase Price",
+        "Sell Price",
+        "Original Quantity",
+        "Remaining Quantity",
+        "Status",
+        "Created At",
+        "Supplier ID",
+        "Supplier Name"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Lot ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Purchase Date",
+          "Created At"
+        ],
+        "amountQuantityHeaders": [
+          "Purchase Price",
+          "Sell Price",
+          "Original Quantity",
+          "Remaining Quantity"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALE_ITEM_LOTS",
+      "sourceSheet": "Sale Item Lots",
+      "originalHeaders": [
+        "Invoice ID",
+        "Product ID",
+        "Lot ID",
+        "Quantity",
+        "Unit Cost",
+        "Unit Sell Price",
+        "Created At",
+        "Supplier ID",
+        "Source Sale Product ID",
+        "Return Consumption Link ID"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Invoice ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity",
+          "Unit Cost",
+          "Unit Sell Price"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "STOCK_LOT_COST_CORRECTIONS",
+      "sourceSheet": "Stock Lot Cost Corrections",
+      "originalHeaders": [
+        "Correction ID",
+        "Date",
+        "Lot ID",
+        "Product ID",
+        "Product Name",
+        "Source",
+        "Old Purchase Price",
+        "New Purchase Price",
+        "Original Quantity",
+        "Remaining Quantity",
+        "Matched Historical Quantity",
+        "Affected Invoice Count",
+        "Historical COGS Delta",
+        "Reason",
+        "Corrected By",
+        "Created At"
+      ],
+      "destinationTables": [
+        "legacy_stock_lot_cost_corrections"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Correction ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0011_legacy_stock_lot_cost_corrections.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER NOT NULL UNIQUE CHECK (legacy_sheet_row >= 2),",
+          "correction_id TEXT NOT NULL UNIQUE CHECK (length(trim(correction_id)) > 0),",
+          "date_text TEXT NOT NULL DEFAULT '',",
+          "lot_id TEXT NOT NULL CHECK (length(trim(lot_id)) > 0),",
+          "product_id TEXT NOT NULL CHECK (length(trim(product_id)) > 0),",
+          "product_name TEXT NOT NULL DEFAULT '',",
+          "source TEXT NOT NULL DEFAULT '',",
+          "old_purchase_price_text TEXT NOT NULL DEFAULT '',",
+          "new_purchase_price_text TEXT NOT NULL DEFAULT '',",
+          "original_quantity_text TEXT NOT NULL DEFAULT '',",
+          "remaining_quantity_text TEXT NOT NULL DEFAULT '',",
+          "matched_historical_quantity_text TEXT NOT NULL DEFAULT '',",
+          "affected_invoice_count_text TEXT NOT NULL DEFAULT '',",
+          "historical_cogs_delta_text TEXT NOT NULL DEFAULT '',",
+          "reason TEXT NOT NULL DEFAULT '',",
+          "corrected_by TEXT NOT NULL DEFAULT '',",
+          "created_at_text TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "audit-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At"
+        ],
+        "amountQuantityHeaders": [
+          "Old Purchase Price",
+          "New Purchase Price",
+          "Original Quantity",
+          "Remaining Quantity",
+          "Matched Historical Quantity"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "audit-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "PURCHASES",
+      "sourceSheet": "Purchases",
+      "originalHeaders": [
+        "Purchase ID",
+        "Date",
+        "Supplier ID",
+        "Supplier Name",
+        "Subtotal",
+        "Discount",
+        "Grand Total",
+        "Paid Amount",
+        "Due Amount",
+        "Payment Status",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Payment Method",
+        "Bank Account ID",
+        "Bank Account Name"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Purchase ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Discount",
+          "Paid Amount",
+          "Due Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Payment Status",
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "PURCHASE_ITEMS",
+      "sourceSheet": "Purchase Items",
+      "originalHeaders": [
+        "Purchase ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Price",
+        "Sell Price",
+        "Line Total"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Purchase ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [],
+        "amountQuantityHeaders": [
+          "Quantity",
+          "Unit Price",
+          "Sell Price"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALES",
+      "sourceSheet": "Sales",
+      "originalHeaders": [
+        "Invoice ID",
+        "Date",
+        "Time",
+        "Customer ID",
+        "Customer Name",
+        "Customer Phone",
+        "Customer Address",
+        "Subtotal",
+        "Discount",
+        "Grand Total",
+        "Paid Amount",
+        "Due Amount",
+        "Payment Type",
+        "Payment Status",
+        "Created By",
+        "Created At",
+        "Payment Method",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Source Draft ID",
+        "Payment Detail Version",
+        "Customer Relation Name",
+        "Customer Relation Type",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Invoice ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Discount",
+          "Paid Amount",
+          "Due Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Payment Status",
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALE_PAYMENTS",
+      "sourceSheet": "Sale Payments",
+      "originalHeaders": [
+        "Payment ID",
+        "Invoice ID",
+        "Revision",
+        "Row Order",
+        "Method",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Tendered Amount",
+        "Applied Amount",
+        "Change Amount",
+        "Transaction Date",
+        "Created At",
+        "Created By",
+        "Operation ID",
+        "Status",
+        "Reversed At",
+        "Reversed By",
+        "Reversal Operation ID"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Payment ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Transaction Date",
+          "Created At",
+          "Reversed At"
+        ],
+        "amountQuantityHeaders": [
+          "Tendered Amount",
+          "Applied Amount",
+          "Change Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Reversed At",
+          "Reversed By",
+          "Reversal Operation ID"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALE_POSTING_JOURNAL",
+      "sourceSheet": "Sale Posting Journal",
+      "originalHeaders": [
+        "Operation ID",
+        "Operation Type",
+        "Payload Hash",
+        "Invoice ID",
+        "Return ID",
+        "State",
+        "Last Completed Stage",
+        "Actor",
+        "Created At",
+        "Updated At",
+        "Error"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Operation ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At",
+          "Updated At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALES_DRAFTS",
+      "sourceSheet": "Draft Invoices",
+      "originalHeaders": [
+        "Draft ID",
+        "Draft No",
+        "Draft Date",
+        "Customer ID",
+        "Customer Name",
+        "Customer Phone",
+        "Customer Father Name",
+        "Customer Address",
+        "Items JSON",
+        "Payment JSON",
+        "Notes",
+        "Subtotal",
+        "Discount",
+        "Grand Total",
+        "Created By ID",
+        "Created By Name",
+        "Created At",
+        "Updated By ID",
+        "Updated By Name",
+        "Updated At",
+        "Version",
+        "Customer Relation Type"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Draft ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Draft Date",
+          "Created At",
+          "Updated At"
+        ],
+        "amountQuantityHeaders": [
+          "Discount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALES_DRAFT_AUDIT",
+      "sourceSheet": "Draft Invoice Audit",
+      "originalHeaders": [
+        "Audit ID",
+        "Timestamp",
+        "Action",
+        "Draft ID",
+        "Draft No",
+        "Version",
+        "Actor ID",
+        "Actor Name",
+        "Source Owner ID",
+        "Invoice ID",
+        "Note"
+      ],
+      "destinationTables": [
+        "legacy_sales_draft_audit"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Audit ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0008_legacy_sales_draft_audit.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE",
+          "audit_id TEXT NOT NULL UNIQUE CHECK (length(trim(audit_id)) > 0),",
+          "timestamp_text TEXT NOT NULL DEFAULT '',",
+          "action TEXT NOT NULL",
+          "draft_id TEXT NOT NULL CHECK (length(trim(draft_id)) > 0),",
+          "draft_no TEXT NOT NULL CHECK (length(trim(draft_no)) > 0),",
+          "version_text TEXT NOT NULL CHECK (length(trim(version_text)) > 0),",
+          "actor_id TEXT NOT NULL DEFAULT '',",
+          "actor_name TEXT NOT NULL DEFAULT '',",
+          "source_owner_id TEXT NOT NULL DEFAULT '',",
+          "invoice_id TEXT NOT NULL DEFAULT '',",
+          "note TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "audit-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Timestamp"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Audit ID"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "audit-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "SALE_ITEMS",
+      "sourceSheet": "Sale Items",
+      "originalHeaders": [
+        "Invoice ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Price",
+        "Line Total",
+        "Sold Product Type"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Invoice ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [],
+        "amountQuantityHeaders": [
+          "Quantity",
+          "Unit Price"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "CUSTOMERS",
+      "sourceSheet": "Customers",
+      "originalHeaders": [
+        "Customer ID",
+        "Customer Name",
+        "Father Name",
+        "Phone",
+        "Address",
+        "Opening Balance",
+        "Current Due",
+        "Status",
+        "Notes",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Relation Type"
+      ],
+      "destinationTables": [
+        "party_legacy_links"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Customer ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0002_party_identity.sql",
+        "declaredColumns": [
+          "link_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "source_group TEXT NOT NULL CHECK(source_group IN",
+          "source_id TEXT NOT NULL CHECK(length(trim(source_id))>0),",
+          "legacy_sheet_row INTEGER CHECK(legacy_sheet_row IS NULL OR legacy_sheet_row>=2),",
+          "party_id TEXT NOT NULL REFERENCES parties(party_id) ON DELETE RESTRICT,",
+          "link_basis TEXT NOT NULL CHECK(link_basis IN ('ORIGINAL_RECORD','HUMAN_VERIFIED')),",
+          "reviewed_by TEXT,",
+          "reviewed_at TEXT,",
+          "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','DISPUTED','RETIRED')),",
+          "created_at TEXT NOT NULL,"
+        ],
+        "scope": "party-identity-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Opening Balance",
+          "Current Due"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "party-identity-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Independent Party accounts/advances/obligations and original source money mappings are missing; M02-P/M03 review required before finance SQL."
+    },
+    {
+      "sourceGroup": "CUSTOMER_LEDGER",
+      "sourceSheet": "Customer Ledger",
+      "originalHeaders": [
+        "Ledger ID",
+        "Date",
+        "Customer ID",
+        "Customer Name",
+        "Type",
+        "Reference",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Payment Method",
+        "Payment Amount",
+        "Discount Amount",
+        "Discount Reason",
+        "Allocated Invoice ID",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Ledger ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Balance",
+          "Payment Amount",
+          "Discount Amount",
+          "Discount Reason"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Discount Reason",
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "EXPENSES",
+      "sourceSheet": "Expenses",
+      "originalHeaders": [
+        "Expense ID",
+        "Date",
+        "Category ID",
+        "Category Name",
+        "Ledger ID",
+        "Ledger Name",
+        "Amount",
+        "Payment Method",
+        "Description",
+        "Reference No",
+        "Notes",
+        "Status",
+        "Created By",
+        "Created At",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Expense ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "EXPENSE_CATEGORIES",
+      "sourceSheet": "Expense Categories",
+      "originalHeaders": [
+        "Category ID",
+        "Category Name",
+        "Description",
+        "Status",
+        "Created At"
+      ],
+      "destinationTables": [
+        "expense_categories"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Category ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0005_expense_categories.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE",
+          "category_id TEXT NOT NULL UNIQUE CHECK (length(trim(category_id)) > 0),",
+          "category_name TEXT NOT NULL CHECK (length(trim(category_name)) > 0),",
+          "description TEXT NOT NULL DEFAULT '',",
+          "status TEXT NOT NULL DEFAULT 'Active'",
+          "created_at TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "catalog-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "catalog-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "EXPENSE_PAYEES",
+      "sourceSheet": "Expense Payees",
+      "originalHeaders": [
+        "Payee ID",
+        "Payee Name",
+        "Phone",
+        "Notes",
+        "Status",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [
+        "party_legacy_links"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Payee ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0002_party_identity.sql",
+        "declaredColumns": [
+          "link_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "source_group TEXT NOT NULL CHECK(source_group IN",
+          "source_id TEXT NOT NULL CHECK(length(trim(source_id))>0),",
+          "legacy_sheet_row INTEGER CHECK(legacy_sheet_row IS NULL OR legacy_sheet_row>=2),",
+          "party_id TEXT NOT NULL REFERENCES parties(party_id) ON DELETE RESTRICT,",
+          "link_basis TEXT NOT NULL CHECK(link_basis IN ('ORIGINAL_RECORD','HUMAN_VERIFIED')),",
+          "reviewed_by TEXT,",
+          "reviewed_at TEXT,",
+          "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','DISPUTED','RETIRED')),",
+          "created_at TEXT NOT NULL,"
+        ],
+        "scope": "party-identity-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "party-identity-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Independent Party accounts/advances/obligations and original source money mappings are missing; M02-P/M03 review required before finance SQL."
+    },
+    {
+      "sourceGroup": "CASH_BOOK",
+      "sourceSheet": "Cash Book",
+      "originalHeaders": [
+        "Entry ID",
+        "Date",
+        "Type",
+        "Reference",
+        "Description",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Payment Method",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Entry ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Balance"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "STOCK_MOVEMENT",
+      "sourceSheet": "Stock Movement",
+      "originalHeaders": [
+        "Movement ID",
+        "Date",
+        "Product ID",
+        "Product Name",
+        "Type",
+        "Reference",
+        "Quantity In",
+        "Quantity Out",
+        "Balance Stock",
+        "Notes",
+        "Lot ID",
+        "Source Sale Product ID",
+        "Source Consumption Link ID",
+        "Reversed By",
+        "Reversed At"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Movement ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Reversed At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity In",
+          "Quantity Out",
+          "Balance Stock"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Reversed By",
+          "Reversed At"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SETTINGS",
+      "sourceSheet": "Settings",
+      "originalHeaders": [
+        "Key",
+        "Value"
+      ],
+      "destinationTables": [
+        "settings"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Key",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0001_core_catalog.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE CHECK (legacy_sheet_row IS NULL OR legacy_sheet_row >= 2),",
+          "key TEXT NOT NULL UNIQUE CHECK (length(trim(key)) > 0),",
+          "value TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "catalog-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "catalog-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "SALES_RETURN",
+      "sourceSheet": "Sales Return",
+      "originalHeaders": [
+        "Return ID",
+        "Date",
+        "Invoice ID",
+        "Customer ID",
+        "Customer Name",
+        "Customer Phone",
+        "Refund Method",
+        "Total Return Amount",
+        "Reason",
+        "Notes",
+        "Processed By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Batch ID",
+        "Return Operation ID",
+        "Edit Version",
+        "Updated At",
+        "Updated By",
+        "Edit Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Return ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At",
+          "Updated At"
+        ],
+        "amountQuantityHeaders": [
+          "Total Return Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Reason",
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason",
+          "Edit Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "SALES_RETURN_ITEMS",
+      "sourceSheet": "Sales Return Items",
+      "originalHeaders": [
+        "Return ID",
+        "Invoice ID",
+        "Product ID",
+        "Product Name",
+        "Return Quantity",
+        "Return Price",
+        "Line Total",
+        "Supplier ID",
+        "Pricing Basis",
+        "Sold Product Type",
+        "Is Deleted",
+        "Deleted At"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Return ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Return Quantity",
+          "Return Price"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Is Deleted",
+          "Deleted At"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "PURCHASE_RETURN",
+      "sourceSheet": "Purchase Return",
+      "originalHeaders": [
+        "Return ID",
+        "Date",
+        "Purchase ID",
+        "Supplier ID",
+        "Supplier Name",
+        "Refund Method",
+        "Total Return Amount",
+        "Reason",
+        "Notes",
+        "Processed By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Return ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Total Return Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Reason",
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "PURCHASE_RETURN_ITEMS",
+      "sourceSheet": "Purchase Return Items",
+      "originalHeaders": [
+        "Return ID",
+        "Purchase ID",
+        "Product ID",
+        "Product Name",
+        "Return Quantity",
+        "Return Price",
+        "Line Total",
+        "Pricing Basis"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Return ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [],
+        "amountQuantityHeaders": [
+          "Return Quantity",
+          "Return Price"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "CASH_SESSIONS",
+      "sourceSheet": "Cash Sessions",
+      "originalHeaders": [
+        "Session ID",
+        "Date",
+        "Opened At",
+        "Opening Cash",
+        "Closed At",
+        "Expected Cash",
+        "Counted Cash",
+        "Variance",
+        "Status",
+        "Notes",
+        "Opening Explanation Entry IDs",
+        "Closing Explanation Entry IDs"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Session ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Opened At",
+          "Closed At"
+        ],
+        "amountQuantityHeaders": [
+          "Opening Cash",
+          "Expected Cash",
+          "Counted Cash"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "INVOICE_EDIT_LOG",
+      "sourceSheet": "Invoice Edit Log",
+      "originalHeaders": [
+        "Log ID",
+        "Invoice ID",
+        "Edit Date",
+        "Reason",
+        "Before Grand Total",
+        "After Grand Total",
+        "Return ID",
+        "Before Return Amount",
+        "After Return Amount",
+        "Before Return Items JSON",
+        "After Return Items JSON",
+        "Edited By"
+      ],
+      "destinationTables": [
+        "legacy_invoice_edit_audit"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Log ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0009_legacy_invoice_edit_audit.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE",
+          "log_id TEXT NOT NULL UNIQUE CHECK (length(trim(log_id)) > 0),",
+          "invoice_id TEXT NOT NULL DEFAULT '',",
+          "edit_date_text TEXT NOT NULL DEFAULT '',",
+          "reason TEXT NOT NULL DEFAULT '',",
+          "before_grand_total_text TEXT NOT NULL DEFAULT '',",
+          "after_grand_total_text TEXT NOT NULL DEFAULT '',",
+          "return_id TEXT NOT NULL DEFAULT '',",
+          "before_return_amount_text TEXT NOT NULL DEFAULT '',",
+          "after_return_amount_text TEXT NOT NULL DEFAULT '',",
+          "before_return_items_json TEXT NOT NULL DEFAULT '',",
+          "after_return_items_json TEXT NOT NULL DEFAULT '',",
+          "edited_by TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "audit-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Edit Date"
+        ],
+        "amountQuantityHeaders": [
+          "Before Return Amount",
+          "After Return Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "audit-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "USERS",
+      "sourceSheet": "Users",
+      "originalHeaders": [
+        "User ID",
+        "Full Name",
+        "Mobile Number",
+        "Password Hash",
+        "Password Salt",
+        "Role",
+        "Status",
+        "Created By",
+        "Created At",
+        "Last Login"
+      ],
+      "destinationTables": [
+        "auth_users"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "User ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0003_auth_core.sql",
+        "declaredColumns": [
+          "user_id TEXT PRIMARY KEY CHECK (length(trim(user_id)) > 0),",
+          "full_name TEXT NOT NULL CHECK (length(trim(full_name)) > 0),",
+          "phone_key TEXT NOT NULL UNIQUE",
+          "role_name TEXT NOT NULL CHECK (length(trim(role_name)) > 0),",
+          "status TEXT NOT NULL CHECK (status IN ('Active','Inactive')),",
+          "credential_state TEXT NOT NULL DEFAULT 'Modern'",
+          "password_algo TEXT NOT NULL DEFAULT 'pbkdf2-sha256'",
+          "password_hash TEXT NOT NULL",
+          "password_salt TEXT NOT NULL",
+          "password_iterations INTEGER NOT NULL",
+          "credential_version INTEGER NOT NULL DEFAULT 1 CHECK (credential_version>=1),",
+          "auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1)"
+        ],
+        "scope": "auth-local-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "auth-local-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "ROLES",
+      "sourceSheet": "Roles",
+      "originalHeaders": [
+        "Role ID",
+        "Role Name",
+        "Allowed Modules",
+        "Permissions",
+        "Status",
+        "Created At"
+      ],
+      "destinationTables": [
+        "auth_roles"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Role ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0003_auth_core.sql",
+        "declaredColumns": [
+          "role_name TEXT PRIMARY KEY",
+          "source_role_id TEXT UNIQUE",
+          "status TEXT NOT NULL CHECK (status IN ('Active','Inactive')),",
+          "permissions_json TEXT NOT NULL DEFAULT '{}',",
+          "allowed_modules TEXT NOT NULL DEFAULT '',",
+          "auth_version INTEGER NOT NULL DEFAULT 1 CHECK (auth_version >= 1)"
+        ],
+        "scope": "auth-local-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "auth-local-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "SESSIONS",
+      "sourceSheet": "Sessions",
+      "originalHeaders": [
+        "Token",
+        "User ID",
+        "Mobile Number",
+        "Created At",
+        "Expires At",
+        "Last Activity"
+      ],
+      "destinationTables": [
+        "auth_sessions"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Token",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0003_auth_core.sql",
+        "declaredColumns": [
+          "token_hash TEXT PRIMARY KEY",
+          "user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE RESTRICT,",
+          "user_auth_version INTEGER NOT NULL CHECK (user_auth_version>=1),",
+          "role_auth_version INTEGER CHECK (role_auth_version IS NULL OR role_auth_version>=1),",
+          "credential_version INTEGER NOT NULL CHECK (credential_version>=1),",
+          "created_at_ms INTEGER NOT NULL CHECK (created_at_ms>=0),",
+          "last_activity_at_ms INTEGER NOT NULL CHECK (last_activity_at_ms>=created_at_ms),",
+          "expires_at_ms INTEGER NOT NULL CHECK (expires_at_ms>created_at_ms),",
+          "revoked_at_ms INTEGER CHECK (revoked_at_ms IS NULL OR revoked_at_ms>=created_at_ms)"
+        ],
+        "scope": "auth-local-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At",
+          "Expires At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "auth-local-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "LOGS",
+      "sourceSheet": "Logs",
+      "originalHeaders": [
+        "Timestamp",
+        "Context",
+        "Message"
+      ],
+      "destinationTables": [
+        "legacy_error_logs"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": null,
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0006_legacy_error_logs.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE CHECK (legacy_sheet_row IS NULL OR legacy_sheet_row >= 2),",
+          "timestamp_text TEXT NOT NULL DEFAULT '',",
+          "context TEXT NOT NULL DEFAULT '',",
+          "message TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "diagnostic-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Timestamp"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "diagnostic-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "DELETE_LOG",
+      "sourceSheet": "Delete Log",
+      "originalHeaders": [
+        "Log ID",
+        "Date",
+        "Time",
+        "Module",
+        "Record ID",
+        "Invoice No",
+        "Reason",
+        "Deleted By",
+        "Deleted By Mobile"
+      ],
+      "destinationTables": [
+        "legacy_delete_log"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Log ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0007_legacy_delete_log.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE",
+          "log_id TEXT NOT NULL UNIQUE CHECK (length(trim(log_id)) > 0),",
+          "date_text TEXT NOT NULL DEFAULT '',",
+          "time_text TEXT NOT NULL DEFAULT '',",
+          "module TEXT NOT NULL DEFAULT '',",
+          "record_id TEXT NOT NULL DEFAULT '',",
+          "invoice_no TEXT NOT NULL DEFAULT '',",
+          "reason TEXT NOT NULL DEFAULT '',",
+          "deleted_by TEXT NOT NULL DEFAULT '',",
+          "deleted_by_mobile TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "audit-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Reason",
+          "Deleted By",
+          "Deleted By Mobile"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "audit-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "OPENING_BALANCE_EDIT_LOG",
+      "sourceSheet": "Opening Balance Edit Log",
+      "originalHeaders": [
+        "Audit ID",
+        "Changed At",
+        "Entity Type",
+        "Entity ID",
+        "Entity Name",
+        "Old Opening Balance",
+        "New Opening Balance",
+        "Delta",
+        "Current Due Before",
+        "Current Due After",
+        "Reason",
+        "Changed By"
+      ],
+      "destinationTables": [
+        "legacy_opening_balance_edit_audit"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Audit ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0010_legacy_opening_balance_edit_audit.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER NOT NULL UNIQUE CHECK (legacy_sheet_row >= 2),",
+          "audit_id TEXT NOT NULL UNIQUE CHECK (length(trim(audit_id)) > 0),",
+          "changed_at_text TEXT NOT NULL DEFAULT '',",
+          "entity_type TEXT NOT NULL CHECK (length(trim(entity_type)) > 0),",
+          "entity_id TEXT NOT NULL CHECK (length(trim(entity_id)) > 0),",
+          "entity_name TEXT NOT NULL DEFAULT '',",
+          "old_opening_balance_text TEXT NOT NULL DEFAULT '',",
+          "new_opening_balance_text TEXT NOT NULL DEFAULT '',",
+          "delta_text TEXT NOT NULL DEFAULT '',",
+          "current_due_before_text TEXT NOT NULL DEFAULT '',",
+          "current_due_after_text TEXT NOT NULL DEFAULT '',",
+          "reason TEXT NOT NULL DEFAULT '',",
+          "changed_by TEXT NOT NULL DEFAULT ''"
+        ],
+        "scope": "audit-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Changed At"
+        ],
+        "amountQuantityHeaders": [
+          "Old Opening Balance",
+          "New Opening Balance",
+          "Current Due Before",
+          "Current Due After"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Audit ID",
+          "Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "audit-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "BANK_ACCOUNTS",
+      "sourceSheet": "Bank Accounts",
+      "originalHeaders": [
+        "Bank Account ID",
+        "Account Name",
+        "Bank Name",
+        "Account Number",
+        "Opening Balance",
+        "Current Balance",
+        "Notes",
+        "Status",
+        "Created At",
+        "Account Type"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Bank Account ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [
+          "Opening Balance",
+          "Current Balance"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "BANK_BOOK",
+      "sourceSheet": "Bank Book",
+      "originalHeaders": [
+        "Entry ID",
+        "Date",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Type",
+        "Reference",
+        "Description",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Status",
+        "Reversal Of",
+        "Created By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Entry ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At"
+        ],
+        "amountQuantityHeaders": [
+          "Balance"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Reversal Of",
+          "Backdated Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "BANK_TRANSFERS",
+      "sourceSheet": "Bank Transfers",
+      "originalHeaders": [
+        "Transfer ID",
+        "Date",
+        "From Account ID",
+        "From Account Name",
+        "To Account ID",
+        "To Account Name",
+        "Amount",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Transfer ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "FINANCE_TRANSACTIONS",
+      "sourceSheet": "Finance Transactions",
+      "originalHeaders": [
+        "Finance ID",
+        "Date",
+        "Transaction Type",
+        "Person",
+        "Payment Method",
+        "Bank Account ID",
+        "Bank Account Name",
+        "Amount",
+        "Reference No",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Person ID"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Finance ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Amount"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "FINANCE_PERSONS",
+      "sourceSheet": "Finance Persons",
+      "originalHeaders": [
+        "Person ID",
+        "Person Name",
+        "Person Type",
+        "Roles",
+        "Phone",
+        "Description",
+        "Notes",
+        "Status",
+        "Created At"
+      ],
+      "destinationTables": [
+        "party_legacy_links"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Person ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0002_party_identity.sql",
+        "declaredColumns": [
+          "link_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "source_group TEXT NOT NULL CHECK(source_group IN",
+          "source_id TEXT NOT NULL CHECK(length(trim(source_id))>0),",
+          "legacy_sheet_row INTEGER CHECK(legacy_sheet_row IS NULL OR legacy_sheet_row>=2),",
+          "party_id TEXT NOT NULL REFERENCES parties(party_id) ON DELETE RESTRICT,",
+          "link_basis TEXT NOT NULL CHECK(link_basis IN ('ORIGINAL_RECORD','HUMAN_VERIFIED')),",
+          "reviewed_by TEXT,",
+          "reviewed_at TEXT,",
+          "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','DISPUTED','RETIRED')),",
+          "created_at TEXT NOT NULL,"
+        ],
+        "scope": "party-identity-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "party-identity-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Independent Party accounts/advances/obligations and original source money mappings are missing; M02-P/M03 review required before finance SQL."
+    },
+    {
+      "sourceGroup": "PRODUCT_CATEGORIES",
+      "sourceSheet": "Product Categories",
+      "originalHeaders": [
+        "Category ID",
+        "Category Name",
+        "Status",
+        "Created At"
+      ],
+      "destinationTables": [
+        "product_categories"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Category ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0001_core_catalog.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE CHECK (legacy_sheet_row IS NULL OR legacy_sheet_row >= 2),",
+          "category_id TEXT NOT NULL UNIQUE CHECK (length(trim(category_id)) > 0),",
+          "category_name TEXT NOT NULL CHECK (length(trim(category_name)) > 0),",
+          "status TEXT NOT NULL DEFAULT 'Active',",
+          "created_at TEXT"
+        ],
+        "scope": "catalog-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "catalog-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "PRODUCT_UNITS",
+      "sourceSheet": "Product Units",
+      "originalHeaders": [
+        "Unit ID",
+        "Unit Name",
+        "Status",
+        "Created At"
+      ],
+      "destinationTables": [
+        "product_units"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Unit ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0001_core_catalog.sql",
+        "declaredColumns": [
+          "row_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "legacy_sheet_row INTEGER UNIQUE CHECK (legacy_sheet_row IS NULL OR legacy_sheet_row >= 2),",
+          "unit_id TEXT NOT NULL UNIQUE CHECK (length(trim(unit_id)) > 0),",
+          "unit_name TEXT NOT NULL CHECK (length(trim(unit_name)) > 0),",
+          "status TEXT NOT NULL DEFAULT 'Active',",
+          "created_at TEXT"
+        ],
+        "scope": "catalog-schema-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At"
+        ],
+        "amountQuantityHeaders": [],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "catalog-schema-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Existing partial DDL does not certify full source import, authorized operational writes or historical reconciliation."
+    },
+    {
+      "sourceGroup": "VENDORS",
+      "sourceSheet": "Vendors",
+      "originalHeaders": [
+        "Vendor ID",
+        "Vendor Name",
+        "Phone",
+        "Address",
+        "Current Due",
+        "Status",
+        "Created At",
+        "Current Receivable",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [
+        "party_legacy_links"
+      ],
+      "legacyIdentity": {
+        "originalIdColumn": "Vendor ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "migration": "migrations/0002_party_identity.sql",
+        "declaredColumns": [
+          "link_id INTEGER PRIMARY KEY AUTOINCREMENT,",
+          "source_group TEXT NOT NULL CHECK(source_group IN",
+          "source_id TEXT NOT NULL CHECK(length(trim(source_id))>0),",
+          "legacy_sheet_row INTEGER CHECK(legacy_sheet_row IS NULL OR legacy_sheet_row>=2),",
+          "party_id TEXT NOT NULL REFERENCES parties(party_id) ON DELETE RESTRICT,",
+          "link_basis TEXT NOT NULL CHECK(link_basis IN ('ORIGINAL_RECORD','HUMAN_VERIFIED')),",
+          "reviewed_by TEXT,",
+          "reviewed_at TEXT,",
+          "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','DISPUTED','RETIRED')),",
+          "created_at TEXT NOT NULL,"
+        ],
+        "scope": "party-identity-only"
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Current Due",
+          "Current Receivable"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "See actual candidate DDL and versioned SQL; no claim of complete native transaction reference graph.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Status",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "party-identity-only",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Existing source coverage audit and corresponding synthetic Node/Workerd tests require exact-head verification; private-data reconciliation not performed.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "Independent Party accounts/advances/obligations and original source money mappings are missing; M02-P/M03 review required before finance SQL."
+    },
+    {
+      "sourceGroup": "VENDOR_SOURCING",
+      "sourceSheet": "Vendor Sourcing",
+      "originalHeaders": [
+        "Sourcing ID",
+        "Date",
+        "Invoice ID",
+        "Product ID",
+        "Product Name",
+        "Vendor ID",
+        "Vendor Name",
+        "Quantity",
+        "Unit Cost",
+        "Total Cost",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Sourcing ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity",
+          "Unit Cost",
+          "Total Cost"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "VENDOR_LEDGER",
+      "sourceSheet": "Vendor Ledger",
+      "originalHeaders": [
+        "Ledger ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Type",
+        "Reference",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Notes",
+        "Payment Method",
+        "Is Backdated",
+        "Backdated Days",
+        "Backdated Reason",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason",
+        "Balance Type"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Ledger ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Balance",
+          "Balance Type"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Backdated Reason",
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "VENDOR_RETURNS",
+      "sourceSheet": "Vendor Returns",
+      "originalHeaders": [
+        "Return ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Sourcing ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Cost",
+        "Total Value",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Return ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity",
+          "Unit Cost"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "VENDOR_ISSUES",
+      "sourceSheet": "Vendor Issues",
+      "originalHeaders": [
+        "Issue ID",
+        "Memo ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Value",
+        "Total Value",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Issue ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    },
+    {
+      "sourceGroup": "VENDOR_RETURNS_RECEIVED",
+      "sourceSheet": "Vendor Returns Received",
+      "originalHeaders": [
+        "Return ID",
+        "Date",
+        "Vendor ID",
+        "Vendor Name",
+        "Issue ID",
+        "Product ID",
+        "Product Name",
+        "Quantity",
+        "Unit Value",
+        "Total Value",
+        "Notes",
+        "Created By",
+        "Created At",
+        "Is Deleted",
+        "Deleted By",
+        "Deleted At",
+        "Delete Reason"
+      ],
+      "destinationTables": [],
+      "legacyIdentity": {
+        "originalIdColumn": "Return ID",
+        "physicalRow": "Explicit original sheet row >=2; preserve ID and its source type; not yet fully reconciled."
+      },
+      "sqliteStorage": {
+        "required": "Source-specific typed STRICT operational destination not implemented; review exact numeric/date/reference mapping before DDL."
+      },
+      "originalSemantics": {
+        "dateTimeHeaders": [
+          "Date",
+          "Created At",
+          "Deleted At"
+        ],
+        "amountQuantityHeaders": [
+          "Quantity"
+        ],
+        "policy": "COMMON.raw-source-preservation",
+        "status": "Per-group native behavior/sign/precision review remains required for complete M02; header inventory is not semantic proof."
+      },
+      "foreignKeysAndIndexes": {
+        "status": "Missing destination and native reference/index/unique constraints.",
+        "required": "COMMON.native-references"
+      },
+      "ownership": "COMMON.single-business-boundary",
+      "history": {
+        "sourceStateHeaders": [
+          "Is Deleted",
+          "Deleted By",
+          "Deleted At",
+          "Delete Reason"
+        ],
+        "rule": "COMMON.history"
+      },
+      "importAndTests": {
+        "coverageStatus": "unmapped",
+        "fullHistoricalReconciliation": false,
+        "existingEvidence": "Synthetic module-level fixtures, if present, do not supply a production migration/importer.",
+        "remaining": "COMMON.import-acceptance"
+      },
+      "conflictsAndMissing": "No source-specific versioned DDL/importer; blocked on native source semantic review and shared schema owner coordination."
+    }
+  ],
+  "commonRules": {
+    "raw-source-preservation": "Keep exact source date/time/amount/quantity evidence; no unreviewed timezone, rounding, identifier normalization or inferred historical tile conversions.",
+    "native-references": "Source-specific typed IDs, provenance keys, SQL uniqueness/FK/index/CHECK review, RESTRICT history deletion; never join financial identities by names/phones.",
+    "single-business-boundary": "Current initial schema is one business per D1, with unscoped catalog keys. Trusted source/business manifest must reject mixed business data. Shared-tenancy would require reviewed composite constraints and real D1 isolation tests.",
+    "history": "Retain native deleted/archived/audit flags, actors and raw source history; no fabricated state, no cascade delete of posted records.",
+    "import-acceptance": "Deterministic dry-run, schema/header/ref/duplicate checks, original row counts/hashes, native gross account/lot/cost reconciliation, repeatable clean local D1 initialization/import, idempotency/rollback and applicable CI."
+  }
+}

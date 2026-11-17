@@ -19,3 +19,5 @@ jobs:
         run: node --test tests/m02-product-catalog-schema.test.mjs
       - name: Test real isolated Workerd and D1 atomicity with no public routes
         run: node --test tests/integration/m02-product-catalog-workerd.spec.mjs
+      - name: Test tiles against existing D1 product and historical unit revisions
+        run: node --test tests/integration/m02-tile-catalog-workerd.spec.mjs
