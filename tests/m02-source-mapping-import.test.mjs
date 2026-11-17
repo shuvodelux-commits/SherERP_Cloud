@@ -194,3 +194,19 @@ test('every group has a distinct proposed logical D1 model and still requires in
  assert.equal(get(r,'STOCK_LOTS').proposedLogicalD1Model,'purchase-lot-stock-and-fifo-provenance');
  assert.equal(get(r,'LOGS').proposedLogicalD1Model,'idless-error-log-raw-event-history');
 });
+
+test('a forged existing D1 table or misclassified partial schema is not accepted as source evidence',()=>{
+ const fake=structuredClone(coverage);
+ const product=fake.rows.find(x=>x.sheetKey==='PRODUCTS');
+ product.targetTable='unreviewed_live_product_records';
+ assert.throws(()=>review({coverage:fake}),/target|evidence|coverage|unreviewed/i);
+ const fake2=structuredClone(coverage);
+ const source=fake2.rows.find(x=>x.sheetKey==='SALES');
+ source.status='catalog-schema-only';
+ source.targetTable='sales';
+ assert.throws(()=>review({coverage:fake2}),/target|evidence|coverage|unreviewed/i);
+ const fake3=structuredClone(coverage);
+ const party=fake3.rows.find(x=>x.sheetKey==='CUSTOMERS');
+ party.targetTable='single_party_net_balance';
+ assert.throws(()=>review({coverage:fake3}),/target|evidence|coverage|unreviewed/i);
+});
