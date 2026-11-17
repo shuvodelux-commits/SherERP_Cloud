@@ -97,3 +97,10 @@ Test data `{"sales":{"view":true,"add":true},"sales":{"view":true,"add":false}}`
 - **Review checklist (intentionally unsigned):** M04 security [ ]; M03 tenant/time/role SQL [ ]; M02 source identities [ ]; owner staff export [ ]; M01/M10 private staging [ ]; M11 safe deploy/rollback [ ]; final owner production GO [ ].
 
 **Until the above approvals are recorded, keep the public registry empty and current deployable Worker DB-free. The correct M04 report is LOCAL QA complete / INTEGRATION BLOCKED / PRODUCTION NO-GO, not "ERP authentication launched."**
+
+
+## 5. CI regression correction and post-merge revalidation (17 November 2026)
+
+The first documentation-only QA PR #540 head `eff46a82a77d8536663a1a4ed23ef1ff5cdd861e` failed 12 of 44 project workflows after an upstream M03 Workerd suite gained an intentional fifth 1,001-row historical readback test. This did **not** represent a new M04 runtime regression: M11's CI membership oracle still required exactly four cases, despite the M03 suite containing five. The failure was visible in [Dashboard #44073655455](https://github.com/shuvodelux-commits/SherERP_Cloud/actions/runs/44073655455) and [Day Book #44073655679](https://github.com/shuvodelux-commits/SherERP_Cloud/actions/runs/44073655679), with 3,175 other Node tests passing.
+
+M11-owned [PR #541](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/541), head `67e1c722f3223d7b62ddd0d8e483d89ea2068da8`, updated that fail-closed oracle to five cases while retaining the suite exactly once in a required six-shard local Workerd/D1 CI job. Its **44/44** required workflows passed and it merged as `a4e763feea7de9d93440192084d180e1ad6ddc95`. This M04 documentation appendix is a **new-head, full-CI revalidation request** against corrected `main`, not an override or waiver of prior failed results. No authentication endpoint, source data, storage, D1 binding, runtime code or production gate changes. Until #540's own new exact-head CI and reviews pass, keep it unmerged.
