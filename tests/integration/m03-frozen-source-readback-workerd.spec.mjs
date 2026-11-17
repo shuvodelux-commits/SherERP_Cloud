@@ -6,6 +6,7 @@ import {createTestHarness} from 'wrangler';
 import {createFrozenSourceReadback} from '../../src/db/m03-frozen-source-readback.js';
 import {createSealedSourceLookup} from '../../src/db/m03-sealed-source-lookup.js';
 import {createM03PrivateIdEvidenceReconciler} from '../../src/db/m03-private-id-evidence-reconcile.js';
+import {createM03PrivateSourceFloorAudit} from '../../src/db/m03-private-source-floor-audit.js';
 import {M02_ID_FAMILIES} from '../../scripts/dry-run-id-floor.mjs';
 import {captureM02IdEvidenceFreeze} from '../../scripts/dry-run-id-evidence-freeze.mjs';
 import {reviewOfflineSourceParity} from '../../scripts/dry-run-source-parity.mjs';
@@ -274,5 +275,47 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
  await assert.rejects(()=>reviewer.reconcile_({
   idEvidence:falseRows,freezeManifest
  }),/M03 private original ID evidence rejected/);
+ // M03 Run 6: fresh, tenant-bound original high-water floors. This
+ // locally created fixture is NEVER a reviewed production migration.
+ await DB.prepare(
+  'CREATE TABLE synthetic_m03_id_counters ('+
+  'tenant_id TEXT NOT NULL,id_key TEXT NOT NULL,prefix TEXT NOT NULL,'+
+  'current_sequence INTEGER NOT NULL,PRIMARY KEY(tenant_id,id_key)) STRICT'
+ ).run();
+ await DB.prepare(
+  'CREATE TABLE synthetic_m03_id_receipts ('+
+  'tenant_id TEXT NOT NULL,id_key TEXT NOT NULL,operation_id TEXT NOT NULL,'+
+  'issued_sequence INTEGER NOT NULL,PRIMARY KEY(tenant_id,id_key,operation_id)) STRICT'
+ ).run();
+ const floorSeed='INSERT INTO synthetic_m03_id_counters VALUES (?,?,?,?)';
+ for(const family of M02_ID_FAMILIES){
+  const group=family.sourceGroup, prefix=family.prefix;
+  const highest=idEvidence.groups[group].reduce((max,item)=>
+   Math.max(max,Number(item.id.slice(prefix.length+1))),0);
+  await DB.prepare(floorSeed).bind('TENANT-A',group,prefix,
+   Math.max(highest,Number(idEvidence.counters[group]))).run();
+ }
+ const floorAudit=createM03PrivateSourceFloorAudit({DB},'TENANT-A');
+ const floorArgs={idEvidence,freezeManifest};
+ const audited=await floorAudit.auditFreshSeed_(floorArgs);
+ assert.equal(audited.exactFreshSyntheticD1CounterFloors,true);
+ assert.equal(audited.idIssuanceAuthorized,false);
+ assert.equal(audited.productionReady,false);
+ await DB.prepare(
+  "UPDATE synthetic_m03_id_counters SET current_sequence=0 WHERE tenant_id='TENANT-A' AND id_key='PRODUCTS'"
+ ).run();
+ await assert.rejects(()=>floorAudit.auditFreshSeed_(floorArgs),
+  /M03 private original ID counter floor rejected/);
+ await DB.prepare(
+  "UPDATE synthetic_m03_id_counters SET current_sequence=? WHERE tenant_id='TENANT-A' AND id_key='PRODUCTS'"
+ ).bind(Number(idEvidence.counters.PRODUCTS)).run();
+ await DB.prepare(
+  "INSERT INTO synthetic_m03_id_receipts VALUES ('TENANT-A','PRODUCTS','OLD',999)"
+ ).run();
+ await assert.rejects(()=>floorAudit.auditFreshSeed_(floorArgs),
+  /M03 private original ID counter floor rejected/);
+ await DB.prepare("DELETE FROM synthetic_m03_id_receipts").run();
+ await assert.rejects(()=>createM03PrivateSourceFloorAudit({DB},'TENANT-B')
+  .auditFreshSeed_(floorArgs),/M03 private original ID counter floor rejected/);
  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM m03_private_source_rows').first()).n,beforeCount);
 });
