@@ -72,7 +72,7 @@ test('invalid or reversed period filters fail closed with redacted status',()=>{
     const result=check(values);
     assert.equal(result.printPreviewEligible,false);
     assert.equal(result.status,'INVALID_REPORT_DATE_WINDOW');
-    assert.equal(JSON.stringify(result).includes(values.from),false);
+    if(values.from)assert.equal(JSON.stringify(result).includes(values.from),false);
   }
   assert.equal(check({from:'2028-02-29',loadedFrom:'2028-02-29',
     to:'2028-02-29',loadedTo:'2028-02-29'}).printPreviewEligible,true);
