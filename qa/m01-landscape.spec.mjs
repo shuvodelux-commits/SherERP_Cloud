@@ -220,3 +220,188 @@ test('M01 synthetic Clerk mobile and tablet navigation keeps source role filteri
     });
   }
 });
+
+
+test('M01 Playwright original POS V2 navigation and workflow parity at phone tablet desktop',async t=>{
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',icon:'dashboard',
+      sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',icon:'pos',
+      sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]},
+    {key:'bank',label:'Bank',icon:'bank',
+      sidebarGroup:4,sidebarOrder:90}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-320x640',width:320,height:640,phone:true},
+    {name:'tablet-768x1024',width:768,height:1024,phone:false},
+    {name:'desktop-1280x800',width:1280,height:800,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},hasTouch:phone,isMobile:phone
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const loginReply=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await loginReply).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        await page.locator('#navList .nav-item[data-page="pos"]')
+          .waitFor({state:'attached'});
+        assert.equal(await page.locator(
+          '#navList .nav-item[data-page="bank"]').count(),0);
+        assert.equal(await page.evaluate(()=>isPhoneViewport_()),phone);
+
+        if(phone){
+          const pos=page.locator('#mobileBottomNav [data-mobile-page="pos"]');
+          assert.equal(await pos.isVisible(),true,'permitted POS must appear as a phone shortcut');
+          await pos.tap();
+        }else{
+          // Tablets can keep the original desktop-mode navigation route
+          // even where a collapsed sidebar is not directly visible.
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' && document.body.classList.contains('pos-v2-active'));
+        assert.equal(await page.locator('#page-pos').isVisible(),true);
+        assert.equal(await page.locator('#page-posv2').isVisible(),false,
+          'V2 must use the source operational #page-pos, not a second checkout');
+        await page.locator('#posSearch').waitFor({state:'visible'});
+        await page.locator('#v2DraftsBtn').waitFor({state:'attached'});
+        const addProductState=await page.evaluate(()=>{
+          const button=document.getElementById('v2AddProductBtn');
+          return {
+            productAddAllowed:hasActionPermission_('products','add'),
+            hiddenAttribute:button?.hasAttribute('hidden'),
+            hiddenProperty:button?.hidden,
+            computedDisplay:button?getComputedStyle(button).display:null
+          };
+        });
+        assert.equal(addProductState.productAddAllowed,false,
+          'the test Clerk must have no Products add grant');
+        assert.equal(addProductState.hiddenProperty,true,
+          'POS must set the restricted button hidden property');
+        // Capture the source/CSS defect before failing, not just the passing UI.
+        await captureM01NavEvidence(page,'posv2-permission-leak-'+name);
+        assert.equal(await page.locator('#v2AddProductBtn').isVisible(),false,
+          'restricted POS Add Product must be absent from visual UI; state='+
+          JSON.stringify(addProductState));
+        assert.equal(await page.locator('#posCompleteBtn').count(),1);
+        assert.equal(await page.locator('#page-pos .pos-v2-workflow-tabs [data-pos-v2-tab]').count(),3);
+
+        if(phone){
+          const tabs=page.locator('#page-pos .pos-v2-workflow-tabs');
+          assert.equal(await tabs.isVisible(),true);
+          for(const key of ['customer','payment','cart']){
+            const tab=tabs.locator('[data-pos-v2-tab="'+key+'"]');
+            await tab.tap();
+            assert.equal(await page.locator('#page-pos')
+              .getAttribute('data-pos-v2-tab-state'),key);
+            assert.equal(await tab.getAttribute('aria-selected'),'true');
+          }
+          const box=await page.locator('#posSearch').boundingBox();
+          assert.ok(box && box.width>0 && box.x>=-1 &&
+            box.x+box.width<=width+1,
+            'POS product search must fit 320px without horizontal clipping');
+        }
+        await page.locator('#posSearch').fill('synthetic no product');
+        assert.equal(await page.evaluate(()=>currentPage),'posv2');
+        const evidence=await captureM01NavEvidence(page,'posv2-'+name);
+        assert.equal(evidence.viewport.width,width);
+        assert.equal(evidence.viewport.height,height);
+        assert.ok(evidence.screenshotBytes>1500);
+        assert.equal(evidence.loginHidden,true);
+        assert.equal(evidence.appVisible,true);
+        assert.equal(evidence.bankNavCount,0);
+
+        await page.evaluate(()=>goToPage('bank'));
+        assert.equal(await page.evaluate(()=>currentPage),'dashboard',
+          'forbidden Bank remains inaccessible by direct source route');
+        assert.equal(calls.filter(x=>x.fnName==='login').length,1);
+        assert.equal(calls.filter(x=>
+          /^(?:saveSale|createSale|completeSale|postSale|submitSale)$/i
+            .test(x.fnName||'')).length,0,
+          'POS navigation and tabs must never submit a financial transaction');
+      }finally{
+        await page.close();
+      }
+    });
+  }
+});
+
+
+test('M01 Playwright POS V2 authorized Products add action stays visible',async()=>{
+  // This positive control protects the original authorized feature when the
+  // cross-owner compiled-CSS hidden-state repair is integrated (issue #482).
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const page=await browser.newPage({
+    viewport:{width:375,height:812},isMobile:true,hasTouch:true
+  });
+  try{
+    const {calls}=await installM01SyntheticNavigation(page,{
+      allowedModules:['dashboard','pos','products'],
+      permissions:{
+        dashboard:{view:true},pos:{view:true},products:{view:true,add:true}
+      },
+      navItems:[
+        {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+        {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,
+          landingKey:'posv2',
+          children:[{key:'posv2',label:'POS V2',permKey:'pos'}]},
+        {key:'products',label:'Products',sidebarGroup:1,sidebarOrder:30}
+      ]
+    });
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.locator('#loginMobile').fill('01710000001');
+    await page.locator('#loginPassword').fill('m01-synthetic-only');
+    const loginReply=page.waitForResponse(response=>
+      response.url().endsWith('/api/rpc') &&
+      response.request().postDataJSON()?.fnName==='login');
+    await page.locator('#loginSubmitBtn').tap();
+    assert.equal((await loginReply).status(),200);
+    await page.waitForFunction(()=>
+      document.getElementById('loginOverlay')?.hidden===true);
+    await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+    await page.waitForFunction(()=>
+      currentPage==='posv2' && document.body.classList.contains('pos-v2-active'));
+    const add=page.locator('#v2AddProductBtn');
+    await add.waitFor({state:'visible'});
+    const state=await page.evaluate(()=>{
+      const btn=document.getElementById('v2AddProductBtn');
+      return {
+        allowed:hasActionPermission_('products','add'),
+        hidden:btn.hidden,
+        display:getComputedStyle(btn).display
+      };
+    });
+    assert.equal(state.allowed,true);
+    assert.equal(state.hidden,false);
+    assert.equal(await add.isVisible(),true,
+      'the authorized Add Product action must remain visible');
+    const evidence=await captureM01NavEvidence(page,'posv2-authorized-product-add');
+    assert.ok(evidence.screenshotBytes>1500);
+    assert.equal(evidence.loginHidden,true);
+    assert.equal(calls.filter(x=>
+      /^(?:saveSale|createSale|completeSale|postSale|submitSale)$/i
+        .test(x.fnName||'')).length,0,
+      'visibility-only Playwright QA must not post a sale');
+  }finally{
+    await page.close();
+  }
+});
