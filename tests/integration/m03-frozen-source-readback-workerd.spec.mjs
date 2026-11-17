@@ -86,3 +86,42 @@ test('unsealed historical record or missing group never becomes accepted Workerd
  await assert.rejects(()=>createFrozenSourceReadback({DB}).readAllSourceGroups(),/Invalid or incomplete private M03 source archive/);
  await DB.prepare("UPDATE m03_private_source_seals SET status='SEALED' WHERE source_group='CUSTOMERS'").run();
 });
+
+test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and detects forged tail',async()=>{
+ // Run after the original four tests so they retain their frozen initial state.
+ const group='LOGS',headers=initial.groups.LOGS.headers;
+ await DB.prepare("DELETE FROM m03_private_source_rows WHERE source_group='LOGS'").run();
+ const rows=Array.from({length:1001},(_,i)=>({
+  sheetRow:i+2+(i>=512?3:0),
+  cells:['2026-11-17T12:30:00+06:00','QA-only','বাংলা ledger text '+i]
+ }));
+ const INSERT='INSERT INTO m03_private_source_rows VALUES (?,?,?,?)';
+ let batch=[];
+ for(const row of rows){
+  batch.push(DB.prepare(INSERT).bind(pin,group,row.sheetRow,JSON.stringify(row.cells)));
+  if(batch.length===50){
+   await DB.batch(batch);
+   batch=[];
+  }
+ }
+ if(batch.length)await DB.batch(batch);
+ const seal=hash(group,headers,rows);
+ await DB.prepare("UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group='LOGS'")
+  .bind(rows.length,seal).run();
+ const archive=await createFrozenSourceReadback({DB}).readAllSourceGroups();
+ assert.deepEqual(archive.groups.LOGS.rows,rows);
+ assert.equal(archive.groups.LOGS.rows[512].sheetRow,517);
+ assert.equal(Object.keys(archive.groups).length,49);
+ const snapshot=sourceData();snapshot.groups.LOGS.rows=rows;
+ assert.equal(reviewOfflineSourceParity({
+  schema:source,pinnedSourceCommit:pin,sourceExport:snapshot,candidateExport:archive
+ }).exactTextParity,true);
+ // An undeclared extra row must not be silently dropped when the caller
+ // believes all source rows have been read.
+ await DB.prepare("UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group='LOGS'")
+  .bind(1000,hash(group,headers,rows.slice(0,1000))).run();
+ await assert.rejects(()=>createFrozenSourceReadback({DB}).readAllSourceGroups(),
+  /Invalid or incomplete private M03 source archive/);
+ await DB.prepare("UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group='LOGS'")
+  .bind(rows.length,seal).run();
+});
