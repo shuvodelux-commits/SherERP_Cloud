@@ -1,0 +1,30 @@
+name: M04 login-to-shell real D1 contract (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  login-shell-local-d1:
+    name: Validate private login, authenticated shell, logout and public preview denial
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run source and transport regression tests
+        run: npm test
+      - name: Install pinned Wrangler for isolated D1 only
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify actual local Workerd D1 login-shell flow
+        run: node --test tests/integration/m04-login-shell-workerd.spec.mjs
+      - name: Verify compiled UI auth-shell patch
+        run: |
+          npm run build:frontend
+          node --test tests/m01-auth-shell-patch.test.mjs
