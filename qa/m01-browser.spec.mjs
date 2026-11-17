@@ -828,8 +828,8 @@ test('M01 Step 2: mouse/keyboard reorder metric and panel groups, toggle hidden,
     assert.equal(await page.locator('[data-hdb-list="metric"] > [data-hdb-id]').count(),11,
       'six default + five optional metric widgets');
 
-    const from=page.locator('[data-hdb-list="metric"] [data-hdb-id="payable"]');
-    const to=page.locator('[data-hdb-list="metric"] [data-hdb-id="today-sales"]');
+    const from=page.locator('[data-hdb-list="metric"] > [data-hdb-id="payable"]');
+    const to=page.locator('[data-hdb-list="metric"] > [data-hdb-id="today-sales"]');
     await from.dragTo(to);
     let ids=await page.locator('[data-hdb-list="metric"] > [data-hdb-id]')
       .evaluateAll(nodes=>nodes.map(n=>n.dataset.hdbId));
@@ -935,6 +935,23 @@ test('M01 Step 2: mobile touch drag reorders widgets without horizontal overflow
     const from=page.locator('[data-hdb-list="metric"] [data-hdb-id="receivable"] [data-hdb-action="drag-grip"]');
     const to=page.locator('[data-hdb-list="metric"] [data-hdb-id="today-sales"] [data-hdb-action="drag-grip"]');
     await from.scrollIntoViewIfNeeded();
+    await page.evaluate(()=>{
+      window.__hdbTouchTrace=[];
+      const source=document.querySelector('[data-hdb-list="metric"] > [data-hdb-id="receivable"] [data-hdb-action="drag-grip"]');
+      for(const type of ['pointerdown','pointermove','pointerup','pointercancel',
+        'touchstart','touchmove','touchend','touchcancel']){
+        source.addEventListener(type,ev=>{
+          const point=ev.changedTouches?.[0]||ev;
+          const target=document.elementFromPoint(point.clientX,point.clientY);
+          window.__hdbTouchTrace.push({
+            type,pointerType:ev.pointerType,button:ev.button,
+            x:Math.round(point.clientX),y:Math.round(point.clientY),
+            hit:target?.closest('.hdb-dialog-row')?.dataset.hdbId||null
+          });
+        },{capture:true});
+      }
+    });
+    await saveArtifact(page,'hisabiq-dashboard-step2-touch-before-390.png');
     const start=await from.boundingBox(),end=await to.boundingBox();
     assert.ok(start&&end);
     const sx=start.x+start.width/2,sy=start.y+start.height/2;
@@ -948,7 +965,8 @@ test('M01 Step 2: mobile touch drag reorders widgets without horizontal overflow
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     const ids=await page.locator('[data-hdb-list="metric"] > [data-hdb-id]')
       .evaluateAll(nodes=>nodes.map(n=>n.dataset.hdbId));
-    assert.equal(ids[0],'receivable','touch pointer drag reorders metric list');
+    const trace=await page.evaluate(()=>window.__hdbTouchTrace||[]);
+    assert.equal(ids[0],'receivable','touch drag reorders metric list: '+JSON.stringify(trace));
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
     assert.ok(overflow<=2,'mobile 390px should not horizontally scroll: '+overflow);
     await saveArtifact(page,'hisabiq-dashboard-step2-touch-390.png');
