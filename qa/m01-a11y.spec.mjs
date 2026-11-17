@@ -67,11 +67,14 @@ test('M01 mobile More keyboard dialog contains focus and restores it to the open
           return {
             dialogOpen:!sheet.hidden,
             focusInDialog:dialog.contains(document.activeElement),
+            backgroundInert:document.getElementById('app')?.inert===true,
             focusIsBackground:document.querySelector('#app')?.contains(document.activeElement)||false
           };
         });
         assert.equal((await state()).focusInDialog,true,
           'opening an aria-modal dialog must focus an actionable element inside it');
+        assert.equal((await state()).backgroundInert,true,
+          'a modal dialog must render the underlying original ERP shell inert');
         for(let i=0;i<10;i++){
           await page.keyboard.press('Tab');
           assert.equal((await state()).focusInDialog,true,
@@ -87,6 +90,8 @@ test('M01 mobile More keyboard dialog contains focus and restores it to the open
           'Escape must close original More sheet');
         assert.equal(await opener.evaluate(el=>el===document.activeElement),true,
           'focus must return to original More trigger after Escape');
+        assert.equal(await page.locator('#app').evaluate(el=>el.inert),false,
+          'closing More must restore original app interactivity');
         assert.equal(calls.filter(x=>/Sale|Payment|Purchase|Return|Posting/.test(x.fnName)).length,0,
           'synthetic keyboard navigation must not post any financial RPC');
       }finally{await page.close();}
