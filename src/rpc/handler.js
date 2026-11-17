@@ -10,6 +10,21 @@ const RPC_NAME = /^[A-Za-z][A-Za-z0-9_]{0,79}$/;
 // surface. The public Worker never passes an authAdapter.
 const AUTH_ARGS = Object.freeze({login:2,validateSession:1,logout:1});
 
+const PRODUCT_MASTER_NAMES=Object.freeze({
+  addProductCategory:'PCAT',
+  addProductUnit:'PUNT'
+});
+const PRODUCT_MASTER_OPERATION=/^[A-Z0-9][A-Z0-9_-]{0,127}$/;
+const PRODUCT_MASTER_FAILURE=Object.freeze({
+  addProductCategory:Object.freeze([
+    'Category name is required.','A category with this name already exists.'
+  ]),
+  addProductUnit:Object.freeze([
+    'Unit name is required.','A unit with this name already exists.'
+  ])
+});
+const PRODUCT_MASTER_UNAVAILABLE='Product master action unavailable or access denied.';
+
 const APP_SHELL_RPC='getAppShellData';
 const APP_SHELL_UNAVAILABLE='Application shell unavailable or access denied.';
 const APP_SHELL_TOKEN=/^[0-9a-f]{64}$/;
@@ -195,6 +210,29 @@ function validAppShellEnvelope(result){
     exactShellNavigation(data.navItems,SOURCE_SHELL_NAV);
 }
 
+/** Allow only original messages and ID/name pairs; never serialize raw D1 rows. */
+function validProductMasterEnvelope(result,fnName,name) {
+  if(!plainRecord(result))return false;
+  const success=Object.getOwnPropertyDescriptor(result,'success');
+  if(!success?.enumerable||!Object.hasOwn(success,'value')||
+     typeof success.value!=='boolean')return false;
+  if(success.value===false){
+    return ownFields(result,['success','message']) &&
+      typeof result.message==='string' &&
+      PRODUCT_MASTER_FAILURE[fnName].includes(result.message);
+  }
+  if(!ownFields(result,['success','data'])||result.success!==true||
+     !ownFields(result.data,['id','name']))return false;
+  const data=result.data, prefix=PRODUCT_MASTER_NAMES[fnName];
+  const pattern=fnName==='addProductCategory'
+    ? /^PCAT-[0-9]{6,}$/ : /^PUNT-[0-9]{6,}$/;
+  if(typeof data.name!=='string'||data.name!==name.trim()||
+     typeof data.id!=='string'||!pattern.test(data.id))return false;
+  const digits=data.id.slice(prefix.length+1),number=Number(digits);
+  return Number.isSafeInteger(number)&&number>=1&&
+    String(number).padStart(6,'0')===digits;
+}
+
 function rpcError(status, message, headers = {}) {
   return Response.json({success:false, message}, {status, headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 }
@@ -222,7 +260,7 @@ async function boundedBody(request) {
   return new TextDecoder('utf-8',{fatal:true}).decode(full);
 }
 
-export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBridge}={}) {
+export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBridge,productMasterBridge}={}) {
   if (request.method !== 'POST') return rpcError(405,'POST required',{'Allow':'POST'});
   const origin=request.headers.get('Origin');
   if (origin && origin!==new URL(request.url).origin) return rpcError(403,'Cross-origin RPC forbidden');
@@ -305,6 +343,36 @@ export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBrid
     }catch{
       // SQL, underlying exceptions and raw credential material never leak.
       return rpcError(503,DAY_BOOK_UNAVAILABLE);
+    }
+  }
+  if(productMasterBridge!==undefined &&
+     Object.hasOwn(PRODUCT_MASTER_NAMES,payload.fnName)){
+    // Internal opt-in only. The public Worker never supplies this bridge.
+    // Original token/payload envelope plus private stable operationId.
+    if(!ownFields(payload,['fnName','args'])||payload.args.length!==2 ||
+       typeof payload.args[0]!=='string'||!AUTH_TOKEN.test(payload.args[0])||
+       !ownFields(payload.args[1],['name','operationId']) ||
+       typeof payload.args[1].name!=='string'||
+       payload.args[1].name.length>256 ||
+       typeof payload.args[1].operationId!=='string'||
+       !PRODUCT_MASTER_OPERATION.test(payload.args[1].operationId))
+      return rpcError(400,'Invalid Product master arguments');
+    try{
+      const invoke=Object.getOwnPropertyDescriptor(productMasterBridge,'invoke')?.value;
+      if(typeof invoke!=='function')
+        return rpcError(503,PRODUCT_MASTER_UNAVAILABLE);
+      const result=await invoke.call(productMasterBridge,{
+        fnName:payload.fnName,token:payload.args[0],
+        name:payload.args[1].name,operationId:payload.args[1].operationId
+      });
+      if(!validProductMasterEnvelope(result,payload.fnName,payload.args[1].name))
+        return rpcError(503,PRODUCT_MASTER_UNAVAILABLE);
+      assertFullyResolvedRpcValue(result);
+      return Response.json(result,{headers:{
+        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
+      }});
+    }catch{
+      return rpcError(503,PRODUCT_MASTER_UNAVAILABLE);
     }
   }
   if (!Object.hasOwn(rpcRegistry,payload.fnName)) {

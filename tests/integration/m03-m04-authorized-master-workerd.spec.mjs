@@ -193,3 +193,74 @@ test('test-only route ignores client actor/time/name/SQL and public Worker/RPC n
   assert(!live.includes('m04-authorized-product-master-create'));
   assert(!live.includes('m03-m04-authorized-master'));
 });
+
+test('Run 4 internal original Product Category/Unit RPC is SQL-actor-authorized and replay safe',async()=>{
+  const route='/__m04_master__/private-rpc';
+  const make=(fnName,token,operationId,name)=>({
+    fnName,args:[token,{operationId,name}]
+  });
+  const before=await state();
+  const first=await call(route,make('addProductCategory',token.ADMIN,
+    'OP-RPC-CAT','Washers'));
+  assert.equal(first.status,200);
+  assert.deepEqual(Object.keys(first.body).sort(),['data','success']);
+  assert.equal(first.body.data.name,'Washers');
+  assert.match(first.body.data.id,/^PCAT-[0-9]{6,}$/);
+  const after=await state();
+  assert.equal(after.counters.find(x=>x.id_key==='PRODUCT_CATEGORIES').current_sequence,
+    before.counters.find(x=>x.id_key==='PRODUCT_CATEGORIES').current_sequence+1);
+  assert.equal(after.intents.find(x=>x.operation_id==='OP-RPC-CAT').actor_id,'ADMIN');
+  assert.deepEqual(await call(route,make('addProductCategory',token.ADMIN,
+    'OP-RPC-CAT',' Washers ')),first);
+  assert.deepEqual(await state(),after);
+  const differentActor=await call(route,make('addProductCategory',token.DENY,
+    'OP-RPC-CAT','Washers'));
+  assert.equal(differentActor.status,503);
+  assert.deepEqual(await state(),after);
+  const unit=await call(route,make('addProductUnit',token.ADMIN,
+    'OP-RPC-UNIT','Millimetre'));
+  assert.equal(unit.status,200);
+  assert.match(unit.body.data.id,/^PUNT-[0-9]{6,}$/);
+  assert.equal((await state()).intents.find(x=>x.operation_id==='OP-RPC-UNIT').actor_id,'ADMIN');
+});
+
+test('Run 4 private Worker HTTP boundary rejects supplied clock, tenant, actor and malformed payload',async()=>{
+  const route='/__m04_master__/private-rpc';
+  const valid={fnName:'addProductCategory',args:[
+    token.ADMIN,{name:'Conduit',operationId:'OP-RPC-CONDUIT'}
+  ]};
+  const before=await state();
+  assert.deepEqual(await call(route,{
+    fnName:'addProductCategory',args:[
+      token.ADMIN,{name:'   ',operationId:'OP-RPC-EMPTY'}
+    ]
+  }),{status:200,body:{success:false,message:'Category name is required.'}});
+  assert.deepEqual(await state(),before);
+  for(const attack of [
+    {...valid,nowMs:9_000_000_000_000},
+    {...valid,actorId:'ADMIN'},
+    {...valid,args:[token.ADMIN,{...valid.args[1],nowMs:9_000_000_000_000}]},
+    {...valid,args:[token.ADMIN,{...valid.args[1],businessId:'BUS-B'}]},
+    {...valid,args:[token.ADMIN,{...valid.args[1],actorId:'ADMIN'}]},
+    {...valid,args:[token.ADMIN,{...valid.args[1],role:'Administrator'}]},
+    {...valid,args:[token.ADMIN,{name:'Conduit'}]},
+    {...valid,args:[token.ADMIN,{...valid.args[1],operationId:'bad key'}]},
+    {...valid,args:['bad-token',valid.args[1]]},
+    {...valid,args:[token.ADMIN,valid.args[1],'ADMIN']}
+  ]){
+    const result=await call(route,attack);
+    assert.equal(result.status,400,JSON.stringify(attack));
+    assert.equal(result.body.success,false);
+  }
+  assert.equal((await call(route,{
+    fnName:'postSale',args:[token.ADMIN,valid.args[1]]
+  })).status,501);
+  assert.equal((await call(route,valid,'GET')).status,405);
+  assert.deepEqual(await state(),before);
+  const denied=await call(route,{fnName:'addProductCategory',args:[
+    token.DENY,{operationId:'OP-RPC-DENIED',name:'Secret'}
+  ]});
+  assert.equal(denied.status,503);
+  assert.equal(JSON.stringify(denied.body).includes('auth_users'),false);
+  assert.deepEqual(await state(),before);
+});
