@@ -78,6 +78,24 @@ export function assessM10EvidencePacket(input={}){
         add('PACKET_GROSS_CAPTURE_AFTER_BACKUP');
     }
 
+    // The account snapshots must cover the same stable source window as
+    // the 49-group source freeze. A matching but earlier gross capture can
+    // conceal financially significant changes made before that freeze.
+    if(chainCandidate&&grossCandidate){
+      const frozenAt=evidence.rehearsal.sourceFreeze.secondPass.capturedAt;
+      if(evidence.gross.source.capturedAt<frozenAt)
+        add('PACKET_GROSS_CAPTURE_BEFORE_SOURCE_FREEZE');
+      if(evidence.gross.d1.capturedAt<frozenAt)
+        add('PACKET_GROSS_CAPTURE_BEFORE_SOURCE_FREEZE');
+    }
+
+    // Supplied performance measurements can be useful only as later-stage
+    // evidence, not as a historical sample collected before restoration.
+    if(chainCandidate&&performanceCandidate&&
+      evidence.performance.recording.capturedAt<
+        evidence.restore.restored.capturedAt)
+      add('PACKET_PERFORMANCE_CAPTURE_BEFORE_RESTORE');
+
     const sorted=[...issues].sort(([a],[b])=>a<b?-1:a>b?1:0)
       .map(([code,count])=>({code,count}));
     return {
