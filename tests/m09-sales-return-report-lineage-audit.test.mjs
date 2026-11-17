@@ -86,6 +86,20 @@ test('M09 soft-deleted headers and children do not contribute active return econ
   assert.deepEqual(audit(s).issues,[]);
 });
 
+test('M09 preserved isDeleted_ accepts mixed-case TRUE, lowercase FALSE and numeric blank',()=>{
+  const s=snapshot();
+  s.returnHeaders.push(head('RET-LOWER','INVALID','true'));
+  s.returnItems.push(item('RET-LOWER','WRONG-INVOICE'));
+  assert.deepEqual(audit(s).issues,[]);
+  s.returnHeaders[0]['Is Deleted']='True';
+  assert.deepEqual(audit(s).issues,[]);
+  const explicitFalse=snapshot();
+  explicitFalse.returnItems[0]['Is Deleted']='false';
+  assert.deepEqual(audit(explicitFalse).issues,[]);
+  explicitFalse.returnItems[0]['Is Deleted']=0;
+  assert.deepEqual(audit(explicitFalse).issues,[]);
+});
+
 test('M09 IDs are source strings and missing source references need review',()=>{
   const invalid=snapshot();
   invalid.returnHeaders[0]['Return ID']=null;
