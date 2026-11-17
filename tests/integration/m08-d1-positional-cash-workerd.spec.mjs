@@ -1372,7 +1372,9 @@ function vpSource(masters,ledger,payees){
   const vendorList=plain(src.getAllVendorsForUI_());
   const payeeList=plain(src.getActiveExpensePayeesForUI_());
   const ledgerDisplay=plain(src.recalculateLedgerBalancesForDisplay_(
-    ledger.filter(row=>row['Is Deleted']!==true &&
+    ledger.map((row,i)=>({
+      ...row,_rowIndex:row._rowIndex ?? i+2
+    })).filter(row=>row['Is Deleted']!==true &&
       String(row['Is Deleted']||'').toUpperCase()!=='TRUE'), 'Balance Type'
   ));
   return {vendorList,payeeList,ledgerDisplay};
