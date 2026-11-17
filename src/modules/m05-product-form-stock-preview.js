@@ -127,8 +127,8 @@ function catalogForTile(productId,stockUnit,tiers,measurement){
   const conversionId=identity(measurement.boxConversionId,'Tile box conversion');
   const boxName=measurement.boxUnitName||'Box';
   const matched=tiers.filter(x=>x.unitName===boxName);
-  if(matched.length!==1||tiers.length!==1)
-    throw new TypeError('Tile pack mismatch: configure exactly Box to Pcs');
+  if(matched.length!==1)
+    throw new TypeError('Tile pack mismatch: configure Box to Pcs in the unit chain');
   const factor=matched[0].factor;
   if(String(factor)!==measurement.piecesPerBox)
     throw new TypeError('Tile pack mismatch against conversion factor');
