@@ -99,6 +99,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
   const areaFields=byId('m01AreaFields');
   const preview=byId('m01StockPreview');
   const readOnly=byId('m01PreviewReadOnly');
+  const readOnlyDefaultText=readOnly.textContent;
   const originalSaveLabel=save.textContent;
   const legacyStockGroup=byId('prodStock')?.parentElement;
 
@@ -127,9 +128,19 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
     return value;
   }
   function update(){
+    const state=globalThis.prodState;
+    const editingId=state?.editingId;
+    const editingRow=editingId&&Array.isArray(state?.products)
+      ?state.products.find(row=>row?.['Product ID']===editingId)
+      :null;
+    // UI defense in depth only. M03 still owns authenticated Product writes.
+    // Treat even stale/malformed owned M05 metadata as advanced: never
+    // downgrade such an edit into the old single-unit Save handler.
+    const protectedEdit=!!editingRow&&Object.hasOwn(editingRow,'M05 Stock Preview');
     const advanced=type.value!=='Bundle'&&mode.value!=='single';
+    const readonly=advanced||protectedEdit;
     const tile=advanced&&mode.value==='tiles';
-    panel.hidden=type.value==='Bundle';
+    panel.hidden=type.value==='Bundle'&&!protectedEdit;
     fields.hidden=!advanced;
     tileFields.hidden=!tile;
     manufacturerFields.hidden=!tile||byId('m01CoveragePolicy').value!=='manufacturer';
@@ -138,12 +149,15 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
     byId('m01CartonFields').hidden=!useCarton.checked;
     byId('m01OpeningOuter').parentElement.hidden=!useCarton.checked;
     preview.hidden=!advanced;
-    readOnly.hidden=!advanced;
+    readOnly.hidden=!readonly;
+    readOnly.textContent=protectedEdit
+      ?'Existing multi-unit or Tiles product: revision-aware editing is unavailable here. View details only; no legacy Save.'
+      :readOnlyDefaultText;
     if(legacyStockGroup)legacyStockGroup.hidden=advanced||type.value==='Bundle';
-    save.disabled=advanced;
-    save.classList.toggle('m01-advanced-save-disabled',advanced);
-    save.textContent=advanced?'Save unavailable':originalSaveLabel;
-    save.title=advanced?'Preview only — server-authorized product saving is not yet available':'';
+    save.disabled=readonly;
+    save.classList.toggle('m01-advanced-save-disabled',readonly);
+    save.textContent=readonly?'Save unavailable':originalSaveLabel;
+    save.title=readonly?'Preview only — server-authorized advanced product editing is not yet available':'';
     if(!advanced){preview.textContent='';return}
     try{
       refreshAnchorChoices();
