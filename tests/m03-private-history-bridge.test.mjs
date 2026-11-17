@@ -8,8 +8,8 @@ import {assertExactD1Resource} from '../scripts/guard-remote-staging.mjs';
 const staging=JSON.parse(readFileSync(new URL('../wrangler.staging.jsonc',import.meta.url),'utf8'));
 const preview=JSON.parse(readFileSync(new URL('../wrangler.preview.jsonc',import.meta.url),'utf8'));
 const publicConfig=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
-const operational={name:'shererp-operational-staging-20261118',uuid:'74102df7-dd31-4999-81d5-69bca42f0424'};
-const archive={name:'shererp-legacy-history-staging-20261118',uuid:'19190fd2-1f5e-4e8a-a062-bd7a0cbf3d96'};
+const operational={name:'shererp-staging-db',uuid:'aa04618e-1639-4cb9-bdf5-7b967d8b968b'};
+const archive={name:'shererp-legacy-history-staging-20261118',uuid:'3328e5c8-7695-4d6c-8bcf-9725437ebdd5'};
 
 test('M03 private config binds two distinct exact D1 resources and keeps all public previews DB-free',()=>{
  assert.equal(validateStagingConfig(staging,preview),true);
