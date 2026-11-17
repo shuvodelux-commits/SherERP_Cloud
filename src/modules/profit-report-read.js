@@ -123,7 +123,8 @@ export function projectProfitReport(snapshot,filters,today){
   for(const expense of expensesRows)checkedDate(own(expense,'Date'));
 
   const sales=allSales.filter(sale=>
-    !(own(sale,'Is Deleted')===true||own(sale,'Is Deleted')==='TRUE') &&
+    !(own(sale,'Is Deleted')===true||
+      String(own(sale,'Is Deleted')||'').toUpperCase()==='TRUE') &&
     dateInReportRange(checkedDate(own(sale,'Date')),range));
   const duplicates=duplicateInvoiceIds(allSales,sales);
   if(duplicates.length)
