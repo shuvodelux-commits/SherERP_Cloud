@@ -148,4 +148,86 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
   /Invalid or incomplete private M03 source archive/);
  await DB.prepare("UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group='LOGS'")
   .bind(rows.length,seal).run();
+
+ // M03 #544 proposed SQL is NOT a deployed migration. Prove the unchanged
+ // proposal's triggers under actual disposable local Workerd/D1, after all
+ // earlier five-case prerequisites have completed. Do not alter the number
+ // of test cases; the M11 six-shard coverage oracle expects exactly five.
+ await DB.prepare('DROP TABLE m03_private_source_rows').run();
+ await DB.prepare('DROP TABLE m03_private_source_seals').run();
+ const reviewedSql=readFileSync(new URL('../../docs/schema/m03-private-source-archive.proposed.sql',import.meta.url),'utf8');
+ assert.match(reviewedSql,/CREATE TRIGGER trg_m03_private_seal_validate_count/);
+ assert.match(reviewedSql,/CREATE TRIGGER trg_m03_private_row_delete_staging_only/);
+ // D1.exec splits SQL scripts on internal trigger semicolons, unlike local
+ // Node SQLite db.exec; replay exactly the reviewed ten complete statements.
+ // The remainder check rejects silently ignored future SQL/provenance edits.
+ const executable=reviewedSql.replace(/^\s*--[^\n]*(?:\n|$)/gm,'');
+ const ddlPattern=/CREATE TABLE[\s\S]*?\)\s+STRICT;|CREATE TRIGGER[\s\S]*?\bEND;/g;
+ const statements=[...executable.matchAll(ddlPattern)].map(match=>match[0]);
+ assert.equal(statements.length,10,'two strict tables plus eight source-immutability triggers');
+ assert.equal(executable.replace(ddlPattern,'').trim(),'','no source archive DDL may be skipped');
+ for(const sql of statements)await DB.prepare(sql).run();
+
+ const staged=sourceData();
+ staged.groups.LOGS.rows=rows;
+ for(const sheet of source.tables){
+  const sourceGroup=sheet.sheetKey;
+  const {headers:fields,rows:original}=staged.groups[sourceGroup];
+  await DB.prepare('INSERT INTO m03_private_source_seals VALUES (?,?,?,?,?,?)')
+   .bind(pin,sourceGroup,JSON.stringify(fields),original.length,
+    hash(sourceGroup,fields,original),'STAGING').run();
+  // An attempt to seal before all original physical rows exist must fail.
+  if(sourceGroup==='PRODUCTS'){
+   assert.ok(original.length>0,'frozen PRODUCTS synthetic source must contain an original row');
+   await assert.rejects(()=>DB.prepare(
+    "UPDATE m03_private_source_seals SET status='SEALED' WHERE source_group='PRODUCTS'"
+   ).run());
+  }
+  let page=[];
+  for(const item of original){
+   page.push(DB.prepare('INSERT INTO m03_private_source_rows VALUES (?,?,?,?)')
+    .bind(pin,sourceGroup,item.sheetRow,JSON.stringify(item.cells)));
+   if(page.length===50){await DB.batch(page);page=[];}
+  }
+  if(page.length)await DB.batch(page);
+  await DB.prepare('UPDATE m03_private_source_seals SET status=? WHERE source_commit=? AND source_group=?')
+   .bind('SEALED',pin,sourceGroup).run();
+ }
+ const sealedArchive=await createFrozenSourceReadback({DB}).readAllSourceGroups();
+ assert.deepEqual(sealedArchive,staged);
+ assert.equal(sealedArchive.groups.LOGS.rows.length,1001);
+ assert.equal(sealedArchive.groups.LOGS.rows[512].sheetRow,517);
+ assert.deepEqual(sealedArchive.groups.PRODUCTS.headers,
+  source.tables.find(table=>table.sheetKey==='PRODUCTS').columns);
+ assert.deepEqual(sealedArchive.groups.CUSTOMERS.headers,
+  source.tables.find(table=>table.sheetKey==='CUSTOMERS').columns);
+ assert.equal((await DB.prepare(
+  "SELECT COUNT(*) AS n FROM m03_private_source_seals WHERE status='SEALED'"
+ ).first()).n,49);
+
+ // Every attack exercises SQL constraints/triggers in Workerd, not JS preflight.
+ await assert.rejects(()=>DB.prepare(
+  'INSERT INTO m03_private_source_rows VALUES (?,?,?,?)'
+ ).bind(pin,'LOGS',999999,JSON.stringify(['date','context','forged'])).run());
+ await assert.rejects(()=>DB.prepare(
+  "UPDATE m03_private_source_rows SET cells_json='[]' WHERE source_group='PRODUCTS'"
+ ).run());
+ await assert.rejects(()=>DB.prepare(
+  "DELETE FROM m03_private_source_rows WHERE source_group='PRODUCTS'"
+ ).run());
+ await assert.rejects(()=>DB.prepare(
+  "UPDATE m03_private_source_seals SET status='STAGING' WHERE source_group='LOGS'"
+ ).run());
+ await assert.rejects(()=>DB.prepare(
+  "UPDATE m03_private_source_seals SET source_digest=? WHERE source_group='LOGS'"
+ ).bind('0'.repeat(64)).run());
+ await assert.rejects(()=>DB.prepare(
+  "DELETE FROM m03_private_source_seals WHERE source_group='LOGS'"
+ ).run());
+ await assert.rejects(()=>DB.prepare(
+  'INSERT INTO m03_private_source_rows VALUES (?,?,?,?)'
+ ).bind(pin,'LOGS',rows[0].sheetRow,JSON.stringify(rows[0].cells)).run());
+ assert.deepEqual(await createFrozenSourceReadback({DB}).readAllSourceGroups(),staged);
+ const archiveRoute=await worker.fetch('http://m03.local/__m03_test__/source-archive');
+ assert.equal(archiveRoute.status,404);
 });
