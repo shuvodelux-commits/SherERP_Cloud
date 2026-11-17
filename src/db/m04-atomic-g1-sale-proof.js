@@ -7,7 +7,9 @@
  * The preflight SELECT derives the actor for immutable intent hashing only.
  * SQL rechecks CURRENT authorization in the very INSERT that triggers stock
  * and both synthetic ledger entries. Cash Session must be exactly Open for
- * new posts; historical receipt replay remains available after Close Day. A stale JavaScript preflight cannot
+ * new posts; historical receipt replay remains available after Close Day.
+ * Every committed receipt is verified against its immutable stock movement
+ * and exact cash/revenue child rows before COMMITTED or REPLAY is reported. A stale JavaScript preflight cannot
  * authorize any write. A post-commit unknown outcome always needs review.
  */
 import {requireD1Binding} from './d1-binding.js';
@@ -74,7 +76,27 @@ const READ=`SELECT u.user_id AS actor_id,
     receipt.operation_id AS receipt_operation_id,
     receipt.actor_id AS receipt_actor_id,
     receipt.operation_type,receipt.payload_hash,receipt.result_ref,
-    receipt.sku,receipt.units,receipt.amount_cents,receipt.committed_at
+    receipt.sku,receipt.units,receipt.amount_cents,receipt.committed_at,
+    (SELECT COUNT(*) FROM synthetic_m03_g1_stock_movements m
+      WHERE m.business_id=receipt.tenant_id
+        AND m.operation_id=receipt.operation_id) AS movement_count,
+    (SELECT COUNT(*) FROM synthetic_m03_g1_stock_movements m
+      WHERE m.business_id=receipt.tenant_id
+        AND m.operation_id=receipt.operation_id
+        AND m.sku=receipt.sku AND m.units_out=receipt.units) AS matching_movement_count,
+    (SELECT COUNT(*) FROM synthetic_m03_g1_journal j
+      WHERE j.business_id=receipt.tenant_id
+        AND j.operation_id=receipt.operation_id) AS journal_count,
+    (SELECT COUNT(*) FROM synthetic_m03_g1_journal j
+      WHERE j.business_id=receipt.tenant_id
+        AND j.operation_id=receipt.operation_id
+        AND j.account_kind='cash' AND j.signed_cents=receipt.amount_cents)
+        AS matching_cash_count,
+    (SELECT COUNT(*) FROM synthetic_m03_g1_journal j
+      WHERE j.business_id=receipt.tenant_id
+        AND j.operation_id=receipt.operation_id
+        AND j.account_kind='sales_revenue' AND j.signed_cents=-receipt.amount_cents)
+        AS matching_revenue_count
   ${AUTH_FROM}
   LEFT JOIN operation_receipts AS receipt
     ON receipt.tenant_id=? AND receipt.operation_id=?
@@ -136,6 +158,17 @@ function evidence(part){
   }
   return part.results[0];
 }
+function validChildEvidence(row){
+  // One immutable stock movement, exactly one debit and one matching credit.
+  // Do not compare historical receipt quantity with current stock balance:
+  // later legitimate sales/purchases change that balance.
+  return row.movement_count===1 &&
+    row.matching_movement_count===1 &&
+    row.journal_count===2 &&
+    row.matching_cash_count===1 &&
+    row.matching_revenue_count===1;
+}
+
 function validReceipt(row,businessId,operationId,actorId){
   return row.receipt_tenant_id===businessId &&
     row.receipt_operation_id===operationId &&
@@ -227,6 +260,9 @@ export function createM04AtomicG1SaleProof(env,{businessId}={}){
       }
       if(!validReceipt(row,businessId,x.operationId,actorId)){
         throw new Error('NEEDS_REVIEW: invalid immutable G1 receipt');
+      }
+      if(!validChildEvidence(row)){
+        throw new Error('NEEDS_REVIEW: G3 original stock movement or ledger integrity mismatch');
       }
       if(row.payload_hash!==hash || row.units!==x.units ||
          row.amount_cents!==x.amountCents){
