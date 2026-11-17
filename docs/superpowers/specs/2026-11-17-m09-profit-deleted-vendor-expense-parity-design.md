@@ -1,0 +1,11 @@
+# M09 Profit source-parity fix — soft-deleted Vendor Sourcing & Expenses
+
+**Workstream:** M09 Issue #431. **Baseline:** SherERP_Cloud main `5290a06abda5a0e42192b8bfbcc2f83e59495647`. **Original frozen source:** `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2` (`Reports.gs::computeProfit_`, `DeleteEngine.gs::activeRows_/isDeleted_`). **Parallel ownership:** M02 PR #603 and M03 PR #604 were reviewed before branch creation; they change different M02/M03 paths, not the two M09 files below.
+
+## Reviewed defect
+Original `Reports.gs::computeProfit_` calls `activeRows_('VENDOR_SOURCING')` and `activeRows_('EXPENSES')`. Frozen `DeleteEngine.gs::activeRows_` excludes rows where `isDeleted_` is true, including mixed-case string 'true' and the boolean true. The current pure `projectProfitReport` loops over all `vendorSourcing` and `expenses` rows, omitting that deletion check, and the previous Profit VM oracle stub returned the arrays without applying frozen `activeRows_`. Consequently already-soft-deleted historical vendor costs may increase COGS and deleted expenses may decrease net profit.
+
+## Design
+Reuse the exact frozen `activeRows_` and `isDeleted_` functions in the existing Profit test oracle, rather than duplicate their behavior in a test stub. First write tests for deletion markers `true` (boolean), `'true'`, `'TrUe'`, `'TRUE'`, plus explicit nondeleted markers `'FALSE'`, `false`, `0`, and the empty string. Test separate vendor and expense contributions and deleted historical rows attached to active invoice IDs. Keep the current source-array shape/amount/date validation: no silent conversion of untrusted deleted records. Then minimally skip original soft-deleted Vendor Sourcing rows and Expenses rows in their existing report loops. Preserve cancellation rules, original invoice/return attribution, FIFO source cost, settlement discounts, category grouping, and the full `getProfitReport` response shape. Do not change any source identity, business data, migration, shared posting, auth, D1, RPC, frontend, or other workstream file.
+
+This module remains a pure internal projection; it is not source reconciliation, authorization, or permission to activate financial reports. Later M03/M04 reader, M05/M07/M08 accounting parity, M10 rehearsal, and M11 owner cutover continue to block production report activation.

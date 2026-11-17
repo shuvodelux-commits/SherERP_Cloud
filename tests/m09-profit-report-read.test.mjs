@@ -19,6 +19,7 @@ const computeEnd=reports.indexOf('/** filters = { from, to }. FIFO-costed profit
 assert.ok(computeStart>0 && computeEnd>computeStart);
 const sourceCode=[
   native(frozenDelete,'isDeleted_'),
+  native(frozenDelete,'activeRows_'),
   ...['roundMoney_','economicReturnLineAmount_','isValidNonNegativeNumber_',
     'duplicateSalesInvoiceIdMap_','assertUniqueSalesInvoiceIds_']
     .map(n=>native(utils,n)),
@@ -80,9 +81,7 @@ function oracle(snapshot,filters,today='2026-11-15'){
     SALES:snapshot.allSales,
     SALE_ITEMS:snapshot.saleItems,
     SALE_ITEM_LOTS:snapshot.lotConsumptions,
-    SALE_BUNDLE_COMPONENTS:snapshot.saleBundleComponents
-  };
-  const active={
+    SALE_BUNDLE_COMPONENTS:snapshot.saleBundleComponents,
     VENDOR_SOURCING:snapshot.vendorSourcing,
     EXPENSES:snapshot.expenses
   };
@@ -96,10 +95,6 @@ function oracle(snapshot,filters,today='2026-11-15'){
     getAllRows_:name=>{
       assert.ok(Object.hasOwn(table,name),'Unexpected source table '+name);
       return table[name];
-    },
-    activeRows_:name=>{
-      assert.ok(Object.hasOwn(active,name),'Unexpected active table '+name);
-      return active[name];
     },
     activeSalesReturnItems_:()=>snapshot.saleReturnItems,
     computeSettlementDiscountProfit_:()=>snapshot.settlementDiscount,
@@ -327,5 +322,60 @@ test('frozen DeleteEngine retains explicitly false and zero source Sales in Prof
     const s=fixture();
     s.allSales[0]['Is Deleted']=status;
     assert.equal(parity(s).totals.invoices,2);
+  }
+});
+
+test('frozen activeRows_ filters mixed-case deleted Vendor Sourcing before Profit COGS',()=>{
+  for(const marker of [true,'true','TrUe','TRUE']){
+    const s=fixture();
+    s.vendorSourcing[0]['Is Deleted']=marker;
+    const before=clone(s);
+    const report=parity(s);
+    assert.equal(report.totals.cogs,55,'deleted source Vendor Sourcing must not be costed');
+    assert.equal(report.totals.netProfit,117);
+    assert.equal(report.coverage.invoicesMissingLotData,1);
+    assert.deepEqual(s,before);
+  }
+});
+
+test('frozen activeRows_ filters mixed-case deleted Expenses before Profit totals',()=>{
+  for(const marker of [true,'true','TrUe','TRUE']){
+    const s=fixture();
+    s.expenses[0]['Is Deleted']=marker;
+    const report=parity(s);
+    assert.equal(report.totals.expenses,5,'deleted expense cannot reduce net profit');
+    assert.equal(report.totals.netProfit,117);
+    assert.deepEqual(report.expenseByCategory.map(e=>e.label),['Fees']);
+  }
+});
+
+test('deleted historical Vendor Sourcing and Expenses are not resurrected by current invoices',()=>{
+  const s=fixture();
+  s.vendorSourcing.push({
+    'Invoice ID':'INV-B','Product ID':'P2','Product Name':'Switch',
+    'Quantity':0.5,'Unit Cost':200,'Total Cost':100,'Is Deleted':'tRue'
+  });
+  s.expenses.push({
+    'Date':'2026-11-15','Category Name':'Deleted Historic Rent',
+    'Amount':800,'Status':'Active','Is Deleted':'TRUE'
+  });
+  const before=clone(s);
+  const report=parity(s);
+  assert.equal(report.totals.cogs,65);
+  assert.equal(report.totals.expenses,15);
+  assert.equal(report.totals.netProfit,107);
+  assert.equal(report.expenseByCategory.some(x=>x.label==='Deleted Historic Rent'),false);
+  assert.deepEqual(s,before);
+});
+
+test('explicit false and zero deletion flags retain active vendor costs and expenses',()=>{
+  for(const marker of ['false','FALSE',false,0,'']){
+    const s=fixture();
+    s.vendorSourcing[0]['Is Deleted']=marker;
+    s.expenses[0]['Is Deleted']=marker;
+    const report=parity(s);
+    assert.equal(report.totals.cogs,65);
+    assert.equal(report.totals.expenses,15);
+    assert.equal(report.totals.netProfit,107);
   }
 });
