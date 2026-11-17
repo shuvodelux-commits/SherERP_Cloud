@@ -1,3 +1,4 @@
+import {M05_TILE_EXACT_AREA_GUARD_SQL} from './m05-tile-exact-area-sql.mjs';
 import {M05_TILE_EXACT_MONEY_GUARD_SQL} from './m05-tile-exact-money-sql.mjs';
 /**
  * LOCAL TEST FIXTURE ONLY — not a numbered migration, deployable inventory
@@ -81,9 +82,7 @@ BEGIN
    AND m.pieces_per_box<=1000000
    AND NEW.received_pcs=NEW.boxes*m.pieces_per_box+NEW.extra_pieces
    AND NEW.pricing_unit=m.purchase_pricing_unit
-   AND json_extract(NEW.request_snapshot_json,'$.mode')='pack'
-   AND json_extract(NEW.request_snapshot_json,'$.boxes')=CAST(NEW.boxes AS TEXT)
-   AND json_extract(NEW.request_snapshot_json,'$.extraPieces')=CAST(NEW.extra_pieces AS TEXT)
+   ${M05_TILE_EXACT_AREA_GUARD_SQL}
    AND json_extract(NEW.measurement_snapshot_json,'$.productId')=NEW.product_id
    AND json_extract(NEW.measurement_snapshot_json,'$.revision')=CAST(NEW.revision AS TEXT)
    AND json_extract(NEW.measurement_snapshot_json,'$.piecesPerBox')=CAST(m.pieces_per_box AS TEXT)
