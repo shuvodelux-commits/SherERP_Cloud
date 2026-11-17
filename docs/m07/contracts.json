@@ -1,0 +1,295 @@
+{
+  "schemaVersion": "m07-b19-v1",
+  "workstream": "M07",
+  "baseMain": "59b0e2e4b7184acf2f3645aca32da1cb1c6d5cb3",
+  "sourceAuthority": {
+    "canonicalRepository": "shuvodelux-commits/Mohim_ERP",
+    "canonicalSha": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+    "supplementaryRepository": "shuvodelux-commits/sherERP_Mohim",
+    "supplementarySha": "590adfad128fe7155bfb7b608a2ed5665b202a9c"
+  },
+  "documentation": "docs/m07/INTEGRATION_HANDOFF.md",
+  "moduleIssue": 314,
+  "coordinationIssue": 456,
+  "readiness": {
+    "parallelPreparationReady": true,
+    "productionIntegrationReady": false,
+    "publicRpcEnabled": false,
+    "livePostingVerified": false,
+    "sharedReversalReady": false,
+    "realSourceReconciled": false
+  },
+  "nativeSourceCapabilities": [
+    {
+      "path": "legacy/source/SalesReturn.gs",
+      "functions": [
+        "completeReturn",
+        "completeReturnBatch",
+        "updateSalesReturn",
+        "deleteSalesReturn"
+      ],
+      "editDeleteSupport": true
+    },
+    {
+      "path": "legacy/source/PurchaseReturn.gs",
+      "functions": [
+        "completePurchaseReturn",
+        "getPurchaseReturnHistory",
+        "getPurchaseReturnDetail"
+      ],
+      "editDeleteSupport": false,
+      "missingFunctions": [
+        "updatePurchaseReturn",
+        "deletePurchaseReturn"
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "purchase-original-lot-preflight",
+      "path": "src/modules/purchase-return-lot-plan.js",
+      "exportName": "planPurchaseReturnLots",
+      "test": "tests/m07-purchase-multilot-preflight.test.mjs",
+      "sourceOracle": "StockLots.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "sale-correction-evidence",
+      "path": "src/modules/sale-return-correction-evidence.js",
+      "exportName": "planSalesReturnCorrectionEvidence",
+      "test": "tests/m07-sale-return-correction-evidence.test.mjs",
+      "sourceOracle": "SalesReturn.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "sale-partial-mixed-unit",
+      "path": "src/modules/m07-historical-partial-unit-return.js",
+      "exportName": "planHistoricalPartialUnitReturn",
+      "test": "tests/m07-historical-partial-unit-return.test.mjs",
+      "sourceOracle": "SalesReturn.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "sale-full-mixed-unit",
+      "path": "src/modules/m07-historical-mixed-unit-full-return.js",
+      "exportName": "planHistoricalMixedUnitFullReturn",
+      "test": "tests/m07-historical-mixed-unit-full-return.test.mjs",
+      "sourceOracle": "SalesReturn.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "sale-bundle-original-components",
+      "path": "src/modules/m07-historical-bundle-return.js",
+      "exportName": "planHistoricalBundleReturn",
+      "test": "tests/m07-historical-bundle-return.test.mjs",
+      "sourceOracle": "StockLots.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "sale-batch-original-lot-reservation",
+      "path": "src/modules/m07-historical-batch-return.js",
+      "exportName": "planHistoricalReturnBatch",
+      "test": "tests/m07-historical-batch-return.test.mjs",
+      "sourceOracle": "SalesReturn.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "purchase-historical-mixed-unit",
+      "path": "src/modules/m07-historical-purchase-mixed-unit-return.js",
+      "exportName": "planHistoricalMixedUnitPurchaseReturn",
+      "test": "tests/m07-historical-purchase-mixed-unit-return.test.mjs",
+      "sourceOracle": "PurchaseReturn.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "purchase-batch-virtual-fifo",
+      "path": "src/modules/m07-historical-purchase-batch-return.js",
+      "exportName": "planHistoricalMixedUnitPurchaseReturnBatch",
+      "test": "tests/m07-historical-purchase-batch-return.test.mjs",
+      "sourceOracle": "StockLots.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "purchase-delete-original-lot-lineage",
+      "path": "src/modules/m07-historical-purchase-delete-lineage.js",
+      "exportName": "planHistoricalMixedUnitPurchaseDeleteLineage",
+      "test": "tests/m07-historical-purchase-delete-lineage.test.mjs",
+      "sourceOracle": "DeleteEngine.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "purchase-return-cancellation-evidence",
+      "path": "src/modules/m07-purchase-return-correction-evidence.js",
+      "exportName": "reviewHistoricalPurchaseReturnCorrection",
+      "test": "tests/m07-purchase-return-correction-evidence.test.mjs",
+      "sourceOracle": "PurchaseReturn.gs",
+      "scope": "READ_ONLY_PLAN_OR_EVIDENCE",
+      "productionWriter": false,
+      "publicRpc": false
+    }
+  ],
+  "workerd": [
+    {
+      "path": "tests/integration/m07-cash-batch-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-cash-delete-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-cash-price-edit-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-cash-return-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-credit-delete-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-credit-price-edit-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-purchase-cash-delete-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-purchase-cash-return-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-purchase-credit-delete-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-purchase-multilot-cash-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-purchase-supplier-credit-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-quantity-preflight-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-return-edit-read-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-store-credit-batch-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m07-store-credit-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    }
+  ],
+  "upstreamOwners": {
+    "sourceIdentityParty": "M02",
+    "atomicRepositoryAndKernel": "M03",
+    "tenantSessionRbac": "M04",
+    "purchaseInventoryLots": "M05",
+    "salePaymentAndBundleOrigins": "M06",
+    "cashBankGrossAccounts": "M08",
+    "reportUiRead": "M09",
+    "reconciliationRehearsal": "M10",
+    "productionCutover": "M11"
+  },
+  "mandatoryAcceptance": [
+    {
+      "code": "M07-GATE-01",
+      "owner": "M02",
+      "evidence": "Original source IDs + role-separated Party accounts reconciled",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-02",
+      "owner": "M03",
+      "evidence": "Awaited D1 repository and atomic stock+money original-source posting/reversal",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-03",
+      "owner": "M04",
+      "evidence": "Trusted actor, tenant, permissions and Cash Session verified inside SQL boundary",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-04",
+      "owner": "M05",
+      "evidence": "Original Purchase FIFO lots and historical unit/factor/price snapshots frozen",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-05",
+      "owner": "M06",
+      "evidence": "Sale source FIFO, vendor/oversold/Bundle attribution and split tender parity",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-06",
+      "owner": "M08",
+      "evidence": "Gross per-account Supplier/Customer/Vendor Cash/Bank reversal signs and later settlement checks",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-07",
+      "owner": "M03",
+      "evidence": "Committed idempotency replay, competing-id conflict, stale CAS and failure-injected SQL rollback",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-08",
+      "owner": "M10",
+      "evidence": "Authentic migrated source/lot/audit/account reconciliation with zero unexplained drift",
+      "passed": false
+    },
+    {
+      "code": "M07-GATE-09",
+      "owner": "M11",
+      "evidence": "Signed preview/staging/backup/restore/cutover approval",
+      "passed": false
+    }
+  ],
+  "futurePurchaseReturnEditDelete": "NEW_FEATURE_REQUIRES_SEPARATE_DESIGN_APPROVAL_NOT_NATIVE_SOURCE_PORT",
+  "readyForProduction": false
+}
