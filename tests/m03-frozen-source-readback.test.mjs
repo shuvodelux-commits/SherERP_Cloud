@@ -6,6 +6,7 @@ import {createHash} from 'node:crypto';
 import {createFrozenSourceReadback} from '../src/db/m03-frozen-source-readback.js';
 import {createM03PrivateIdEvidenceReconciler} from '../src/db/m03-private-id-evidence-reconcile.js';
 import {createM03PrivateSourceFloorAudit} from '../src/db/m03-private-source-floor-audit.js';
+import {createM03PrivateSourceFloorInstaller} from '../src/db/m03-private-source-floor-install.js';
 import {M02_ID_FAMILIES} from '../scripts/dry-run-id-floor.mjs';
 import {captureM02IdEvidenceFreeze} from '../scripts/dry-run-id-evidence-freeze.mjs';
 
@@ -47,7 +48,10 @@ function fixtureDb(input=original()){
  const statements=[];
  const DB={prepare(q){
   statements.push(q);const stmt=sql.prepare(q);
-  return {bind(...args){return {async all(){return {success:true,results:stmt.all(...args).map(row=>({...row}))};}};}};
+  return {bind(...args){return {
+   async all(){return {success:true,results:stmt.all(...args).map(row=>({...row}))};},
+   async run(){const result=stmt.run(...args);return {success:true,meta:{changes:result.changes}};}
+  };}};
  }};
  return {sql,env:{DB},statements,close:()=>sql.close()};
 }
@@ -498,5 +502,92 @@ test('M03 Run 6 RED: prior receipt, changed original counter and untrusted calle
   await assert.rejects(()=>audit.auditFreshSeed_({
    idEvidence:changed,freezeManifest:x.manifest}),run6Denied);
   assert.throws(()=>createM03PrivateSourceFloorAudit({},'TENANT-A'),/D1.*unavailable/i);
+ }finally{db.close();}
+});
+
+
+const run7Failure=/M03 private source ID floor installation rejected/;
+function run7Db(input) {
+ const db=run6SeedDb(input);
+ db.sql.prepare("DELETE FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").run();
+ return db;
+}
+test('M03 Run 7 RED: single atomic insert installs all 38 original source floors; repeated request writes nothing',async()=>{
+ const x=run5Evidence(),db=run7Db(x);
+ try{
+  const args={idEvidence:x.evidence,freezeManifest:x.manifest};
+  const installer=createM03PrivateSourceFloorInstaller(db.env,'TENANT-A');
+  const result=await installer.installFreshSynthetic_(args);
+  assert.deepEqual(result,{
+   formatVersion:1,sourceGroups:49,idFamilies:38,
+   localSyntheticD1FloorsInstalled:true,
+   independentSourceCaptureVerified:false,sourceToD1Reconciled:false,
+   idIssuanceAuthorized:false,publicRpcEnabled:false,productionReady:false
+  });
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,38);
+  assert.equal(db.sql.prepare("SELECT current_sequence FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A' AND id_key='PRODUCTS'").get().current_sequence,5);
+  assert.equal((await createM03PrivateSourceFloorAudit(db.env,'TENANT-A').auditFreshSeed_(args)).exactFreshSyntheticD1CounterFloors,true);
+  assert.deepEqual(await installer.installFreshSynthetic_(args),result);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,38);
+  const writes=db.statements.filter(sql=>sql.startsWith('WITH '));
+  assert.equal(writes.length,2);
+  assert(writes.every(sql=>sql.includes('INSERT INTO synthetic_m03_id_counters')));
+  assert(writes.every(sql=>!sql.includes('TENANT-A') && !sql.includes('PRD-000002')));
+  assert(writes.every(sql=>sql.split('?').length-1<=100),
+   'Cloudflare D1 permits at most 100 bound parameters in one atomic statement');
+  assert(writes.every(sql=>sql.split('?').length-1===41),
+   '38 original source-floor numbers plus three trusted tenant bindings');
+ }finally{db.close();}
+});
+test('M03 Run 7 RED: partial and poisoned pre-existing tenant states prevent any additional seed rows',async()=>{
+ const x=run5Evidence(),db=run7Db(x);
+ try{
+  const args={idEvidence:x.evidence,freezeManifest:x.manifest};
+  const installer=createM03PrivateSourceFloorInstaller(db.env,'TENANT-A');
+  db.sql.prepare("INSERT INTO synthetic_m03_id_counters VALUES ('TENANT-A','PRODUCTS','WRONG',9)").run();
+  await assert.rejects(()=>installer.installFreshSynthetic_(args),run7Failure);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,1);
+  assert.equal(db.sql.prepare("SELECT current_sequence FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().current_sequence,9);
+  db.sql.prepare("DELETE FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").run();
+  db.sql.prepare("INSERT INTO synthetic_m03_id_receipts VALUES ('TENANT-A','PRODUCTS','OLD',999)").run();
+  await assert.rejects(()=>installer.installFreshSynthetic_(args),run7Failure);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
+  db.sql.prepare("DELETE FROM synthetic_m03_id_receipts").run();
+  assert.equal((await installer.installFreshSynthetic_(args)).localSyntheticD1FloorsInstalled,true);
+ }finally{db.close();}
+});
+test('M03 Run 7 RED: trigger failure rolls back all 38 family seeds rather than leaving partial state',async()=>{
+ const x=run5Evidence(),db=run7Db(x);
+ try{
+  const args={idEvidence:x.evidence,freezeManifest:x.manifest};
+  db.sql.exec("CREATE TRIGGER run7_abort BEFORE INSERT ON synthetic_m03_id_counters WHEN NEW.id_key='PRODUCT_UNITS' BEGIN SELECT RAISE(ABORT,'injected write error'); END");
+  const installer=createM03PrivateSourceFloorInstaller(db.env,'TENANT-A');
+  await assert.rejects(()=>installer.installFreshSynthetic_(args),run7Failure);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
+  db.sql.exec("DROP TRIGGER run7_abort");
+  assert.equal((await installer.installFreshSynthetic_(args)).localSyntheticD1FloorsInstalled,true);
+ }finally{db.close();}
+});
+test('M03 Run 7 RED: changed original evidence, unapproved args or missing binding cause zero writes',async()=>{
+ const x=run5Evidence(),db=run7Db(x);
+ try{
+  const args={idEvidence:x.evidence,freezeManifest:x.manifest};
+  const installer=createM03PrivateSourceFloorInstaller(db.env,'TENANT-A');
+  const wrong=structuredClone(x.evidence);wrong.counters.SALES='999';
+  for(const value of [
+   {idEvidence:wrong,freezeManifest:x.manifest},
+   {...args,force:true},
+   {...args,actorId:'ADMIN'}
+  ])await assert.rejects(()=>installer.installFreshSynthetic_(value),run7Failure);
+  await assert.rejects(()=>installer.installFreshSynthetic_(args,{force:true}),run7Failure);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
+  assert.throws(()=>createM03PrivateSourceFloorInstaller({},'TENANT-A'),/D1 database binding unavailable/);
+  const otherTenant=await createM03PrivateSourceFloorInstaller(db.env,'TENANT-Z').installFreshSynthetic_(args);
+  assert.equal(otherTenant.localSyntheticD1FloorsInstalled,true);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-Z'").get().n,38);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
+  const altered=structuredClone(x.manifest);altered.rootDigest='0'.repeat(64);
+  await assert.rejects(()=>installer.installFreshSynthetic_({idEvidence:x.evidence,freezeManifest:altered}),run7Failure);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
  }finally{db.close();}
 });
