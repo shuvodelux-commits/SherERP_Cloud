@@ -1,0 +1,11 @@
+# M09 Reports browser control regression — design (local-only)
+
+**Workstream:** M09 Issue #431. **UI owner:** M01 Issue #25. **Coordination:** #456. **Base:** main `892115db23b9dead40dce9ed1c69b536d11c0b6c`, after merged PRs #571 screenshot review and #583 pure report control state.
+
+The original Reports UI can invoke Print when the active tab has no successful server response, and edits to date inputs do not invalidate `rptState.loaded`. The previously merged pure M09 control inspector models the desired print eligibility but is intentionally not connected to the source-preserved frontend. M01 currently has dashboard/UI PRs open, so this M09 task cannot change `legacy/source/**`, shared UI patches, Worker, D1, posting or actual report actions.
+
+Add a repeatable Playwright QA script that opens the compiled original Reports screen on 390px mobile and 1440px desktop. Reveal the already-rendered DOM in a local test context; stub only the six original report loaders as resolved synthetic promises, and intercept `window.print`. Preserve real original tab event handlers and date inputs. Assert that printing before a successful active report load is blocked, date edits invalidate `rptState.loaded`, and stale content cannot print. These assertions **must RED on original source**. Also verify that all six tab buttons select the corresponding report panel and keyboard Enter can activate a tab; these existing working behaviors must stay intact.
+
+A separate, test-only `qa/m09-report-print-preview.js` may call the merged `inspectM09ReportControlState` pure helper in browser preview to demonstrate fixed gating. The preview must not import into the frontend build or an authenticated Worker. It must not invent a successful report lifecycle: for synthetic tests the harness may explicitly mark a successful report load, and must still fail closed on stale inputs or pending requests. All synthetic dates and any screenshots are local QA only. Source integrity and public RPC exposure remain unchanged.
+
+**Acceptance:** original QA RED for the two control regressions, preview GREEN at desktop and mobile with tabs and keyboard preserved, full Node/source checks and complete current-head GitHub CI, handoff to M01. No claim that deployed ERP UI or live financial reporting changed.
