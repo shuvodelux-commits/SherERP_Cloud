@@ -41,7 +41,8 @@ function takeRows(source,fields){
  if(!Array.isArray(source)||source.length<1||source.length>10000||
     Object.getPrototypeOf(source)!==Array.prototype||
     Reflect.ownKeys(source).length!==source.length+1)throw fail();
- return source.map((_,i)=>{
+ const cloned=[];
+ for(let i=0;i<source.length;i++){
   const item=Object.getOwnPropertyDescriptor(source,String(i));
   if(!item?.enumerable||!Object.hasOwn(item,'value'))throw fail();
   const row=item.value;
@@ -56,8 +57,9 @@ function takeRows(source,fields){
    if(!descriptor?.enumerable||!Object.hasOwn(descriptor,'value'))throw fail();
    output[field]=descriptor.value;
   }
-  return output;
- });
+  cloned.push(output);
+ }
+ return cloned;
 }
 /**
  * Return a detached PRIVATE staff copy for later protected M04 preflight.
