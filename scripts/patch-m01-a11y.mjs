@@ -89,6 +89,12 @@ const KEY_PATCHED=KEY_ORIGINAL+`\n      // Keyboard modal scope: no Tab navigati
 
 export function patchM01Accessibility(html){
   if(typeof html!=='string')throw new TypeError('Missing compiled original UI');
+  // A second <head> or an unknown document prefix must never be masked by
+  // a simple substring replacement; the source manifest stays authoritative.
+  const originalPrefix='<!DOCTYPE html>\n<html>\n<head>\n  <base target="_top">';
+  const patchedPrefix='<!DOCTYPE html>\n<html lang="en">\n<head>\n  <title>Hardware Store ERP</title>\n  <base target="_top">';
+  if(!html.startsWith(originalPrefix) && !html.startsWith(patchedPrefix))
+    throw new Error('Compiled M01 original document boundary missing or ambiguous');
   let patched=html;
   patched=replaceOnce(patched,
     '<!DOCTYPE html>\n<html>\n<head>',
