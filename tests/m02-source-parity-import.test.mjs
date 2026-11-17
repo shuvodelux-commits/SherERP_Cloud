@@ -15,6 +15,8 @@ function makeExport(){
  for(const item of fixture.rows){
   assert.ok(frozen.has(item.group));
   const headers=frozen.get(item.group);
+  for(const field of Object.keys(item.values))assert.ok(headers.includes(field),
+   'Unexpected synthetic fixture column for '+item.group);
   const values=headers.map(name=>Object.hasOwn(item.values,name)?item.values[name]:'');
   groups[item.group].rows.push({sheetRow:item.sheetRow,cells:values});
  }
