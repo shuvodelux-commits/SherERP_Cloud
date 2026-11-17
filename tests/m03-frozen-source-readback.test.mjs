@@ -578,7 +578,10 @@ test('M03 Run 7 RED: changed original evidence, unapproved args or missing bindi
   await assert.rejects(()=>installer.installFreshSynthetic_(args,{force:true}),run7Failure);
   assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
   assert.throws(()=>createM03PrivateSourceFloorInstaller({},'TENANT-A'),/D1 database binding unavailable/);
-  await assert.rejects(()=>createM03PrivateSourceFloorInstaller(db.env,'TENANT-Z').installFreshSynthetic_(args),run7Failure);
+  const otherTenant=await createM03PrivateSourceFloorInstaller(db.env,'TENANT-Z').installFreshSynthetic_(args);
+  assert.equal(otherTenant.localSyntheticD1FloorsInstalled,true);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-Z'").get().n,38);
+  assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
   const altered=structuredClone(x.manifest);altered.rootDigest='0'.repeat(64);
   await assert.rejects(()=>installer.installFreshSynthetic_({idEvidence:x.evidence,freezeManifest:altered}),run7Failure);
   assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
