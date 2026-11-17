@@ -21,7 +21,7 @@ test('Run2 audited async scope adds all six historical archive read chains, with
   assert(HISTORICAL.every(p=>REVIEWED_AWAIT_FILES.includes(p)));
   assert.deepEqual(auditReviewedM03AwaitChains(files()),{
     status:'REVIEWED_M03_AWAITED_ONLY',
-    files:12,awaitedCallSites:39,publicRpcEnabled:false
+    files:12,awaitedCallSites:51,publicRpcEnabled:false
   });
 });
 
