@@ -323,3 +323,21 @@ test('G4 Workerd D1 concurrent last-stock sales allocate only one original invoi
     .bind('OP-G4-WORKER-A','OP-G4-WORKER-B').all()).results;
   assert.deepEqual(rows.map(row=>row.source_invoice_id),['INV-'+String(after).padStart(6,'0')]);
 });
+
+test('G4 Workerd D1 two concurrent successful sales receive separate sequential source IDs',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=2 WHERE business_id='BUSINESS-A'").run();
+  const counter=async()=>(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  const before=await counter();
+  const results=await Promise.all([
+    posting.post_(input(SECOND,'OP-G4-WORKER-BOTH-A')),
+    posting.post_(input(SECOND,'OP-G4-WORKER-BOTH-B'))
+  ]);
+  assert.deepEqual(results.map(value=>value.status).sort(),['COMMITTED','COMMITTED']);
+  assert.equal(await counter(),before+2);
+  const rows=(await DB.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id IN (?,?) ORDER BY source_invoice_id")
+    .bind('OP-G4-WORKER-BOTH-A','OP-G4-WORKER-BOTH-B').all()).results;
+  assert.deepEqual(rows.map(x=>x.source_invoice_id),[
+    'INV-'+String(before+1).padStart(6,'0'),
+    'INV-'+String(before+2).padStart(6,'0')
+  ]);
+});
