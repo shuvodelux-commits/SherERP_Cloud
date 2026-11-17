@@ -303,3 +303,22 @@ test('Super QA: malicious D1 row accessor is rejected without executing its gett
   assert.equal(called,0,'source readback may not execute D1 accessor side effects');
  });
 });
+
+test('page resource budget rejects a correctly sealed 8MiB+ cell before any partial source output',async()=>{
+ await withDb(async x=>{
+  const name='LOGS';
+  const headers=schema.tables.find(t=>t.sheetKey===name).columns;
+  const huge='q'.repeat(8*1024*1024+1);
+  const rows=[{sheetRow:2,cells:['2026-11-17T00:00:00+06:00','QA',huge]}];
+  x.sql.prepare('DELETE FROM m03_private_source_rows WHERE source_group=?').run(name);
+  x.sql.prepare('INSERT INTO m03_private_source_rows VALUES (?,?,?,?)')
+   .run(pin,name,2,JSON.stringify(rows[0].cells));
+  x.sql.prepare('UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group=?')
+   .run(1,digest(name,headers,rows),name);
+  await assert.rejects(()=>createFrozenSourceReadback(x.env).readAllSourceGroups(),e=>{
+   assert.equal(e.message,'Invalid or incomplete private M03 source archive');
+   assert.doesNotMatch(e.message,/qqqq|LOGS|SQL/);
+   return true;
+  });
+ });
+});
