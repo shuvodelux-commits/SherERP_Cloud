@@ -8,7 +8,8 @@ import {resolve} from 'node:path';
 function replaceOnce(html,original,revised,label){
   const oldCount=html.split(original).length-1;
   const newCount=html.split(revised).length-1;
-  if(oldCount===0&&newCount===1)return html;
+  // The keyboard listener patch deliberately prefixes the original line.
+  if(newCount===1 && (oldCount===0 || (oldCount===1 && revised.startsWith(original)))) return html;
   if(oldCount!==1||newCount!==0)
     throw new Error('Compiled M01 '+label+' boundary missing or ambiguous');
   return html.replace(original,revised);
@@ -26,6 +27,9 @@ const OPEN_PATCHED=[
   '    sheet.hidden = false;',
   "    document.body.classList.add('mobile-sheet-open');",
   "    syncMobileNavigation_('more');",
+  '    if (sheet.parentElement) Array.prototype.forEach.call(sheet.parentElement.children, function (el) {',
+  '      if (el !== sheet) el.inert = true;',
+  '    });',
   "    var closeButton = sheet.querySelector('.mobile-sheet-close');",
   '    if (closeButton) closeButton.focus();',
   '  }',
@@ -46,6 +50,9 @@ const CLOSE_PATCHED=[
   '    var wasOpen = !!sheet && !sheet.hidden;',
   '    if (sheet) sheet.hidden = true;',
   "    document.body.classList.remove('mobile-sheet-open');",
+  '    if (wasOpen && sheet.parentElement) Array.prototype.forEach.call(sheet.parentElement.children, function (el) {',
+  '      if (el !== sheet) el.inert = false;',
+  '    });',
   '    syncMobileNavigation_(currentPage);',
   '    if (wasOpen) {',
   '      var opener = document.querySelector(\'#mobileBottomNav [data-mobile-page="more"]\');',
