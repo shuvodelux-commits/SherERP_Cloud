@@ -824,6 +824,8 @@ test('M01 Step 2: mouse/keyboard reorder metric and panel groups, toggle hidden,
     await page.locator('#hdb-all-widgets').click();
     const dlg=page.locator('#hisabiq-dashboard-dialog');
     assert.equal(await dlg.isVisible(),true);
+    assert.equal(await page.evaluate(()=>document.activeElement?.id),'hdb-dialog-title',
+      'opening a long dialog focuses its heading, not a footer button');
     assert.equal(await page.locator('#hdb-dialog-desc').count(),1);
     assert.equal(await page.locator('[data-hdb-list="metric"] > [data-hdb-id]').count(),11,
       'six default + five optional metric widgets');
@@ -853,6 +855,8 @@ test('M01 Step 2: mouse/keyboard reorder metric and panel groups, toggle hidden,
     await page.evaluate(()=>document.getElementById('refreshBtn').focus());
     assert.equal(await page.evaluate(()=>document.activeElement.closest('#hisabiq-dashboard-dialog')!==null),
       true,'focus cannot escape an open modal');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'hdb-dialog-title',
+      'an attempted background focus returns to the dialog heading');
     await saveArtifact(page,'hisabiq-dashboard-step2-dialog-1280.png');
     await page.keyboard.press('Escape');
     assert.equal(await dlg.isVisible(),false);
@@ -932,6 +936,9 @@ test('M01 Step 2: mobile touch drag reorders widgets without horizontal overflow
     await authorizeDashboardStep2_(page);
     await page.locator('#hisabiq-dashboard-customize').click();
     await page.locator('#hdb-all-widgets').click();
+    const switchHeight=await page.locator('[data-hdb-list="metric"] > [data-hdb-id="today-sales"] [role="switch"]')
+      .evaluate(node=>node.getBoundingClientRect().height);
+    assert.ok(switchHeight<=22,'mobile switch must remain compact (19px), got '+switchHeight);
     const from=page.locator('[data-hdb-list="metric"] [data-hdb-id="receivable"] [data-hdb-action="drag-grip"]');
     const to=page.locator('[data-hdb-list="metric"] [data-hdb-id="today-sales"] [data-hdb-action="drag-grip"]');
     await from.scrollIntoViewIfNeeded();
