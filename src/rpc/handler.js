@@ -1,5 +1,6 @@
 import {rpcRegistry} from './registry.js';
 import {buildSourceAppShellData} from '../modules/source-app-shell-reader.js';
+import {assertFullyResolvedRpcValue} from './awaited-response-boundary.js';
 
 const MAX_RPC_BYTES = 65_536;
 const MAX_ARGS = 20;
@@ -251,6 +252,7 @@ export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBrid
       const result=await method(...payload.args);
       if(!validAuthEnvelope(result,payload.fnName))
         return rpcError(503,'Authentication backend unavailable');
+      assertFullyResolvedRpcValue(result);
       return Response.json(result,{headers:{
         'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
       }});
@@ -273,6 +275,7 @@ export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBrid
       const result=await invoke.call(appShellBridge,{token:payload.args[0]});
       if(!validAppShellEnvelope(result))
         return rpcError(503,APP_SHELL_UNAVAILABLE);
+      assertFullyResolvedRpcValue(result);
       return Response.json(result,{headers:{
         'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
       }});
@@ -295,6 +298,7 @@ export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBrid
       const result=await method.call(dayBookBridge,payload);
       if(!validDayBookEnvelope(result))
         return rpcError(503,DAY_BOOK_UNAVAILABLE);
+      assertFullyResolvedRpcValue(result);
       return Response.json(result,{headers:{
         'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
       }});
