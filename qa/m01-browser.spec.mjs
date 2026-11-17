@@ -794,3 +794,188 @@ test('HisabIQ Dashboard Step 1: source visual layout is responsive at 320/390/76
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+
+async function authorizeDashboardStep2_(page,user='M01-STEP2-USER-A',tenant='M01-STEP2-STORE-A'){
+  await page.evaluate(({user,tenant})=>{
+    // Synthetic browser UI session only; no Worker or D1 authority is granted.
+    window.authToken='m01-step2-synthetic-token';
+    window.currentUser={id:user,tenantId:tenant,name:'Step2 Fixture',role:'Administrator'};
+    window.allowedModules=null;
+    document.getElementById('loginOverlay').hidden=true;
+    document.getElementById('app').style.visibility='';
+    document.getElementById('shopNameLabel').textContent='Step2 Synthetic Store';
+    window.dispatchEvent(new Event('focus'));
+  },{user,tenant});
+}
+
+test('M01 Step 2: mouse/keyboard reorder metric and panel groups, toggle hidden, reset and focus restore',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await authorizeDashboardStep2_(page);
+    await page.locator('#hisabiq-dashboard-customize').click();
+    const hint=page.locator('#hdb-edit-hint [data-hdb-action="show-hidden"]');
+    assert.match(await hint.innerText(),/5/,'five optional metrics start hidden');
+    await page.locator('[data-hdb-widget="low-stock"] [data-hdb-action="hide"]').click();
+    assert.match(await hint.innerText(),/6/,'hiding a card increments hidden count');
+
+    await page.locator('#hdb-all-widgets').click();
+    const dlg=page.locator('#hisabiq-dashboard-dialog');
+    assert.equal(await dlg.isVisible(),true);
+    assert.equal(await page.evaluate(()=>document.activeElement?.id),'hdb-dialog-title',
+      'opening a long dialog focuses its heading, not a footer button');
+    assert.equal(await page.locator('#hdb-dialog-desc').count(),1);
+    assert.equal(await page.locator('[data-hdb-list="metric"] > [data-hdb-id]').count(),11,
+      'six default + five optional metric widgets');
+
+    const from=page.locator('[data-hdb-list="metric"] > [data-hdb-id="payable"]');
+    const to=page.locator('[data-hdb-list="metric"] > [data-hdb-id="today-sales"]');
+    await from.dragTo(to);
+    let ids=await page.locator('[data-hdb-list="metric"] > [data-hdb-id]')
+      .evaluateAll(nodes=>nodes.map(n=>n.dataset.hdbId));
+    assert.equal(ids[0],'payable','native mouse drag reorders metric widgets');
+
+    const panelGrip=page.locator('[data-hdb-list="panel"] [data-hdb-id="cashflow"] [data-hdb-action="drag-grip"]');
+    await panelGrip.focus();
+    await panelGrip.press('ArrowUp');
+    ids=await page.locator('[data-hdb-list="panel"] > [data-hdb-id]')
+      .evaluateAll(nodes=>nodes.map(n=>n.dataset.hdbId));
+    assert.equal(ids[0],'cashflow','keyboard grip moves panels');
+    assert.equal(await page.evaluate(()=>document.activeElement?.dataset.hdbAction),'drag-grip',
+      'focus must remain on the moved grip');
+    const switchButton=page.locator('[data-hdb-list="metric"] [data-hdb-id="low-stock"] [role="switch"]');
+    await switchButton.focus();
+    await switchButton.press('Space');
+    assert.equal(await switchButton.getAttribute('aria-checked'),'true');
+    assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('role')),'switch',
+      'focus survives the toggled switch re-render');
+
+    await page.evaluate(()=>document.getElementById('refreshBtn').focus());
+    assert.equal(await page.evaluate(()=>document.activeElement.closest('#hisabiq-dashboard-dialog')!==null),
+      true,'focus cannot escape an open modal');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'hdb-dialog-title',
+      'an attempted background focus returns to the dialog heading');
+    await saveArtifact(page,'hisabiq-dashboard-step2-dialog-1280.png');
+    await page.keyboard.press('Escape');
+    assert.equal(await dlg.isVisible(),false);
+    assert.equal(await page.evaluate(()=>document.activeElement?.id),'hdb-all-widgets',
+      'Escape restores focus to the launching control');
+    await page.locator('[data-hdb-action="finish"]').click();
+    const layout=await page.locator('#hisabiq-dashboard-panels > [data-hdb-widget]')
+      .evaluateAll(nodes=>nodes.map(n=>n.dataset.hdbWidget));
+    assert.equal(layout[0],'cashflow');
+    await page.locator('#hisabiq-dashboard-customize').click();
+    await page.locator('#hdb-all-widgets').click();
+    await page.locator('[data-hdb-action="reset"]').click();
+    const defaults=await page.locator('[data-hdb-list="metric"] > [data-hdb-id]')
+      .evaluateAll(nodes=>nodes.map(n=>n.dataset.hdbId));
+    assert.equal(defaults[0],'today-sales','reset restores original order');
+    assert.equal(await page.locator('[data-hdb-list="metric"] [data-hdb-id="low-stock"] [role="switch"]')
+      .getAttribute('aria-checked'),'true');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('M01 Step 2: same user across tenants and other actors get isolated saved layouts; malformed JSON self-heals',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  try{
+    await page.goto(server.url);
+    await authorizeDashboardStep2_(page);
+    await page.locator('#hisabiq-dashboard-customize').click();
+    await page.locator('#hdb-all-widgets').click();
+    await page.locator('[data-hdb-list="metric"] [data-hdb-id="today-sales"] [data-hdb-action="list-next"]').click();
+    assert.equal(await page.locator('[data-hdb-list="metric"] > [data-hdb-id]').first()
+      .getAttribute('data-hdb-id'),'receivable');
+    await page.locator('[data-hdb-action="dialog-close"]').click();
+    await page.locator('[data-hdb-action="finish"]').click();
+    await page.reload();
+    await authorizeDashboardStep2_(page);
+    assert.equal(await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]').first()
+      .getAttribute('data-hdb-widget'),'receivable','same user layout should survive reload');
+
+    await authorizeDashboardStep2_(page,'M01-STEP2-USER-A','M01-STEP2-STORE-B');
+    assert.equal(await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]').first()
+      .getAttribute('data-hdb-widget'),'today-sales','tenant B must not inherit tenant A');
+    await authorizeDashboardStep2_(page,'M01-STEP2-USER-B','M01-STEP2-STORE-A');
+    assert.equal(await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]').first()
+      .getAttribute('data-hdb-widget'),'today-sales','user B must not inherit user A');
+    await authorizeDashboardStep2_(page);
+    assert.equal(await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]').first()
+      .getAttribute('data-hdb-widget'),'receivable');
+
+    await page.evaluate(()=>{
+      const key=Object.keys(localStorage).find(k=>k.startsWith('shererp.hisabiq.dashboard.v1:') &&
+        k.includes('M01-STEP2-STORE-A') && k.includes('M01-STEP2-USER-A'));
+      if(!key)throw Error('expected scoped actor-specific key');
+      localStorage.setItem(key,'{"invalid":true}');
+    });
+    await page.reload();await authorizeDashboardStep2_(page);
+    assert.equal(await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]').first()
+      .getAttribute('data-hdb-widget'),'today-sales','malformed saved layout falls back safely');
+
+    await page.locator('#hisabiq-dashboard-customize').click();
+    await page.locator('#hdb-all-widgets').click();
+    await page.evaluate(()=>{
+      window.authToken='';
+      window.currentUser=null;
+      document.getElementById('loginOverlay').hidden=false;
+      window.dispatchEvent(new Event('focus'));
+    });
+    await page.waitForFunction(()=>
+      document.getElementById('hisabiq-dashboard-dialog').hidden===true &&
+      !document.getElementById('hisabiq-dashboard').classList.contains('is-editing'));
+  }finally{await page.close();}
+});
+
+test('M01 Step 2: mobile touch drag reorders widgets without horizontal overflow',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+  try{
+    await page.goto(server.url);
+    await authorizeDashboardStep2_(page);
+    await page.locator('#hisabiq-dashboard-customize').click();
+    await page.locator('#hdb-all-widgets').click();
+    const switchHeight=await page.locator('[data-hdb-list="metric"] > [data-hdb-id="today-sales"] [role="switch"]')
+      .evaluate(node=>node.getBoundingClientRect().height);
+    assert.ok(switchHeight<=22,'mobile switch must remain compact (19px), got '+switchHeight);
+    const from=page.locator('[data-hdb-list="metric"] [data-hdb-id="receivable"] [data-hdb-action="drag-grip"]');
+    const to=page.locator('[data-hdb-list="metric"] [data-hdb-id="today-sales"] [data-hdb-action="drag-grip"]');
+    await from.scrollIntoViewIfNeeded();
+    await page.evaluate(()=>{
+      window.__hdbTouchTrace=[];
+      const source=document.querySelector('[data-hdb-list="metric"] > [data-hdb-id="receivable"] [data-hdb-action="drag-grip"]');
+      for(const type of ['pointerdown','pointermove','pointerup','pointercancel',
+        'touchstart','touchmove','touchend','touchcancel']){
+        source.addEventListener(type,ev=>{
+          const point=ev.changedTouches?.[0]||ev;
+          const target=document.elementFromPoint(point.clientX,point.clientY);
+          window.__hdbTouchTrace.push({
+            type,pointerType:ev.pointerType,button:ev.button,
+            x:Math.round(point.clientX),y:Math.round(point.clientY),
+            hit:target?.closest('.hdb-dialog-row')?.dataset.hdbId||null
+          });
+        },{capture:true});
+      }
+    });
+    await saveArtifact(page,'hisabiq-dashboard-step2-touch-before-390.png');
+    const start=await from.boundingBox(),end=await to.boundingBox();
+    assert.ok(start&&end);
+    const sx=start.x+start.width/2,sy=start.y+start.height/2;
+    const tx=end.x+end.width/2,ty=end.y+end.height/2;
+    const cdp=await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:sx,y:sy}]});
+    for(let i=1;i<=6;i++){
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',
+        touchPoints:[{x:sx+(tx-sx)*i/6,y:sy+(ty-sy)*i/6}]});
+    }
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    const ids=await page.locator('[data-hdb-list="metric"] > [data-hdb-id]')
+      .evaluateAll(nodes=>nodes.map(n=>n.dataset.hdbId));
+    const trace=await page.evaluate(()=>window.__hdbTouchTrace||[]);
+    assert.equal(ids[0],'receivable','touch drag reorders metric list: '+JSON.stringify(trace));
+    const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+    assert.ok(overflow<=2,'mobile 390px should not horizontally scroll: '+overflow);
+    await saveArtifact(page,'hisabiq-dashboard-step2-touch-390.png');
+  }finally{await page.close();}
+});
