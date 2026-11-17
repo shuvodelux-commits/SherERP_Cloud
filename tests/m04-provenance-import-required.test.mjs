@@ -123,3 +123,50 @@ test('malformed protected extra field cannot be accepted by readback reconciliat
   });
   assert.equal(queries,0);
 });
+
+
+test('protected export root must be exactly own enumerable users and roles before D1 access',async()=>{
+  const malformed=[
+    src=>{src.sessions=[{Token:'SYNTHETIC_SESSION_MUST_NOT_BE_IMPORTED'}];},
+    src=>{src.unreviewedPrivateField='SYNTHETIC_PRIVATE_FIELD';},
+    src=>Object.defineProperty(src,'hiddenFutureData',{
+      value:'SYNTHETIC_HIDDEN',enumerable:false,
+    }),
+    src=>{src[Symbol('unreviewed')]='SYNTHETIC_SYMBOL';},
+    src=>Object.defineProperty(src,'unreviewedGetter',{
+      enumerable:true,get(){throw Error('PRIVATE_ROOT_GETTER_EXECUTED');},
+    }),
+    src=>Object.setPrototypeOf(src,{inheritedTrusted:false}),
+  ];
+  for(const change of malformed){
+    const src=snapshot();
+    change(src);
+    await expectNoWrite(src);
+  }
+  // A hostile Proxy cannot supply an unverifiable list of root keys.
+  const src=new Proxy(snapshot(),{
+    ownKeys(){throw Error('PRIVATE_ROOT_KEYS_EXECUTED');},
+  });
+  await expectNoWrite(src);
+});
+
+test('ordinary and null-prototype exact snapshot roots reach read-only D1 preflight',async()=>{
+  for(const src of [
+    snapshot(),
+    Object.assign(Object.create(null),snapshot()),
+  ]){
+    let inspected=0;
+    const db={
+      prepare(){
+        inspected++;
+        throw Error('SYNTHETIC_DB_PREFLIGHT_REACHED');
+      },
+      batch(){
+        throw Error('Unexpected write');
+      },
+    };
+    await assert.rejects(()=>importLegacyStaffSnapshotWithD1(db,src),
+      err=>err.message==='SYNTHETIC_DB_PREFLIGHT_REACHED');
+    assert.equal(inspected,1);
+  }
+});
