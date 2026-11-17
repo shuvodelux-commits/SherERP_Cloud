@@ -62,9 +62,9 @@ before(async()=>{
 after(async()=>{await harness.close();});
 beforeEach(async()=>{await DB.prepare('DELETE FROM m02_test_checkpoints').run();});
 
-test('twelve versioned core/auth/catalog/diagnostic/audit/product-snapshot migrations preserve no production Party financial account schema',async()=>{
+test('fourteen versioned core/auth/catalog/diagnostic/audit/product-snapshot migrations preserve no production Party financial account schema',async()=>{
   const migrationCount=await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first();
-  assert.equal(migrationCount.n,13);
+  assert.equal(migrationCount.n,14);
   const names=await DB.prepare(`SELECT name FROM sqlite_master
     WHERE type='table' AND name IN ('party_accounts','party_account_entries','journal_entries','party_settlements')`).all();
   assert.deepEqual(names.results,[]);
@@ -173,5 +173,5 @@ test('helper causes no database mutations or new migration during readback',asyn
   await report(preflight);
   const after=await DB.prepare('SELECT COUNT(*) AS n FROM m02_test_checkpoints').first();
   assert.equal(before.n,after.n);
-  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n,13);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n,14);
 });

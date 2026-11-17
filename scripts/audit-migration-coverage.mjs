@@ -138,7 +138,7 @@ async function main() {
   // Explicit current-baseline gate; adding future migrations/groups requires
   // source/schema review, not silent promotion to a production-ready status.
   const s=report.summary;
-  if(files.length!==13||s.sourceGroups!==49||s.catalogSchemaOnly!==4||
+  if(files.length!==14||s.sourceGroups!==49||s.catalogSchemaOnly!==4||
      s.diagnosticSchemaOnly!==1||s.auditSchemaOnly!==5||s.productArchiveOnly!==1||
      s.partyIdentityOnly!==5||s.authLocalOnly!==3||
      s.unmapped!==30||s.fullyReconciled!==0||
