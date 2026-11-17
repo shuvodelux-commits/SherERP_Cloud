@@ -404,6 +404,10 @@ test('G4 source SALES ID is issued with an atomic sale from imported high-water 
     });
     assert.equal(count(),17);
     assert.deepEqual(x.state(),before);
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-G4-1',{amount:'120.01'})),{
+      status:'CONFLICT',operationId:'OP-G4-1'
+    });
+    assert.equal(count(),17,'conflicting intent may not issue another invoice ID');
     assert.equal((await x.post.post_(intent(ADMIN,'OP-G4-2'))).status,'COMMITTED');
     assert.equal(count(),18);
     assert.equal(x.db.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id='OP-G4-2'").get().source_invoice_id,'INV-000018');
@@ -484,5 +488,20 @@ test('G4 direct forged source invoice IDs fail SQL verification; committed invoi
     assert.equal(x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence,16);
     assert.equal((await x.post.post_(intent(ADMIN,'OP-G4-VALID'))).status,'COMMITTED');
     assert.throws(()=>x.db.exec("UPDATE operation_receipts SET source_invoice_id='INV-999999'"),/immutable/i);
+  }finally{x.close();}
+});
+
+test('G4 two concurrent successful sales produce unique sequential INV IDs without a counter race',async()=>{
+  const x=fixture();try{
+    const states=await Promise.all([
+      x.post.post_(intent(ADMIN,'OP-G4-TWO-A')),
+      x.post.post_(intent(SECOND,'OP-G4-TWO-B'))
+    ]);
+    assert.deepEqual(states.map(s=>s.status),['COMMITTED','COMMITTED']);
+    const rows=x.db.prepare("SELECT source_invoice_id FROM operation_receipts ORDER BY source_invoice_id").all();
+    assert.deepEqual(rows.map(r=>r.source_invoice_id),['INV-000017','INV-000018']);
+    assert.equal(x.db.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").get().current_sequence,18);
+    assert.equal(x.db.prepare("SELECT available FROM synthetic_m03_g1_stock WHERE business_id='BUSINESS-A'").get().available,0);
+    assert.equal(x.db.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_g1_journal").get().n,4);
   }finally{x.close();}
 });
