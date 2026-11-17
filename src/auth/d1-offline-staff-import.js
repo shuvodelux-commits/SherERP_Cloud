@@ -73,9 +73,17 @@ function captureVerifiedSnapshot(source){
   try {
     if(!source || typeof source!=='object' || Array.isArray(source))
       throw rejected();
+    // The protected export contract has EXACTLY two enumerable root fields.
+    // Never silently drop SESSIONS, symbols, hidden data or future secrets.
+    const prototype=Object.getPrototypeOf(source);
+    if(prototype!==Object.prototype && prototype!==null)throw rejected();
+    const keys=Reflect.ownKeys(source);
+    if(keys.length!==2 || !keys.includes('users') || !keys.includes('roles'))
+      throw rejected();
     const u=Object.getOwnPropertyDescriptor(source,'users');
     const r=Object.getOwnPropertyDescriptor(source,'roles');
-    if(!u || !r || !Object.hasOwn(u,'value') || !Object.hasOwn(r,'value'))
+    if(!u?.enumerable || !r?.enumerable ||
+       !Object.hasOwn(u,'value') || !Object.hasOwn(r,'value'))
       throw rejected();
     users=u.value;
     roles=r.value;
