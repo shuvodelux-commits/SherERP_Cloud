@@ -1085,3 +1085,63 @@ test('M01 Step 3: mobile low stock and cash drilldowns disclose unfiltered nativ
     assert.ok(width<=2,'no horizontal overflow at 390px: '+width);
   }finally{await page.close();}
 });
+
+
+test('M01 dashboard actor/tenant summary values reset on switch and logout (synthetic UI only)',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const sales=page.locator('#hisabiq-dashboard [data-hdb-value="dashSales"]');
+  const due=page.locator('#hisabiq-dashboard [data-hdb-value="dashDue"]');
+  try{
+    await page.goto(server.url);
+    await authorizeDashboardStep2_(page,'DASH-USER-A','DASH-TENANT-A');
+    await page.evaluate(()=>{
+      document.getElementById('dashSales').textContent='A-SALES-1500';
+      document.getElementById('dashDue').textContent='A-DUE-4000';
+    });
+    await page.waitForFunction(()=>document.querySelector('#hisabiq-dashboard [data-hdb-value="dashSales"]')
+      ?.textContent==='A-SALES-1500');
+    assert.equal(await due.innerText(),'A-DUE-4000');
+
+    // The same account switching shops must not inherit the previous shop's totals.
+    await authorizeDashboardStep2_(page,'DASH-USER-A','DASH-TENANT-B');
+    await page.waitForFunction(()=>document.querySelector('#hisabiq-dashboard [data-hdb-value="dashSales"]')
+      ?.textContent==='—');
+    assert.equal(await due.innerText(),'—');
+    assert.equal(await page.locator('#dashSales').innerText(),'--',
+      'legacy source cell must not retain previous tenant total after identity change');
+
+    // Freshly delivered source cells can still hydrate normally for the new tenant.
+    await page.evaluate(()=>{
+      document.getElementById('dashSales').textContent='B-SALES-330';
+      document.getElementById('dashDue').textContent='B-DUE-70';
+    });
+    await page.waitForFunction(()=>document.querySelector('#hisabiq-dashboard [data-hdb-value="dashSales"]')
+      ?.textContent==='B-SALES-330');
+    assert.equal(await due.innerText(),'B-DUE-70');
+
+    await page.evaluate(()=>{
+      window.authToken='';window.currentUser=null;
+      document.getElementById('loginOverlay').hidden=false;
+      window.dispatchEvent(new Event('focus'));
+    });
+    await page.waitForFunction(()=>document.querySelector('#hisabiq-dashboard [data-hdb-value="dashSales"]')
+      ?.textContent==='—');
+    assert.equal(await due.innerText(),'—');
+
+    // A stale legacy DOM callback during signed-out time remains redacted.
+    await page.evaluate(()=>{
+      document.getElementById('dashSales').textContent='LATE-SIGNED-OUT-999';
+      document.getElementById('dashDue').textContent='LATE-DUE-777';
+    });
+    assert.equal(await sales.innerText(),'—');
+    assert.equal(await due.innerText(),'—');
+
+    // Sign back into a different actor: late values from the previous session are discarded.
+    await authorizeDashboardStep2_(page,'DASH-USER-C','DASH-TENANT-C');
+    await page.waitForFunction(()=>document.getElementById('dashSales')?.textContent==='--');
+    assert.equal(await sales.innerText(),'—');
+    assert.equal(await due.innerText(),'—');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
