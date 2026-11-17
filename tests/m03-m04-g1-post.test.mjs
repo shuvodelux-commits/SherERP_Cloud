@@ -109,10 +109,15 @@ test('current authorized sales.add staff posts, but false grants and malformed g
     await assert.rejects(()=>x.post.post_(intent(DENY,'OP-DENIED')),/Denied/i);
     x.db.prepare("UPDATE auth_roles SET permissions_json=? WHERE role_name='Denied'")
       .run('{"sales":{"add":"true"}}');
-    // Reissue a session to avoid falsely accepting stale permissions after change.
-    x.db.prepare('UPDATE auth_sessions SET role_auth_version=(SELECT auth_version FROM auth_roles WHERE role_name=?) WHERE token_hash=?')
-      .run('Denied',digest(DENY));
-    await assert.rejects(()=>x.post.post_(intent(DENY,'OP-STRING')),/Denied/i);
+    // M04 seals session role versions. Simulate a newly issued session
+    // instead of modifying an existing authority snapshot.
+    const freshToken='e'.repeat(64);
+    const epoch=x.db.prepare("SELECT auth_version FROM auth_roles WHERE role_name='Denied'").get().auth_version;
+    x.db.prepare(`INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,
+      role_auth_version,credential_version,created_at_ms,last_activity_at_ms,expires_at_ms)
+      VALUES(?, 'DENIED',1,?,1,?,?,?)`)
+      .run(digest(freshToken),epoch,NOW-600_000,NOW-10_000,NOW+600_000);
+    await assert.rejects(()=>x.post.post_(intent(freshToken,'OP-STRING')),/Denied/i);
     assert.deepEqual(x.state(),before);
   }finally{x.close();}
 });
@@ -135,9 +140,14 @@ test('session revocation, role downgrade, stale role epoch and user disable bloc
     await assert.rejects(()=>x.post.post_(intent()),/Denied/i);
     x.db.prepare("UPDATE auth_roles SET permissions_json='{}' WHERE role_name='Cashier'").run();
     await assert.rejects(()=>x.post.post_(intent(CASHIER,'OP-STALE')),/Denied/i);
-    x.db.prepare('UPDATE auth_sessions SET role_auth_version=(SELECT auth_version FROM auth_roles WHERE role_name=?) WHERE token_hash=?')
-      .run('Cashier',digest(CASHIER));
-    await assert.rejects(()=>x.post.post_(intent(CASHIER,'OP-DOWNGRADE')),/Denied/i);
+    // Correct authority epoch alone never recreates a removed sales.add grant.
+    const freshCashier='f'.repeat(64);
+    const cashierEpoch=x.db.prepare("SELECT auth_version FROM auth_roles WHERE role_name='Cashier'").get().auth_version;
+    x.db.prepare(`INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,
+      role_auth_version,credential_version,created_at_ms,last_activity_at_ms,expires_at_ms)
+      VALUES(?, 'CASHIER',1,?,1,?,?,?)`)
+      .run(digest(freshCashier),cashierEpoch,NOW-600_000,NOW-10_000,NOW+600_000);
+    await assert.rejects(()=>x.post.post_(intent(freshCashier,'OP-DOWNGRADE')),/Denied/i);
     x.db.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='SECOND'").run();
     await assert.rejects(()=>x.post.post_(intent(SECOND,'OP-DISABLED')),/Denied/i);
     assert.equal(x.state().receipts.length,0);
