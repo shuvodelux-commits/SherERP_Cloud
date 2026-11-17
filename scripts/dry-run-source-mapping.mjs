@@ -18,6 +18,89 @@ const UNIQUE_BY_POSITION_ONLY=new Set([
  'PURCHASE_ITEMS','SALE_ITEMS','SALES_RETURN_ITEMS',
  'PURCHASE_RETURN_ITEMS','LOGS'
 ]);
+
+// Frozen evidence *labels*, not deployment confirmation. If M03 adds
+// actual reviewed schema coverage, refresh this in a dedicated shared
+// contract PR. Never allow invented table names into M02 reports.
+const EXPECTED_PARTIAL_D1_EVIDENCE=Object.freeze({
+  "SETTINGS": [
+    "catalog-schema-only",
+    "settings"
+  ],
+  "PRODUCT_CATEGORIES": [
+    "catalog-schema-only",
+    "product_categories"
+  ],
+  "PRODUCT_UNITS": [
+    "catalog-schema-only",
+    "product_units"
+  ],
+  "EXPENSE_CATEGORIES": [
+    "catalog-schema-only",
+    "expense_categories"
+  ],
+  "LOGS": [
+    "diagnostic-schema-only",
+    "legacy_error_logs"
+  ],
+  "PRODUCTS": [
+    "product-source-archive-only",
+    "legacy_product_snapshots"
+  ],
+  "DELETE_LOG": [
+    "audit-schema-only",
+    "legacy_delete_log"
+  ],
+  "SALES_DRAFT_AUDIT": [
+    "audit-schema-only",
+    "legacy_sales_draft_audit"
+  ],
+  "INVOICE_EDIT_LOG": [
+    "audit-schema-only",
+    "legacy_invoice_edit_audit"
+  ],
+  "OPENING_BALANCE_EDIT_LOG": [
+    "audit-schema-only",
+    "legacy_opening_balance_edit_audit"
+  ],
+  "STOCK_LOT_COST_CORRECTIONS": [
+    "audit-schema-only",
+    "legacy_stock_lot_cost_corrections"
+  ],
+  "CUSTOMERS": [
+    "party-identity-only",
+    "party_legacy_links"
+  ],
+  "SUPPLIERS": [
+    "party-identity-only",
+    "party_legacy_links"
+  ],
+  "VENDORS": [
+    "party-identity-only",
+    "party_legacy_links"
+  ],
+  "FINANCE_PERSONS": [
+    "party-identity-only",
+    "party_legacy_links"
+  ],
+  "EXPENSE_PAYEES": [
+    "party-identity-only",
+    "party_legacy_links"
+  ],
+  "USERS": [
+    "auth-local-only",
+    "auth_users"
+  ],
+  "ROLES": [
+    "auth-local-only",
+    "auth_roles"
+  ],
+  "SESSIONS": [
+    "auth-local-only",
+    "auth_sessions"
+  ]
+});
+
 const ALLOWED_EVIDENCE=new Set([
  'unmapped','catalog-schema-only','diagnostic-schema-only',
  'audit-schema-only','product-source-archive-only',
@@ -169,6 +252,10 @@ function requireTrustedInventory(schema,coverage,pinnedSourceCommit){
  let unmapped=0,partial=0;
  for(const [i,source] of schema.tables.entries()){
   const row=coverage.rows[i];
+  const expected=Object.hasOwn(EXPECTED_PARTIAL_D1_EVIDENCE,source.sheetKey)
+   ?EXPECTED_PARTIAL_D1_EVIDENCE[source.sheetKey]:['unmapped',null];
+  if(row?.status!==expected[0]||row?.targetTable!==expected[1])
+   reject('unreviewed D1 target evidence');
   if(!record(row)||seen.has(row.sheetKey)||row.sheetKey!==source.sheetKey||
      row.sourceColumnCount!==source.columns.length||
      row.sourceImportReconciled!==false||
