@@ -13,6 +13,24 @@ const INTENT="CREATE TABLE synthetic_m03_master_intents ("+
 
 function createTrigger(table,key,id,name){
   const prefix=key==='PRODUCT_CATEGORIES'?'cat':'unit';
+  const sourcePrefix=key==='PRODUCT_CATEGORIES'?'PCAT':'PUNT';
+  // Source ID issuance must never start below an imported historical high-water
+  // ID. Check INSIDE the same trigger statement as cleanup, receipt and append;
+  // a separate JavaScript read would allow counter rollback/race anomalies.
+  const suffix="substr(original."+id+",length(counter.prefix)+2)";
+  const floorGuard="SELECT CASE WHEN NOT EXISTS ("+
+    "SELECT 1 FROM synthetic_m03_id_counters AS counter "+
+    "WHERE counter.tenant_id=NEW.tenant_id AND counter.id_key=NEW.id_key "+
+      "AND counter.prefix='"+sourcePrefix+"' "+
+      "AND counter.current_sequence BETWEEN 0 AND 9007199254740990 "+
+      "AND NOT EXISTS (SELECT 1 FROM "+table+" AS original WHERE "+
+        "substr(original."+id+",1,length(counter.prefix)+1)<>counter.prefix||'-' OR "+
+        "length("+suffix+")<6 OR "+suffix+" GLOB '*[^0-9]*' OR "+
+        "CAST("+suffix+" AS INTEGER)<1 OR "+
+        suffix+"<>printf('%06d',CAST("+suffix+" AS INTEGER)) OR "+
+        "CAST("+suffix+" AS INTEGER)>counter.current_sequence"+
+      ")"+
+    ") THEN RAISE(ABORT,'source master counter floor mismatch') END; ";
   return "CREATE TRIGGER synthetic_m03_create_"+prefix+" AFTER INSERT ON synthetic_m03_master_intents "+
     "WHEN NEW.id_key='"+key+"' BEGIN "+
     "SELECT CASE WHEN "+
@@ -25,6 +43,7 @@ function createTrigger(table,key,id,name){
           "json_extract(expected.value,'$[3]') IS current.status AND "+
           "json_extract(expected.value,'$[4]') IS COALESCE(current.created_at,''))) "+
       "THEN RAISE(ABORT,'stale master catalog snapshot') END; "+
+    floorGuard+
     "DELETE FROM "+table+" WHERE "+id+" IN (SELECT value FROM json_each(NEW.cleanup_json)); "+
     "SELECT CASE WHEN changes()!=json_array_length(NEW.cleanup_json) "+
       "THEN RAISE(ABORT,'master cleanup count mismatch') END; "+
