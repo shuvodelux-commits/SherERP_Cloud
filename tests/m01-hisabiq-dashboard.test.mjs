@@ -78,3 +78,47 @@ test('M01 Step 1 RED: reference header hierarchy, Lucide SVGs and honest chart g
   assert.doesNotMatch(html,/hdb-chart-point|hdb-mock-revenue|hdb-demo-sales/,
     'do not fake financial chart data to imitate screenshot');
 });
+
+
+test('M01 Step 2 RED: discoverable reorder grips and complete touch/keyboard controls',async t=>{
+  const html=await compiled(t);
+  assert.match(html,/data-hdb-action=['"]list-prev['"]/,
+    'customization rows must offer accessible move-earlier control');
+  assert.match(html,/data-hdb-action=['"]list-next['"]/,
+    'customization rows must offer accessible move-later control');
+  assert.match(html,/data-hdb-action=['"]drag-grip['"]/,
+    'customization rows must offer discoverable drag grip');
+  assert.match(html,/addEventListener\('pointerdown'/,
+    'touch pointer-based reorder starts on the grip');
+  assert.match(html,/addEventListener\('pointermove'/,
+    'touch pointer-based reorder follows the user's finger');
+  assert.match(html,/addEventListener\('pointerup'/,
+    'touch pointer-based reorder commits after the gesture');
+  assert.match(html,/addEventListener\('keydown'/,
+    'drag grip supports accessible keyboard reorder');
+  assert.match(html,/aria-live="polite"/,
+    'user actions should announce their result without visually shifting the layout');
+  assert.match(html,/touch-action:\s*none/,
+    'drag grip must capture native touch gestures instead of scrolling the page');
+});
+
+test('M01 Step 2 RED: user and tenant scope, modal focus, and bounded layout persistence',async t=>{
+  const html=await compiled(t);
+  assert.match(html,/function syncIdentity\(/);
+  assert.match(html,/function closeDialog\(/);
+  assert.match(html,/function persist\(/);
+  assert.match(html,/function defaultLayout\(/);
+  assert.match(html,/function restore\(/);
+  assert.match(html,/addEventListener\('focusin'/,
+    'modal keeps focus inside even when another element is focused programmatically');
+  assert.match(html,/function announce\(/,
+    'layout and reorder feedback must reach screen readers');
+  assert.match(html,/function restoreDialogFocus\(/,
+    're-rendering a switch or row must not lose keyboard focus');
+  assert.match(html,/function moveInDialog\(/,
+    'hidden items can be rearranged without first unhiding them');
+  assert.match(html,/aria-describedby="hdb-dialog-desc"/,
+    'the dialog includes a referenced description');
+  assert.doesNotMatch(html,/window\.eval\(|innerHTML\s*=\s*[^'"]/,
+    'layout restoration must not interpret stored text as DOM or code');
+});
