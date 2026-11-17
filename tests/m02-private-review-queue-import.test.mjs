@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,mkdtempSync,writeFileSync,rmSync,statSync,existsSync,symlinkSync,mkdirSync} from 'node:fs';
+import {readFileSync,mkdtempSync,writeFileSync,rmSync,statSync,existsSync,symlinkSync,truncateSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
@@ -181,6 +181,23 @@ test('explicit private destination inside GitHub repo is rejected, not logged',(
   const p=run(input,'--private-output',attempted);
   assert.equal(p.status,2);
   assert.ok(!(p.stdout+p.stderr).includes(attempted));
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test('oversized private source file is rejected before reading and creates no output',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'m02-private-queue-'));
+ try{
+  const input=join(dir,'oversized-source.json'),dest=join(dir,'review.json');
+  writeFileSync(input,'X');
+  // Sparse 64MiB+1 file: safe reader rejects by stat before reading.
+  truncateSync(input,64*1024*1024+1);
+  const p=run(input,'--private-output',dest);
+  assert.equal(p.status,2);
+  assert.equal(existsSync(dest),false);
+  assert.equal(requireTmpLeaks(dir),0);
+  assert.ok(!(p.stdout+p.stderr).includes(input));
+  assert.ok(!(p.stdout+p.stderr).includes(dest));
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
