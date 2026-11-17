@@ -286,3 +286,20 @@ test('G4 Workerd D1 issues one source invoice ID with authorized sale and stable
   assert.equal(await counter(),before+1);
   assert.deepEqual(await snapshot(),prior);
 });
+
+test('G4 Workerd D1 journal failure rolls back invoice sequence and uses same next ID on retry',async()=>{
+  await DB.prepare("UPDATE synthetic_m03_g1_stock SET available=1 WHERE business_id='BUSINESS-A'").run();
+  await DB.prepare(`CREATE TRIGGER synthetic_g4_fail_late BEFORE INSERT ON synthetic_m03_g1_journal
+    WHEN NEW.account_kind='sales_revenue'
+    BEGIN SELECT RAISE(ABORT,'G4 isolated journal fault'); END`).run();
+  const counter=async()=>(await DB.prepare("SELECT current_sequence FROM synthetic_m03_g4_sale_counters WHERE business_id='BUSINESS-A'").first()).current_sequence;
+  const before=await counter();
+  const prestate=await snapshot();
+  await assert.rejects(()=>posting.post_(input(SECOND,'OP-G4-WORKER-RETRY')),/NEEDS_REVIEW/i);
+  assert.equal(await counter(),before);
+  assert.deepEqual(await snapshot(),prestate);
+  await DB.prepare('DROP TRIGGER synthetic_g4_fail_late').run();
+  assert.equal((await posting.post_(input(SECOND,'OP-G4-WORKER-RETRY'))).status,'COMMITTED');
+  const row=await DB.prepare("SELECT source_invoice_id FROM operation_receipts WHERE operation_id=?").bind('OP-G4-WORKER-RETRY').first();
+  assert.equal(row.source_invoice_id,'INV-'+String(before+1).padStart(6,'0'));
+});
