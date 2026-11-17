@@ -94,12 +94,11 @@ test('prior source-linked returns reduce specific remaining lot quantities rathe
  assert.deepEqual(r.data.restoreOriginalLots,[
   {lotId:'LOT-NEW',sourceLinkId:'LINK-NEW',sourceRowIndex:72,baseQty:25}
  ]);
- const second=plan(source,intent({unitBreakdown:[
+ // Duplicated conversion IDs are browser corruption, not a second quantity.
+ assert.throws(()=>plan(source,intent({unitBreakdown:[
   {conversionId:'C-BOX',qty:1},{conversionId:'BASE',qty:5},
   {conversionId:'C-BOX',qty:1}
- ]}));
- // Duplicated conversion IDs are browser corruption, not a second quantity.
- assert.equal(second.status,'INVALID');
+ ]})),/invalid|duplicate/i);
 });
 
 test('prior return across both original rows retains exact reverse-row ordering',()=>{
