@@ -27,7 +27,24 @@ test('runtime test workflow is PR-only, local-only, secret-free and excludes dep
   assert.doesNotMatch(yml,/workflow_dispatch:|^  push:/m);
   assert.doesNotMatch(yml,/secrets\.|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|--remote\b|wrangler deploy|--config wrangler\.staging\.jsonc/i);
   assert.match(yml,/npm install --no-save --package-lock=false wrangler@4\.161\.0/);
-  assert.match(yml,/node --test tests\/integration\/m03-workerd\.spec\.mjs/);
+  const legacySingleRunner=/node --test tests\/integration\/m03-workerd\.spec\.mjs/.test(yml);
+  if(!legacySingleRunner){
+    // The alternative is accepted ONLY when all old M03 files are enumerated
+    // once and each local-D1 shard plus full source policy must pass.
+    assert.match(yml,/node --test --test-concurrency=1 \$\{\{ matrix\.specs \}\}/);
+    assert.match(yml,/workerd-shards:/);
+    assert.equal((yml.match(/- group: shard-[1-6]/g)||[]).length,6);
+    assert.match(yml,/needs: \[verify-repo, workerd-shards\]/);
+    assert.match(yml,/if: always\(\)/);
+    assert.match(yml,/needs\.verify-repo\.result/);
+    assert.match(yml,/needs\.workerd-shards\.result/);
+    assert.match(yml,/npm test/);
+    assert.match(yml,/name: Test read-only adapters against local workerd and D1/);
+    const coverage=read('tests/m03-workerd-ci-sharding.test.mjs');
+    assert.match(coverage,/listed\.sort\(\),expected/);
+    assert.match(coverage,/the matrix must enumerate the complete existing M03 suite/);
+    assert.match(read('tests/integration/m03-workerd.spec.mjs'),/import '\.\/m03-workerd-core\.spec\.mjs'/);
+  }
   assert.equal(read('tests/integration/m03-workerd.spec.mjs').includes("import './m03-catalog-append-workerd.spec.mjs'"),true);
 });
 
