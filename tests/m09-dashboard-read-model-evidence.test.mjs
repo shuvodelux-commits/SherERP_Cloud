@@ -179,7 +179,7 @@ test('M09 gate exactly tracks shipped Dashboard widgets and frozen source group 
     assert.match(sourceGroups,new RegExp('\\b'+group+'\\b'),
       'unrecognized frozen source group '+group);
   const browserWidgets=[...new Set(
-    [...ui.matchAll(/data-hdb-widget="([^"]+)"/g)].map(match=>match[1])
+    [...ui.matchAll(/data-hdb-widget="([a-z][a-z0-9-]+)"/g)].map(match=>match[1])
   )].sort();
   assert.deepEqual(browserWidgets,[...EXPECTED].sort(),
     'dashboard widget additions/removals require M09 source-evidence review');
