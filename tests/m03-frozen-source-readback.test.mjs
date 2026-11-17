@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createFrozenSourceReadback} from '../src/db/m03-frozen-source-readback.js';
 import {createM03PrivateIdEvidenceReconciler} from '../src/db/m03-private-id-evidence-reconcile.js';
+import {createM03PrivateSourceFloorAudit} from '../src/db/m03-private-source-floor-audit.js';
 import {M02_ID_FAMILIES} from '../scripts/dry-run-id-floor.mjs';
 import {captureM02IdEvidenceFreeze} from '../scripts/dry-run-id-evidence-freeze.mjs';
 
@@ -426,5 +427,76 @@ test('M03 Run 5 RED: forged input, unbound D1 and unknown caller flags never exp
     assert.ok(!e.message.includes(secret));
    return true;
   });
+ }finally{db.close();}
+});
+
+function run6SeedDb(input,initialEvidence=input.evidence){
+ const db=fixtureDb(input.source);
+ db.sql.exec([
+ 'CREATE TABLE synthetic_m03_id_counters(tenant_id TEXT NOT NULL,id_key TEXT NOT NULL,prefix TEXT NOT NULL,current_sequence INTEGER NOT NULL,PRIMARY KEY(tenant_id,id_key)) STRICT;',
+ 'CREATE TABLE synthetic_m03_id_receipts(tenant_id TEXT NOT NULL,id_key TEXT NOT NULL,operation_id TEXT NOT NULL,issued_sequence INTEGER NOT NULL,PRIMARY KEY(tenant_id,id_key,operation_id)) STRICT;'
+ ].join('\n'));
+ const insert=db.sql.prepare('INSERT INTO synthetic_m03_id_counters VALUES (?,?,?,?)');
+ for(const family of M02_ID_FAMILIES){
+  const key=family.sourceGroup;
+  const highest=initialEvidence.groups[key].reduce((max,row)=>
+   Math.max(max,Number(row.id.slice(family.prefix.length+1))),0);
+  const floor=Math.max(Number(initialEvidence.counters[key]),highest);
+  insert.run('TENANT-A',key,family.prefix,floor);
+ }
+ return db;
+}
+const run6Denied=/M03 private original ID counter floor rejected/;
+test('M03 Run 6 RED: exact 38-family synthetic D1 floors match fully sealed 49-group archive',async()=>{
+ const x=run5Evidence(),db=run6SeedDb(x);
+ try{
+  const auditor=createM03PrivateSourceFloorAudit(db.env,'TENANT-A');
+  const result=await auditor.auditFreshSeed_({idEvidence:x.evidence,freezeManifest:x.manifest});
+  assert.deepEqual(result,{
+   formatVersion:1,sourceGroups:49,idFamilies:38,
+   exactFreshSyntheticD1CounterFloors:true,
+   sourceToD1Reconciled:false,idIssuanceAuthorized:false,
+   publicRpcEnabled:false,productionReady:false
+  });
+  assert.ok(db.statements.every(sql=>sql.startsWith('SELECT ')));
+ }finally{db.close();}
+});
+test('M03 Run 6 RED: wrong floor, wrong prefix, extra family, absent family and foreign tenant all fail closed',async()=>{
+ const x=run5Evidence(),db=run6SeedDb(x);
+ try{
+  const audit=createM03PrivateSourceFloorAudit(db.env,'TENANT-A');
+  const args={idEvidence:x.evidence,freezeManifest:x.manifest};
+  const sql=db.sql;
+  const deny=async()=>assert.rejects(()=>audit.auditFreshSeed_(args),run6Denied);
+  sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=0 WHERE id_key='PRODUCTS'").run();
+  await deny();
+  sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=6 WHERE id_key='PRODUCTS'").run();
+  await deny();
+  sql.prepare("UPDATE synthetic_m03_id_counters SET current_sequence=5,prefix='WRONG' WHERE id_key='PRODUCTS'").run();
+  await deny();
+  sql.prepare("UPDATE synthetic_m03_id_counters SET prefix='PRD' WHERE id_key='PRODUCTS'").run();
+  sql.prepare("INSERT INTO synthetic_m03_id_counters VALUES ('TENANT-A','SESSIONS','BAD',0)").run();
+  await deny();
+  sql.prepare("DELETE FROM synthetic_m03_id_counters WHERE id_key='SESSIONS'").run();
+  sql.prepare("DELETE FROM synthetic_m03_id_counters WHERE id_key='PRODUCT_UNITS'").run();
+  await deny();
+  await assert.rejects(()=>createM03PrivateSourceFloorAudit(db.env,'TENANT-Z')
+   .auditFreshSeed_(args),run6Denied);
+ }finally{db.close();}
+});
+test('M03 Run 6 RED: prior receipt, changed original counter and untrusted caller flags never approve issuer',async()=>{
+ const x=run5Evidence(),db=run6SeedDb(x);
+ try{
+  const audit=createM03PrivateSourceFloorAudit(db.env,'TENANT-A');
+  const args={idEvidence:x.evidence,freezeManifest:x.manifest};
+  await assert.rejects(()=>audit.auditFreshSeed_({...args,allowIssue:true}),run6Denied);
+  await assert.rejects(()=>audit.auditFreshSeed_(args,{actorId:'admin'}),run6Denied);
+  db.sql.prepare("INSERT INTO synthetic_m03_id_receipts VALUES ('TENANT-A','PRODUCTS','OP-OLD',5)").run();
+  await assert.rejects(()=>audit.auditFreshSeed_(args),run6Denied);
+  db.sql.prepare("DELETE FROM synthetic_m03_id_receipts").run();
+  const changed=structuredClone(x.evidence);changed.counters.SALES='999';
+  await assert.rejects(()=>audit.auditFreshSeed_({
+   idEvidence:changed,freezeManifest:x.manifest}),run6Denied);
+  assert.throws(()=>createM03PrivateSourceFloorAudit({},'TENANT-A'),/D1.*unavailable/i);
  }finally{db.close();}
 });
