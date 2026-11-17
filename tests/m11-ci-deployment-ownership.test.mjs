@@ -104,3 +104,38 @@ test('CI auditor refuses malformed manifests without leaking source contents',()
   checkBlocked(x,'M11_CI_WORKFLOW_SET_INVALID');
   assert.doesNotMatch(JSON.stringify(x),/PRIVATE_USER_VALUE/);
 });
+
+test('approved exact manual staging workflow is sealed against second remote SQL commands',()=>{
+  const a=workflows(),m=a.find(x=>x.name==='remote-d1-staging.yml');
+  assert.ok(m);
+  m.content=m.content.replace(
+    'npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --remote --config wrangler.staging.jsonc',
+    'npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --remote --config wrangler.staging.jsonc\n          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --remote --config wrangler.staging.jsonc --command "DELETE FROM parties"'
+  );
+  checkBlocked(examine({workflows:a}),'M11_CI_STAGING_UNREVIEWED_CHANGE');
+});
+
+test('staging owner approval may not be bypassed with a true-OR expression',()=>{
+  const a=workflows(),m=a.find(x=>x.name==='remote-d1-staging.yml');
+  const condition="inputs.confirmation == 'APPLY_STAGING_D1_SCHEMA_ONLY'";
+  assert.ok(m.content.includes(condition));
+  m.content=m.content.replace(condition,'true || '+condition);
+  checkBlocked(examine({workflows:a}),'M11_CI_STAGING_UNREVIEWED_CHANGE');
+});
+
+test('staging main-branch restriction may not be bypassed while keeping its token present',()=>{
+  const a=workflows(),m=a.find(x=>x.name==='remote-d1-staging.yml');
+  const condition="github.ref == 'refs/heads/main'";
+  assert.ok(m.content.includes(condition));
+  m.content=m.content.replace(condition,'true || '+condition);
+  checkBlocked(examine({workflows:a}),'M11_CI_STAGING_UNREVIEWED_CHANGE');
+});
+
+test('manual staging migration count cannot be changed by retaining an old value in a comment',()=>{
+  const a=workflows(),m=a.find(x=>x.name==='remote-d1-staging.yml');
+  const approved='EXPECTED_REMOTE_MIGRATION_COUNT=2';
+  assert.ok(m.content.includes(approved));
+  m.content=m.content.replace(approved,
+    'EXPECTED_REMOTE_MIGRATION_COUNT=3\n          # '+approved);
+  checkBlocked(examine({workflows:a}),'M11_CI_STAGING_UNREVIEWED_CHANGE');
+});

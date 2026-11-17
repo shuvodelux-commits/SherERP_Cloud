@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {readFileSync,readdirSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validateCloudflarePreviewConfig} from './check-cloudflare-preview.mjs';
@@ -14,6 +15,11 @@ const SECRET=/\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)/g;
 const DEPLOY_ACTION=/\b(?:cloudflare\/(?:wrangler-action|pages-action)|wrangler-action@|pages-action@)/i;
 const WRANGLER_DEPLOY=/\bwrangler(?:@[a-z0-9._-]+)?\s+deploy\b[^\r\n]*/gi;
 const MANUAL='remote-d1-staging.yml';
+// Reviewed Git blob on main before M11-13. Any change requires a new M11 owner review.
+const APPROVED_STAGING_BLOB='cd8ef338cf2e532f43c12fffc01654452917fe60';
+const blobSha=content=>createHash('sha1')
+  .update('blob '+Buffer.byteLength(content,'utf8')+String.fromCharCode(0),'utf8')
+  .update(content,'utf8').digest('hex');
 const EXPECTED=new Set(['cloudflare-preview.yml',MANUAL]);
 const ALLOWED_STAGING_SECRETS=new Set([
   'CLOUDFLARE_D1_STAGING_TOKEN','CLOUDFLARE_ACCOUNT_ID'
@@ -123,6 +129,12 @@ export function auditM11CiDeploymentOwnership({workflows,previewConfig}={}) {
       }
     }
     if(name===MANUAL){
+      // Existing syntax/token checks cannot see a bypass hidden behind a
+      // retained comment or a second shell command. Seal the *whole* approved
+      // manual staging workflow, including executable approval and SQL steps.
+      if(blobSha(content)!==APPROVED_STAGING_BLOB){
+        setCode(blockers,'M11_CI_STAGING_UNREVIEWED_CHANGE');
+      }
       readStagingAudit(content,blockers);
     }else{
       checkOrdinaryWorkflow(content,blockers);
