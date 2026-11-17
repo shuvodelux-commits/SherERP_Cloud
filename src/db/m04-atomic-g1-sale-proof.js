@@ -6,7 +6,8 @@
  *
  * The preflight SELECT derives the actor for immutable intent hashing only.
  * SQL rechecks CURRENT authorization in the very INSERT that triggers stock
- * and both synthetic ledger entries. A stale JavaScript preflight cannot
+ * and both synthetic ledger entries. Cash Session must be exactly Open for
+ * new posts; historical receipt replay remains available after Close Day. A stale JavaScript preflight cannot
  * authorize any write. A post-commit unknown outcome always needs review.
  */
 import {requireD1Binding} from './d1-binding.js';
@@ -59,6 +60,12 @@ const CLAIM=`INSERT INTO operation_receipts(
     AND EXISTS (
       SELECT 1 FROM synthetic_m03_g1_stock
       WHERE business_id=? AND sku='PIPE-1' AND available>=?
+    )
+    -- CashSession.gs: requireActiveCashSession_ checks exactly Open.
+    -- Recheck with current M04 authority and stock in this INSERT.
+    AND EXISTS (
+      SELECT 1 FROM synthetic_m03_g1_cash_sessions AS cs
+      WHERE cs.business_id=? AND cs.status='Open'
     )
   ON CONFLICT(tenant_id,operation_id) DO NOTHING
   RETURNING operation_id`;
@@ -182,7 +189,7 @@ export function createM04AtomicG1SaleProof(env,{businessId}={}){
         claim=await DB.prepare(CLAIM).bind(
           businessId,x.operationId,hash,resultRef,
           new Date(x.nowMs).toISOString(),SKU,x.units,x.amountCents,
-          ...session,actorId,businessId,x.units
+          ...session,actorId,businessId,x.units,businessId
         ).first();
       }catch(cause){
         // A failing late journal trigger rolls back the INSERT in SQLite.
