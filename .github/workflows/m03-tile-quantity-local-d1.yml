@@ -1,0 +1,23 @@
+name: M03 tile D1 exact quantity proposal (local-only)
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tile-quantity:
+    name: SQLite and real local Workerd D1 persisted quantities
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Local SQLite exact tile proposal tests
+        run: node --test tests/m03-tile-quantity-d1-proposal.test.mjs
+      - name: Install pinned local Workerd runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Real local D1 exact quantity, manufacturer and historic revision tests
+        run: node --test tests/integration/m03-tile-quantity-workerd.spec.mjs
