@@ -8,7 +8,8 @@ const preview = JSON.parse(readFileSync(new URL('../wrangler.preview.jsonc', imp
 
 test('staging binding is isolated, non-public and points only to the chosen D1 database', () => {
   assert.equal(validateStagingConfig(staging, preview), true);
-  assert.equal(staging.d1_databases[0].database_id, 'aa04618e-1639-4cb9-bdf5-7b967d8b968b');
+  assert.equal(staging.d1_databases[0].database_id, '74102df7-dd31-4999-81d5-69bca42f0424');
+  assert.equal(staging.d1_databases[1].database_id, '19190fd2-1f5e-4e8a-a062-bd7a0cbf3d96');
 });
 test('never permit public staging routes or production Worker name', () => {
   assert.throws(() => validateStagingConfig({...staging,workers_dev:true},preview), /workers_dev/);
