@@ -16,6 +16,11 @@ import {M08_BANK_DDL}
 import {previewD1BankLedger}
   from '../fixtures/m08-d1-bank-ledger-preview.mjs';
 
+import {M08_ROLE_DDL}
+  from '../fixtures/m08-d1-role-account-schema.mjs';
+import {previewD1RoleAccountIsolation}
+  from '../fixtures/m08-d1-role-account-preview.mjs';
+
 const oracle=loadPinnedGASFunctions({
   'Utils.gs':['roundMoney_'],
   'CashReconciliation.gs':[
@@ -665,4 +670,324 @@ test('M08 Bank D1 empty ledger, SQL injection shape, missing binding and no publ
     method:'POST',body:JSON.stringify(valid)
   })).status,404);
   assert.deepEqual(await bankSnapshot(),beforeState);
+});
+
+
+// M08 #66 source-role account isolation only; disposable local D1, no posting.
+const fm=(id,name='Verified Person',extra={})=>({
+  'Person ID':id,'Person Name':name,'Person Type':'Owner',Roles:'Owner',
+  Status:'Active',Phone:'',Description:'',...extra
+});
+const ft=(id,personId,type,amount,extra={})=>({
+  'Finance ID':id,'Person ID':personId,'Person':'Historic display name',
+  'Transaction Type':type,Amount:amount,'Is Deleted':'',...extra
+});
+const pl=(id,kind,legacyId,rowIndex,debit,credit,extra={})=>({
+  'Ledger ID':id,kind,legacyId,_rowIndex:rowIndex,
+  Date:'2026-11-15',Type:'Opening Balance',
+  Debit:debit,Credit:credit,'Is Deleted':'',
+  'Created At':'2026-11-15T20:00:00+06:00',...extra
+});
+const safeCents=v=>Math.round(Number(v)*100);
+const roleTables=[
+  'm08_role_party','m08_role_finance','m08_role_persons'
+];
+async function roleReset(){
+  for(const table of roleTables)
+    await DB.prepare('DROP TABLE IF EXISTS '+table).run();
+  for(const ddl of M08_ROLE_DDL)await DB.prepare(ddl).run();
+}
+async function roleSeed(tenant,masters,finance,parties){
+  for(let i=masters.length-1;i>=0;i--){
+    const m=masters[i];
+    await DB.prepare('INSERT INTO m08_role_persons VALUES (?,?,?,?,?,?,?,?,?)')
+      .bind(tenant,i+2,m['Person ID'],m['Person Name'],m['Person Type'],
+        m.Roles,m.Status,m.Phone,m.Description).run();
+  }
+  for(let i=finance.length-1;i>=0;i--){
+    const t=finance[i];
+    await DB.prepare('INSERT INTO m08_role_finance VALUES (?,?,?,?,?,?,?,?)')
+      .bind(tenant,i+2,t['Finance ID'],t['Person ID'],t.Person,
+        t['Transaction Type'],safeCents(t.Amount),
+        t['Is Deleted']===true || String(t['Is Deleted']).toUpperCase()==='TRUE'?1:0).run();
+  }
+  for(const p of parties.slice().reverse()){
+    await DB.prepare('INSERT INTO m08_role_party VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(tenant,p._rowIndex,p['Ledger ID'],p.kind,p.legacyId,p.Date,
+        p.Type,safeCents(p.Debit),safeCents(p.Credit),
+        p['Is Deleted']===true || String(p['Is Deleted']).toUpperCase()==='TRUE'?1:0,
+        p['Created At'],p.kind==='customer'?'Customer Name':'Supplier Name').run();
+  }
+}
+async function roleSnapshot(){
+  const snapshot={};
+  for(const [key,query] of Object.entries({
+    masters:'SELECT * FROM m08_role_persons ORDER BY tenant_id,legacy_row',
+    finance:'SELECT * FROM m08_role_finance ORDER BY tenant_id,legacy_row',
+    party:'SELECT * FROM m08_role_party ORDER BY tenant_id,legacy_row'
+  }))snapshot[key]=(await DB.prepare(query).all()).results.map(x=>({...x}));
+  return snapshot;
+}
+const roleReq=(overrides={})=>({
+  tenantId:'SHOP-A',customerId:'DUAL',supplierId:'DUAL',...overrides
+});
+function financeGAS(masters,finance){
+  const types=[
+    ['Owner Investment','owner',1],['Owner Withdrawal','owner',-1],
+    ['Loan Received','loanPayable',1],['Loan Repayment','loanPayable',-1],
+    ['Borrower Loan','borrowerReceivable',1],
+    ['Borrower Repayment','borrowerReceivable',-1],
+    ['Opening Owner Capital','owner',1],['Opening Loan','loanPayable',1],
+    ['Opening Borrower Loan','borrowerReceivable',1]
+  ].map(([key,account,balanceEffect])=>({key,account,balanceEffect}));
+  const source=loadPinnedGASFunctions({
+    'Utils.gs':['roundMoney_'],
+    'FinanceModule.gs':[
+      'financeCanonicalRoles_','financePersonRoles_','getAllFinancePersonsForUI_',
+      'financePersonNameAliasMap_','financeTransactionType_','financeTxnPersonKey_',
+      'financeSignedBalances_','financeBalanceSummary_','financePersonBalancesForUI_'
+    ]
+  },{
+    FINANCE_PERSON_ROLES:['Owner','Lender','Borrower'],
+    FINANCE_TRANSACTION_TYPES:types,
+    getAllRows_:group=>{
+      assert.equal(group,'FINANCE_PERSONS');
+      return plain(masters);
+    }
+  });
+  const persons=source.getAllFinancePersonsForUI_();
+  const current=finance.filter(t=>t['Is Deleted']!==true &&
+    String(t['Is Deleted']||'').toUpperCase()!=='TRUE');
+  return plain({
+    persons,
+    personBalances:source.financePersonBalancesForUI_(persons,plain(current)),
+    summary:source.financeBalanceSummary_(plain(current))
+  });
+}
+function partyGAS(kind,legacyId,parts){
+  const sourceRows=parts.filter(p=>p.kind===kind).map(p=>({
+    'Ledger ID':p['Ledger ID'],
+    [kind==='customer'?'Customer ID':'Supplier ID']:p.legacyId,
+    Date:p.Date,Type:p.Type,Debit:p.Debit,Credit:p.Credit,
+    'Is Deleted':p['Is Deleted'],'Created At':p['Created At'],
+    _rowIndex:p._rowIndex
+  }));
+  const source=loadPinnedGASFunctions({
+    'Utils.gs':['roundMoney_'],
+    'DeleteEngine.gs':['isDeleted_'],
+    'PartyLedger.gs':[
+      'partyLedgerConfig_','partyLedgerStableSortKey_','partyLedgerBuildAscendingIndex_'
+    ]
+  },{
+    PARTY_LEDGER_CONFIG_:{
+      customer:{partyIdColumn:'Customer ID'},
+      supplier:{partyIdColumn:'Supplier ID'}
+    },
+    partyLedgerReadIndex_:()=>plain(sourceRows)
+  });
+  return plain(source.partyLedgerBuildAscendingIndex_(kind,legacyId));
+}
+async function roleParity(masters,finance,parts,request=roleReq()){
+  const beforeD1=await roleSnapshot();
+  const result=await previewD1RoleAccountIsolation(DB,request);
+  assert.deepEqual(result.finance,financeGAS(masters,finance));
+  assert.deepEqual(result.customer.rows,
+    partyGAS('customer',request.customerId,parts));
+  assert.deepEqual(result.supplier.rows,
+    partyGAS('supplier',request.supplierId,parts));
+  assert.deepEqual(await roleSnapshot(),beforeD1,'read-only role proof mutated D1');
+  return result;
+}
+
+test('M08 role D1 single original Finance Person retains Owner, Loan and Borrower balances separately',async()=>{
+  await roleReset();
+  const masters=[fm('P1','Owner and lender',{Roles:'Borrower,Owner,Lender'})];
+  const txs=[
+    ft('F1','P1','Owner Investment',600),
+    ft('F2','P1','Owner Withdrawal',50),
+    ft('F3','P1','Loan Received',1000),
+    ft('F4','P1','Loan Repayment',150),
+    ft('F5','P1','Borrower Loan',400),
+    ft('F6','P1','Borrower Repayment',25)
+  ];
+  await roleSeed('SHOP-A',masters,txs,[]);
+  const r=await roleParity(masters,txs,[]);
+  assert.deepEqual(r.finance.personBalances.P1,{
+    owner:550,loanPayable:850,borrowerReceivable:375
+  });
+  assert.equal(r.finance.summary.ownerCapital,550);
+  assert.equal(r.finance.summary.outstandingLoan,850);
+  assert.equal(r.finance.summary.borrowerReceivable,375);
+  assert.deepEqual(r.finance.persons[0].roles,['Owner','Lender','Borrower']);
+});
+
+test('M08 role D1 historical opening finance positions have no Cash/Bank ledger effect',async()=>{
+  await roleReset();
+  const masters=[fm('P1','Historical Owner',{Roles:'Owner,Lender,Borrower'})];
+  const txs=[
+    ft('OP1','P1','Opening Owner Capital',1000),
+    ft('OP2','P1','Opening Loan',400),
+    ft('OP3','P1','Opening Borrower Loan',300)
+  ];
+  await roleSeed('SHOP-A',masters,txs,[]);
+  const cashBefore=await snapshot(),bankBefore=await bankSnapshot();
+  const r=await roleParity(masters,txs,[]);
+  assert.deepEqual(r.finance.personBalances.P1,{
+    owner:1000,loanPayable:400,borrowerReceivable:300
+  });
+  assert.deepEqual(await snapshot(),cashBefore);
+  assert.deepEqual(await bankSnapshot(),bankBefore);
+});
+
+test('M08 role D1 distinct original IDs with same display name never merge or auto-net overpayments',async()=>{
+  await roleReset();
+  const masters=[
+    fm('P1','Same Person',{Phone:'01700000000'}),
+    fm('P2','Same Person',{Phone:'01700000000'})
+  ];
+  const txs=[
+    ft('F1','P1','Owner Investment',250),
+    ft('F2','P2','Owner Withdrawal',60),
+    ft('F3','P1','Loan Repayment',90),
+    ft('F4','P2','Loan Received',300),
+    ft('F5','P1','Borrower Repayment',20),
+    ft('F6','P2','Borrower Loan',70)
+  ];
+  await roleSeed('SHOP-A',masters,txs,[]);
+  const r=await roleParity(masters,txs,[]);
+  assert.deepEqual(r.finance.personBalances.P1,{
+    owner:250,loanPayable:-90,borrowerReceivable:-20
+  });
+  assert.deepEqual(r.finance.personBalances.P2,{
+    owner:-60,loanPayable:300,borrowerReceivable:70
+  });
+  assert.deepEqual(r.finance.summary,{
+    ownerCapital:250,ownerAdvance:60,
+    outstandingLoan:300,lenderCredit:90,
+    borrowerReceivable:70,borrowerCredit:20
+  });
+});
+
+test('M08 role D1 soft-deleted Finance rows are removed without hiding active historical amounts',async()=>{
+  await roleReset();
+  const masters=[fm('P1')],txs=[
+    ft('O1','P1','Opening Owner Capital',100),
+    ft('D1','P1','Owner Withdrawal',9999,{'Is Deleted':'TRUE'}),
+    ft('D2','P1','Loan Received',999,{'Is Deleted':true}),
+    ft('O2','P1','Opening Loan',50)
+  ];
+  await roleSeed('SHOP-A',masters,txs,[]);
+  const r=await roleParity(masters,txs,[]);
+  assert.deepEqual(r.finance.personBalances.P1,{
+    owner:100,loanPayable:50,borrowerReceivable:0
+  });
+});
+
+test('M08 role D1 Customer and Supplier with the same literal legacy ID keep independent gross ledger signs',async()=>{
+  await roleReset();
+  const parties=[
+    pl('C3','customer','DUAL',6,0,50,{Type:'Payment Received'}),
+    pl('C1','customer','DUAL',2,200,0,{Date:'2026-11-10'}),
+    pl('C2','customer','DUAL',3,40,0,{Date:'2026-11-12'}),
+    pl('S1','supplier','DUAL',4,500,0,{Date:'2026-11-10'}),
+    pl('S2','supplier','DUAL',5,0,750,{Date:'2026-11-13'}),
+    pl('DEL','supplier','DUAL',7,900,0,{'Is Deleted':'TRUE'}),
+    pl('OTHER','customer','OTHER',8,10000,0)
+  ];
+  await roleSeed('SHOP-A',[],[],parties);
+  const r=await roleParity([],[],parties);
+  assert.equal(r.customer.closingBalance,190);
+  assert.equal(r.supplier.closingBalance,-250);
+  assert.deepEqual(r.customer.rows.map(x=>x['Ledger ID']),['C1','C2','C3']);
+  assert.deepEqual(r.supplier.rows.map(x=>x['Ledger ID']),['S1','S2']);
+});
+
+test('M08 role D1 original Party date and physical-row ordering outrank import sequence and Created At',async()=>{
+  await roleReset();
+  const parties=[
+    pl('C4','customer','DUAL',12,0,5,{'Created At':'1990-01-01'}),
+    pl('C2','customer','DUAL',7,20,0,{'Date':'2026-11-13'}),
+    pl('C3','customer','DUAL',10,0,10,{'Created At':'2050-01-01'}),
+    pl('C1','customer','DUAL',3,40,0,{'Date':'2026-11-11'})
+  ];
+  await roleSeed('SHOP-A',[],[],parties);
+  const r=await roleParity([],[],parties);
+  assert.deepEqual(r.customer.rows.map(x=>x['Ledger ID']),['C1','C2','C3','C4']);
+  assert.deepEqual(r.customer.rows.map(x=>x._displayBalance),[40,60,50,45]);
+});
+
+test('M08 role D1 same source identity values in two tenants do not share historical balances',async()=>{
+  await roleReset();
+  const mastersA=[fm('P1','Same',{Roles:'Owner,Lender'})],
+    mastersB=[fm('P1','Same',{Roles:'Owner,Lender'})];
+  const txsA=[ft('F1','P1','Opening Owner Capital',100)];
+  const txsB=[ft('F1','P1','Opening Loan',500)];
+  const partiesA=[pl('CL1','customer','DUAL',2,90,0)],
+    partiesB=[pl('CL1','customer','DUAL',2,0,30)];
+  await roleSeed('SHOP-A',mastersA,txsA,partiesA);
+  await roleSeed('SHOP-B',mastersB,txsB,partiesB);
+  const a=await roleParity(mastersA,txsA,partiesA);
+  const b=await roleParity(mastersB,txsB,partiesB,
+    roleReq({tenantId:'SHOP-B'}));
+  assert.equal(a.finance.personBalances.P1.owner,100);
+  assert.equal(b.finance.personBalances.P1.loanPayable,500);
+  assert.equal(a.customer.closingBalance,90);
+  assert.equal(b.customer.closingBalance,-30);
+});
+
+test('M08 role D1 duplicate Finance Person, transaction or per-role Party Ledger identifiers fail closed',async()=>{
+  await roleReset();
+  await roleSeed('SHOP-A',[fm('P1')],[ft('F1','P1','Opening Owner Capital',100)],
+    [pl('L1','customer','DUAL',2,50,0)]);
+  await DB.prepare("INSERT INTO m08_role_persons VALUES ('SHOP-A',100,'P1','Duplicate','Owner','Owner','Active','','')").run();
+  await assert.rejects(()=>previewD1RoleAccountIsolation(DB,roleReq()),
+    /Duplicate Finance Person ID/);
+  await DB.prepare("DELETE FROM m08_role_persons WHERE legacy_row=100").run();
+  await DB.prepare("INSERT INTO m08_role_finance VALUES ('SHOP-A',100,'F1','P1','Repeat','Owner Investment',1,0)").run();
+  await assert.rejects(()=>previewD1RoleAccountIsolation(DB,roleReq()),
+    /Duplicate Finance ID/);
+  await DB.prepare("DELETE FROM m08_role_finance WHERE legacy_row=100").run();
+  await DB.prepare("INSERT INTO m08_role_party VALUES ('SHOP-A',100,'L1','customer','DUAL','2026-11-15','Opening Balance',100,0,0,'','Customer Name')").run();
+  await assert.rejects(()=>previewD1RoleAccountIsolation(DB,roleReq()),
+    /Duplicate customer Ledger ID/);
+});
+
+test('M08 role D1 unresolved Person ID and malformed type never produce partial gross balance',async()=>{
+  await roleReset();
+  await roleSeed('SHOP-A',[fm('P1')],[ft('F1','NOT-MAPPED','Opening Loan',900)],[]);
+  await assert.rejects(()=>previewD1RoleAccountIsolation(DB,roleReq()),
+    /Unresolved finance transaction Person ID/);
+  await DB.prepare("UPDATE m08_role_finance SET person_id='P1',transaction_type='Unknown Type'").run();
+  await assert.rejects(()=>previewD1RoleAccountIsolation(DB,roleReq()),
+    /Unknown source finance transaction type/);
+});
+
+test('M08 role D1 ignores soft-deleted Party entries but never silently nets different roles',async()=>{
+  await roleReset();
+  const parties=[
+    pl('C1','customer','DUAL',2,100,0),
+    pl('C2','customer','DUAL',3,9999,0,{'Is Deleted':'TRUE'}),
+    pl('S1','supplier','DUAL',4,300,0),
+    pl('S2','supplier','DUAL',5,0,50,{'Is Deleted':'TRUE'})
+  ];
+  await roleSeed('SHOP-A',[],[],parties);
+  const r=await roleParity([],[],parties);
+  assert.equal(r.customer.closingBalance,100);
+  assert.equal(r.supplier.closingBalance,300);
+});
+
+test('M08 role D1 invalid identity requests, public RPC and unknown role are fail-closed',async()=>{
+  await roleReset();
+  await roleSeed('SHOP-A',[],[],[]);
+  const stable=await roleSnapshot();
+  for(const invalid of [
+    null,{},roleReq({tenantId:'SHOP-A; DROP TABLE'}),
+    roleReq({customerId:''}),roleReq({supplierId:Promise.resolve('DUAL')}),
+    {...roleReq(),sql:'DELETE FROM m08_role_finance'}
+  ])await assert.rejects(()=>previewD1RoleAccountIsolation(DB,invalid),TypeError);
+  await assert.rejects(()=>previewD1RoleAccountIsolation(null,roleReq()),/D1/);
+  assert.equal((await worker.fetch('https://m08-role.test/api/rpc',{
+    method:'POST',body:JSON.stringify(roleReq())
+  })).status,404);
+  assert.deepEqual(await roleSnapshot(),stable);
 });
