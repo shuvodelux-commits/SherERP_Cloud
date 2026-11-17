@@ -89,7 +89,7 @@ const READ_RELATIONS=SCOPE+
  'ORDER BY c.product_id,c.sort_order,c.conversion_id LIMIT 1001';
 const READ_TILE=SCOPE+
  'SELECT t.product_id,t.unit_revision,t.current_measurement_revision,'+
- 't.measurement_json FROM authorized auth '+
+ 't.measurement_json,t.measurement_sha256 FROM authorized auth '+
  'JOIN synthetic_m03_tile_current t ON t.tenant_id=auth.tenant_id '+
  'JOIN synthetic_m03_product_tenants owner ON owner.tenant_id=auth.tenant_id '+
  'AND owner.product_id=t.product_id '+
@@ -291,6 +291,17 @@ async function hashToken(token){
  const sum=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
  return Array.from(sum,b=>b.toString(16).padStart(2,'0')).join('');
 }
+async function verifyStagedTileDigests(rows){
+ for(const row of rows){
+  if(typeof row.measurement_json!=='string'||row.measurement_json.length>4096||
+     typeof row.measurement_sha256!=='string'||
+     !/^[a-f0-9]{64}$/.test(row.measurement_sha256))fail();
+  const hash=new Uint8Array(await crypto.subtle.digest(
+   'SHA-256',new TextEncoder().encode(row.measurement_json)));
+  const actual=Array.from(hash,b=>b.toString(16).padStart(2,'0')).join('');
+  if(actual!==row.measurement_sha256)fail();
+ }
+}
 async function all(DB,sql,bindings,columns,max){
  const result=await DB.prepare(sql).bind(...bindings).all();
  return expectedRows(result,columns,max);
@@ -308,7 +319,7 @@ const fields={
  conversions:['product_id','revision','conversion_id','unit_name',
   'reviewed_unit_master_id','relation_qty_text','relation_unit_name',
   'factor_text','status','sort_order'],
- tiles:['product_id','unit_revision','current_measurement_revision','measurement_json'],
+ tiles:['product_id','unit_revision','current_measurement_revision','measurement_json','measurement_sha256'],
  lots:['lot_id','product_id','remaining_qty_text','purchase_price_text','purchase_id'],
  bundles:['bundle_id','component_id','qty_per_set_text','unit_name','revision','status'],
  settings:['currency_symbol','low_stock_threshold_text']
@@ -338,6 +349,7 @@ export function createM03AuthenticatedProductsBootstrap(env,{now=Date.now}={}){
        !authorized[0].tenant_id.trim())fail();
     const result=await Promise.all(statements.map((sql,i)=>
       all(DB,sql,binds,names[i],i===8?1:MAX_ROWS)));
+    await verifyStagedTileDigests(result[5]);
     // Reject a session/role/tenant revoked while the awaited reads ran.
     const final=await all(DB,AUTH,binds,['tenant_id'],1);
     if(final.length!==1||final[0].tenant_id!==authorized[0].tenant_id)fail();
