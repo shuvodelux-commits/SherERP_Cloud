@@ -46,6 +46,11 @@ function fixture(){
     .run('BUSINESS-A','PIPE-1',2);
   db.prepare('INSERT INTO synthetic_m03_g1_stock(business_id,sku,available) VALUES(?,?,?)')
     .run('BUSINESS-B','PIPE-1',5);
+  for(const [business,floor] of [['BUSINESS-A',16],['BUSINESS-B',0]]){
+    db.prepare(`INSERT INTO synthetic_m03_g4_sale_counters
+      (business_id,id_key,prefix,current_sequence) VALUES(?,'SALES','INV',?)`)
+      .run(business,floor);
+  }
   db.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions(business_id,session_id,status)
     VALUES('BUSINESS-A','SESSION-1','Open')`).run();
   const DB={prepare(sql){
