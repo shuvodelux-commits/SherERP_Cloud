@@ -92,7 +92,11 @@ test('batch plans two original-Purchase returns in one virtual FIFO stock budget
 });
 
 test('two individually valid requests cannot reuse one historical Box selection after total budget',()=>{
- const s=source(),entries=[
+ const s=source();
+ // Isolate the historical conversion count invariant from current lot stock:
+ // 120 original-purchase physical Pcs remain, enough for both 40+20 requests.
+ s.lots[0]['Remaining Quantity']=80;
+ const entries=[
   child(structuredClone(s),intent('RET-1',[{conversionId:'C-BOX',qty:2}])),
   child(structuredClone(s),intent('RET-2',[{conversionId:'C-BOX',qty:1}]))
  ];
