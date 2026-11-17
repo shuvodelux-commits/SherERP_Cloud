@@ -39,8 +39,7 @@ export function createM03PrivateProductMasterBridge(env,{businessId,now=Date.now
          !Object.hasOwn(METHODS,request.fnName) ||
          typeof request.token!=='string'||!TOKEN.test(request.token) ||
          typeof request.operationId!=='string'||!OPERATION.test(request.operationId) ||
-         typeof request.name!=='string'||request.name.length>256 ||
-         !request.name.trim()){
+         typeof request.name!=='string'||request.name.length>256){
         throw new TypeError('Invalid or unapproved private Product master RPC');
       }
       const nowMs=now();
