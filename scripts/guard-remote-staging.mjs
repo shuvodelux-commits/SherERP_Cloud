@@ -3,10 +3,10 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-export const EXPECTED_NAME='shererp-operational-staging-20261118';
-export const EXPECTED_UUID='74102df7-dd31-4999-81d5-69bca42f0424';
+export const EXPECTED_NAME='shererp-staging-db';
+export const EXPECTED_UUID='aa04618e-1639-4cb9-bdf5-7b967d8b968b';
 export const EXPECTED_ARCHIVE_NAME='shererp-legacy-history-staging-20261118';
-export const EXPECTED_ARCHIVE_UUID='19190fd2-1f5e-4e8a-a062-bd7a0cbf3d96';
+export const EXPECTED_ARCHIVE_UUID='3328e5c8-7695-4d6c-8bcf-9725437ebdd5';
 
 export function assertExactD1Resource(data){
   const items=Array.isArray(data)?data:data?.result;
