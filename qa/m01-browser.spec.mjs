@@ -1145,3 +1145,43 @@ test('M01 dashboard actor/tenant summary values reset on switch and logout (synt
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+
+test('M01 dashboard tablet 768px: named regions, three-column metrics and accessible customization',async()=>{
+  const page=await browser.newPage({viewport:{width:768,height:1024}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await authorizeDashboardStep2_(page,'M01-TABLET-USER','M01-TABLET-STORE');
+    const metrics=page.getByRole('region',{name:'Dashboard metrics'});
+    const panels=page.getByRole('region',{name:'Dashboard panels'});
+    assert.equal(await metrics.count(),1,'KPI region must have an accessible landmark label');
+    assert.equal(await panels.count(),1,'panel region must have an accessible landmark label');
+    const layout=await page.evaluate(()=>{
+      const root=document.getElementById('hisabiq-dashboard');
+      const metricArea=root.querySelector('#hisabiq-dashboard-metrics');
+      const panelArea=root.querySelector('#hisabiq-dashboard-panels');
+      const countVisible=area=>[...area.children].filter(n=>!n.hidden).length;
+      return {
+        columns:getComputedStyle(metricArea).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+        metricCount:countVisible(metricArea),panelCount:countVisible(panelArea),
+        overflow:document.documentElement.scrollWidth-window.innerWidth
+      };
+    });
+    assert.equal(layout.columns,3,'tablet 768px KPI grid uses three columns');
+    assert.equal(layout.metricCount,6,'six source-default KPI widgets visible');
+    assert.equal(layout.panelCount,4,'four source-default panels visible');
+    assert.ok(layout.overflow<=2,'tablet width must have no horizontal overflow: '+layout.overflow);
+    await saveArtifact(page,'hisabiq-dashboard-tablet-768.png');
+    await page.locator('#hisabiq-dashboard-customize').click();
+    await page.locator('#hdb-all-widgets').click();
+    const dialog=page.getByRole('dialog',{name:'Customize dashboard'});
+    assert.equal(await dialog.isVisible(),true,'tablet must support keyboard-accessible customization');
+    assert.equal(await page.locator('#hdb-dialog-title').evaluate(el=>el===document.activeElement),true,
+      'opening customization should focus its heading');
+    await saveArtifact(page,'hisabiq-dashboard-tablet-customize-768.png');
+    await page.keyboard.press('Escape');
+    assert.equal(await dialog.isVisible(),false);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
