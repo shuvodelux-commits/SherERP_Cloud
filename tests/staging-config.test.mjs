@@ -18,7 +18,7 @@ test('never permit public staging routes or production Worker name', () => {
   assert.throws(() => validateStagingConfig({...staging,name:'shererp-cloud-preview'},preview), /staging/);
 });
 test('reject wrong binding, database, id, migrations path or extra resources',()=>{
-  const altered=(change)=>({...staging,d1_databases:[{...staging.d1_databases[0],...change}]});
+  const altered=(change)=>({...staging,d1_databases:[{...staging.d1_databases[0],...change},staging.d1_databases[1]]});
   assert.throws(()=>validateStagingConfig(altered({binding:'PROD_DB'}),preview), /binding|database/);
   assert.throws(()=>validateStagingConfig(altered({database_name:'production'}),preview), /database/);
   assert.throws(()=>validateStagingConfig(altered({database_id:'nope'}),preview), /database|id/);
