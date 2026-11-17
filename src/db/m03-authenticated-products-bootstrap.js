@@ -169,6 +169,7 @@ function compose(snapshot){
  const [products,units,categories,profiles,conversions,tiles,lots,bundles,settings]=snapshot;
  if(settings.length!==1)fail();
  const seen=ids(products,'product_id'),profilesById=new Map();
+ const productsById=new Map(products.map(row=>[row.product_id,row]));
  const activeUnits=new Map();
  for(const unit of units){
   if(unit.status!=='Active')continue;
@@ -189,7 +190,7 @@ function compose(snapshot){
      !activeUnits.has(c.relation_unit_name.toLowerCase())||
      typeof c.factor_text!=='string'||!c.factor_text.trim())fail();
   revision(c.revision);
-  const row=products.find(p=>p.product_id===c.product_id);
+  const row=productsById.get(c.product_id);
   if(c.revision!==row.current_unit_revision)fail();
   const relations=relById.get(c.product_id)||[];
   relations.push({leftQty:1,leftUnit:c.unit_name,
