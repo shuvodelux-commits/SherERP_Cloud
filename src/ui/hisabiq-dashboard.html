@@ -10,10 +10,12 @@
     font-family: "Geist", "Hind Siliguri", system-ui, sans-serif; display: grid; gap: 16px;
   }
   .hdb * { box-sizing: border-box; }
-  .hdb-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
-  .hdb-head h1 { font-size:24px; line-height:1.22; margin:0; font-weight:700; letter-spacing:-.03em; }
-  .hdb-head .hdb-bn { font-family:"Hind Siliguri",sans-serif; color:#81909b; font-size:12px; margin:2px 0 0; }
-  .hdb-head p { margin:6px 0 0; font-size:12px; color:var(--hdb-muted); }
+  .hdb-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+  .hdb-heading { display:flex; gap:8px; flex-wrap:wrap; align-items:baseline; }
+  .hdb-head h1 { font-size:20px; line-height:1.35; margin:0; font-weight:600; letter-spacing:-.025em; }
+  .hdb-head .hdb-bn { font-family:"Hind Siliguri",sans-serif; color:#5a6b80; font-size:14px; margin:0; }
+  .hdb-head p { margin:2px 0 0; font-size:14px; color:var(--hdb-muted); line-height:1.45; }
+  .hdb-head p#hdb-subtitle-bn { font-family:"Hind Siliguri",sans-serif; font-size:11px; margin:0; color:#8291a1; }
   .hdb-actions { display:flex; gap:7px; align-items:center; }
   .hdb button { font-family:inherit; }
   .hdb-btn { border:1px solid #d4dee1; background:white; border-radius:7px; padding:7px 12px; color:var(--hdb-ink); font-size:12px; font-weight:600; min-height:34px; cursor:pointer; }
@@ -27,25 +29,31 @@
   .hdb-widget { display:flex; flex-direction:column; width:100%; min-height:121px; height:100%; border:1px solid var(--hdb-border); padding:14px; border-radius:12px; background:white; text-align:left; box-shadow:0 1px 3px rgba(13,42,52,.045); color:var(--hdb-ink); cursor:pointer; text-decoration:none; transition:border-color .14s ease, box-shadow .14s ease; }
   .hdb-widget:hover { border-color:#a7c3c8; box-shadow:0 3px 11px rgba(15,49,57,.065); }
   .hdb-widget-top { display:flex; justify-content:space-between; gap:7px; align-items:flex-start; }
-  .hdb-widget-label { font-size:12px; font-weight:600; color:#536677; line-height:1.4; }
-  .hdb-widget-label small { display:block; color:#8d9ba6; font-size:11px; font-weight:400; line-height:1.45; }
-  .hdb-icon { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; border-radius:8px; background:#e9f7f5; color:#087f78; font-size:17px; line-height:1; font-weight:600; }
+  .hdb-widget-label { font-size:12.5px; font-weight:500; color:#3a4d66; line-height:1.4; }
+  .hdb-widget-label small { display:block; color:#607086; font-family:"Hind Siliguri",sans-serif; font-size:11px; font-weight:400; line-height:1.45; }
+  .hdb-icon { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; border-radius:8px; background:#eaf6f4; color:#0a625c; line-height:1; }
+  .hdb-icon svg { width:14px; height:14px; display:block; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .hdb-widget[data-hdb-tone="warning"] .hdb-icon { background:#fef3db; color:#ba7914; }
   .hdb-widget[data-hdb-tone="danger"] .hdb-icon { background:#ffeded; color:#c43b3b; }
   .hdb-widget[data-hdb-tone="ink"] .hdb-icon { background:#edf1f5; color:#40546b; }
-  .hdb-amount { margin-top:9px; display:block; font-size:22px; font-weight:700; letter-spacing:-.035em; line-height:1.25; font-variant-numeric:normal; }
+  .hdb-amount { margin-top:9px; display:block; font-size:22px; font-weight:600; letter-spacing:-.03em; line-height:1.25; font-variant-numeric:normal; }
   .hdb-foot { display:block; margin-top:4px; font-size:11px; color:#7c8996; line-height:1.4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .hdb-panels { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
   .hdb-panel { border:1px solid var(--hdb-border); border-radius:12px; background:white; overflow:hidden; box-shadow:0 1px 3px rgba(13,42,52,.045); min-width:0; }
-  .hdb-panel-head { display:flex; justify-content:space-between; gap:10px; align-items:start; padding:14px 16px; }
+  .hdb-panel-head { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--hdb-border); flex-wrap:wrap; }
   .hdb-panel-head h2 { font-size:14px; font-weight:700; margin:0; line-height:1.35; }
-  .hdb-panel-head p { margin:3px 0 0; color:#81909b; font-size:11px; }
+  .hdb-panel-head p { margin:3px 0 0; color:#5a6b80; font-size:12px; }
   .hdb-panel-link { border:0; background:none; color:#087f78; font-size:11px; font-weight:600; cursor:pointer; text-decoration:none; white-space:nowrap; }
   .hdb-panel-link:hover { text-decoration:underline; }
   .hdb-legend { color:#71818d; display:flex; gap:12px; font-size:11px; margin:0 16px 8px; }
   .hdb-legend i { display:inline-block; background:#087f78; width:7px; height:7px; border-radius:50%; margin-right:4px; }
-  .hdb-legend i:nth-of-type(2) { background:#93a4af; }
-  .hdb-panel-empty { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:184px; border-top:1px solid #f1f3f5; padding:22px; gap:8px; }
+  .hdb-legend span:nth-child(2) i { background:#3a4d66; }
+  .hdb-panel-empty { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:220px; padding:22px; gap:8px; }
+  .hdb-chart-shell { min-height:220px; position:relative; display:flex; justify-content:center; align-items:center; padding:18px; isolation:isolate; }
+  .hdb-chart-guides { position:absolute; inset:16px 16px 26px 54px; border-left:1px solid #e3e8ee; border-bottom:1px solid #e3e8ee; background:repeating-linear-gradient(to bottom, transparent 0, transparent 39px, #e3e8ee 40px, transparent 41px); pointer-events:none; }
+  .hdb-chart-state { display:flex; position:relative; z-index:1; align-items:center; flex-direction:column; gap:7px; max-width:290px; padding:14px 18px; border:1px solid #e3e8ee; background:#ffffffed; border-radius:8px; text-align:center; }
+  .hdb-chart-state strong { color:#5a6b80; font-size:12px; font-weight:600; }
+  .hdb-chart-state span { color:#8291a1; font-size:11px; line-height:1.45; }
   .hdb-panel-empty .hdb-empty-icon { font-size:25px; color:#a1b3bd; }
   .hdb-panel-empty strong { font-size:12px; color:#617585; font-weight:600; }
   .hdb-panel-empty span { font-size:11px; color:#87949f; max-width:270px; line-height:1.45; }
@@ -78,19 +86,20 @@
   .hdb-switch[aria-checked="true"]::after { left:16px; }
   .hdb-dialog-footer { display:flex; justify-content:space-between; gap:10px; margin-top:20px; flex-wrap:wrap; }
   .hdb-linklike { background:none; border:0; cursor:pointer; text-decoration:underline; color:#087f78; font-size:12px; }
-  @media(min-width:768px){ .hdb-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); } .hdb-dialog-grid { grid-template-columns:1fr 1fr; } }
+  @media(min-width:640px){ .hdb-dialog-grid { grid-template-columns:1fr 1fr; } }
+  @media(min-width:768px){ .hdb-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); } }
   @media(min-width:1024px){ .hdb-panels { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media(min-width:1280px){ .hdb-metrics { grid-template-columns:repeat(6,minmax(0,1fr)); } .hdb-panels { grid-template-columns:repeat(3,minmax(0,1fr)); } .hdb-panel[data-hdb-wide="true"] { grid-column:span 2; } }
-  @media(max-width:600px){ .hdb-head h1 { font-size:20px; } .hdb-widget { padding:12px; min-height:116px; } .hdb-amount { font-size:19px; } .hdb-widget-label { font-size:11px; } .hdb-quick { display:flex; gap:7px; overflow-x:auto; } .hdb-quick button { flex:1; min-width:58px; } .hdb-dialog { padding:16px; } .hdb-head { align-items:center; } }
+  @media(max-width:600px){ .hdb-head h1 { font-size:20px; } .hdb-head p { font-size:12px; } .hdb-head .hdb-bn { font-size:12px; } .hdb-widget { padding:12px; min-height:116px; } .hdb-amount { font-size:19px; } .hdb-widget-label { font-size:11px; } .hdb-quick { display:flex; gap:7px; overflow-x:auto; } .hdb-quick button { flex:1; min-width:58px; } .hdb-dialog { padding:16px; } .hdb-head { align-items:center; } }
   @media(prefers-reduced-motion:reduce){ .hdb-widget,.hdb-switch::after { transition:none; } }
 </style>
 
 <div class="hdb" id="hisabiq-dashboard">
   <header class="hdb-head">
     <div>
-      <h1>Dashboard</h1>
-      <div class="hdb-bn">ড্যাশবোর্ড</div>
+      <div class="hdb-heading"><h1 id="hdb-welcome-title">Dashboard</h1><span class="hdb-bn" id="hdb-welcome-bn" lang="bn">ড্যাশবোর্ড</span></div>
       <p id="hdb-subtitle">Your business · Today's overview</p>
+      <p id="hdb-subtitle-bn" lang="bn">আজকের হিসাবের সারাংশ</p>
     </div>
     <div class="hdb-actions">
       <button type="button" class="hdb-btn" id="hisabiq-dashboard-customize" data-hdb-action="customize">☷ Customize</button>
@@ -111,37 +120,37 @@
   <div class="hdb-metrics" id="hisabiq-dashboard-metrics">
     <div class="hdb-widget-wrap" data-hdb-widget="today-sales" data-hdb-kind="metric">
       <button type="button" class="hdb-widget" data-hdb-tone="teal" data-hdb-route="sales">
-        <span class="hdb-widget-top"><span class="hdb-widget-label">Today's Sales<small>আজকের বিক্রি</small></span><span class="hdb-icon" aria-hidden="true">↗</span></span>
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Today's Sales<small>আজকের বিক্রি</small></span><span class="hdb-icon" aria-hidden="true"><svg data-hdb-icon="today-sales" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M2 3h2l2.2 11a2 2 0 0 0 2 1.6h10.5a2 2 0 0 0 2-1.6L22 7H5"/><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/></svg></span></span>
         <strong class="hdb-amount" data-hdb-value="dashSales">—</strong><span class="hdb-foot">Sales invoices · View details</span>
       </button>
     </div>
     <div class="hdb-widget-wrap" data-hdb-widget="receivable" data-hdb-kind="metric">
       <button type="button" class="hdb-widget" data-hdb-tone="ink" data-hdb-route="customers">
-        <span class="hdb-widget-top"><span class="hdb-widget-label">Receivable<small>পাওনা</small></span><span class="hdb-icon" aria-hidden="true">↙</span></span>
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Receivable<small>পাওনা</small></span><span class="hdb-icon" aria-hidden="true"><svg data-hdb-icon="receivable" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></svg></span></span>
         <strong class="hdb-amount" data-hdb-value="dashDue">—</strong><span class="hdb-foot">Customer dues · View ledger</span>
       </button>
     </div>
     <div class="hdb-widget-wrap" data-hdb-widget="payable" data-hdb-kind="metric">
       <button type="button" class="hdb-widget" data-hdb-tone="warning" data-hdb-route="suppliers">
-        <span class="hdb-widget-top"><span class="hdb-widget-label">Payable<small>দেনা</small></span><span class="hdb-icon" aria-hidden="true">↗</span></span>
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Payable<small>দেনা</small></span><span class="hdb-icon" aria-hidden="true"><svg data-hdb-icon="payable" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M7 14h4a2 2 0 0 0 2-2V9"/><path d="M3 10v10h4l3-3h5a3 3 0 0 0 2-1l4-5a2 2 0 0 0-3-2l-4 4"/><circle cx="15" cy="5" r="3"/><path d="M15 3v4"/></svg></span></span>
         <strong class="hdb-amount" data-hdb-value="dashPayable">—</strong><span class="hdb-foot">Supplier dues · View ledger</span>
       </button>
     </div>
     <div class="hdb-widget-wrap" data-hdb-widget="cash" data-hdb-kind="metric">
       <button type="button" class="hdb-widget" data-hdb-tone="ink" data-hdb-route="daybook">
-        <span class="hdb-widget-top"><span class="hdb-widget-label">Cash in Hand<small>হাতে নগদ</small></span><span class="hdb-icon" aria-hidden="true">৳</span></span>
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Cash in Hand<small>হাতে নগদ</small></span><span class="hdb-icon" aria-hidden="true"><svg data-hdb-icon="cash" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M20 9V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v12H5a3 3 0 0 1-3-3V6"/><path d="M22 12h-5a2 2 0 0 0 0 4h5z"/></svg></span></span>
         <strong class="hdb-amount" data-hdb-value="dashCash">—</strong><span class="hdb-foot">Day Book · View cash activity</span>
       </button>
     </div>
     <div class="hdb-widget-wrap" data-hdb-widget="gross-profit" data-hdb-kind="metric">
       <button type="button" class="hdb-widget" data-hdb-tone="teal" data-hdb-route="reports">
-        <span class="hdb-widget-top"><span class="hdb-widget-label">Gross Profit<small>মোট লাভ</small></span><span class="hdb-icon" aria-hidden="true">%</span></span>
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Gross Profit<small>মোট লাভ</small></span><span class="hdb-icon" aria-hidden="true"><svg data-hdb-icon="gross-profit" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span></span>
         <strong class="hdb-amount" data-hdb-value="unavailable">—</strong><span class="hdb-foot">View profit reports</span>
       </button>
     </div>
     <div class="hdb-widget-wrap" data-hdb-widget="low-stock" data-hdb-kind="metric">
       <button type="button" class="hdb-widget" data-hdb-tone="danger" data-hdb-route="products">
-        <span class="hdb-widget-top"><span class="hdb-widget-label">Low Stock<small>স্টক কম</small></span><span class="hdb-icon" aria-hidden="true">▤</span></span>
+        <span class="hdb-widget-top"><span class="hdb-widget-label">Low Stock<small>স্টক কম</small></span><span class="hdb-icon" aria-hidden="true"><svg data-hdb-icon="low-stock" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="m12 3 9 5v9l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5M12 13v9M9 8h6M8 17h3"/></svg></span></span>
         <strong class="hdb-amount" data-hdb-value="dashLowStockCount">—</strong><span class="hdb-foot">Below minimum · View products</span>
       </button>
     </div>
@@ -166,12 +175,12 @@
     <section class="hdb-panel hdb-widget-wrap" data-hdb-widget="sales-trend" data-hdb-kind="panel" data-hdb-wide="true">
       <div class="hdb-panel-head"><div><h2>Sales trend</h2><p>Last 14 days · বিক্রির ধারা</p></div><button type="button" class="hdb-panel-link" data-hdb-route="reports">View reports</button></div>
       <div class="hdb-legend"><span><i></i>Sales</span><span><i></i>Gross profit</span></div>
-      <div class="hdb-panel-empty"><span class="hdb-empty-icon" aria-hidden="true">⌁</span><strong>Sales trend unavailable</strong><span>Waiting for an authenticated, date-scoped sales and profit read.</span></div>
+      <div class="hdb-chart-shell" data-hdb-chart="sales-trend"><div class="hdb-chart-guides" aria-hidden="true"></div><div class="hdb-chart-state" role="status"><strong>Sales trend unavailable</strong><span>Waiting for an authenticated, date-scoped sales and profit read.</span></div></div>
     </section>
     <section class="hdb-panel hdb-widget-wrap" data-hdb-widget="cashflow" data-hdb-kind="panel">
       <div class="hdb-panel-head"><div><h2>Cashflow</h2><p>Cash in vs out · নগদ প্রবাহ</p></div><button type="button" class="hdb-panel-link" data-hdb-route="daybook">Day Book</button></div>
       <div class="hdb-legend"><span><i></i>In</span><span><i></i>Out</span></div>
-      <div class="hdb-panel-empty"><span class="hdb-empty-icon" aria-hidden="true">↕</span><strong>Cashflow history unavailable</strong><span>No safe monthly cashflow time series is connected yet.</span></div>
+      <div class="hdb-chart-shell" data-hdb-chart="cashflow"><div class="hdb-chart-guides" aria-hidden="true"></div><div class="hdb-chart-state" role="status"><strong>Cashflow history unavailable</strong><span>No safe monthly cashflow time series is connected yet.</span></div></div>
     </section>
     <section class="hdb-panel hdb-widget-wrap" data-hdb-widget="recent-sales" data-hdb-kind="panel" data-hdb-wide="true">
       <div class="hdb-panel-head"><div><h2>Recent sales</h2><p>Today and yesterday</p></div><button type="button" class="hdb-panel-link" data-hdb-route="sales">Manage sales</button></div>
@@ -368,7 +377,17 @@
     var shop=document.getElementById('shopNameLabel');
     var store=shop&&shop.textContent&&shop.textContent.trim();
     var date=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+    var loginOverlay=document.getElementById('loginOverlay');
+    var active=typeof authToken==='string' && !!authToken && currentUser &&
+      loginOverlay && loginOverlay.hidden;
+    var displayName=active ? String(currentUser.name||currentUser.mobile||'').trim() : '';
+    root.querySelector('#hdb-welcome-title').textContent=displayName?
+      'Welcome, '+displayName : 'Dashboard';
+    root.querySelector('#hdb-welcome-bn').textContent=displayName?
+      'স্বাগতম, '+displayName : 'ড্যাশবোর্ড';
     root.querySelector('#hdb-subtitle').textContent=date+' · '+(store||'Your business');
+    var bnDate=new Intl.DateTimeFormat('bn-BD',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+    root.querySelector('#hdb-subtitle-bn').textContent=bnDate+' · '+(store||'আপনার ব্যবসা');
   }
   function openDialog(){
     focusReturn=document.activeElement;
