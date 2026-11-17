@@ -369,6 +369,10 @@ test('M01 Reports mobile stale response, snapshot and session turnover never pri
    let finishOld;
    RPT_LOADERS.rptSales=()=>new Promise(resolve=>{finishOld=resolve;});
    const older=rptRunActive_(true);
+   // The guarded loader starts in a Promise microtask. Let its original
+   // synthetic request actually begin before replacing the test stub.
+   await Promise.resolve();
+   if(typeof finishOld!=='function')throw Error('Synthetic old report did not start');
    const pendingBlocked=el('rptPrintBtn').disabled;
    RPT_LOADERS.rptSales=()=>Promise.resolve();
    await rptRunActive_(true);
