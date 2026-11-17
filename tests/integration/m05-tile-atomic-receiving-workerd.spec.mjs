@@ -89,10 +89,11 @@ test('Box, Pcs and manufacturer-Sqft purchase prices preserve exact line totals 
   });
  }
 });
-test('area-entry receiving, price authority overrides and malformed physical claims fail before stock writes',async()=>{
+test('invalid area and malformed physical claims fail before stock writes',async()=>{
  await seed('M05-TILE-MODE');
  for(const request of [
-  {mode:'area',requestedSqft:'35.50',fulfillment:'loose'},
+  {mode:'area',requestedSqft:'0',fulfillment:'loose'},
+  {mode:'area',requestedSqft:'35.50',fulfillment:'unsupported'},
   {mode:'pack',boxes:'0',extraPieces:'0'},
   {mode:'pack',boxes:'1.5',extraPieces:'0'}
  ]) await assert.rejects(()=>poster().post(input('OP-TILE-MODE-001','M05-TILE-MODE',{request})));
