@@ -120,6 +120,10 @@ function catalogForTile(productId,stockUnit,tiers,measurement){
       'dimensionUnit','piecesPerBox','coveragePolicy'],'Tile measurement');
   if(measurement.productId!==productId||stockUnit!=='Pcs')
     throw new TypeError('Tile product identity or Pcs stock unit mismatch');
+  if(measurement.coveragePolicy==='manufacturer'&&
+      (!Object.hasOwn(measurement,'manufacturerSqftPerBox')||
+        !Object.hasOwn(measurement,'manufacturerEvidence')))
+    throw new TypeError('Manufacturer coverage requires verified evidence');
   const conversionId=identity(measurement.boxConversionId,'Tile box conversion');
   const boxName=measurement.boxUnitName||'Box';
   const matched=tiers.filter(x=>x.unitName===boxName);
