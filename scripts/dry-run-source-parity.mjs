@@ -171,8 +171,439 @@ export function reviewOfflineSourceParity({
  };
 }
 
+
+/**
+ * Historical source-ID-only reference-review evidence (M02-safe).
+ * These are review hints, not FK DDL, auto-identity joins or posting guards.
+ * Historical orphan references may be legitimate; never synthesize parents.
+ */
+const SOURCE_REFERENCE_RULES=Object.freeze([
+  [
+    "BUNDLE_COMPONENTS",
+    "Bundle Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "BUNDLE_COMPONENTS",
+    "Component Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "SALE_BUNDLE_COMPONENTS",
+    "Invoice ID",
+    "SALES",
+    true
+  ],
+  [
+    "SALE_BUNDLE_COMPONENTS",
+    "Bundle Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "SALE_BUNDLE_COMPONENTS",
+    "Component Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "SUPPLIER_LEDGER",
+    "Supplier ID",
+    "SUPPLIERS",
+    true
+  ],
+  [
+    "STOCK_LOTS",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "STOCK_LOTS",
+    "Purchase ID",
+    "PURCHASES",
+    false
+  ],
+  [
+    "STOCK_LOTS",
+    "Supplier ID",
+    "SUPPLIERS",
+    false
+  ],
+  [
+    "SALE_ITEM_LOTS",
+    "Invoice ID",
+    "SALES",
+    true
+  ],
+  [
+    "SALE_ITEM_LOTS",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "SALE_ITEM_LOTS",
+    "Lot ID",
+    "STOCK_LOTS",
+    false
+  ],
+  [
+    "SALE_ITEM_LOTS",
+    "Supplier ID",
+    "SUPPLIERS",
+    false
+  ],
+  [
+    "STOCK_LOT_COST_CORRECTIONS",
+    "Lot ID",
+    "STOCK_LOTS",
+    false
+  ],
+  [
+    "STOCK_LOT_COST_CORRECTIONS",
+    "Product ID",
+    "PRODUCTS",
+    false
+  ],
+  [
+    "PURCHASES",
+    "Supplier ID",
+    "SUPPLIERS",
+    false
+  ],
+  [
+    "PURCHASE_ITEMS",
+    "Purchase ID",
+    "PURCHASES",
+    true
+  ],
+  [
+    "PURCHASE_ITEMS",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "SALES",
+    "Customer ID",
+    "CUSTOMERS",
+    false
+  ],
+  [
+    "SALE_PAYMENTS",
+    "Invoice ID",
+    "SALES",
+    true
+  ],
+  [
+    "SALE_PAYMENTS",
+    "Bank Account ID",
+    "BANK_ACCOUNTS",
+    false
+  ],
+  [
+    "SALE_PAYMENTS",
+    "Operation ID",
+    "SALE_POSTING_JOURNAL",
+    false
+  ],
+  [
+    "SALE_POSTING_JOURNAL",
+    "Invoice ID",
+    "SALES",
+    false
+  ],
+  [
+    "SALE_POSTING_JOURNAL",
+    "Return ID",
+    "SALES_RETURN",
+    false
+  ],
+  [
+    "SALES_DRAFTS",
+    "Customer ID",
+    "CUSTOMERS",
+    false
+  ],
+  [
+    "SALE_ITEMS",
+    "Invoice ID",
+    "SALES",
+    true
+  ],
+  [
+    "SALE_ITEMS",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "CUSTOMER_LEDGER",
+    "Customer ID",
+    "CUSTOMERS",
+    true
+  ],
+  [
+    "CUSTOMER_LEDGER",
+    "Allocated Invoice ID",
+    "SALES",
+    false
+  ],
+  [
+    "EXPENSES",
+    "Category ID",
+    "EXPENSE_CATEGORIES",
+    false
+  ],
+  [
+    "EXPENSES",
+    "Bank Account ID",
+    "BANK_ACCOUNTS",
+    false
+  ],
+  [
+    "STOCK_MOVEMENT",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "STOCK_MOVEMENT",
+    "Lot ID",
+    "STOCK_LOTS",
+    false
+  ],
+  [
+    "SALES_RETURN",
+    "Invoice ID",
+    "SALES",
+    true
+  ],
+  [
+    "SALES_RETURN",
+    "Customer ID",
+    "CUSTOMERS",
+    false
+  ],
+  [
+    "SALES_RETURN_ITEMS",
+    "Return ID",
+    "SALES_RETURN",
+    true
+  ],
+  [
+    "SALES_RETURN_ITEMS",
+    "Invoice ID",
+    "SALES",
+    true
+  ],
+  [
+    "SALES_RETURN_ITEMS",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "SALES_RETURN_ITEMS",
+    "Supplier ID",
+    "SUPPLIERS",
+    false
+  ],
+  [
+    "PURCHASE_RETURN",
+    "Purchase ID",
+    "PURCHASES",
+    true
+  ],
+  [
+    "PURCHASE_RETURN",
+    "Supplier ID",
+    "SUPPLIERS",
+    false
+  ],
+  [
+    "PURCHASE_RETURN_ITEMS",
+    "Return ID",
+    "PURCHASE_RETURN",
+    true
+  ],
+  [
+    "PURCHASE_RETURN_ITEMS",
+    "Purchase ID",
+    "PURCHASES",
+    true
+  ],
+  [
+    "PURCHASE_RETURN_ITEMS",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "INVOICE_EDIT_LOG",
+    "Invoice ID",
+    "SALES",
+    false
+  ],
+  [
+    "BANK_BOOK",
+    "Bank Account ID",
+    "BANK_ACCOUNTS",
+    true
+  ],
+  [
+    "BANK_TRANSFERS",
+    "From Account ID",
+    "BANK_ACCOUNTS",
+    true
+  ],
+  [
+    "BANK_TRANSFERS",
+    "To Account ID",
+    "BANK_ACCOUNTS",
+    true
+  ],
+  [
+    "FINANCE_TRANSACTIONS",
+    "Person ID",
+    "FINANCE_PERSONS",
+    false
+  ],
+  [
+    "FINANCE_TRANSACTIONS",
+    "Bank Account ID",
+    "BANK_ACCOUNTS",
+    false
+  ],
+  [
+    "VENDOR_SOURCING",
+    "Invoice ID",
+    "SALES",
+    false
+  ],
+  [
+    "VENDOR_SOURCING",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "VENDOR_SOURCING",
+    "Vendor ID",
+    "VENDORS",
+    true
+  ],
+  [
+    "VENDOR_LEDGER",
+    "Vendor ID",
+    "VENDORS",
+    true
+  ],
+  [
+    "VENDOR_RETURNS",
+    "Vendor ID",
+    "VENDORS",
+    true
+  ],
+  [
+    "VENDOR_RETURNS",
+    "Sourcing ID",
+    "VENDOR_SOURCING",
+    false
+  ],
+  [
+    "VENDOR_RETURNS",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "VENDOR_ISSUES",
+    "Vendor ID",
+    "VENDORS",
+    true
+  ],
+  [
+    "VENDOR_ISSUES",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ],
+  [
+    "VENDOR_RETURNS_RECEIVED",
+    "Vendor ID",
+    "VENDORS",
+    true
+  ],
+  [
+    "VENDOR_RETURNS_RECEIVED",
+    "Issue ID",
+    "VENDOR_ISSUES",
+    false
+  ],
+  [
+    "VENDOR_RETURNS_RECEIVED",
+    "Product ID",
+    "PRODUCTS",
+    true
+  ]
+]);
+const REVIEW_ROW_SAMPLE_LIMIT=20;
+
+export function reviewOfflineSourceReferences({schema,pinnedSourceCommit,sourceExport}={}){
+ requireBaseline(schema,pinnedSourceCommit);
+ const snapshot=verifyExport(sourceExport,schema,pinnedSourceCommit,'source');
+ const groupHeaders=new Map(schema.tables.map(t=>[t.sheetKey,t.columns]));
+ const findings=[];
+ let checkedReferences=0,resolvedReferences=0,unresolvedReferences=0,missingRequiredReferences=0;
+ for(const [sourceGroup,referenceField,targetGroup,required] of SOURCE_REFERENCE_RULES){
+  const from=groupHeaders.get(sourceGroup),to=groupHeaders.get(targetGroup);
+  const targetKey=RECORD_KEYS[targetGroup];
+  if(!from?.includes(referenceField)||!to?.includes(targetKey))
+   reject('INVALID_FROZEN_REFERENCE_RULE');
+  const sourceColumn=from.indexOf(referenceField),targetColumn=to.indexOf(targetKey);
+  const targetIds=new Set(snapshot.get(targetGroup).rows.map(r=>r.cells[targetColumn]));
+  const unresolved=[],missing=[];
+  for(const row of snapshot.get(sourceGroup).rows){
+   const identifier=row.cells[sourceColumn];
+   if(identifier===''){
+    if(required){missingRequiredReferences++;missing.push(row.sheetRow);}
+   }else{
+    checkedReferences++;
+    if(targetIds.has(identifier))resolvedReferences++;
+    else{unresolvedReferences++;unresolved.push(row.sheetRow);}
+   }
+  }
+  for(const [code,rows] of [['MISSING_REQUIRED_SOURCE_ID',missing],['UNRESOLVED_SOURCE_ID',unresolved]]){
+   if(!rows.length)continue;
+   findings.push({sourceGroup,targetGroup,referenceField,code,count:rows.length,
+    sampleSheetRows:rows.slice().sort((a,b)=>a-b).slice(0,REVIEW_ROW_SAMPLE_LIMIT)});
+  }
+ }
+ return {
+  formatVersion:1,sourceGroups:schema.tables.length,
+  rulesChecked:SOURCE_REFERENCE_RULES.length,
+  checkedReferences,resolvedReferences,unresolvedReferences,missingRequiredReferences,
+  humanReviewRequired:findings.length>0,automaticLinksCreated:0,
+  resolvedByNameOrPhone:false,d1Verified:false,productionReady:false,findings
+ };
+}
+
 async function main(){
  // Explicit paths only: never fetch source over network or query production.
+ if(process.argv.length===4&&process.argv[2]==='--references'){
+  const sourceText=await readFile(resolve(process.argv[3]),'utf8');
+  const review=reviewOfflineSourceReferences({
+   schema:BASELINE,pinnedSourceCommit:SOURCE_COMMIT,
+   sourceExport:JSON.parse(sourceText)
+  });
+  process.stdout.write(JSON.stringify(review,null,2)+'\n');
+  if(review.humanReviewRequired)process.exitCode=1;
+  return;
+ }
  if(process.argv.length!==4)reject('REQUIRE_TWO_EXPLICIT_LOCAL_EXPORT_PATHS');
  const [sourcePath,candidatePath]=process.argv.slice(2);
  const [sourceText,candidateText]=await Promise.all([
