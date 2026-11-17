@@ -5,19 +5,19 @@ import {join} from 'node:path';
  * M01 browser-only synthetic Clerk. The actual public Worker stays inert.
  * This is presentation/role-navigation QA, not server authorization or D1.
  */
-export async function installM01SyntheticNavigation(page) {
+export async function installM01SyntheticNavigation(page,overrides={}) {
   const calls=[];
   const payload={
     token:'c'.repeat(64),
     user:{id:'M01-SYNTHETIC-CLERK',name:'Synthetic Clerk',
       mobile:'01710000001',role:'Clerk'},
-    allowedModules:['dashboard','reports'],
-    permissions:{dashboard:{view:true},reports:{view:true}}
+    allowedModules:overrides.allowedModules ?? ['dashboard','reports'],
+    permissions:overrides.permissions ?? {dashboard:{view:true},reports:{view:true}}
   };
   const shell={
     shopName:'Synthetic Hardware',
     currencySymbol:'৳',
-    navItems:[
+    navItems:overrides.navItems ?? [
       {key:'dashboard',label:'Dashboard',icon:'dashboard',
         sidebarGroup:0,sidebarOrder:1},
       {key:'reports',label:'Reports',icon:'reports',
