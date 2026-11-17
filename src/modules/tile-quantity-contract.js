@@ -10,7 +10,7 @@ import {resolveProductUnitBreakdown_} from './product-unit-conversions.js';
 const SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 const MEASUREMENT_FIELDS = [
   'productId', 'revision', 'baseUnit', 'boxConversionId', 'length', 'width',
-  'dimensionUnit', 'piecesPerBox', 'coveragePolicy',
+  'dimensionUnit', 'piecesPerBox', 'coveragePolicy', 'boxUnitName',
   'manufacturerSqftPerBox', 'manufacturerEvidence'
 ];
 
@@ -79,6 +79,8 @@ function measurement(config) {
   record(config, MEASUREMENT_FIELDS);
   identity(config.productId, 'product identity');
   identity(config.boxConversionId, 'box conversion identity');
+  const boxUnitName = Object.hasOwn(config, 'boxUnitName')
+    ? identity(config.boxUnitName, 'box unit name') : 'Box';
   if (config.boxConversionId === 'BASE' ||
       Object.hasOwn(Object.prototype, config.boxConversionId))
     throw new TypeError('Invalid tile box conversion identity');
@@ -106,7 +108,7 @@ function measurement(config) {
     pack, nominal,
     effective: config.coveragePolicy === 'manufacturer'
       ? divide(advertised, fraction(pack)) : nominal,
-    snapshot: Object.freeze({...config})
+    snapshot: Object.freeze({...config, boxUnitName})
   };
 }
 
@@ -145,7 +147,7 @@ export function resolveTileQuantity(config, request) {
     [{conversionId: config.boxConversionId, qty: Number(boxes)},
       {conversionId: 'BASE', qty: Number(extra)}], Number(pieces),
     [{'Product ID': config.productId, 'Conversion ID': config.boxConversionId,
-      'Unit Name': 'Box', 'Conversion Factor': Number(m.pack), Status: 'Active'}]
+      'Unit Name': m.snapshot.boxUnitName, 'Conversion Factor': Number(m.pack), Status: 'Active'}]
   );
   if (BigInt(resolved.baseQty) !== pieces)
     throw new Error('Tile physical unit compatibility mismatch');
@@ -158,6 +160,35 @@ export function resolveTileQuantity(config, request) {
     displaySqft: display(actual), measurementSnapshot: m.snapshot,
     requestSnapshot: Object.freeze({...request}), unitSnapshot: resolved.snapshot
   };
+}
+
+/**
+ * Read-only composition with M03's existing catalog candidate DTO. This
+ * validates physical agreement, not actor authorization, stock availability,
+ * measurement persistence, or permission to use an inactive historical item.
+ */
+export function resolveTileQuantityFromCatalog(catalog, config, request) {
+  let bound;
+  try {
+    const m = measurement(config);
+    const profile = catalog?.unitConfig;
+    if (catalog?.productId !== config.productId || catalog.baseUnitName !== 'Pcs' ||
+        profile?.stockUnitName !== 'Pcs' || !Number.isSafeInteger(profile.revision) ||
+        String(profile.revision) !== config.revision || !Array.isArray(profile.conversions))
+      throw new Error('mismatch');
+    const packs = profile.conversions.filter(row => row?.conversionId === config.boxConversionId);
+    if (packs.length !== 1) throw new Error('mismatch');
+    const pack = packs[0];
+    identity(pack.unitName, 'catalog pack label');
+    const factor = decimal(pack.factorText, 'catalog pack factor', true);
+    if (factor.n !== m.pack * factor.d ||
+        (Object.hasOwn(config, 'boxUnitName') && config.boxUnitName !== pack.unitName))
+      throw new Error('mismatch');
+    bound = {...m.snapshot, boxUnitName: pack.unitName};
+  } catch {
+    throw new TypeError('Tile catalog identity, revision or pack mismatch');
+  }
+  return resolveTileQuantity(bound, request);
 }
 
 /** Proposed exact selected-unit line calculation; no override selection or posting. */

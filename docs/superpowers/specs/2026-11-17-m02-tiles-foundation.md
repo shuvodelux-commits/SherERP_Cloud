@@ -28,7 +28,7 @@ No public binding, production login, public RPC, remote import/migration or orig
 Files: src/modules/tile-quantity-contract.js; tests/m02-tile-quantity-contract.test.mjs.
 resolveTileQuantity(measurement,request) accepts an explicitly supplied trusted historical revision, never a DB binding or browser-authoritative factor.
 Measurement keys:
-productId, revision (positive integer string), baseUnit='Pcs', boxConversionId (non-BASE), length, width, dimensionUnit ('in'|'cm'|'mm'), piecesPerBox (positive integer string), coveragePolicy ('nominal'|'manufacturer'), optional manufacturerSqftPerBox and manufacturerEvidence.
+productId, revision (positive integer string), baseUnit='Pcs', boxConversionId (non-BASE), optional boxUnitName (defaults to Box), length, width, dimensionUnit ('in'|'cm'|'mm'), piecesPerBox (positive integer string), coveragePolicy ('nominal'|'manufacturer'), optional manufacturerSqftPerBox and manufacturerEvidence.
 Decimal inputs are canonical nonnegative strings with at most 24 integer and 12 fractional digits; no exponent/coercion/whitespace/leading zeros. Identity strings are bounded, nonblank and exact.
 Physical quantities use whole decimal-string integers. The compatibility bridge to the existing Number-based multi-unit resolver refuses any quantity exceeding Number.MAX_SAFE_INTEGER, before conversion to Number.
 Output includes pieces, normalized boxes/extraPieces, nominalSqft, actualSqft, requestedSqft (null for pack input), displaySqft, detached measurementSnapshot and existing source-shaped unitSnapshot.
@@ -51,6 +51,14 @@ Pcs billing quantity=pieces; Box=pieces/pack; Sqft=effective exact area. A mixed
 This helper consumes a selected trusted price and retains it; price selection/override authorization remains with the existing product price profile and future M04/M05/M06 adapters.
 It outputs exactAmount, lineAmountMinor, quantity, billingQuantityDisplay, priceSnapshot, displayQuantityAmountMinor and displayQuantityAmountDeltaMinor.
 It is not a discount/tax/payment/FIFO/refund engine and does not change canonical source historical money.
+
+## Catalog-bound contract (implemented in the continuation)
+
+`resolveTileQuantityFromCatalog(catalog,measurement,request)` consumes the existing M03 `readProductCatalogCandidateD1` DTO. It requires matching product identity, Pcs stock dimension, exact revision, exactly one selected pack conversion and an exactly equal integral factor. A factor such as `25.000000000001` cannot pass as 25 through Number coercion. The native pack label (for example Carton) is retained in the measurement/unit snapshots; conflicting supplied labels are rejected.
+
+This is a read-only physics check, not authorization, availability or permission to transact with inactive historical products. Historical candidates remain usable for review without reinterpreting them as current configurations. Measurement inputs must still come from trusted separately reviewed evidence; existing catalog persistence alone does not verify physical dimensions or manufacturer labels.
+
+Actual Workerd/D1 tests load current and historical catalog revisions through the existing reader and pass supplied synthetic measurements to this function. No M03 reader/kernel code or numbered migration is changed. These tests do not claim that measurements are stored in D1.
 
 ## Proposed D1 extension — approval and real D1 tests required
 

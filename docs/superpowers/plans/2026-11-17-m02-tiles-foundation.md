@@ -20,7 +20,7 @@
 - Protected financial schema needs M02-P account/sign review and shared M03 ownership coordination.
 - Keep original HTML/CSS/JS, original identifiers, ledger signs and historical source values unchanged.
 - General units and tiles use the existing stock/FIFO/return engines; this PR cannot activate them.
-- This session has no executor. GitHub Actions supplies real Node and local Workerd/D1 evidence. Do not substitute mock-only claims.
+- The initial planning session had no executor; the continuation uses a verified local checkout and real Workerd/D1. GitHub exact-head CI remains a separate gate; never substitute mock-only claims.
 
 ## Module overview (12 sentences)
 
@@ -77,11 +77,11 @@ flowchart TD
 **Produces:** resolveTileQuantity(measurement,request), priceTileQuantity(measurement,request,pricingUnit,unitPriceText).
 **No persistence or transaction writer.**
 
-- [ ] RED: commit the real behavioral tests before the production module.
-- [ ] Observe Foundation CI failing on absent tile-quantity-contract.js and link the run.
-- [ ] GREEN: bounded canonical decimal strings → reduced BigInt rationals; exact inch/cm/mm dimensions; nominal/manufacturer policy; whole pieces; safe adapter into existing multi-unit resolver.
-- [ ] Expose measurement snapshot, original requested area, delivered area, normalized Box+Pcs, original unit breakdown and exact price snapshot.
-- [ ] Exact pricing covers Pcs/Box/Sqft from the selected trusted price, without duplicating override precedence or posting.
+- [x] RED: commit the real behavioral tests before the production module.
+- [x] Observe Foundation CI failing on absent tile-quantity-contract.js and link the run.
+- [x] GREEN: bounded canonical decimal strings → reduced BigInt rationals; exact inch/cm/mm dimensions; nominal/manufacturer policy; whole pieces; safe adapter into existing multi-unit resolver.
+- [x] Expose measurement snapshot, original requested area, delivered area, normalized Box+Pcs, original unit breakdown and exact price snapshot.
+- [x] Exact pricing covers Pcs/Box/Sqft from the selected trusted price, without duplicating override precedence or posting.
 - [ ] Run the full npm test suite plus unchanged source/build gates in CI; fix meaningful failures through RED/GREEN.
 - [ ] Verify latest-main compare/mergeability and every exact-head check; leave owner review/merge gate intact.
 
@@ -137,3 +137,7 @@ revisions using actual D1 without inventing measurement persistence or stock.
 - RED/GREEN and exact-head links will be recorded in the PR after observed results.
 
 - Review checkpoint: existing M03 reader reused; protected account/sign review packet added. Initial RED Foundation run 43992235035 remains queued at observation; no production implementation or RED/GREEN claim.
+
+### Verified continuation evidence
+
+See `docs/reviews/2026-11-17-m02-tiles-contract-verification.md` for observed RED/GREEN, runtime, review and remaining gates. Local Node 22 suite: 2,473 passed; tiles: 27 unit + 3 real local Workerd/D1 composition tests. Existing catalog D1 suite: 5 passed. Latest main was merged without conflicts. Exact-head hosted CI must be checked after publication; M02 as a whole remains incomplete.
