@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {buildFrontend} from '../scripts/build-frontend.mjs';
 import {patchServerCall} from '../scripts/patch-rpc.mjs';
+import {patchPosV2HiddenVisibility} from '../scripts/patch-posv2-visibility.mjs';
 import worker from '../src/index.js';
 import {handleRpc} from '../src/rpc/handler.js';
 
@@ -21,7 +22,8 @@ export async function serveCompiledUi({internalDayBookRpc,internalAuthAdapter}={
       sourceDir:new URL('../legacy/source/',import.meta.url).pathname,
       outputDir:temp
     });
-    const html=patchServerCall(await readFile(outputPath,'utf8'));
+    const html=patchPosV2HiddenVisibility(
+      patchServerCall(await readFile(outputPath,'utf8')));
     server=createServer((request,response)=>{
       void (async()=>{
         response.setHeader('Cache-Control','no-store');

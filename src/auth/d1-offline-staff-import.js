@@ -37,6 +37,9 @@ function requireD1(db,needsBatch=false){
 function captureRows(rows,fields){
   try {
     if(!Array.isArray(rows) || rows.length>10000)return null;
+    // Dense array indices plus built-in length are the entire export contract.
+    // Reject hidden/named/symbol keys before any D1 work or row capture.
+    if(Reflect.ownKeys(rows).length!==rows.length+1)return null;
     const captured=[];
     for(let i=0;i<rows.length;i++){
       const at=Object.getOwnPropertyDescriptor(rows,String(i));
