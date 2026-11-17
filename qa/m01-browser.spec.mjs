@@ -1044,8 +1044,9 @@ test('M01 Step 3: restricted and signed-out actors cannot jump to unauthorized r
     await page.goto(server.url);
     await authorizeDashboardStep2_(page,'STEP3-LIMITED','STEP3-SHOP');
     await page.evaluate(()=>{
-      window.allowedModules=['customers'];
-      window.navItems_=[{key:'customers',children:[{key:'customers'}]},
+      window.allowedModules=['dashboard','customers'];
+      window.navItems_=[{key:'dashboard'},
+        {key:'customers',children:[{key:'customers'}]},
         {key:'sales',children:[{key:'sales'}]},{key:'reports'}];
     });
     await page.locator('[data-hdb-widget="today-sales"] [data-hdb-route="sales"]').click();
