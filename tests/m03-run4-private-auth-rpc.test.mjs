@@ -106,6 +106,22 @@ test('private transport returns generic failure for invalid/secret or unresolved
   }
 });
 
+test('RPC never invokes a getter hidden in an untrusted private bridge result',async()=>{
+  let hits=0;
+  const hostile=Object.create(null);
+  Object.defineProperty(hostile,'success',{
+    enumerable:true,get(){hits++;return true;}
+  });
+  Object.defineProperty(hostile,'data',{
+    enumerable:true,value:{id:'PCAT-000017',name:'Tools'}
+  });
+  const result=await getResult('addProductCategory',[TOKEN,data('Tools')],{
+    productMasterBridge:{invoke:()=>hostile}
+  });
+  assert.equal(result.status,503);
+  assert.equal(hits,0);
+});
+
 test('private bridge rejects rogue operation and invalid server clock without DB I/O',async()=>{
   let queried=0;
   const env={DB:{prepare(){queried++;throw Error('MUST_NOT_QUERY');}}};
