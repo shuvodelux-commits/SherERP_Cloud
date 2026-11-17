@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
 import {createFrozenSourceReadback} from '../../src/db/m03-frozen-source-readback.js';
+import {createSealedSourceLookup} from '../../src/db/m03-sealed-source-lookup.js';
 import {reviewOfflineSourceParity} from '../../scripts/dry-run-source-parity.mjs';
 
 const source=JSON.parse(readFileSync(new URL('../../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
@@ -53,6 +54,29 @@ test('real local Workerd D1 reads exact frozen 49 groups and original row hashes
  });
  assert.equal(parity.exactTextParity,true);
  assert.equal(parity.d1Verified,false);
+ const adapter=createSealedSourceLookup({DB});
+ const snapshot=await adapter.openSnapshot_();
+ assert.equal((await snapshot.getSheetHeaders_('PRODUCTS')).length,19);
+ for(const group of source.tables){
+  const rows=await snapshot.getAllRows_(group.sheetKey);
+  assert.equal(rows.length,initial.groups[group.sheetKey].rows.length,group.sheetKey);
+  assert.deepEqual(await snapshot.getSheetHeaders_(group.sheetKey),group.columns);
+  for(let i=0;i<rows.length;i++){
+   const original=initial.groups[group.sheetKey].rows[i],converted=rows[i];
+   assert.equal(converted._rowIndex,original.sheetRow);
+   assert.deepEqual(group.columns.map(name=>converted[name]),original.cells);
+  }
+ }
+ const h=initial.groups.PRODUCTS.headers;
+ const product=initial.groups.PRODUCTS.rows[0];
+ const id=product.cells[h.indexOf('Product ID')];
+ const found=await snapshot.findRow_('PRODUCTS','Product ID',id);
+ assert.equal(found.rowIndex,product.sheetRow);
+ assert.equal(found.row['Product ID'],id);
+ assert.equal((await snapshot.findRows_('PRODUCTS','Product ID',id)).length,1);
+ await assert.rejects(()=>snapshot.getAllRows_('suppliers'),/source|unsupported|group/i);
+ const publicPage=await worker.fetch('http://m03.local/__m03_test__/source-lookup');
+ assert.equal(publicPage.status,404);
 });
 test('local Workerd DB readback never writes source archive or exposes a public snapshot API',async()=>{
  const beforeCount=(await DB.prepare('SELECT COUNT(*) AS n FROM m03_private_source_rows').first()).n;
