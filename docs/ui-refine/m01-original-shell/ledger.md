@@ -13,4 +13,4 @@ Target: original `/` shell; baseline `main@5a06c28`, final behavior `PR #569@20d
 
 **Degraded mode:** Impeccable was not detected; the supplied fallback rubric was applied manually. No Workflow/Agent sub-agent tool was exposed, so there were no fresh autonomous checkers/fixers or a separately executed finish-reviewer agent. The screenshot capture utility and Playwright were actually executed; there were **no new visual production edits** in this refinement branch.
 
-**Artifacts:** before/after local captures compared as reported in [README.md](README.md); added M01 Chromium screenshot test uploads persistent review evidence to the existing GitHub Actions `m01-browser-evidence` artifact. The local binary screenshots are not claimed as committed. The GitHub PR is draft and must not be auto-merged.
+**Artifacts:** before/after local captures compared as reported in [README.md](README.md); added M01 Chromium screenshot test uploads persistent review evidence to the existing GitHub Actions `m01-browser-evidence` artifact. All 16 before/after PNG screenshots plus 8 comparison sheets are now committed under `shots/`. The GitHub PR is draft and must not be auto-merged.
