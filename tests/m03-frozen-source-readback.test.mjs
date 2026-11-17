@@ -533,9 +533,9 @@ test('M03 Run 7 RED: single atomic insert installs all 38 original source floors
   assert.equal(writes.length,2);
   assert(writes.every(sql=>sql.includes('INSERT INTO synthetic_m03_id_counters')));
   assert(writes.every(sql=>!sql.includes('TENANT-A') && !sql.includes('PRD-000002')));
-  assert(writes.every(sql=>(sql.match(/\\?/g)||[]).length<=100),
+  assert(writes.every(sql=>sql.split('?').length-1<=100),
    'Cloudflare D1 permits at most 100 bound parameters in one atomic statement');
-  assert(writes.every(sql=>(sql.match(/\\?/g)||[]).length===41),
+  assert(writes.every(sql=>sql.split('?').length-1===41),
    '38 original source-floor numbers plus three trusted tenant bindings');
  }finally{db.close();}
 });
