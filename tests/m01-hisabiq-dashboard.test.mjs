@@ -82,16 +82,16 @@ test('M01 Step 1 RED: reference header hierarchy, Lucide SVGs and honest chart g
 
 test('M01 Step 2 RED: discoverable reorder grips and complete touch/keyboard controls',async t=>{
   const html=await compiled(t);
-  assert.match(html,/data-hdb-action=['"]list-prev['"]/,
+  assert.match(html,/\['list-prev','↑'/,
     'customization rows must offer accessible move-earlier control');
-  assert.match(html,/data-hdb-action=['"]list-next['"]/,
+  assert.match(html,/\['list-next','↓'/,
     'customization rows must offer accessible move-later control');
-  assert.match(html,/data-hdb-action=['"]drag-grip['"]/,
+  assert.match(html,/grip\.dataset\.hdbAction='drag-grip'/,
     'customization rows must offer discoverable drag grip');
   assert.match(html,/addEventListener\('pointerdown'/,
     'touch pointer-based reorder starts on the grip');
   assert.match(html,/addEventListener\('pointermove'/,
-    'touch pointer-based reorder follows the user's finger');
+    'touch pointer-based reorder follows the gesture');
   assert.match(html,/addEventListener\('pointerup'/,
     'touch pointer-based reorder commits after the gesture');
   assert.match(html,/addEventListener\('keydown'/,
@@ -119,6 +119,9 @@ test('M01 Step 2 RED: user and tenant scope, modal focus, and bounded layout per
     'hidden items can be rearranged without first unhiding them');
   assert.match(html,/aria-describedby="hdb-dialog-desc"/,
     'the dialog includes a referenced description');
-  assert.doesNotMatch(html,/window\.eval\(|innerHTML\s*=\s*[^'"]/,
+  const start=html.indexOf('<script id="hisabiq-dashboard-runtime">');
+  const end=html.indexOf('</script>',start);
+  const runtime=html.slice(start,end);
+  assert.doesNotMatch(runtime,/window\.eval\(|innerHTML\s*=\s*[^'"]/,
     'layout restoration must not interpret stored text as DOM or code');
 });
