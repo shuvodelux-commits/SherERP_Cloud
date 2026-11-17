@@ -284,3 +284,21 @@ test('unsupported Sqft decimal precision fails closed and never increments physi
  assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-AREA-PRECISION'")).pcs,10);
  assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-AREA-PRECISION'")).n,0);
 });
+
+
+test('direct SQL cannot bypass the 1000 Sqft receiving bound with otherwise correct whole pieces',async()=>{
+ await seed('M05-TILE-AREA-BOUND');
+ const request={mode:'area',requestedSqft:'1000.0001',fulfillment:'loose'};
+ const quote=await previewTilePurchaseLineCandidateD1({DB,productId:'M05-TILE-AREA-BOUND',request});
+ const op='OP-TILE-AREA-BOUND-001';
+ await assert.rejects(()=>DB.prepare(M05_TILE_RECEIVE_INSERT_SQL).bind(
+  op,'PUR-'+op,'ACT-1','b'.repeat(64),'SUP-1','M05-TILE-AREA-BOUND',
+  1,1,0,Number(quote.purchasePreview.receivedPcs),
+  Number(quote.quantity.boxes),Number(quote.quantity.extraPieces),
+  'Sqft',quote.purchasePreview.unitPriceText,Number(quote.purchasePreview.lineAmountMinor),
+  JSON.stringify(request),JSON.stringify(quote.quantity.measurementSnapshot),
+  JSON.stringify(quote.purchasePreview.priceSnapshot),'2026-11-17'
+ ).run(),/area|quantity|unverified|bound|constraint/i);
+ assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='M05-TILE-AREA-BOUND'")).pcs,10);
+ assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='M05-TILE-AREA-BOUND'")).n,0);
+});
