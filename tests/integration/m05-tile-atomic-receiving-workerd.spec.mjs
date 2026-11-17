@@ -74,10 +74,12 @@ test('identical operation replay is exactly once; changed request and actor conf
 test('Box, Pcs and manufacturer-Sqft purchase prices preserve exact line totals and canonical Pcs',async()=>{
  await seed('M05-TILE-BOX',{price:'600.0000',anchor:'Carton',packOverride:'600.00',pricingUnit:'Box',sqftPrice:null});
  await seed('M05-TILE-PCS',{price:'5.25',anchor:'Pcs',pricingUnit:'Pcs',sqftPrice:null});
+ await seed('M05-TILE-PCS-EQ',{price:'5.25',anchor:'Pcs',stockOverride:'5.2500',pricingUnit:'Pcs',sqftPrice:null});
  await seed('M05-TILE-MFR',{manufacturer:true});
  for(const [op,productId,req,amount,pcs] of [
   ['OP-TILE-BOX-001','M05-TILE-BOX',pack,127200,53],
   ['OP-TILE-PCS-001','M05-TILE-PCS',pack,27825,53],
+  ['OP-TILE-PCS-EQ-001','M05-TILE-PCS-EQ',pack,27825,53],
   ['OP-TILE-MFR-001','M05-TILE-MFR',{mode:'pack',boxes:'18',extraPieces:'0'},1140091,450]
  ]){
   assert.equal((await poster().post(input(op,productId,{request:req}))).status,'COMMITTED');
