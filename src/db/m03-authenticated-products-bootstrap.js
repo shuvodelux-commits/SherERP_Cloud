@@ -15,6 +15,7 @@ const DENIED='M03 authenticated Products bootstrap rejected';
 const fail=()=>{throw new Error(DENIED);};
 const TOKEN=/^[0-9a-f]{64}$/;
 const INTEGER=/^(?:0|[1-9][0-9]*|-[1-9][0-9]*)$/;
+const DECIMAL=/^(?:0|[1-9][0-9]*|-[1-9][0-9]*)(?:\.[0-9]+)?$/;
 const POSITIVE=/^[1-9][0-9]*$/;
 const MAX_ROWS=1000;
 
@@ -144,9 +145,12 @@ function revision(value,allowZero=false){
     (!allowZero&&value===0))fail();
  return value;
 }
-function canonicalSigned(text){
- if(typeof text!=='string'||!INTEGER.test(text)||!Number.isSafeInteger(Number(text)))fail();
- return Number(text);
+function canonicalStock(text,wholeOnly){
+ if(typeof text!=='string'||!(wholeOnly?INTEGER:DECIMAL).test(text))fail();
+ const quantity=Number(text);
+ if(!Number.isFinite(quantity)||Math.abs(quantity)>Number.MAX_SAFE_INTEGER||
+    (wholeOnly&&!Number.isSafeInteger(quantity)))fail();
+ return quantity;
 }
 function canonicalPositive(text){
  if(typeof text!=='string'||!POSITIVE.test(text)||!Number.isSafeInteger(Number(text)))fail();
@@ -229,8 +233,11 @@ function compose(snapshot){
      !['Active','Inactive'].includes(p.status)||
      (p.is_tile!==0&&p.is_tile!==1)||
      typeof p.product_name!=='string'||!p.product_name.trim())fail();
-  const stock=canonicalSigned(p.physical_qty_text);
   const unitRevision=revision(p.current_unit_revision,true);
+  // Frozen source single-unit quantities can be fractional (e.g. Feet).
+  // M05 mixed-unit/Tiles chain requires integral canonical physical pieces.
+  const stock=canonicalStock(p.physical_qty_text,
+   unitRevision!==0||p.is_tile===1||p.product_type_text==='Bundle');
   const profile=profilesById.get(p.product_id);
   const relations=relById.get(p.product_id)||[];
   const tile=tileById.get(p.product_id);
