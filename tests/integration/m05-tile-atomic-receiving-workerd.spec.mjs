@@ -187,3 +187,32 @@ test('receipt and historical lot are immutable and private Workerd paths have no
   assert.equal((await worker.fetch('https://synthetic.local'+path,{method:'POST',body:'{}'})).status,404);
  }
 });
+
+test('tampered supplier-credit amount is rejected inside SQL, with original price/quantity evidence unchanged',async()=>{
+ const cases=[
+  {id:'M05-TILE-FORGE-MONEY-SQFT',config:{},request:pack},
+  {id:'M05-TILE-FORGE-MONEY-BOX',config:{price:'600.0000',anchor:'Carton',packOverride:'600.00',pricingUnit:'Box',sqftPrice:null},request:pack},
+  {id:'M05-TILE-FORGE-MONEY-PCS',config:{price:'5.25',anchor:'Pcs',pricingUnit:'Pcs',sqftPrice:null},request:pack},
+  {id:'M05-TILE-FORGE-MONEY-MFR',config:{manufacturer:true},request:{mode:'pack',boxes:'18',extraPieces:'0'}}
+ ];
+ for(const [i,entry] of cases.entries()){
+  await seed(entry.id,entry.config);
+  const q=await previewTilePurchaseLineCandidateD1({DB,productId:entry.id,request:entry.request});
+  const p=Number(q.purchasePreview.receivedPcs);
+  const [boxes,extra]=[Number(entry.request.boxes),Number(entry.request.extraPieces)];
+  const altered=Number(q.purchasePreview.lineAmountMinor)+1;
+  const code='OP-TILE-MONEY-FORGE-'+String(i).padStart(3,'0');
+  const supplierBefore=(await scalar("SELECT payable_paisa FROM m05_tile_test_suppliers WHERE supplier_id='SUP-1'")).payable_paisa;
+  await assert.rejects(()=>DB.prepare(M05_TILE_RECEIVE_INSERT_SQL).bind(
+   code,'PUR-'+code,'ACT-1','d'.repeat(64),'SUP-1',entry.id,
+   1,1,0,p,boxes,extra,q.purchasePreview.pricingUnit,q.purchasePreview.unitPriceText,
+   altered,JSON.stringify(entry.request),JSON.stringify(q.quantity.measurementSnapshot),
+   JSON.stringify(q.purchasePreview.priceSnapshot),'2026-11-17'
+  ).run(),/money|amount|conservation|mismatch|constraint|price/i,entry.id);
+  assert.equal((await scalar("SELECT pcs FROM m05_tile_test_stock WHERE product_id='"+entry.id+"'")).pcs,10);
+  assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_receipts WHERE product_id='"+entry.id+"'")).n,0);
+  assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_lots WHERE product_id='"+entry.id+"'")).n,0);
+  assert.equal((await scalar("SELECT COUNT(*) n FROM m05_tile_test_movements WHERE product_id='"+entry.id+"'")).n,0);
+  assert.equal((await scalar("SELECT payable_paisa FROM m05_tile_test_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,supplierBefore);
+ }
+});
