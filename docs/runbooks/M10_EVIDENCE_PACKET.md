@@ -25,6 +25,32 @@ The owner requests the remaining M10 work be organized into **three execution ru
 - Independently collected performance metrics must be dated **at or after** the isolated restore readback.
 - These timestamp comparisons reject impossible evidence order; they **do not authenticate receipts or prove that operations occurred**.
 
+## Run 1 verified coverage audit and M02/M03 handoff (2026-11-17)
+
+**Evidence baseline:** `main@7c81dca09f975fbda37586eb50c2763c7f8506df`. Independently evaluated the actual `buildMigrationCoverage` logic from `scripts/audit-migration-coverage.mjs` against the frozen 49-group `docs/baseline/schema-inventory.json` and the contents of all **14 numbered SQL migrations 0001–0014**. This is a **static source-to-table coverage assessment**, not a successful historical D1 import, reconciliation or server auth proof. Do not extrapolate D1 production readiness from table creation.
+
+| Category returned by coverage audit | Source groups | Interpretation |
+| --- | ---: | --- |
+| Catalog schema only | **4** | Source-shaped table presence; not historical business-data reconciliation |
+| Diagnostic schema only | **1** | `LOGS` archive; physical sheet positions only, no invented source Log ID |
+| Historical audit schema only | **5** | Delete, draft audit, invoice/opening edit, and lot-cost correction audit |
+| Product source archive only | **1** | Historical PRODUCTS snapshot, not full stock/financial posting migration |
+| Party identity only | **5** | Original master IDs can be mapped; separate role financial balances are not proven migrated |
+| Local authentication only | **3** | USERS/ROLES/SESSIONS local structures, not approved public authenticated RPC |
+| **Unmapped** | **30** | No qualifying reviewed source-group mapping in this current coverage audit |
+| **Fully reconciled** | **0 / 49** | The audit intentionally does not recognize full source/private D1 data import from schema presence alone |
+
+**Thirty currently unmapped groups, to be resolved through M02 source semantics and the single M03 SQL/schema integration owner:**
+
+- **Purchases, inventory, bundles, and historical stock (8):** `BUNDLE_COMPONENTS`, `SALE_BUNDLE_COMPONENTS`, `SUPPLIER_LEDGER`, `STOCK_LOTS`, `SALE_ITEM_LOTS`, `PURCHASES`, `PURCHASE_ITEMS`, `STOCK_MOVEMENT`
+- **Sales, payments, and cash session (7):** `SALES`, `SALE_PAYMENTS`, `SALE_POSTING_JOURNAL`, `SALES_DRAFTS`, `SALE_ITEMS`, `CUSTOMER_LEDGER`, `CASH_SESSIONS`
+- **Returns, operating cash/bank, expenses, and finance (11):** `SALES_RETURN`, `SALES_RETURN_ITEMS`, `PURCHASE_RETURN`, `PURCHASE_RETURN_ITEMS`, `EXPENSES`, `CASH_BOOK`, `BANK_ACCOUNTS`, `BANK_BOOK`, `BANK_TRANSFERS`, `FINANCE_TRANSACTIONS`, `VENDOR_LEDGER`
+- **Vendor sourcing and correction history (4):** `VENDOR_SOURCING`, `VENDOR_RETURNS`, `VENDOR_ISSUES`, `VENDOR_RETURNS_RECEIVED`
+
+**Required upstream work before Run 2 can be an actual full rehearsal:** M02 must submit versioned original-ID/row/date/amount/soft-delete and Party-account mapping proposals for every missing group; M03, as **sole shared schema/posting owner**, must review and integrate the needed D1 tables/import/readback contracts with genuine local Workerd/D1 tests. M04–M09 must provide their current authenticated transaction and financial parity contracts. Then an authorized M10 operator can capture a private source snapshot, compare all 49 groups and independently validate original and D1 readback. M10 may consume those signed records; it must **not** create a competing shared schema or use fabricated synthetic `fullyReconciled:49` as actual evidence.
+
+**Do not mark any of the nine M10 #312 acceptance gates satisfied based on this static audit.** Its reported `fullyReconciled:0` is an intentionally conservative result of the audit contract; it is not a claim that isolated module tests have accomplished nothing.
+
 ## 1. What this tool does and does not do
 
 This preflight composes **existing** M10 checks; it never takes a real snapshot, imports a group, authorizes D1 SQL, mutates Sheets, posts money, modifies worker bindings or performs backup/restore.
