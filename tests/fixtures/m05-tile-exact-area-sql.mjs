@@ -42,7 +42,7 @@ export const M05_TILE_EXACT_AREA_GUARD_SQL=
  "AND json_type(NEW.request_snapshot_json,'$.boxes') IS NULL "+
  "AND json_type(NEW.request_snapshot_json,'$.extraPieces') IS NULL "+
  "AND "+f+" IN ('loose','box-only') "+
- "AND "+decimalWithinFour(r,1000)+" AND "+fixed4(r)+">0 "+
+ "AND "+decimalWithinFour(r,1000)+" AND "+fixed4(r)+">0 AND "+fixed4(r)+"<=10000000 "+
  "AND (substr("+r+",1,1)<>'0' OR substr("+r+",2,1)='.') "+
  "AND m.pieces_per_box BETWEEN 1 AND 1000000 "+
  "AND NEW.boxes=(NEW.received_pcs/m.pieces_per_box) "+
