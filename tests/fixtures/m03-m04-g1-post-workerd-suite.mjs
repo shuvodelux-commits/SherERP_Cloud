@@ -104,9 +104,15 @@ test('current M04 revocation and permission epoch changes deny before any privat
   await assert.rejects(()=>posting.post_(input(ADMIN,'OP-REVOKE')),/Denied/i);
   await DB.prepare("UPDATE auth_roles SET permissions_json='{}' WHERE role_name='Cashier'").run();
   await assert.rejects(()=>posting.post_(input(CASHIER,'OP-STALE-ROLE')),/Denied/i);
-  await DB.prepare('UPDATE auth_sessions SET role_auth_version=(SELECT auth_version FROM auth_roles WHERE role_name=?) WHERE token_hash=?')
-    .bind('Cashier',hash(CASHIER)).run();
-  await assert.rejects(()=>posting.post_(input(CASHIER,'OP-NO-GRANT')),/Denied/i);
+  // A changed role epoch requires a freshly issued session; the previous
+  // M04 session authority snapshot is intentionally immutable.
+  const freshCashier='f'.repeat(64);
+  const epoch=(await DB.prepare("SELECT auth_version FROM auth_roles WHERE role_name='Cashier'").first()).auth_version;
+  await DB.prepare(`INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,
+    role_auth_version,credential_version,created_at_ms,last_activity_at_ms,expires_at_ms)
+    VALUES(?, 'CASHIER',1,?,1,?,?,?)`)
+    .bind(hash(freshCashier),epoch,NOW-600_000,NOW-10_000,NOW+600_000).run();
+  await assert.rejects(()=>posting.post_(input(freshCashier,'OP-NO-GRANT')),/Denied/i);
   assert.deepEqual(await snapshot(),original);
 });
 
