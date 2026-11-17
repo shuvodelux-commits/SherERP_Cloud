@@ -9,11 +9,11 @@ const source=()=>Object.fromEntries(REVIEWED_AWAIT_FILES.map(path=>[
 ]));
 const analyze=sources=>auditReviewedM03AwaitChains(sources);
 
-test('source-pinned M03 converted read/RPC slice has a fully awaited transitive 6-file chain',()=>{
+test('source-pinned M03 converted read/RPC slice and six archived groups contain 12 reviewed awaited chains',()=>{
   const report=analyze(source());
   assert.deepEqual(report,{
     status:'REVIEWED_M03_AWAITED_ONLY',
-    files:6,awaitedCallSites:15,
+    files:12,awaitedCallSites:51,
     publicRpcEnabled:false
   });
   const live=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
