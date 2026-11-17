@@ -1034,3 +1034,35 @@ test('M04 A05 SQL-current grant proof rejects duplicate and escaped-equivalent J
     }),false,'fixed operation allowlist prevents selector injection');
   }
 });
+
+
+test('M04 restore must revoke a core-valid bearer when stored role profile is invalid',async()=>{
+  const at=NOW+5_700_000;
+  // The synthetic Corrupt role is active in SQL but has a forbidden []
+  // permission root. Core SQL-current session checks can still mint a bearer;
+  // the source-shaped M04 profile reader must fail CLOSED and revoke it.
+  const core=await loginWithD1(db,{
+    phoneKey:'01710000103',password:SECRET,nowMs:at,
+  });
+  assert.equal(core.authenticated,true,
+    'core session deliberately predates source-profile validation');
+  const digest=await tokenFingerprint(core.token);
+  const before=await db.prepare(`SELECT revoked_at_ms FROM auth_sessions
+    WHERE token_hash=?`).bind(digest).first();
+  assert.equal(before.revoked_at_ms,null,'synthetic core bearer begins active');
+
+  const restored=await rpc('validateSession',[core.token],at+1_000);
+  assert.deepEqual(restored,{
+    status:200,body:{
+      success:false,message:'Session expired. Please sign in again.',
+    },
+  },'invalid role JSON must never yield a source-shaped profile');
+
+  const after=await db.prepare(`SELECT revoked_at_ms FROM auth_sessions
+    WHERE token_hash=?`).bind(digest).first();
+  assert.equal(after.revoked_at_ms,at+1_000,
+    'failed source-profile restore must persist bearer revocation');
+  const repeat=await rpc('validateSession',[core.token],at+2_000);
+  assert.equal(repeat.body.success,false,
+    'the invalid bearer cannot be resurrected on another restore');
+});
