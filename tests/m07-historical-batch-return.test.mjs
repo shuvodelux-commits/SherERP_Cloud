@@ -138,8 +138,8 @@ test('third Bundle return declines the entire three-child batch without partial 
 
 test('mixed-unit source already partly returned supports only its remaining original consumption',()=>{
  const s=mixedSource();
- s.activeReturnedBaseQty=20;
- s.consumptionRows[1].remainingBaseQty=25;
+ s.activeReturnedBaseQty=25;
+ s.consumptionRows[1].remainingBaseQty=20;
  const r=batch([
   mixed('RET-C-1',boxAndFive,structuredClone(s)),
   mixed('RET-C-2',bag,structuredClone(s))
