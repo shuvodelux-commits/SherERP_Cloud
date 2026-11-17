@@ -342,3 +342,66 @@ test('M01 Playwright original POS V2 navigation and workflow parity at phone tab
     });
   }
 });
+
+
+test('M01 Playwright POS V2 authorized Products add action stays visible',async()=>{
+  // This positive control protects the original authorized feature when the
+  // cross-owner compiled-CSS hidden-state repair is integrated (issue #482).
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const page=await browser.newPage({
+    viewport:{width:375,height:812},isMobile:true,hasTouch:true
+  });
+  try{
+    const {calls}=await installM01SyntheticNavigation(page,{
+      allowedModules:['dashboard','pos','products'],
+      permissions:{
+        dashboard:{view:true},pos:{view:true},products:{view:true,add:true}
+      },
+      navItems:[
+        {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+        {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,
+          landingKey:'posv2',
+          children:[{key:'posv2',label:'POS V2',permKey:'pos'}]},
+        {key:'products',label:'Products',sidebarGroup:1,sidebarOrder:30}
+      ]
+    });
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.locator('#loginMobile').fill('01710000001');
+    await page.locator('#loginPassword').fill('m01-synthetic-only');
+    const loginReply=page.waitForResponse(response=>
+      response.url().endsWith('/api/rpc') &&
+      response.request().postDataJSON()?.fnName==='login');
+    await page.locator('#loginSubmitBtn').tap();
+    assert.equal((await loginReply).status(),200);
+    await page.waitForFunction(()=>
+      document.getElementById('loginOverlay')?.hidden===true);
+    await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+    await page.waitForFunction(()=>
+      currentPage==='posv2' && document.body.classList.contains('pos-v2-active'));
+    const add=page.locator('#v2AddProductBtn');
+    await add.waitFor({state:'visible'});
+    const state=await page.evaluate(()=>{
+      const btn=document.getElementById('v2AddProductBtn');
+      return {
+        allowed:hasActionPermission_('products','add'),
+        hidden:btn.hidden,
+        display:getComputedStyle(btn).display
+      };
+    });
+    assert.equal(state.allowed,true);
+    assert.equal(state.hidden,false);
+    assert.equal(await add.isVisible(),true,
+      'the source's authorized Add Product action must remain visible');
+    const evidence=await captureM01NavEvidence(page,'posv2-authorized-product-add');
+    assert.ok(evidence.screenshotBytes>1500);
+    assert.equal(evidence.loginHidden,true);
+    assert.equal(calls.filter(x=>
+      /^(?:saveSale|createSale|completeSale|postSale|submitSale)$/i
+        .test(x.fnName||'')).length,0,
+      'visibility-only Playwright QA must not post a sale');
+  }finally{
+    await page.close();
+  }
+});
