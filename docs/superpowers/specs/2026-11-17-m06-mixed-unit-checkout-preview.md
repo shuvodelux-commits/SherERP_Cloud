@@ -1,0 +1,20 @@
+# M06 — Mixed-unit POS checkout and split tender read-only preview
+
+## Authority and dependencies
+**Issue:** #314, coordination #456. **Branch base main:** `1cd270e29e7a023f1a84c784e31845a9927704c4`. Read `AGENTS.md`, `docs/PARALLEL_EXECUTION.md`, `docs/M03_PARALLEL_READINESS.md`, `docs/WORKSTREAMS.md`, and approved ADR-007. Frozen sale/payment authority: `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, `legacy/source/Sales.gs`, `legacy/source/SalePayments.gs`. Approved multiunit mathematics derives from `sherERP_Mohim@590adfad128fe7155bfb7b608a2ed5665b202a9c`, merged M05 unit converter #313, and merged M06 [#463](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/463). This is **parallel preparation only**. M03 owns `src/db/**`, shared D1 migrations, transaction/reversal kernel, Cash Session authorization, Worker RPC, and source ID issuance; M04 owns session/RBAC; M05 owns stock/unit revision schema.
+
+## Small internal interface
+`planMultiUnitPosCheckoutPreview(intent,snapshot)` takes an object `{lines:[{productId,unitBreakdown,claimedBaseQty,shortageMode}],discount,payments}` and trusted tenant-scoped `{products,conversionRows,stockLots,bankAccounts}`. All rows and payment objects must be plain accessor-free data. Caller must have already established POS authority through M04; no browser-provided permission grants authorization. The helper invokes merged `planMultiUnitPosLine` once for each unique Product ID and `normalizeSalePayments_` from the pinned source once on the final Grand Total. It MUST NOT reimplement conversion chains, FIFO, or split tender.
+
+## Financial invariants
+- Every distinct product is **one sale line** even if entered in Bag/Box/Pcs. Duplicates reject rather than consume the same owned FIFO inventory twice.
+- Subtotal is the **sum of authoritative per-line `lineTotal` values** in integer paisa. Never calculate `line.baseQty * line.unitPrice` to reconstruct money; rounded rates differ by paisa for nontrivial factors.
+- The discount uses the existing `salePaymentPaisa_` exact nonnegative 2-decimal parser; `grandPaisa=max(0,subtotalPaisa-discountPaisa)`, preserving original source discount cap-to-zero. Integer-paisa safety checks reject overflow.
+- Split allocation uses untouched `normalizeSalePayments_` exactly once with the trusted bank account directory. Bank/Mobile allocation never exceeds Grand Total; Cash may tender change; applied payment, Customer due, account identity and payment status are source-faithful.
+- Duplicate Bank Account IDs in a trusted directory fail closed instead of selecting the first ambiguous account. Invalid or untrusted source rows and duplicate Product IDs also reject. Snapshot immutability and no private purchase-cost leakage are tested.
+- Anonymous cash checkout remains anonymous: no synthetic Customer/Party ID, no Customer ledger creation, no source-ID issuance.
+- The return is a **display-only** object `{lines,subtotal,discount,grandTotal,allocation}`. It includes original line quantities and unit snapshots but does not authorize or persist them.
+- Empty cart fails. Legitimate zero-valued Grand Total due to discount can project no payment; Cash tender against zero is rejected by the original source function. No live DB or remote business data operations.
+
+## Scoped files and merge
+Create only `src/modules/m06-mixed-unit-pos-checkout-preview.js`, `tests/m06-mixed-unit-pos-checkout-preview.test.mjs` and the two new M06 Superpowers docs. All existing M05/M06 modules are **read-only imports**. No `src/db`, `migrations`, `src/rpc`, `src/index.js`, shared transaction kernel, frontend/raw, wrangler, auth, D1 data, or CI workflow file changes. Use RED test-only commit, minimal GREEN, full exact-head GitHub Foundation/Node, local Workerd/D1 and Chromium/Cloudflare safety CI. Owner explicitly authorized proceeding with next M06 preparation; this is **not** a production integration or permission to deploy/merge before all checks. Rollback: revert this isolated PR; no D1 rollback.
