@@ -38,7 +38,22 @@ const purchase=()=>({
   returnHeaders:[{'Return ID':'PR-A','Purchase ID':'PO-A','Is Deleted':''}],
   returnItems:[{'Return ID':'PR-A','Purchase ID':'PO-A','Is Deleted':''}]
 });
-const complete=()=>({manifest:verifiedManifest(),salesSnapshot:sales(),purchaseSnapshot:purchase()});
+const complete=()=>{
+  const manifest=verifiedManifest(),salesSnapshot=sales(),purchaseSnapshot=purchase();
+  // The manifest represents complete source history, including deleted rows.
+  for(const [key,rows] of [
+    ['SALES',salesSnapshot.allSales],
+    ['SALES_RETURN',salesSnapshot.returnHeaders],
+    ['SALES_RETURN_ITEMS',salesSnapshot.returnItems],
+    ['PURCHASES',purchaseSnapshot.allPurchases],
+    ['PURCHASE_RETURN',purchaseSnapshot.returnHeaders],
+    ['PURCHASE_RETURN_ITEMS',purchaseSnapshot.returnItems]
+  ]){
+    manifest.sourceGroups[key].sourceRows=rows.length;
+    manifest.sourceGroups[key].importedRows=rows.length;
+  }
+  return {manifest,salesSnapshot,purchaseSnapshot};
+};
 const byKey=(result,key)=>result.reports.find(r=>r.key===key);
 
 test('M09 complete historical lineage can improve source evidence but can never authorize reports',()=>{
@@ -81,6 +96,8 @@ test('M09 missing Purchase source snapshot blocks Purchase and Profit only',()=>
 test('M09 Sales mismatched child and missing parent are source blockers, not financial totals',()=>{
   const data=complete();
   data.salesSnapshot.allSales.push({'Invoice ID':'INV-B','Is Deleted':''});
+  data.manifest.sourceGroups.SALES.sourceRows=2;
+  data.manifest.sourceGroups.SALES.importedRows=2;
   data.salesSnapshot.returnItems[0]['Invoice ID']='INV-B';
   const out=inspect(data);
   assert.deepEqual(byKey(out,'sales').lineageBlockers,['SALES_RETURN_LINEAGE_NEEDS_REVIEW']);
@@ -92,6 +109,8 @@ test('M09 Sales mismatched child and missing parent are source blockers, not fin
 test('M09 Purchase mismatch blocks Purchase and Profit but not Sales',()=>{
   const data=complete();
   data.purchaseSnapshot.allPurchases.push({'Purchase ID':'PO-B','Is Deleted':''});
+  data.manifest.sourceGroups.PURCHASES.sourceRows=2;
+  data.manifest.sourceGroups.PURCHASES.importedRows=2;
   data.purchaseSnapshot.returnItems[0]['Purchase ID']='PO-B';
   const out=inspect(data);
   assert.deepEqual(byKey(out,'purchase').lineageBlockers,['PURCHASE_RETURN_LINEAGE_NEEDS_REVIEW']);
@@ -103,6 +122,8 @@ test('M09 Purchase mismatch blocks Purchase and Profit but not Sales',()=>{
 test('M09 two independent bad return sources block Profit with both fixed codes',()=>{
   const data=complete();
   data.salesSnapshot.returnItems.push({'Return ID':'GHOST','Invoice ID':'INV-A'});
+  data.manifest.sourceGroups.SALES_RETURN_ITEMS.sourceRows=2;
+  data.manifest.sourceGroups.SALES_RETURN_ITEMS.importedRows=2;
   data.purchaseSnapshot.returnHeaders[0]['Purchase ID']='MISSING';
   const out=inspect(data);
   assert.deepEqual(byKey(out,'profit').lineageBlockers,[
@@ -118,7 +139,7 @@ test('M09 original manifest count drift is still blocked independently',()=>{
   const out=inspect(data);
   assert.deepEqual(byKey(out,'sales').countMismatchGroups,['SALES']);
   assert.equal(byKey(out,'sales').evidenceComplete,false);
-  assert.deepEqual(byKey(out,'sales').lineageBlockers,[]);
+  assert.deepEqual(byKey(out,'sales').lineageBlockers,['SALES_SOURCE_ROWS_MISMATCH']);
   assert.equal(byKey(out,'stock').evidenceComplete,true);
 });
 
@@ -145,4 +166,102 @@ test('M09 rejects untrusted root or manifest getter without invoking side effect
   Object.defineProperty(root,'manifest',{get(){invoked++;throw Error('DO-NOT-READ');}});
   assert.throws(()=>inspect(root),/trusted|manifest|record/i);
   assert.equal(invoked,0);
+});
+
+test('M09 six full historical source counts must agree with reviewed manifest counts',()=>{
+  for(const [side,keys,dependent] of [
+    ['salesSnapshot',['SALES','SALES_RETURN','SALES_RETURN_ITEMS'],['sales','profit']],
+    ['purchaseSnapshot',['PURCHASES','PURCHASE_RETURN','PURCHASE_RETURN_ITEMS'],['purchase','profit']]
+  ]){
+    for(const group of keys){
+      const data=complete();
+      // Both original-vs-imported manifest totals still agree, but disagree
+      // with the full source-shaped snapshot actually supplied to the auditor.
+      data.manifest.sourceGroups[group].sourceRows=0;
+      data.manifest.sourceGroups[group].importedRows=0;
+      const result=inspect(data);
+      for(const key of dependent){
+        const item=byKey(result,key);
+        assert.deepEqual(item.lineageBlockers,[group+'_SOURCE_ROWS_MISMATCH'],
+          side+' '+group+' must block '+key);
+        assert.equal(item.evidenceComplete,false);
+        assert.equal(item.status,'BLOCKED');
+        assert.equal(item.ready,false);
+      }
+      for(const other of ['sales','purchase','stock','cashbank','profit','balancesheet']){
+        if(!dependent.includes(other)){
+          assert.equal(byKey(result,other).evidenceComplete,true,
+            side+' '+group+' must not block '+other);
+          assert.deepEqual(byKey(result,other).lineageBlockers,[]);
+        }
+      }
+      assert.equal(JSON.stringify(result).includes('INV-A'),false);
+      assert.equal(JSON.stringify(result).includes('PO-A'),false);
+    }
+  }
+});
+
+test('M09 full source counts include deleted parent and original invoice/purchase rows',()=>{
+  const data=complete();
+  data.salesSnapshot.allSales.push({'Invoice ID':'INV-DEL','Is Deleted':'True'});
+  data.salesSnapshot.returnHeaders.push({
+    'Return ID':'SR-DELETED','Invoice ID':'INV-A','Is Deleted':'true'
+  });
+  data.purchaseSnapshot.allPurchases.push({'Purchase ID':'PO-DEL','Is Deleted':'TRUE'});
+  const result=inspect(data);
+  assert.deepEqual(byKey(result,'sales').lineageBlockers,[
+    'SALES_SOURCE_ROWS_MISMATCH','SALES_RETURN_SOURCE_ROWS_MISMATCH'
+  ]);
+  assert.deepEqual(byKey(result,'purchase').lineageBlockers,[
+    'PURCHASES_SOURCE_ROWS_MISMATCH'
+  ]);
+  assert.deepEqual(byKey(result,'profit').lineageBlockers,[
+    'SALES_SOURCE_ROWS_MISMATCH','SALES_RETURN_SOURCE_ROWS_MISMATCH',
+    'PURCHASES_SOURCE_ROWS_MISMATCH'
+  ]);
+  assert.equal(byKey(result,'stock').evidenceComplete,true);
+});
+
+test('M09 mismatched child relationships and row counts fail independently in one report',()=>{
+  const data=complete();
+  data.salesSnapshot.returnItems.push({'Return ID':'UNKNOWN','Invoice ID':'INV-A'});
+  const result=inspect(data);
+  assert.deepEqual(byKey(result,'sales').lineageBlockers,[
+    'SALES_RETURN_LINEAGE_NEEDS_REVIEW','SALES_RETURN_ITEMS_SOURCE_ROWS_MISMATCH'
+  ]);
+  assert.deepEqual(byKey(result,'profit').lineageBlockers,[
+    'SALES_RETURN_LINEAGE_NEEDS_REVIEW','SALES_RETURN_ITEMS_SOURCE_ROWS_MISMATCH'
+  ]);
+  assert.equal(byKey(result,'purchase').evidenceComplete,true);
+});
+
+test('M09 incomplete and accessor source receipts fail closed without calling getters',()=>{
+  const missing=complete();
+  delete missing.manifest.sourceGroups.SALES_RETURN;
+  const result=inspect(missing);
+  assert.deepEqual(byKey(result,'sales').missingGroups,['SALES_RETURN']);
+  assert.equal(byKey(result,'sales').evidenceComplete,false);
+  assert.equal(byKey(result,'sales').ready,false);
+
+  let called=0;
+  const accessors=complete();
+  Object.defineProperty(accessors.manifest.sourceGroups.PURCHASE_RETURN,
+    'sourceRows',{configurable:true,get(){called++;throw Error('SOURCE-PRIVATE');}});
+  const bad=inspect(accessors);
+  assert.equal(called,0);
+  assert.deepEqual(byKey(bad,'purchase').unreviewedGroups,['PURCHASE_RETURN']);
+  assert.equal(byKey(bad,'purchase').evidenceComplete,false);
+  assert.equal(JSON.stringify(bad).includes('SOURCE-PRIVATE'),false);
+});
+
+test('M09 returns original six-report response keys with no totals or input mutation',()=>{
+  const data=complete(),original=JSON.stringify(data);
+  const out=inspect(data);
+  assert.equal(out.ready,false);
+  for(const item of out.reports){
+    assert.deepEqual(item.lineageBlockers,[]);
+    assert.equal(item.ready,false);
+    assert.equal(Object.hasOwn(item,'totals'),false);
+  }
+  assert.equal(JSON.stringify(data),original);
 });
