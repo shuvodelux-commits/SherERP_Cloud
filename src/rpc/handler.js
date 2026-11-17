@@ -213,7 +213,10 @@ function validAppShellEnvelope(result){
 /** Allow only original messages and ID/name pairs; never serialize raw D1 rows. */
 function validProductMasterEnvelope(result,fnName,name) {
   if(!plainRecord(result))return false;
-  if(result.success===false){
+  const success=Object.getOwnPropertyDescriptor(result,'success');
+  if(!success?.enumerable||!Object.hasOwn(success,'value')||
+     typeof success.value!=='boolean')return false;
+  if(success.value===false){
     return ownFields(result,['success','message']) &&
       typeof result.message==='string' &&
       PRODUCT_MASTER_FAILURE[fnName].includes(result.message);
