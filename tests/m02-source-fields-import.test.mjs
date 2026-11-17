@@ -175,7 +175,7 @@ test('unclassified fields stay subject to review, not automatically omitted or a
  const r=review();
  for(const [g,c] of [
   ['CUSTOMERS','Notes'],['PRODUCTS','Brand'],
-  ['VENDOR_RETURNS','Reason'],['CASH_BOOK','Description']
+  ['VENDOR_RETURNS','Notes'],['CASH_BOOK','Description']
  ]){
   assert.equal(field(r,g,c).semanticHazard,'review-text');
   assert.equal(field(r,g,c).reconciliationReviewRequired,true);
