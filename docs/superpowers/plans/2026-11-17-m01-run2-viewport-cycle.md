@@ -20,7 +20,7 @@
 6. Start with the existing M01 synthetic Clerk allowing only Dashboard and POS, explicitly denying Bank and Products-add.
 7. Authenticate once, enter POS V2 through the original mobile navigation, and preserve the same browser page throughout.
 8. At each viewport assert the original `isPhoneViewport_()` result, app viewport-height metric, authenticated shell, POS V2 page and absence of Bank navigation and restricted Products-add action.
-9. On phone layouts activate the original Cart/Customer/Payment tabs and verify selected-state semantics without adding products.
+9. On narrow portrait phone layouts activate visible original Customer/Cart tabs, while coarse wide landscape retains phone navigation but hides the narrow-only workflow tabs; verify no products are added.
 10. Capture a screenshot for every stage and confirm the product search remains within phone width.
 11. Prove no sale-creation/posting RPC was invoked, the Clerk login occurred exactly once and direct forbidden Bank navigation still falls back safely.
 12. Do not infer live checkout, real user authorization, hardware rendering or financial correctness from this synthetic browser regression.
