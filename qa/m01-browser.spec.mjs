@@ -825,7 +825,7 @@ test('M01 Step 2: mouse/keyboard reorder metric and panel groups, toggle hidden,
     const dlg=page.locator('#hisabiq-dashboard-dialog');
     assert.equal(await dlg.isVisible(),true);
     assert.equal(await page.locator('#hdb-dialog-desc').count(),1);
-    assert.equal(await page.locator('[data-hdb-list="metric"] [data-hdb-id]').count(),11,
+    assert.equal(await page.locator('[data-hdb-list="metric"] > [data-hdb-id]').count(),11,
       'six default + five optional metric widgets');
 
     const from=page.locator('[data-hdb-list="metric"] [data-hdb-id="payable"]');
