@@ -123,9 +123,12 @@ test('desktop product modal previews 2 Box 5 Pcs without changing legacy Save or
   await page.locator('#m01StockPreview').getByText('2 Box 5 Pcs',{exact:false}).waitFor();
   await captureProductPreview(page,'products-desktop-after-multiunit');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
+  assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save unavailable');
+  assert.equal(await page.locator('#prodSaveBtn').evaluate(el=>getComputedStyle(el).cursor),'not-allowed');
   assert.equal(await page.locator('#prodBundleEditor').count(),1);
   await chooseProductPreviewOption(page,'m01ProductUnitMode','single');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),false);
+  assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save Product');
  }finally{await page.close();}
 });
 
