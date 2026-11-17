@@ -9,7 +9,7 @@ function setup(){
  const db=new DatabaseSync(':memory:');
  db.exec('PRAGMA foreign_keys=ON');
  const path=new URL('../migrations/',import.meta.url);
- for(const name of readdirSync(path).filter(x=>/^\\d{4}_.+\\.sql$/.test(x)).sort())
+ for(const name of readdirSync(path).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort())
   db.exec(readFileSync(new URL(name,path),'utf8'));
  return db;
 }
