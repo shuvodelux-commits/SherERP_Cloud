@@ -316,9 +316,9 @@ test('G2 even a direct synthetic receipt INSERT cannot bypass DB Cash Session gu
     const before=x.state();
     assert.throws(()=>x.db.prepare(`INSERT INTO operation_receipts(
       tenant_id,operation_id,actor_id,operation_type,payload_hash,result_ref,
-      committed_at,sku,units,amount_cents)
+      committed_at,sku,units,amount_cents,source_invoice_id)
       VALUES('BUSINESS-A','OP-DIRECT','ADMIN','sales.post',?,'SYNTH-OP-DIRECT',
-        '2026-11-17T08:00:00Z','PIPE-1',1,12000)`).run('a'.repeat(64)),/cash session|required|abort/i);
+        '2026-11-17T08:00:00Z','PIPE-1',1,12000,'INV-000017')`).run('a'.repeat(64)),/cash session|required|abort/i);
     assert.deepEqual(x.state(),before);
   }finally{x.close();}
 });
