@@ -252,7 +252,7 @@
     elements[item[0]]=node;
     definitions[item[0]]={id:item[0],kind:item[1],visible:item[2]};
   });
-  var widgets=[],editing=false,storedKey=null,focusReturn=null,dragTouch=null;
+  var widgets=[],editing=false,storedKey=null,hadActor=false,focusReturn=null,dragTouch=null;
   var live=document.getElementById('hdb-announcement');
   function announce(message){if(live)live.textContent=message;}
   function defaultLayout(){return defaults.map(function(w){return {id:w[0],visible:w[2]};});}
@@ -292,9 +292,23 @@
     if(!storedKey || storedKey!==identityKey())return;
     try{localStorage.setItem(storedKey,JSON.stringify(widgets));}catch(_){}
   }
+  function clearLegacySummaryOnActorChange(){
+    // Rendered legacy dash* cells are not tagged with the server-side actor.
+    // Never show previously mirrored values after switching users/tenants.
+    ['dashSales','dashCollection','dashExpense','dashPurchase','dashDue',
+      'dashBorrowerReceivable','dashPayable','dashOutstandingLoan',
+      'dashCash','dashLowStockCount'].forEach(function(id){
+      var cell=document.getElementById(id);
+      if(cell)cell.textContent='--';
+    });
+  }
   function syncIdentity(){
     var next=identityKey();
     if(next===storedKey)return false;
+    // The first account on a fresh page may retain its own source-load result.
+    // Subsequent switches, logout and login must discard the old DOM summary.
+    if(hadActor)clearLegacySummaryOnActorChange();
+    if(next)hadActor=true;
     // A resumed browser or an actor/tenant switch must never keep the old
     // actor's edit dialog, selected grips or pending touch gesture.
     if(!dialog.hidden)closeDialog(false);
@@ -525,9 +539,12 @@
     hydrate();
   }
   function hydrate(){
+    var loginOverlay=document.getElementById('loginOverlay');
+    var active=typeof authToken==='string' && !!authToken && currentUser &&
+      loginOverlay && loginOverlay.hidden && storedKey && storedKey===identityKey();
     root.querySelectorAll('[data-hdb-value]').forEach(function(output){
       var id=output.dataset.hdbValue;
-      if(id==='unavailable'){output.textContent='—';return;}
+      if(!active || id==='unavailable'){output.textContent='—';return;}
       var original=document.getElementById(id);
       var value=original && original.textContent?original.textContent.trim():'';
       output.textContent=value && value!=='--' ? value : '—';
@@ -535,9 +552,6 @@
     var shop=document.getElementById('shopNameLabel');
     var store=shop&&shop.textContent&&shop.textContent.trim();
     var date=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
-    var loginOverlay=document.getElementById('loginOverlay');
-    var active=typeof authToken==='string' && !!authToken && currentUser &&
-      loginOverlay && loginOverlay.hidden;
     var displayName=active ? String(currentUser.name||currentUser.mobile||'').trim() : '';
     root.querySelector('#hdb-welcome-title').textContent=displayName?
       'Welcome, '+displayName : 'Dashboard';
