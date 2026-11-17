@@ -168,3 +168,36 @@ test('unknown export accessors and enumeration traps fail without execution or l
   }
   assert.equal(invoked,0);
 });
+
+
+test('two distinct wrapper exports sharing any USERS or ROLES collection or row cannot pass source freeze',()=>{
+  const aliases=[
+    s=>({users:s.users,roles:structuredClone(s.roles)}),
+    s=>({users:structuredClone(s.users),roles:s.roles}),
+    s=>{const t=structuredClone(s);t.users[0]=s.users[0];return t;},
+    s=>{const t=structuredClone(s);t.users[1]=s.users[1];return t;},
+    s=>{const t=structuredClone(s);t.roles[0]=s.roles[0];return t;},
+  ];
+  for(const alias of aliases){
+    const first=source(),confirmation=alias(first);
+    assert.notEqual(first,confirmation);
+    assert.deepEqual(first,confirmation);
+    const result=auditStableLegacyStaffFreeze(first,confirmation);
+    assert.deepEqual(result,{
+      freezeMatch:false,
+      counts:{users:0,roles:0},
+      issues:[{scope:'snapshot',row:null,code:'SOURCE_PREFLIGHT_FAILED'}],
+    },'shared protected source references are not independent captures');
+    assert.doesNotMatch(JSON.stringify(result),/Synthetic|0179000|USR-FREEZE|Cashier|123e4567/i);
+  }
+});
+
+test('two independently allocated but identical source graphs still pass freeze',()=>{
+  const first=source(),confirmation=source();
+  assert.notEqual(first.users,confirmation.users);
+  assert.notEqual(first.users[0],confirmation.users[0]);
+  assert.notEqual(first.roles[0],confirmation.roles[0]);
+  assert.deepEqual(auditStableLegacyStaffFreeze(first,confirmation),{
+    freezeMatch:true,counts:{users:2,roles:1},issues:[],
+  });
+});
