@@ -228,3 +228,63 @@ test('compiled login rejects malformed M04 profiles before assigning browser aut
     allowedModules:null,permissions:null
   })?.then,'function','source-shaped Administrator payload remains accepted');
 });
+
+
+test('compiled session restore never replaces the locally validated bearer',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const frozen=readFileSync(new URL('../legacy/source/javascript.html',import.meta.url),'utf8');
+  const generated=patchServerCall(frozen);
+  const marker='  function bootstrapSession_() {';
+  const endMarker='  function wireLoginForm_() {';
+  const start=generated.indexOf(marker);
+  const end=generated.indexOf(endMarker,start);
+  assert.ok(start>=0&&end>start,'use the pinned original bootstrap function');
+  const fn=generated.slice(start,end)+';bootstrapSession_';
+  const saved='a'.repeat(64);
+  for(const reply of [
+    {token:'b'.repeat(64)},
+    {token:null},
+    {user:{id:'SYNTHETIC'}},
+    null
+  ]){
+    let stored=saved,opened=0,cleared=0,locked=0,requested=0;
+    const bootstrap=runInNewContext(fn,{
+      readStoredToken_:()=>stored,
+      withLoader:promise=>promise,
+      serverCall:(name,token)=>{
+        assert.equal(name,'validateSession');
+        assert.equal(token,saved);
+        requested++;
+        return Promise.resolve(reply);
+      },
+      onAuthenticated_:()=>{opened++;},
+      clearStoredToken_:()=>{cleared++;stored='';},
+      showLogin_:()=>{locked++;}
+    });
+    bootstrap();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(requested,1,'must validate only the original saved bearer');
+    assert.equal(opened,0,'different/malformed returned bearer cannot open the shell');
+    assert.equal(cleared,1,'existing source catch must clear a rejected saved token');
+    assert.equal(locked,1,'existing source catch must restore login overlay');
+    assert.equal(stored,'','do not store a different session from validateSession');
+  }
+  let opened=0,cleared=0,locked=0;
+  const bootstrap=runInNewContext(fn,{
+    readStoredToken_:()=>saved,
+    withLoader:promise=>promise,
+    serverCall:(name,token)=>{
+      assert.equal(name,'validateSession');
+      assert.equal(token,saved);
+      return Promise.resolve({token:saved,user:{id:'SYNTHETIC'}});
+    },
+    onAuthenticated_:payload=>{opened++;assert.equal(payload.token,saved);},
+    clearStoredToken_:()=>{cleared++;},
+    showLogin_:()=>{locked++;}
+  });
+  bootstrap();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(opened,1,'matching M04 session still restores');
+  assert.equal(cleared,0);
+  assert.equal(locked,0);
+});

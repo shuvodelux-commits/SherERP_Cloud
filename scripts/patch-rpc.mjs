@@ -114,8 +114,28 @@ export function patchServerCall(html) {
       throw new Error('Invalid authentication response');
     }
 `;
-  return withLockedShell.replace(authMarker,
+  const withProfileGuard=withLockedShell.replace(authMarker,
     authName+'\n'+guard+'    authToken = payload.token;\n');
+
+  // M04 validateSession must return exactly the bearer submitted on restore.
+  // Never let a success-looking RPC switch the original browser's session.
+  const restoreName='  function bootstrapSession_() {';
+  if (!withProfileGuard.includes(restoreName)) return withProfileGuard;
+  if (withProfileGuard.indexOf(restoreName,withProfileGuard.indexOf(restoreName)+1)!==-1) {
+    throw new Error('Multiple original session restoration handlers');
+  }
+  const restoreMarker='      .then(function (payload) { onAuthenticated_(payload); })';
+  if (!withProfileGuard.includes(restoreMarker) ||
+      withProfileGuard.indexOf(restoreMarker,withProfileGuard.indexOf(restoreMarker)+1)!==-1) {
+    throw new Error('Original session restoration boundary changed');
+  }
+  return withProfileGuard.replace(restoreMarker,
+    "      .then(function (payload) {\n"+
+    "        if (!payload || payload.token !== saved) {\n"+
+    "          throw new Error('Invalid authentication response');\n"+
+    "        }\n"+
+    "        onAuthenticated_(payload);\n"+
+    "      })");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pathname) {

@@ -642,3 +642,64 @@ test('synthetic successful login with malformed role data must not unlock origin
     await page.close();
   }
 });
+
+
+test('original Chromium refuses a validateSession reply with a different bearer',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const saved='a'.repeat(64);
+  const substituted='b'.repeat(64);
+  const calls=[];
+  try{
+    await page.addInitScript(token=>{
+      window.localStorage.setItem('hwerp.session.token',token);
+    },saved);
+    await page.route('**/api/rpc',async route=>{
+      const payload=route.request().postDataJSON();
+      calls.push(payload);
+      if(payload.fnName==='validateSession'){
+        return route.fulfill({
+          status:200,contentType:'application/json',
+          body:JSON.stringify({success:true,data:{
+            token:substituted,
+            user:{id:'SYNTHETIC-M01',name:'Synthetic Clerk',
+              mobile:'01710000001',role:'Clerk'},
+            allowedModules:['dashboard'],permissions:{dashboard:{view:true}}
+          }})
+        });
+      }
+      if(payload.fnName==='getAppShellData'){
+        return route.fulfill({
+          status:200,contentType:'application/json',
+          body:JSON.stringify({success:true,data:{
+            shopName:'Synthetic Restored Shop',currencySymbol:'৳',
+            navItems:[{key:'dashboard',label:'Dashboard',icon:'dashboard',
+              sidebarGroup:0,sidebarOrder:10}]
+          }})
+        });
+      }
+      return route.continue();
+    });
+    const validation=page.waitForResponse(response=>
+      response.url().endsWith('/api/rpc') &&
+      response.request().postDataJSON()?.fnName==='validateSession');
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    assert.equal((await validation).status(),200,
+      'the test response is HTTP success, so restore must verify its token');
+    await page.waitForFunction(()=>
+      window.localStorage.getItem('hwerp.session.token')===null,
+      null,{timeout:5000});
+    assert.deepEqual(
+      calls.filter(x=>x.fnName==='validateSession').map(x=>x.args),
+      [[saved]],'original browser must submit only the initially saved token');
+    assert.equal(await page.locator('#loginOverlay').isVisible(),true,
+      'a substituted session must not unlock protected navigation');
+    assert.equal(await page.locator('#app').evaluate(
+      el=>getComputedStyle(el).visibility),'hidden');
+    assert.equal(await page.locator('#navList .nav-item').count(),0,
+      'no protected sidebar is constructed after a mismatched validation');
+    assert.equal(calls.filter(x=>x.fnName==='login').length,0,
+      'bootstrap never invents a fresh login');
+  }finally{
+    await page.close();
+  }
+});
