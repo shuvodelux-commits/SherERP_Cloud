@@ -185,3 +185,29 @@ test('deleted vendor tombstones and unrelated invoice/product rows preserve nati
   assert.equal(result.items[0].vendorId,'V-ACTIVE');
   assert.equal(result.items[0].vendorUnitCost,8.75);
 });
+
+
+test('unsupported historical Payment Detail Version cannot erase saved split tenders in Sale Update prefill',()=>{
+  for(const version of ['2','01','v2']){
+    const data=snapshot();
+    data.sales[0]['Payment Detail Version']=version;
+    const before=structuredClone(data);
+    assert.throws(
+      ()=>projectSaleForUpdate(invoiceId,data,{canEditSales:true}),
+      /NEEDS_REVIEW: unsupported historical sale payment detail version in Update Mode/,
+      JSON.stringify({version})
+    );
+    assert.deepEqual(data,before,'Unknown payment detail version must never mutate history');
+  }
+});
+
+test('blank legacy and version 1 still preserve original source-shaped edit prefill',()=>{
+  for(const version of ['', '1']){
+    const data=snapshot();
+    data.sales[0]['Payment Detail Version']=version;
+    const projected=compare(data);
+    assert.equal(projected.paymentDetailVersion,version);
+    assert.equal(projected.paidAmount,70);
+    assert.equal(projected.payments.length,version==='1'?2:0);
+  }
+});

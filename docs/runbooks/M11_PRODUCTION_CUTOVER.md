@@ -282,3 +282,43 @@ node scripts/check-m11-handover-evidence.mjs \
 ```
 
 `DOCUMENTARY_COMPLETE` states only that the submitted metadata and references are internally consistent under the source pin. A different operator must validate authenticity of the underlying evidence; M10 source-to-D1 migration parity, actual restore rehearsal, incident disposition, and **explicit owner business acceptance remain independent**. The tool grants no production authorization and cannot deploy, reroute, connect a D1 binding, freeze writers, restore a backup or resume transactions.
+
+
+## M11-11 — One authoritative writer across cutover and rollback
+
+The existing M11-03 event sequence and M11-02 committed-write disposition reports **do not separately prove when each system was writable**. The offline `scripts/check-m11-single-writer-timeline.mjs` adds a time-contiguous **authority-epoch review** over private, operator-supplied evidence. It cannot contact the legacy GAS/Sheets deployment, Cloudflare Workers or any D1 database, observe actual commits, stop either writer or authorize traffic switching.
+
+Prepare a private JSON document containing exactly `schemaVersion:1`, `releaseSha`, `sourceSha`, `sourceSnapshotSha256`, `mode`, `epochs`, and `checkpoint`. The three identifiers must match the independently reviewed target release, pinned original Mohim_ERP source, and private final source snapshot. `mode` must match the separately reviewed M11-03 cutover order:
+
+| Mode | Required writer epochs (in order) |
+|---|---|
+| `activation` | `legacy` → `frozen` → `d1` |
+| `rollback-to-legacy` | `legacy` → `frozen` → `d1` → `frozen` → `legacy` |
+| `hold-d1-readonly` | `legacy` → `frozen` → `d1` → `frozen` |
+
+Each epoch has **exactly** `startedAt`, `endedAt` (canonical UTC `YYYY-MM-DDTHH:MM:SSZ`), `authority`, `legacyCommits`, `d1Commits`, `record` and `releaseSha`. Intervals must have positive durations of no more than 24 hours, be strictly ordered and meet end-to-start with no gaps or overlaps. Each `record` is a distinct non-sensitive private audit-reference ID; no raw journal, transaction, employee or customer data is included. For the source-freeze epoch, use the **same** `record` as the M11-03 `legacy-writes-frozen` event; for the D1 epoch, use that of `traffic-switched-to-d1`. For recovery/hold, link the second frozen epoch to `worker-writes-frozen`; for rollback back to legacy, link the final epoch to `traffic-restored-to-legacy`.
+
+A `legacy` epoch must report zero D1 commits, a `d1` epoch must report zero legacy commits, and a `frozen` epoch must report zero commits to **both** systems. The validator rejects any forbidden commitment, missing or malformed count, invalid fence, or duplicated audit reference. This proves only **internal consistency of the submitted counts**, not their completeness or the fact that live writers were stopped.
+
+For `rollback-to-legacy` and `hold-d1-readonly`, also supply the existing M11-02 private delta manifest. Its separately reviewed `freeze.legacy.record` and `freeze.d1.record` must match the timeline's source and D1 freeze epochs; its `checkpoints.committed.count` must exactly equal all reported D1-only commits. The existing M11-03 validator must independently accept that delta, with `resume-legacy` dispositions for rollback or `roll-forward` retention for D1 hold. **Never** reactivate legacy writes until every acknowledged post-switch D1 operation has been reconciled and replayed under a separately authorized single-writer plan. A zero-count delta is permissible only when the independent committed journal proves zero commits.
+
+The `checkpoint` must contain `status:"verified"`, distinct `record`, pinned `releaseSha` and **zero** `unreconciledAcknowledgedOperations`, `duplicateOperationEffects`, `grossPartyDiscrepancies`, `inventoryDiscrepancies`, `legacyWritesAfterFreeze`. A nonzero or unreviewed checkpoint is an incident/recovery blocker.
+
+```sh
+# Activation review: only private reports; no database access
+node scripts/check-m11-single-writer-timeline.mjs \
+  /private/m11-writer-timeline.json \
+  /private/m11-cutover-order.json \
+  /private/m11-release-evidence.json \
+  <reviewed-release-sha> <source-snapshot-sha256>
+
+# Approved rollback or D1 read-only hold: same arguments plus the private delta
+node scripts/check-m11-single-writer-timeline.mjs \
+  /private/m11-writer-timeline.json \
+  /private/m11-cutover-order.json \
+  /private/m11-release-evidence.json \
+  <reviewed-release-sha> <source-snapshot-sha256> \
+  /private/m11-write-delta.json
+```
+
+The tool emits fixed blocker codes, not source data, raw event IDs or secrets. A structurally complete report is **not an authenticated live source freeze, production GO, safe rollback, authorization to resume legacy/D1 writes, or proof of a finished ERP migration**. Require real M10/production acceptance, independent source and target journal/readback evidence, gross-role Party accounts, stock/FIFO parity, correct D1 Time Travel retention and a separate documented owner decision. Do not bind public previews to D1 or write to the original business Sheets during this review.
