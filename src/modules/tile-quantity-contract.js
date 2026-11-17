@@ -86,7 +86,7 @@ function measurement(config) {
   const pack = integer(config.piecesPerBox, 'pieces per box', true);
   if (config.baseUnit !== 'Pcs') throw new TypeError('Tile base unit must be Pcs');
   const scale = {in: fraction(1n), cm: fraction(50n, 127n), mm: fraction(5n, 127n)};
-  if (!Object.hasOwn(scale, config.dimensionUnit))
+  if (typeof config.dimensionUnit !== 'string' || !Object.hasOwn(scale, config.dimensionUnit))
     throw new TypeError('Unsupported tile dimension unit');
   const length = multiply(decimal(config.length, 'length', true), scale[config.dimensionUnit]);
   const width = multiply(decimal(config.width, 'width', true), scale[config.dimensionUnit]);
@@ -172,7 +172,7 @@ export function priceTileQuantity(config, request, pricingUnit, unitPriceText) {
   const exactAmount = multiply(billingQuantity, price);
   const amount = roundMinor(exactAmount);
   const shown = display(billingQuantity);
-  const displayAmount = roundMinor(multiply(decimal(shown, 'display quantity'), price));
+  const displayAmount = roundMinor(multiply(fraction(roundMinor(billingQuantity), 100n), price));
   return {
     quantity, billingQuantity: serialize(billingQuantity), billingQuantityDisplay: shown,
     exactAmount: serialize(exactAmount), lineAmountMinor: String(amount),
