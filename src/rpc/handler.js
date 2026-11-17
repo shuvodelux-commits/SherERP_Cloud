@@ -210,7 +210,7 @@ function validAppShellEnvelope(result){
     exactShellNavigation(data.navItems,SOURCE_SHELL_NAV);
 }
 
-/** Exact original success/failure envelope; never serialize raw D1/actor rows. */
+/** Allow only original messages and ID/name pairs; never serialize raw D1 rows. */
 function validProductMasterEnvelope(result,fnName,name) {
   if(!plainRecord(result))return false;
   if(result.success===false){
@@ -219,12 +219,18 @@ function validProductMasterEnvelope(result,fnName,name) {
       PRODUCT_MASTER_FAILURE[fnName].includes(result.message);
   }
   if(!ownFields(result,['success','data'])||result.success!==true||
-     !ownFields(result.data,['id','name']))
-    return false;
-  const data=result.data;
-  const prefix=PRODUCT_MASTER_NAMES[fnName];
+     !ownFields(result.data,['id','name']))return false;
+  const data=result.data, prefix=PRODUCT_MASTER_NAMES[fnName];
+  const pattern=fnName==='addProductCategory'
+    ? /^PCAT-[0-9]{6,}$/ : /^PUNT-[0-9]{6,}$/;
   if(typeof data.name!=='string'||data.name!==name.trim()||
-     typeof data.id!=='string'||!new RegExp('^'+prefix+'-[0-9]{6,}
+     typeof data.id!=='string'||!pattern.test(data.id))return false;
+  const digits=data.id.slice(prefix.length+1),number=Number(digits);
+  return Number.isSafeInteger(number)&&number>=1&&
+    String(number).padStart(6,'0')===digits;
+}
+
+function rpcError(status, message, headers = {}) {
   return Response.json({success:false, message}, {status, headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 }
 
@@ -338,9 +344,8 @@ export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBrid
   }
   if(productMasterBridge!==undefined &&
      Object.hasOwn(PRODUCT_MASTER_NAMES,payload.fnName)){
-    // Internal opt-in only. The public Worker never passes this bridge.
-    // Original fnName/token/payload shape, with one stable operationId
-    // required by the private SQL idempotency contract.
+    // Internal opt-in only. The public Worker never supplies this bridge.
+    // Original token/payload envelope plus private stable operationId.
     if(!ownFields(payload,['fnName','args'])||payload.args.length!==2 ||
        typeof payload.args[0]!=='string'||!AUTH_TOKEN.test(payload.args[0])||
        !ownFields(payload.args[1],['name','operationId']) ||
@@ -364,137 +369,7 @@ export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBrid
         'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
       }});
     }catch{
-      // Never expose underlying auth, session, catalog, SQL or actor details.
       return rpcError(503,PRODUCT_MASTER_UNAVAILABLE);
-    }
-  }
-  if (!Object.hasOwn(rpcRegistry,payload.fnName)) {
-    if (payload.fnName === 'login') {
-      return rpcError(503,'Sign-in is unavailable because server authentication is not configured yet.');
-    }
-    return rpcError(501,'RPC method not migrated');
-  }
-  // No handlers are registered until the authenticated authorization layer (M04).
-  return rpcError(501,'RPC method not migrated');
-}
-).test(data.id))
-    return false;
-  const digits=data.id.slice(prefix.length+1);
-  const number=Number(digits);
-  return Number.isSafeInteger(number)&&number>=1&&
-    String(number).padStart(6,'0')===digits;
-}
-
-function rpcError(status, message, headers = {}) {
-  return Response.json({success:false, message}, {status, headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
-}
-
-async function boundedBody(request) {
-  const length = Number(request.headers.get('Content-Length'));
-  if (Number.isFinite(length) && length > MAX_RPC_BYTES) return null;
-  if (!request.body) return '';
-  const reader = request.body.getReader();
-  const chunks=[];
-  let size=0;
-  while (true) {
-    const {done,value}=await reader.read();
-    if (done) break;
-    size+=value.byteLength;
-    if (size > MAX_RPC_BYTES) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-  const full=new Uint8Array(size);
-  let offset=0;
-  for (const chunk of chunks) {full.set(chunk,offset);offset+=chunk.byteLength;}
-  return new TextDecoder('utf-8',{fatal:true}).decode(full);
-}
-
-export async function handleRpc(request, {authAdapter,dayBookBridge,appShellBridge}={}) {
-  if (request.method !== 'POST') return rpcError(405,'POST required',{'Allow':'POST'});
-  const origin=request.headers.get('Origin');
-  if (origin && origin!==new URL(request.url).origin) return rpcError(403,'Cross-origin RPC forbidden');
-  const type=(request.headers.get('Content-Type')||'').split(';')[0].trim().toLowerCase();
-  if (type!=='application/json') return rpcError(415,'JSON request required');
-
-  let raw;
-  try { raw=await boundedBody(request); }
-  catch { return rpcError(400,'Invalid request encoding'); }
-  if(raw===null) return rpcError(413,'RPC request too large');
-  let payload;
-  try {payload=JSON.parse(raw);} catch {return rpcError(400,'Invalid JSON');}
-  if (!payload || typeof payload!=='object' || Array.isArray(payload) ||
-      typeof payload.fnName!=='string' || !RPC_NAME.test(payload.fnName) ||
-      !Array.isArray(payload.args) || payload.args.length>MAX_ARGS) {
-    return rpcError(400,'Invalid RPC payload');
-  }
-  if (authAdapter!==undefined && Object.hasOwn(AUTH_ARGS,payload.fnName)) {
-    if(!validAuthArguments(payload.fnName,payload.args))
-      return rpcError(400,'Invalid authentication arguments');
-    try {
-      // Never dispatch an unreviewed method or take a handler name from a
-      // request beyond AUTH_ARGS. The adapter is trusted server context.
-      const method=Object.getOwnPropertyDescriptor(authAdapter,payload.fnName)?.value;
-      if(typeof method!=='function')
-        return rpcError(503,'Authentication backend unavailable');
-      const result=await method(...payload.args);
-      if(!validAuthEnvelope(result,payload.fnName))
-        return rpcError(503,'Authentication backend unavailable');
-      assertFullyResolvedRpcValue(result);
-      return Response.json(result,{headers:{
-        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
-      }});
-    } catch {
-      // Never expose credentials, D1 errors, SQL, or exception messages.
-      return rpcError(503,'Authentication backend unavailable');
-    }
-  }
-
-  if(appShellBridge!==undefined && payload.fnName===APP_SHELL_RPC) {
-    // Internal-only trusted M04 composition, never imported by src/index.js.
-    // The original pre-login call is denied; an issued bearer is required.
-    if(!ownFields(payload,['fnName','args'])||payload.args.length!==1 ||
-       typeof payload.args[0]!=='string'||!APP_SHELL_TOKEN.test(payload.args[0]))
-      return rpcError(400,'Invalid RPC arguments');
-    try{
-      const invoke=Object.getOwnPropertyDescriptor(appShellBridge,'invoke')?.value;
-      if(typeof invoke!=='function')
-        return rpcError(503,APP_SHELL_UNAVAILABLE);
-      const result=await invoke.call(appShellBridge,{token:payload.args[0]});
-      if(!validAppShellEnvelope(result))
-        return rpcError(503,APP_SHELL_UNAVAILABLE);
-      assertFullyResolvedRpcValue(result);
-      return Response.json(result,{headers:{
-        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
-      }});
-    }catch{
-      return rpcError(503,APP_SHELL_UNAVAILABLE);
-    }
-  }
-
-  if(dayBookBridge!==undefined && payload.fnName===DAY_BOOK_RPC) {
-    // A trusted server-only opt-in. src/index.js never supplies this
-    // bridge; passing dayBookBridge/actor/nowMs in JSON cannot activate it.
-    if(!ownFields(payload,['fnName','args']) || payload.args.length!==1 ||
-       typeof payload.args[0]!=='string' ||
-       !DAY_BOOK_TOKEN.test(payload.args[0]))
-      return rpcError(400,'Invalid RPC arguments');
-    try {
-      const method=Object.getOwnPropertyDescriptor(dayBookBridge,'invoke')?.value;
-      if(typeof method!=='function')
-        return rpcError(503,DAY_BOOK_UNAVAILABLE);
-      const result=await method.call(dayBookBridge,payload);
-      if(!validDayBookEnvelope(result))
-        return rpcError(503,DAY_BOOK_UNAVAILABLE);
-      assertFullyResolvedRpcValue(result);
-      return Response.json(result,{headers:{
-        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
-      }});
-    }catch{
-      // SQL, underlying exceptions and raw credential material never leak.
-      return rpcError(503,DAY_BOOK_UNAVAILABLE);
     }
   }
   if (!Object.hasOwn(rpcRegistry,payload.fnName)) {
