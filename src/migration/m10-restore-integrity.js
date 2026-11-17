@@ -150,7 +150,9 @@ export function assessM10RestoreIntegrity({
         add('RESTORE_RECEIPT_CHRONOLOGY_INVALID');
     }
     const groupsComparedComplete=Boolean(a&&b&&
-      a.rows.size===expected.size&&b.rows.size===expected.size);
+      a.rows.size===expected.size&&b.rows.size===expected.size&&
+      !['RESTORE_GROUP_MISSING','RESTORE_GROUP_UNEXPECTED',
+        'RESTORE_GROUP_DUPLICATE'].some(code=>issues.has(code)));
     const sorted=[...issues].sort(([nameA],[nameB])=>
       nameA<nameB?-1:nameA>nameB?1:0)
       .map(([code,n])=>({code,count:n}));
