@@ -1,0 +1,43 @@
+name: Fast PR confidence (source, policy, UI)
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fast:
+    name: Fast PR confidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies (verified npm cache)
+        run: npm ci --no-audit --no-fund
+      - name: Run pure Node safety contracts immediately
+        run: |
+          node --test \
+            tests/m03-runtime-policy.test.mjs \
+            tests/m03-workerd-ci-sharding.test.mjs \
+            tests/m05-tile-atomic-receiving.test.mjs \
+            tests/m05-tile-purchase-line-preview.test.mjs \
+            tests/m09-reports-source-eligibility.test.mjs
+      - name: Verify frozen original GAS source
+        run: npm run verify:source
+      - name: Assemble original UI with safe RPC adapter
+        run: npm run build:frontend
+      - name: Check Worker and RPC JavaScript syntax
+        run: |
+          node --check src/index.js
+          node --check src/rpc/handler.js
+          node --check src/rpc/registry.js
+      - name: Enforce DB-free public preview
+        run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
