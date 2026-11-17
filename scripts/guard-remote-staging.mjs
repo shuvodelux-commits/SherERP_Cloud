@@ -3,8 +3,10 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-export const EXPECTED_NAME='shererp-staging-db';
-export const EXPECTED_UUID='aa04618e-1639-4cb9-bdf5-7b967d8b968b';
+export const EXPECTED_NAME='shererp-operational-staging-20261118';
+export const EXPECTED_UUID='74102df7-dd31-4999-81d5-69bca42f0424';
+export const EXPECTED_ARCHIVE_NAME='shererp-legacy-history-staging-20261118';
+export const EXPECTED_ARCHIVE_UUID='19190fd2-1f5e-4e8a-a062-bd7a0cbf3d96';
 
 export function assertExactD1Resource(data){
   const items=Array.isArray(data)?data:data?.result;
@@ -13,6 +15,12 @@ export function assertExactD1Resource(data){
   if(matching.length!==1)throw new Error('Expected exactly one staging database name');
   if(matching[0].uuid!==EXPECTED_UUID)throw new Error('Staging database identity/UUID mismatch');
   if(items.filter(x=>x?.uuid===EXPECTED_UUID).length!==1)throw new Error('Staging UUID is not uniquely resolved');
+  const archives=items.filter(x=>x?.name===EXPECTED_ARCHIVE_NAME);
+  if(archives.length!==1||archives[0].uuid!==EXPECTED_ARCHIVE_UUID)
+    throw new Error('Private archive database identity/UUID mismatch');
+  if(items.filter(x=>x?.uuid===EXPECTED_ARCHIVE_UUID).length!==1||
+     EXPECTED_ARCHIVE_UUID===EXPECTED_UUID)
+    throw new Error('Private archive UUID is not uniquely resolved');
   return true;
 }
 
