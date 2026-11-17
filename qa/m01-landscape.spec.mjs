@@ -393,7 +393,7 @@ test('M01 Playwright POS V2 authorized Products add action stays visible',async(
     assert.equal(state.allowed,true);
     assert.equal(state.hidden,false);
     assert.equal(await add.isVisible(),true,
-      'the source's authorized Add Product action must remain visible');
+      'the authorized Add Product action must remain visible');
     const evidence=await captureM01NavEvidence(page,'posv2-authorized-product-add');
     assert.ok(evidence.screenshotBytes>1500);
     assert.equal(evidence.loginHidden,true);
