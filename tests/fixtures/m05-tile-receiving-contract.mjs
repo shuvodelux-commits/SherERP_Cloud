@@ -46,15 +46,29 @@ function validate(input){
    throw new TypeError('Invalid expected version');
  }
  validateDate(input.purchaseDate);
- ownRecord(input.request,['mode','boxes','extraPieces']);
- if(input.request.mode!=='pack'||typeof input.request.boxes!=='string'||
-    typeof input.request.extraPieces!=='string'||
-    !WHOLE.test(input.request.boxes)||!WHOLE.test(input.request.extraPieces))
-  throw new TypeError('Unreviewed tile receive mode or whole-piece input');
- const boxes=Number(input.request.boxes),extra=Number(input.request.extraPieces);
- if(boxes===0&&extra===0||boxes>MAX_PCS||extra>MAX_PCS)
-  throw new TypeError('Invalid physical tile receiving request');
- return {boxes,extra};
+ if(input.request?.mode==='pack'){
+  ownRecord(input.request,['mode','boxes','extraPieces']);
+  if(typeof input.request.boxes!=='string'||
+     typeof input.request.extraPieces!=='string'||
+     !WHOLE.test(input.request.boxes)||!WHOLE.test(input.request.extraPieces))
+   throw new TypeError('Invalid whole-Pcs tile receiving input');
+  const boxes=Number(input.request.boxes),extra=Number(input.request.extraPieces);
+  if(boxes===0&&extra===0||boxes>MAX_PCS||extra>MAX_PCS)
+   throw new TypeError('Invalid physical tile receiving request');
+  return {boxes,extra};
+ }
+ if(input.request?.mode==='area'){
+  ownRecord(input.request,['mode','requestedSqft','fulfillment']);
+  if(typeof input.request.requestedSqft!=='string'||
+     !/^(?:0|[1-9][0-9]{0,3})(?:\.[0-9]{1,4})?$/.test(input.request.requestedSqft)||
+     !['loose','box-only'].includes(input.request.fulfillment))
+   throw new TypeError('Invalid area receiving demand or fulfillment');
+  const [whole,fraction='']=input.request.requestedSqft.split('.');
+  const scaled=BigInt(whole)*10000n+BigInt(fraction.padEnd(4,'0'));
+  if(scaled<1n||scaled>10000000n)throw new RangeError('Unsupported area input bound');
+  return {boxes:null,extra:null};
+ }
+ throw new TypeError('Unreviewed tile receive mode');
 }
 function rows(result){
  if(result?.success!==true||!Array.isArray(result.results))throw fail();
@@ -74,7 +88,7 @@ export function createSyntheticTileReceivingPoster(DB,{beforeBatch}={}){
   throw new TypeError('Invalid synthetic concurrency hook');
  return Object.freeze({
   async post(input){
-   const {boxes,extra}=validate(input);
+   let {boxes,extra}=validate(input);
    const {
     actorId,operationId,purchaseId,supplierId,productId,
     expectedStockVersion,expectedCatalogVersion,purchaseDate,request
@@ -96,6 +110,12 @@ export function createSyntheticTileReceivingPoster(DB,{beforeBatch}={}){
    if(!proposal.isCurrent||proposal.catalog.recordVersion!==expectedCatalogVersion)
     return {status:'DECLINED',operationId};
 
+   if(request.mode==='area'){
+    boxes=Number(proposal.quantity.boxes);
+    extra=Number(proposal.quantity.extraPieces);
+   }
+   if(!Number.isSafeInteger(boxes)||boxes<0||!Number.isSafeInteger(extra)||extra<0)
+    throw fail();
    const pcs=Number(proposal.purchasePreview.receivedPcs);
    const total=Number(proposal.purchasePreview.lineAmountMinor);
    if(!Number.isSafeInteger(pcs)||pcs<1||pcs>MAX_PCS||
