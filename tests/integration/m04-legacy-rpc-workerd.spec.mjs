@@ -985,3 +985,52 @@ test('M04 SQL/JS permission ambiguity: duplicate-role JSON cannot yield a D1 log
     WHERE user_id=? AND revoked_at_ms IS NULL`).bind(userId).first();
   assert.equal(outstanding.n,0,'invalid duplicate-key role must not leave a live bearer');
 });
+
+ 
+test('M04 A05 SQL-current grant proof rejects duplicate and escaped-equivalent JSON keys in real local D1',async()=>{
+  // This is synthetic JSON authorization text, never a live staff token or
+  // authority to post. The M03 source-shaped SQL writer is a separate gate.
+  const {inspectSyntheticRoleGrantWithD1}=await import(
+    '../fixtures/m04-sql-current-role-permission-proof.mjs'
+  );
+  const samples=[
+    {label:'canonical source sales.add',operation:'sales.add',
+      json:JSON.stringify({sales:{view:true,add:true}}),expected:true},
+    {label:'canonical source products.add',operation:'products.add',
+      json:JSON.stringify({products:{view:true,add:true}}),expected:true},
+    {label:'explicit denied action',operation:'sales.add',
+      json:JSON.stringify({sales:{view:true,add:false}}),expected:false},
+    {label:'string is not boolean grant',operation:'sales.add',
+      json:JSON.stringify({sales:{add:'true'}}),expected:false},
+    {label:'nonobject permissions',operation:'sales.add',
+      json:'[]',expected:false},
+    {label:'malformed json',operation:'sales.add',
+      json:'{"sales":',expected:false},
+    {label:'missing grant',operation:'sales.add',
+      json:'{"sales":{"view":true}}',expected:false},
+    {label:'duplicate module grant: SQL first true JS last false',
+      operation:'sales.add',
+      json:'{"sales":{"add":true},"sales":{"add":false}}',expected:false},
+    {label:'duplicate nested action grant: SQL first true JS last false',
+      operation:'sales.add',
+      json:'{"sales":{"add":true,"add":false}}',expected:false},
+    {label:'escaped-equivalent nested action duplicate',
+      operation:'sales.add',
+      json:String.raw`{"sales":{"add":true,"\\u0061dd":false}}`,expected:false},
+    {label:'escaped-equivalent top-level module duplicate',
+      operation:'sales.add',
+      json:String.raw`{"sales":{"add":true},"\\u0073ales":{"add":false}}`,expected:false},
+    {label:'duplicate product action',operation:'products.add',
+      json:'{"products":{"add":true,"add":false}}',expected:false},
+  ];
+  for(const sample of samples){
+    assert.equal(await inspectSyntheticRoleGrantWithD1(db,{
+      permissionsJson:sample.json,operation:sample.operation,
+    }),sample.expected,sample.label);
+  }
+  for(const invalid of ['sales.view','products.add OR 1=1','__proto__',null,'']){
+    assert.equal(await inspectSyntheticRoleGrantWithD1(db,{
+      permissionsJson:'{"sales":{"add":true}}',operation:invalid,
+    }),false,'fixed operation allowlist prevents selector injection');
+  }
+});
