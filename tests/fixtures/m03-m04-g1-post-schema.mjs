@@ -20,6 +20,24 @@ export const M03_G1_POST_DDL=Object.freeze([
      FOREIGN KEY(business_id,operation_id)
        REFERENCES operation_receipts(tenant_id,operation_id)
    ) STRICT`,
+  `CREATE TABLE synthetic_m03_g1_cash_sessions(
+     business_id TEXT NOT NULL,
+     session_id TEXT NOT NULL CHECK(length(trim(session_id))>0),
+     status TEXT NOT NULL CHECK(status IN ('Starting','Open','Closing','Closed')),
+     PRIMARY KEY(business_id,session_id)
+   ) STRICT`,
+  `CREATE UNIQUE INDEX synthetic_m03_g2_one_active_session
+    ON synthetic_m03_g1_cash_sessions(business_id)
+    WHERE status IN ('Starting','Open','Closing')`,
+  // SQL-level safeguard for even a direct test-only INSERT; no JS preflight.
+  // SQL-level safeguard for even a direct test-only INSERT; no JS preflight.
+  `CREATE TRIGGER synthetic_m03_g2_cash_session_required
+    BEFORE INSERT ON operation_receipts
+    WHEN NOT EXISTS (
+      SELECT 1 FROM synthetic_m03_g1_cash_sessions AS cs
+      WHERE cs.business_id=NEW.tenant_id AND cs.status='Open'
+    )
+    BEGIN SELECT RAISE(ABORT,'G2 active Cash Session required'); END`,
   `CREATE TRIGGER synthetic_m03_g1_receipt_shape
     BEFORE INSERT ON operation_receipts
     WHEN NEW.operation_type<>'sales.post'
