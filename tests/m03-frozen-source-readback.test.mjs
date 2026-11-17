@@ -8,6 +8,9 @@ import {createM03PrivateIdEvidenceReconciler} from '../src/db/m03-private-id-evi
 import {createM03PrivateSourceFloorAudit} from '../src/db/m03-private-source-floor-audit.js';
 import {createM03PrivateSourceFloorInstaller} from '../src/db/m03-private-source-floor-install.js';
 import {M02_ID_FAMILIES} from '../scripts/dry-run-id-floor.mjs';
+import {SYNTHETIC_M03_ID_DDL} from './fixtures/m03-id-issuer-schema.mjs';
+import {SYNTHETIC_M03_M04_AUTHORIZED_MASTER_DDL} from './fixtures/m03-m04-authorized-master-schema.mjs';
+import {createM04AuthorizedProductMasterCreator} from '../src/modules/m04-authorized-product-master-create.js';
 import {captureM02IdEvidenceFreeze} from '../scripts/dry-run-id-evidence-freeze.mjs';
 
 import {FROZEN_SOURCE_COLUMNS,FROZEN_SOURCE_COMMIT} from '../src/db/m03-frozen-source-headers.js';
@@ -589,5 +592,89 @@ test('M03 Run 7 RED: changed original evidence, unapproved args or missing bindi
   const altered=structuredClone(x.manifest);altered.rootDigest='0'.repeat(64);
   await assert.rejects(()=>installer.installFreshSynthetic_({idEvidence:x.evidence,freezeManifest:altered}),run7Failure);
   assert.equal(db.sql.prepare("SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'").get().n,0);
+ }finally{db.close();}
+});
+
+test('M03 Run 8 private sealed ID seed composes with SQL-authorized PCAT PUNT issuance and replay',async()=>{
+ const snapshot=run5Evidence(),db=run7Db(snapshot);
+ try{
+  // Start from the frozen 49 source groups on ONE D1-shaped SQLite database.
+  // Replace only the preliminary Run 6 testing tables with the already-tested
+  // full M03 synthetic issuer DDL BEFORE the Run 7 seed; no second issuer.
+  db.sql.exec('DROP TABLE synthetic_m03_id_receipts; DROP TABLE synthetic_m03_id_counters;');
+  for(const ddl of SYNTHETIC_M03_ID_DDL)db.sql.exec(ddl);
+  const args={idEvidence:snapshot.evidence,freezeManifest:snapshot.manifest};
+  const seeded=await createM03PrivateSourceFloorInstaller(db.env,'TENANT-A')
+   .installFreshSynthetic_(args);
+  assert.equal(seeded.localSyntheticD1FloorsInstalled,true);
+  assert.equal(seeded.idIssuanceAuthorized,false);
+  assert.equal(seeded.productionReady,false);
+  const floor=key=>db.sql.prepare(
+   'SELECT current_sequence FROM synthetic_m03_id_counters WHERE tenant_id=? AND id_key=?'
+  ).get('TENANT-A',key).current_sequence;
+  const categoryFloor=floor('PRODUCT_CATEGORIES'),unitFloor=floor('PRODUCT_UNITS');
+  assert.equal(categoryFloor,Number(snapshot.evidence.counters.PRODUCT_CATEGORIES));
+  assert.equal(unitFloor,Number(snapshot.evidence.counters.PRODUCT_UNITS));
+  assert.equal(db.sql.prepare(
+   "SELECT COUNT(*) AS n FROM synthetic_m03_id_counters WHERE tenant_id='TENANT-A'"
+  ).get().n,38);
+  const originalSource=await createFrozenSourceReadback(db.env).readAllSourceGroups();
+
+  // Populate the *existing reviewed* master/Auth schemas in the same database.
+  // Only synthetic, separately frozen PCAT/PUNT source master rows are imported.
+  const catalogSql=readFileSync(new URL('../migrations/0001_core_catalog.sql',import.meta.url),'utf8');
+  const authSql=readFileSync(new URL('./fixtures/m04-auth-migrations/0001_auth_core.sql',import.meta.url),'utf8');
+  db.sql.exec(catalogSql);
+  db.sql.exec(authSql);
+  for(const ddl of SYNTHETIC_M03_M04_AUTHORIZED_MASTER_DDL.slice(SYNTHETIC_M03_ID_DDL.length))
+   db.sql.exec(ddl);
+  for(const spec of [
+   ['PRODUCT_CATEGORIES','product_categories','category_id','category_name'],
+   ['PRODUCT_UNITS','product_units','unit_id','unit_name']
+  ]){
+   const [group,table,id,name]=spec;
+   for(const row of snapshot.source.groups[group].rows)
+    db.sql.prepare(
+     'INSERT INTO '+table+'(legacy_sheet_row,'+id+','+name+',status,created_at) VALUES(?,?,?,?,?)'
+    ).run(row.sheetRow,row.cells[0],row.cells[1],row.cells[2]||'Active',row.cells[3]||null);
+  }
+  const token='a'.repeat(64),nowMs=1_800_000_000_000;
+  const tokenHash=createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
+  db.sql.prepare(
+   "INSERT INTO auth_users(user_id,full_name,phone_key,role_name,status,password_hash,password_salt,password_iterations) VALUES(?,?,?,?,'Active',?,?,210000)"
+  ).run('ADMIN','Synthetic Administrator','01710000001','Administrator','ab'.repeat(32),'cd'.repeat(24));
+  db.sql.prepare(
+   'INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,role_auth_version,credential_version,created_at_ms,last_activity_at_ms,expires_at_ms) VALUES(?,?,1,NULL,1,?,?,?)'
+  ).run(tokenHash,'ADMIN',nowMs-90_000,nowMs-30_000,nowMs+600_000);
+  const master=createM04AuthorizedProductMasterCreator(db.env,{businessId:'TENANT-A'});
+  const categoryRequest={token,nowMs,operationId:'OP-RUN8-CAT',name:'Tools'};
+  const unitRequest={token,nowMs,operationId:'OP-RUN8-UNIT',name:'Gauge'};
+  const category=await master.createCategory_(categoryRequest);
+  const unit=await master.createUnit_(unitRequest);
+  assert.deepEqual(category,{success:true,data:{
+   id:'PCAT-'+String(categoryFloor+1).padStart(6,'0'),name:'Tools'
+  }});
+  assert.deepEqual(unit,{success:true,data:{
+   id:'PUNT-'+String(unitFloor+1).padStart(6,'0'),name:'Gauge'
+  }});
+  assert.equal(floor('PRODUCT_CATEGORIES'),categoryFloor+1);
+  assert.equal(floor('PRODUCT_UNITS'),unitFloor+1);
+  const committed=()=>db.sql.prepare(
+   'SELECT id_key,operation_id,actor_id,result_id FROM synthetic_m03_master_intents ORDER BY id_key,operation_id'
+  ).all().map(r=>({...r}));
+  const prior=committed();
+  assert.equal(prior.length,2);
+  assert(prior.every(r=>r.actor_id==='ADMIN'));
+  assert.deepEqual(await master.createCategory_(categoryRequest),category);
+  assert.deepEqual(await master.createUnit_(unitRequest),unit);
+  assert.deepEqual(committed(),prior,'replay must not insert another immutable intent');
+  assert.equal(floor('PRODUCT_CATEGORIES'),categoryFloor+1);
+  assert.equal(floor('PRODUCT_UNITS'),unitFloor+1);
+  assert.deepEqual(await createFrozenSourceReadback(db.env).readAllSourceGroups(),originalSource,
+   'the 49 immutable historic source groups must not be modified by new master records');
+  // An authenticated, nondeployable proof cannot promote import/source authority.
+  assert.equal(seeded.independentSourceCaptureVerified,false);
+  assert.equal(seeded.sourceToD1Reconciled,false);
+  assert.equal(seeded.publicRpcEnabled,false);
  }finally{db.close();}
 });
