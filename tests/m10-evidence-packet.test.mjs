@@ -161,6 +161,30 @@ test('both Party captures after backup count separately and cannot be hidden by 
   assert.equal(issue(r,'PACKET_GROSS_CAPTURE_AFTER_BACKUP'),2);
 });
 
+test('gross source captured before source freeze is not valid chain evidence',()=>{
+  const x=packet();
+  x.gross.source.capturedAt='2026-11-16T09:00:00.000Z';
+  const r=assessM10EvidencePacket(x);
+  assert.equal(r.grossCandidate,true);
+  assert.equal(issue(r,'PACKET_GROSS_CAPTURE_BEFORE_SOURCE_FREEZE'),1);
+  assert.equal(r.candidateEvidenceComplete,false);
+});
+test('both gross captures dated before second source freeze produce two separate blockers',()=>{
+  const x=packet();
+  x.gross.source.capturedAt='2026-11-16T09:00:00.000Z';
+  x.gross.d1.capturedAt='2026-11-16T09:30:00.000Z';
+  const r=assessM10EvidencePacket(x);
+  assert.equal(issue(r,'PACKET_GROSS_CAPTURE_BEFORE_SOURCE_FREEZE'),2);
+});
+test('budget-compliant performance samples measured before restored readback still fail packet',()=>{
+  const x=packet();
+  x.performance.recording.capturedAt='2026-11-17T06:19:00.000Z';
+  const r=assessM10EvidencePacket(x);
+  assert.equal(r.performanceCandidate,true);
+  assert.equal(issue(r,'PACKET_PERFORMANCE_CAPTURE_BEFORE_RESTORE'),1);
+  assert.equal(r.candidateEvidenceComplete,false);
+});
+
 test('LOGS cannot be silently given invented source ID provenance',()=>{
   const x=packet();
   x.rehearsal.sourceSummary.find(g=>g.sheetKey==='LOGS').idDigest=hash(30);
