@@ -40,9 +40,9 @@ function fixture(){
    change:createGuardedExpenseCategoryStatusAdapter({DB}),
    reader:createLegacyCatalogReadAdapter({DB}),close:()=>sqlite.close()};
 }
-const get=(x,id)=>x.sqlite.prepare(
+const get=(x,id)=>({...x.sqlite.prepare(
  'SELECT legacy_sheet_row,category_id,category_name,description,status,created_at FROM expense_categories WHERE category_id=?'
-).get(id);
+).get(id)});
 
 test('actual 0005 STRICT SQLite status CAS changes exactly one source category and leaves all other text unchanged',async()=>{
  const x=fixture();try{
