@@ -1,12 +1,24 @@
 /**
  * NONDEPLOYABLE M03 G1 overlay. These test tables extend the proposed M04
  * session schema and immutable operation_receipts fixture for local D1 only.
- * This is NOT a migrated sales, inventory, Cash Session or journal schema.
+ * G4 adds SQL-atomic source SALES invoice counter issuance; still NOT a\n * migrated sales, inventory, Cash Session or journal schema.
  */
 export const M03_G1_POST_DDL=Object.freeze([
   `ALTER TABLE operation_receipts ADD COLUMN sku TEXT`,
   `ALTER TABLE operation_receipts ADD COLUMN units INTEGER`,
   `ALTER TABLE operation_receipts ADD COLUMN amount_cents INTEGER`,
+  `ALTER TABLE operation_receipts ADD COLUMN source_invoice_id TEXT`,
+  `CREATE UNIQUE INDEX synthetic_m03_g4_unique_invoice
+    ON operation_receipts(tenant_id,source_invoice_id)
+    WHERE source_invoice_id IS NOT NULL`,
+  `CREATE TABLE synthetic_m03_g4_sale_counters(
+     business_id TEXT NOT NULL,
+     id_key TEXT NOT NULL CHECK(id_key='SALES'),
+     prefix TEXT NOT NULL CHECK(prefix='INV'),
+     current_sequence INTEGER NOT NULL
+       CHECK(current_sequence BETWEEN 0 AND 9007199254740991),
+     PRIMARY KEY(business_id,id_key)
+   ) STRICT`,
   `CREATE TABLE synthetic_m03_g1_stock(
      business_id TEXT NOT NULL, sku TEXT NOT NULL,
      available INTEGER NOT NULL CHECK(available>=0),
@@ -39,6 +51,29 @@ export const M03_G1_POST_DDL=Object.freeze([
     ON synthetic_m03_g1_cash_sessions(business_id)
     WHERE status IN ('Starting','Open','Closing')`,
   // Even a direct test-only INSERT must obey the current session.
+  // Separate per-business imported SALES high-water; the final invoice ID
+  // is computed from this source counter INSIDE the authorized receipt INSERT.
+  `CREATE TRIGGER synthetic_m03_g4_invoice_verified BEFORE INSERT
+    ON operation_receipts
+    WHEN NOT EXISTS (
+      SELECT 1 FROM synthetic_m03_g4_sale_counters AS c
+      WHERE c.business_id=NEW.tenant_id
+        AND c.id_key='SALES' AND c.prefix='INV'
+        AND c.current_sequence<9007199254740991
+        AND NEW.source_invoice_id=c.prefix||'-'||printf('%06d',c.current_sequence+1)
+    )
+    BEGIN SELECT RAISE(ABORT,'G4 source invoice ID guard'); END`,
+  `CREATE TRIGGER synthetic_m03_g4_invoice_issue AFTER INSERT
+    ON operation_receipts
+    BEGIN
+      UPDATE synthetic_m03_g4_sale_counters
+        SET current_sequence=current_sequence+1
+        WHERE business_id=NEW.tenant_id AND id_key='SALES'
+          AND prefix='INV' AND current_sequence<9007199254740991
+          AND NEW.source_invoice_id=prefix||'-'||printf('%06d',current_sequence+1);
+      SELECT CASE WHEN changes()=1 THEN 1
+        ELSE RAISE(ABORT,'G4 source invoice counter CAS failed') END;
+    END`,
   `CREATE TRIGGER synthetic_m03_g2_cash_session_required
     BEFORE INSERT ON operation_receipts
     WHEN NOT EXISTS (
