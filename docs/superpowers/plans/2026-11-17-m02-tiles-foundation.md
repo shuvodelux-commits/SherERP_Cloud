@@ -120,6 +120,17 @@ flowchart TD
 
 ## Execution ledger
 
+### 2026-11-17 continuation scope: catalog-bound quantity contract
+
+Add `resolveTileQuantityFromCatalog(catalog,measurement,request)` within the same
+internal tiles module, two behavioral tests, and an actual Workerd/D1 composition
+test using the existing M03 catalog reader and unchanged 0013 schema. Validate
+exact product/base-unit/revision/pack-factor agreement and preserve the native
+pack label. Reuse the existing isolated product-catalog CI job. Measurement DDL,
+M03 reader/kernel changes and posting remain excluded. RED must show the absent
+export before implementation; GREEN must prove old 25-piece and current 24-piece
+revisions using actual D1 without inventing measurement persistence or stock.
+
 - Audit: 13 migrations; 49 canonical source groups; 30 no source-specific DDL; no full historical-data reconciliation certified.
 - Existing PR #434 owns pure price-anchor profile work; no conflicting changes planned.
 - Ruling: this branch leaves protected source/finance SQL untouched until the required M02-P/M03 review, and implements the safely independent pure tiles contract first.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  resolveTileQuantity, priceTileQuantity
+  resolveTileQuantity, priceTileQuantity, resolveTileQuantityFromCatalog
 } from '../src/modules/tile-quantity-contract.js';
 import {resolveProductUnitBreakdown_} from '../src/modules/product-unit-conversions.js';
 
@@ -205,4 +205,31 @@ test('pricing generated large coverage does not reparse it as an input decimal',
   assert.equal(out.lineAmountMinor,'0');
   assert.equal(out.displayQuantityAmountMinor,'0');
   assert.equal(out.quantity.pieces,'1');
+});
+
+const catalog=()=>({
+  productId:'T-8X12',baseUnitName:'Pcs',
+  unitConfig:{revision:1,stockUnitName:'Pcs',conversions:[{
+    conversionId:'BOX-25',unitName:'Carton',factorText:'25.000'
+  }]}
+});
+
+test('catalog-bound tiles preserve verified pack label and exact integral factor',()=>{
+  const out=resolveTileQuantityFromCatalog(catalog(),tile(),pack());
+  assert.equal(out.pieces,'53');
+  assert.equal(out.unitSnapshot[0].unitName,'Carton');
+  assert.equal(out.measurementSnapshot.boxUnitName,'Carton');
+  assert.equal(resolveTileQuantity(out.measurementSnapshot,pack()).pieces,'53');
+});
+
+test('catalog-bound tiles reject product, stock unit, revision and pack mismatches',()=>{
+  const wrongProduct={...catalog(),productId:'OTHER'};
+  const wrongStock={...catalog(),baseUnitName:'Sqft'};
+  const wrongRevision=catalog();wrongRevision.unitConfig.revision=2;
+  const wrongPack=catalog();wrongPack.unitConfig.conversions[0].factorText='25.000000000001';
+  const missingPack=catalog();missingPack.unitConfig.conversions=[];
+  const duplicatePack=catalog();duplicatePack.unitConfig.conversions.push({...duplicatePack.unitConfig.conversions[0]});
+  for(const candidate of [wrongProduct,wrongStock,wrongRevision,wrongPack,missingPack,duplicatePack])
+    assert.throws(()=>resolveTileQuantityFromCatalog(candidate,tile(),pack()),/catalog/i);
+  assert.throws(()=>resolveTileQuantityFromCatalog(catalog(),tile({boxUnitName:'Box'}),pack()),/catalog/i);
 });
