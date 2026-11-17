@@ -6,6 +6,25 @@
 **Coordinator:** [M01–M11 board #456](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456).
 **No credentials, private spreadsheet exports, original IDs, Party amounts or unhashed records belong in GitHub, CI or a public Cloudflare preview.**
 
+## Three-run acceptance sequence (M10 #312)
+
+The owner requests the remaining M10 work be organized into **three execution runs**. These are acceptance work packages, not automatic release authorizations, and work cannot cross into M03's shared schema/posting paths.
+
+| Run | Deliverable and evidence | Exit gate | Blocking dependency |
+| --- | --- | --- | --- |
+| **Run 1 — Evidence framework and rehearsal readiness** | Merge tested M10-15 packet after exact-head full CI/review; verify original source inventory and M02/M03 contracts, 49-group readiness discrepancies, immutable source/review evidence handling, gross role accounts and cross-gate chronology; provide local-only redacted operator entrypoint and explicit owners | All M10-only tooling on main, tests and no unresolved CI conflicts; **M10 production GO still false** | Full GitHub CI, owner review, integrations owned by M02/M03 |
+| **Run 2 — Approved private rehearsal and discrepancy convergence** | With explicit owner-sanctioned private source read and isolated D1 staging authorization, capture actual 49 groups including source/LOGS physical positions; import/readback and replay without mutation of original Sheets; compare exact gross Customer/Supplier/Vendor/Owner/Lender/Borrower accounts, historical openings and corrections; test real D1 retries, stale/concurrent writes, rollback, and record numeric CPU/D1/p95/p99 and browser/print baselines | Zero unexplained **critical** discrepancies, repeatable import, reviewed M02–M09 transaction interfaces, measured agreed targets, signed stage receipts | Private authorization, original source export custody, M02 49-group migration coverage, M03 shared D1 and M04 authority, M05–M09 financial contracts |
+| **Run 3 — Recovery, independent audit and final decision** | Independently review source/Party accounts and security, test actual isolated backup/restore and full readback digests, review real performance and UI/print, validate owner-controlled rollback/roll-forward and M11 release handoff; produce signed dated GO/NO-GO evidence report | All nine #312 gates evidenced with links and written independent accounting/security and owner sign-off; otherwise explicit **NO-GO** | All Run 2 evidence and M11 operational approval |
+
+**Never mark Runs 2–3 complete just because a program returns `candidateEvidenceComplete:true`.** If authorization or upstream production integration is missing, finish the run with an explicit blocker/NO-GO rather than inventing data or expanding scope.
+
+### Cross-gate chronology safeguards
+
+- Two frozen source passes precede gross source/D1 checkpoint evidence, which must be captured **after the second source-freeze pass**.
+- Both gross source and D1 checkpoints must be captured **no later than** the backup they claim to reconcile.
+- Independently collected performance metrics must be dated **at or after** the isolated restore readback.
+- These timestamp comparisons reject impossible evidence order; they **do not authenticate receipts or prove that operations occurred**.
+
 ## 1. What this tool does and does not do
 
 This preflight composes **existing** M10 checks; it never takes a real snapshot, imports a group, authorizes D1 SQL, mutates Sheets, posts money, modifies worker bindings or performs backup/restore.
@@ -31,7 +50,7 @@ It must never be presented as evidence that production data was migrated or inde
 5. Capture *separate* immutable source-freeze passes, imported D1 summaries, isolated backup and isolated restored-readback receipts. The actual backup/import/restore operation is explicitly **outside** this tool; follow M11 operational restrictions and owner staging authorization.
 6. Set explicit, reviewed performance workloads/limits using representative sample size and independently measured latency, Workers CPU, D1 queries/rows read. All synthetic or self-declared values remain supplied claims.
 7. Supply the four evidence keys in one private JSON file with each module's reviewed format; never manually invent source commits, group hashes, identity links, reader version or review provenance.
-8. The packet additionally checks that `rehearsal.pendingIdentityReviews` equals `gross.identityReviewsPending`, and that both gross captures precede or coincide with the backup capture they purport to validate.
+8. The packet additionally checks that `rehearsal.pendingIdentityReviews` equals `gross.identityReviewsPending`, both gross captures fall between the second source-freeze pass and backup capture, and performance samples are not earlier than the restored readback.
 9. Record private provenance links and the IDs of independent reviewers for security, accounting, operational replay/rollback, and UI/browser print. These are **not present** in the packet result and cannot be marked done by this script.
 
 ### Packet shape
