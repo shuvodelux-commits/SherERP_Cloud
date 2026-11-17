@@ -69,7 +69,8 @@ test('manual staging exception requires main guard, environment and human confir
   const mutation=[
     ['refs/heads/main','refs/heads/feature'],
     ['environment: cloudflare-staging-db','environment: cloudflare-preview'],
-    ['APPLY_STAGING_D1_SCHEMA_ONLY','ALLOW_ALL_DB_WRITES']
+    ["inputs.confirmation == 'APPLY_STAGING_D1_SCHEMA_ONLY'",
+      "inputs.confirmation == 'ALLOW_ALL_DB_WRITES'"]
   ];
   for(const [original,replacement] of mutation){
     const a=workflows(),m=a.find(x=>x.name==='remote-d1-staging.yml');
