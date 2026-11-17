@@ -66,10 +66,11 @@ async function seed621(){
   ['ViewB','Active',JSON.stringify({products:{view:true}})],
   ['NoView','Active',JSON.stringify({products:{view:false}})],
   ['DisabledRole','Inactive',JSON.stringify({products:{view:true}})],
-  ['StringView','Active',JSON.stringify({products:{view:'true'}})]
+  ['StringView','Active',JSON.stringify({products:{view:'true'}})],
+  ['StaleView','Active',JSON.stringify({products:{view:true}})]
  ]){
-  await insert621('INSERT INTO auth_roles(role_name,status,permissions_json) VALUES (?,?,?)',
-   role,status,permissions);
+  await insert621('INSERT INTO auth_roles(role_name,status,permissions_json,auth_version) VALUES (?,?,?,?)',
+   role,status,permissions,role==='StaleView'?2:1);
  }
  const actors=[
   ['A','ViewA','BUS-A',T621.A],['B','ViewB','BUS-B',T621.B],
@@ -77,7 +78,7 @@ async function seed621(){
   ['REVOKED','ViewA','BUS-A',T621.REVOKED],
   ['INACTIVE','DisabledRole','BUS-A',T621.INACTIVE],
   ['STRING','StringView','BUS-A',T621.STRING],
-  ['STALE','ViewA','BUS-A',T621.STALE],
+  ['STALE','StaleView','BUS-A',T621.STALE],
   ['ADMIN','Administrator','BUS-A',T621.ADMIN]
  ];
  let n=0;
@@ -89,7 +90,7 @@ async function seed621(){
    role,'ab'.repeat(32),'cd'.repeat(24));
   await insert621('INSERT INTO auth_sessions(token_hash,user_id,user_auth_version,role_auth_version,credential_version,created_at_ms,last_activity_at_ms,expires_at_ms,revoked_at_ms) '+
    'VALUES(?,?,1,?,1,?,?,?,?)',
-   h621(token),'USR-P621-'+id,role==='Administrator'?null:id==='STALE'?0:1,
+   h621(token),'USR-P621-'+id,role==='Administrator'?null:1,
    N621-100000,N621-1000,N621+1000000,id==='REVOKED'?N621-10:null);
   await insert621('INSERT INTO synthetic_m03_session_tenants VALUES (?,?)',h621(token),tenant);
  }
