@@ -14,6 +14,9 @@ const FILE=/^[a-z0-9][a-z0-9._-]*\.ya?ml$/;
 const SECRET=/\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)/g;
 const DEPLOY_ACTION=/\b(?:cloudflare\/(?:wrangler-action|pages-action)|wrangler-action@|pages-action@)/i;
 const WRANGLER_DEPLOY=/\bwrangler(?:@[a-z0-9._-]+)?\s+deploy\b[^\r\n]*/gi;
+// Alternative publish verbs must not create a second GitHub deployment owner.
+// Unlike Worker `deploy --dry-run`, these methods have no approved CI exception.
+const ALT_WRANGLER_PUBLISH=/\bwrangler(?:@[a-z0-9._-]+)?\s+(?:pages\s+(?:deploy|publish)|versions\s+(?:deploy|upload)|publish)\b/i;
 const MANUAL='remote-d1-staging.yml';
 // Reviewed Git blob on main before M11-13. Any change requires a new M11 owner review.
 const APPROVED_STAGING_BLOB='cd8ef338cf2e532f43c12fffc01654452917fe60';
@@ -123,6 +126,9 @@ export function auditM11CiDeploymentOwnership({workflows,previewConfig}={}) {
     // No other GitHub Action may publish Workers or use cloud deployment
     // actions. A complete Wrangler command line must explicitly say dry-run.
     if(DEPLOY_ACTION.test(content))setCode(blockers,'M11_CI_DEPLOY_ACTION_BLOCKED');
+    if(ALT_WRANGLER_PUBLISH.test(content)){
+      setCode(blockers,'M11_CI_DEPLOY_COMMAND_BLOCKED');
+    }
     for(const command of content.matchAll(WRANGLER_DEPLOY)){
       if(!/(?:^|\s)--dry-run(?:\s|$)/.test(command[0])){
         setCode(blockers,'M11_CI_DEPLOY_COMMAND_BLOCKED');
