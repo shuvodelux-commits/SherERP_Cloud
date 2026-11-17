@@ -202,8 +202,15 @@ function compose(snapshot){
   if(typeof t.measurement_json!=='string'||t.measurement_json.length>4096)fail();
   let measurement;
   try{measurement=JSON.parse(t.measurement_json);}catch{fail();}
-  exact(measurement,['productId','revision','baseUnit','boxConversionId',
-   'boxUnitName','length','width','dimensionUnit','piecesPerBox','coveragePolicy']);
+  const required=['productId','revision','baseUnit','boxConversionId',
+   'boxUnitName','length','width','dimensionUnit','piecesPerBox','coveragePolicy'];
+  const allowed=[...required,'manufacturerSqftPerBox','manufacturerEvidence'];
+  const properties=Object.getOwnPropertyDescriptors(measurement);
+  if(!measurement||typeof measurement!=='object'||Array.isArray(measurement)||
+     ![Object.prototype,null].includes(Object.getPrototypeOf(measurement))||
+     Reflect.ownKeys(properties).some(key=>typeof key!=='string'||!allowed.includes(key)||
+       !properties[key]?.enumerable||!Object.hasOwn(properties[key],'value'))||
+     required.some(key=>!Object.hasOwn(properties,key)))fail();
   if(measurement.productId!==t.product_id||
      measurement.revision!==String(t.current_measurement_revision))fail();
   tileById.set(t.product_id,t);
