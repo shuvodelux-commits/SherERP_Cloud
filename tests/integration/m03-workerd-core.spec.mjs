@@ -66,6 +66,38 @@ test('exact Party links retain separate identities and require human-verified se
   assert.deepEqual(await query('/__m03_test__/party-id?source=SUPPLIERS&id=SUP-1'),{status:200,body:{partyId:'PARTY-1'}});
   assert.deepEqual(await query('/__m03_test__/party-id?source=VENDORS&id=SUP-1'),{status:200,body:{partyId:null}});
   assert.deepEqual(await query('/__m03_test__/party-id?source=CUSTOMERS&id=CUS-3'),{status:200,body:{partyId:null}});
+  // M03 Run1 extends this EXISTING Workerd D1 identity test. Keep the ten
+  // original core test cases and CI sharding contract unaltered.
+  const before=await db.prepare('SELECT COUNT(*) AS n FROM party_legacy_links').first();
+  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=2 WHERE source_group='CUSTOMERS' AND source_id='CUS-1'").run();
+  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=7 WHERE source_group='SUPPLIERS' AND source_id='SUP-1'").run();
+  const link=(sourceGroup,sourceId,legacySheetRow)=>
+    resolveLegacyPartyByProvenance({DB:db},{sourceGroup,sourceId,legacySheetRow});
+  assert.deepEqual(await link('CUSTOMERS','CUS-1',2),{
+    partyId:'PARTY-1',sourceGroup:'CUSTOMERS',sourceId:'CUS-1',
+    legacySheetRow:2,linkBasis:'ORIGINAL_RECORD',partyStatus:'ACTIVE'
+  });
+  assert.deepEqual(await link('SUPPLIERS','SUP-1',7),{
+    partyId:'PARTY-1',sourceGroup:'SUPPLIERS',sourceId:'SUP-1',
+    legacySheetRow:7,linkBasis:'HUMAN_VERIFIED',partyStatus:'ACTIVE'
+  });
+  for(const item of [
+    ['CUSTOMERS','CUS-1',7],
+    ['CUSTOMERS','CUS-2',2],
+    ['SUPPLIERS','CUS-1',2],
+    ['SUPPLIERS','SUP-1',2],
+    ['VENDORS','SUP-1',7]
+  ]){
+    assert.equal(await link(...item),null,item.join(':'));
+  }
+  await db.prepare("UPDATE party_legacy_links SET status='DISPUTED' WHERE source_group='SUPPLIERS' AND source_id='SUP-1'").run();
+  assert.equal(await link('SUPPLIERS','SUP-1',7),null);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM party_legacy_links').first()).n,before.n);
+  // Keep the original core fixture unchanged for all later M03 regression cases.
+  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=NULL WHERE source_group='CUSTOMERS' AND source_id='CUS-1'").run();
+  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=NULL,status='ACTIVE' WHERE source_group='SUPPLIERS' AND source_id='SUP-1'").run();
+  const publicWorker=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8');
+  assert.equal(publicWorker.includes('resolveLegacyPartyByProvenance'),false);
 });
 
 test('invalid requests fail closed without leaking data, and test routes never write',async()=>{
@@ -216,34 +248,4 @@ test('M09 Reports bootstrap derives safe source-shaped projection through actual
     const after=await db.prepare('SELECT COUNT(*) AS n FROM settings').first();
     assert.equal(after.n,before.n);
   }
-});
-
-test('Run1 actual Workerd D1 ties exact original Party identity to its reviewed physical source row',async()=>{
-  const before=await db.prepare('SELECT COUNT(*) AS n FROM party_legacy_links').first();
-  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=2 WHERE source_group='CUSTOMERS' AND source_id='CUS-1'").run();
-  await db.prepare("UPDATE party_legacy_links SET legacy_sheet_row=7 WHERE source_group='SUPPLIERS' AND source_id='SUP-1'").run();
-  const link=(sourceGroup,sourceId,legacySheetRow)=>
-    resolveLegacyPartyByProvenance({DB:db},{sourceGroup,sourceId,legacySheetRow});
-  assert.deepEqual(await link('CUSTOMERS','CUS-1',2),{
-    partyId:'PARTY-1',sourceGroup:'CUSTOMERS',sourceId:'CUS-1',
-    legacySheetRow:2,linkBasis:'ORIGINAL_RECORD',partyStatus:'ACTIVE'
-  });
-  assert.deepEqual(await link('SUPPLIERS','SUP-1',7),{
-    partyId:'PARTY-1',sourceGroup:'SUPPLIERS',sourceId:'SUP-1',
-    legacySheetRow:7,linkBasis:'HUMAN_VERIFIED',partyStatus:'ACTIVE'
-  });
-  for(const item of [
-    ['CUSTOMERS','CUS-1',7],
-    ['CUSTOMERS','CUS-2',2],
-    ['SUPPLIERS','CUS-1',2],
-    ['SUPPLIERS','SUP-1',2],
-    ['VENDORS','SUP-1',7]
-  ]){
-    assert.equal(await link(...item),null,item.join(':'));
-  }
-  await db.prepare("UPDATE party_legacy_links SET status='DISPUTED' WHERE source_group='SUPPLIERS' AND source_id='SUP-1'").run();
-  assert.equal(await link('SUPPLIERS','SUP-1',7),null);
-  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM party_legacy_links').first()).n,before.n);
-  const publicWorker=readFileSync(new URL('../../src/index.js',import.meta.url),'utf8');
-  assert.equal(publicWorker.includes('resolveLegacyPartyByProvenance'),false);
 });
