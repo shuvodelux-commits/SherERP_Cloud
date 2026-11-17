@@ -101,7 +101,7 @@ test('source input is confined to exact src JS paths, valid own code and parseab
     one('export const x=1;','src/../legacy/source/Database.gs'),
     one('function broken( {'),
     one(42),
-    {'src/db/ok.js':'export const x=1;', '__proto__':'forged'}
+    JSON.parse('{"src/db/ok.js":"export const x=1;","__proto__":"forged"}')
   ])assert.throws(()=>auditMigratedM03GasRuntime(entries),/invalid|source|GAS|parse|review/i);
   let access=0;
   const poisoned=Object.defineProperty({},'src/db/ok.js',{
