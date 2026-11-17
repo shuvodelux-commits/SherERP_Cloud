@@ -171,3 +171,50 @@ test('ordinary and null-prototype exact snapshot roots reach read-only D1 prefli
     assert.equal(inspected,1,'a valid root must reach the trusted D1 preflight');
   }
 });
+
+
+test('staff export arrays reject unreviewed own keys before D1',async()=>{
+  let accessed=0;
+  const variants=[
+    source=>{source.users.sessions=[{Token:'SYNTHETIC_ONLY'}];},
+    source=>{source.roles['01']='SYNTHETIC_SECOND_ROLE';},
+    source=>Object.defineProperty(source.users,'unreviewedHidden',{
+      enumerable:false,value:'SYNTHETIC_PRIVATE_FIELD',
+    }),
+    source=>{source.roles[Symbol('unexpected')]='SYNTHETIC_SYMBOL';},
+    source=>Object.defineProperty(source.roles,'unreviewedGetter',{
+      enumerable:true,get(){
+        accessed++;
+        throw Error('SYNTHETIC_PRIVATE_GETTER_MUST_NOT_RUN');
+      },
+    }),
+    source=>{source.users=new Proxy(source.users,{
+      ownKeys(){throw Error('SYNTHETIC_ARRAY_KEY_TRAP');},
+    });},
+  ];
+  for(const mutate of variants){
+    const source=snapshot();
+    mutate(source);
+    await expectNoWrite(source);
+  }
+  assert.equal(accessed,0,'unknown export array getters must never execute');
+});
+
+test('dense original staff arrays and an Administrator-only empty ROLES array still reach preflight',async()=>{
+  for(const source of [
+    snapshot(),
+    {users:[admin()],roles:[]},
+  ]){
+    let inspected=0;
+    const db={
+      prepare(){
+        inspected++;
+        throw Error('SYNTHETIC_DB_PREFLIGHT_REACHED');
+      },
+      batch(){throw Error('UNEXPECTED_BATCH');},
+    };
+    await assert.rejects(()=>importLegacyStaffSnapshotWithD1(db,source),
+      err=>err.message==='Offline staff import rejected');
+    assert.equal(inspected,1,'valid staff arrays must reach trusted D1 preflight');
+  }
+});
