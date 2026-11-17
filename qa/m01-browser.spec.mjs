@@ -703,3 +703,45 @@ test('original Chromium refuses a validateSession reply with a different bearer'
     await page.close();
   }
 });
+
+
+test('HisabIQ dashboard source-parity smoke: six cards, four panels, custom layout and safe details',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:840}});
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try{
+    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.evaluate(()=>{
+      // Browser-only synthetic fixture: bypasses no Worker auth or D1 gate.
+      window.authToken='synthetic-m01-dashboard-fixture';
+      window.currentUser={id:'M01-DASH-01',tenantId:'M01-DASH-SHOP',role:'Administrator'};
+      window.allowedModules=null;
+      document.getElementById('loginOverlay').hidden=true;
+      document.getElementById('app').style.visibility='';
+      document.getElementById('shopNameLabel').textContent='Synthetic M01 Store';
+      window.dispatchEvent(new Event('focus'));
+    });
+    const count=selector=>page.locator(selector).count();
+    assert.equal(await count('#hisabiq-dashboard-metrics > [data-hdb-widget]:visible'),6);
+    assert.equal(await count('#hisabiq-dashboard-panels > [data-hdb-widget]:visible'),4);
+    await page.locator('#dashSales').evaluate(node=>{node.textContent='৳1,234';});
+    await page.waitForFunction(()=>document.querySelector('[data-hdb-value="dashSales"]').textContent==='৳1,234');
+    assert.equal(await page.locator('[data-hdb-value="unavailable"]').textContent(),'—');
+    await page.locator('#hisabiq-dashboard-customize').click();
+    await page.locator('[data-hdb-widget="today-sales"] [data-hdb-action="move-next"]').click();
+    const first=await page.locator('#hisabiq-dashboard-metrics > [data-hdb-widget]').first().getAttribute('data-hdb-widget');
+    assert.equal(first,'receivable','editable dashboard reorders within the metric group');
+    await page.locator('[data-hdb-widget="low-stock"] [data-hdb-action="hide"]').click();
+    assert.equal(await page.locator('[data-hdb-widget="low-stock"]').isVisible(),false);
+    await page.locator('#hdb-all-widgets').click();
+    await page.locator('[data-hdb-list="metric"] [data-hdb-id="low-stock"] [role="switch"]').click();
+    assert.equal(await page.locator('[data-hdb-widget="low-stock"]').isVisible(),true);
+    await page.locator('[data-hdb-action="dialog-close"]').click();
+    await page.locator('[data-hdb-action="finish"]').click();
+    await saveArtifact(page,'hisabiq-dashboard-1280.png');
+    await page.locator('[data-hdb-widget="today-sales"] .hdb-widget').click();
+    assert.equal(await page.locator('#page-sales').isVisible(),true,
+      'summary card opens the existing permission-checked Sales page');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
