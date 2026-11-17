@@ -33,7 +33,7 @@ test('twelve versioned migrations retain the initial seven identity/catalog tabl
     'parties','party_identity_review','party_legacy_links','party_roles','product_categories','product_units','settings'
   ]);
   const n=await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first();
-  assert.equal(n.n,12);
+  assert.equal(n.n,13);
   const triggers=await DB.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_party_%' ORDER BY name").all();
   assert.deepEqual(triggers.results.map(x=>x.name),[
     'trg_party_cross_source_verification','trg_party_legacy_identity_immutable',

@@ -1,0 +1,23 @@
+name: M03 private product-catalog D1 read (local-only)
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  private-product-read:
+    name: Product revision text and immutable source identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Local SQLite frozen product catalog read tests
+        run: node --test tests/m03-product-catalog-d1-read.test.mjs
+      - name: Install local Workerd test runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Real local Workerd/D1 read-only projection tests
+        run: node --test tests/integration/m03-private-product-catalog-workerd.spec.mjs

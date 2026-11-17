@@ -1,0 +1,21 @@
+name: M02 product catalog revision schema isolated local D1
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  product-catalog-d1:
+    name: Frozen Product source references and versioned conversion guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Test original product identity and versioned SQLite constraints
+        run: node --test tests/m02-product-catalog-schema.test.mjs
+      - name: Test real isolated Workerd and D1 atomicity with no public routes
+        run: node --test tests/integration/m02-product-catalog-workerd.spec.mjs
