@@ -56,6 +56,11 @@ before(async()=>{
     await DB.prepare('INSERT INTO synthetic_m03_g1_stock(business_id,sku,available) VALUES(?,?,?)')
       .bind(id,'PIPE-1',amount).run();
   }
+  for(const [business,floor] of [['BUSINESS-A',16],['BUSINESS-B',0]]){
+    await DB.prepare(`INSERT INTO synthetic_m03_g4_sale_counters
+      (business_id,id_key,prefix,current_sequence) VALUES(?,'SALES','INV',?)`)
+      .bind(business,floor).run();
+  }
   await DB.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions
     (business_id,session_id,status) VALUES('BUSINESS-A','SESSION-1','Open')`).run();
   posting=createM04AtomicG1SaleProof({DB},{businessId:'BUSINESS-A'});
