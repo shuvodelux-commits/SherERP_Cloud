@@ -140,3 +140,80 @@ test('caller arguments cannot override the frozen 49-group readback scope',async
   assert.equal(a.productionReady,false);assert.equal(a.publicRpcEnabled,false);assert.equal(a.authorizesImport,false);
  });
 });
+
+test('Super QA: a completely sealed 1001-row source group must not yield a partial 1000-row archive',async()=>{
+ await withDb(async x=>{
+  const group='LOGS',headers=schema.tables.find(t=>t.sheetKey===group).columns;
+  x.sql.prepare("DELETE FROM m03_private_source_rows WHERE source_group='LOGS'").run();
+  const insert=x.sql.prepare('INSERT INTO m03_private_source_rows VALUES (?,?,?,?)');
+  const rows=[];
+  for(let i=0;i<1001;i++){
+   const row={sheetRow:i+2,cells:headers.map((_,k)=>'test-log-'+i+'-'+k)};
+   rows.push(row);
+   insert.run(pin,group,row.sheetRow,JSON.stringify(row.cells));
+  }
+  const fullDigest=digest(group,headers,rows);
+  x.sql.prepare("UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group='LOGS'")
+   .run(rows.length,fullDigest);
+  assert.equal(x.sql.prepare("SELECT COUNT(*) AS n FROM m03_private_source_rows WHERE source_group='LOGS'").get().n,1001);
+  const seal=x.sql.prepare("SELECT source_digest,expected_rows FROM m03_private_source_seals WHERE source_group='LOGS'").get();
+  assert.equal(seal.source_digest,fullDigest);
+  assert.equal(seal.expected_rows,1001);
+  await assert.rejects(()=>createFrozenSourceReadback(x.env).readAllSourceGroups(),e=>{
+   assert.equal(e.message,'Invalid or incomplete private M03 source archive');
+   assert.doesNotMatch(e.message,/test-log|original|SQL|source_digest/);
+   return true;
+  });
+ });
+});
+
+test('Super QA: unexpected private D1 columns fail without emitting any sensitive row values',async()=>{
+ await withDb(async x=>{
+  const DB={prepare(sql){
+   const bound=x.env.DB.prepare(sql);
+   return {bind(...args){
+    const stmt=bound.bind(...args);
+    return {async all(){
+     const result=await stmt.all();
+     if(sql.includes('FROM m03_private_source_seals')){
+      result.results[0].private_staff_token='synthetic-qa-canary-should-never-leak';
+     }
+     return result;
+    }};
+   }};
+  }};
+  await assert.rejects(()=>createFrozenSourceReadback({DB}).readAllSourceGroups(),e=>{
+   assert.equal(e.message,'Invalid or incomplete private M03 source archive');
+   assert.doesNotMatch(e.message,/private_staff_token|synthetic-qa-canary/);
+   return true;
+  });
+ });
+});
+
+test('Super QA: malicious D1 row accessor is rejected without executing its getter',async()=>{
+ await withDb(async x=>{
+  let called=0;
+  const DB={prepare(sql){
+   const bound=x.env.DB.prepare(sql);
+   return {bind(...args){
+    const stmt=bound.bind(...args);
+    return {async all(){
+     const result=await stmt.all();
+     if(sql.includes('FROM m03_private_source_rows') && args[1]==='PRODUCTS'){
+      Object.defineProperty(result.results[0],'cells_json',{
+       enumerable:true,configurable:true,
+       get(){called++;throw new Error('synthetic-qa-private-credential');}
+      });
+     }
+     return result;
+    }};
+   }};
+  }};
+  await assert.rejects(()=>createFrozenSourceReadback({DB}).readAllSourceGroups(),e=>{
+   assert.equal(e.message,'Invalid or incomplete private M03 source archive');
+   assert.doesNotMatch(e.message,/credential|cells_json|PRODUCTS/);
+   return true;
+  });
+  assert.equal(called,0,'source readback may not execute D1 accessor side effects');
+ });
+});
