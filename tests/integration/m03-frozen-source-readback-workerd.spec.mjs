@@ -158,7 +158,15 @@ test('real local Workerd D1 reads 1001 sealed LOGS rows over keyset pages and de
  const reviewedSql=readFileSync(new URL('../../docs/schema/m03-private-source-archive.proposed.sql',import.meta.url),'utf8');
  assert.match(reviewedSql,/CREATE TRIGGER trg_m03_private_seal_validate_count/);
  assert.match(reviewedSql,/CREATE TRIGGER trg_m03_private_row_delete_staging_only/);
- await DB.exec(reviewedSql);
+ // D1.exec splits SQL scripts on internal trigger semicolons, unlike local
+ // Node SQLite db.exec; replay exactly the reviewed ten complete statements.
+ // The remainder check rejects silently ignored future SQL/provenance edits.
+ const executable=reviewedSql.replace(/^\s*--[^\n]*(?:\n|$)/gm,'');
+ const ddlPattern=/CREATE TABLE[\s\S]*?\)\s+STRICT;|CREATE TRIGGER[\s\S]*?\bEND;/g;
+ const statements=[...executable.matchAll(ddlPattern)].map(match=>match[0]);
+ assert.equal(statements.length,10,'two strict tables plus eight source-immutability triggers');
+ assert.equal(executable.replace(ddlPattern,'').trim(),'','no source archive DDL may be skipped');
+ for(const sql of statements)await DB.prepare(sql).run();
 
  const staged=sourceData();
  staged.groups.LOGS.rows=rows;
