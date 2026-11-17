@@ -43,6 +43,10 @@ export function roleMetadata(row){
   if(!permissions || typeof permissions!=='object' || Array.isArray(permissions) ||
      Object.getPrototypeOf(permissions)!==Object.prototype)
     return null;
+  // Frozen GAS RoleManagement stores JSON.stringify(permissions). Reject
+  // noncanonical/duplicate-key text: SQLite JSON1 and JS JSON.parse can
+  // otherwise disagree about which action was actually granted.
+  if(JSON.stringify(permissions)!==row.permissions_json)return null;
   for(const [module,actions] of Object.entries(permissions)){
     if(!MODULES.has(module) || !actions || typeof actions!=='object' ||
        Array.isArray(actions) || Object.getPrototypeOf(actions)!==Object.prototype)
