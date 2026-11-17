@@ -4,6 +4,8 @@ import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createLegacyCatalogReadAdapter}
   from '../../src/db/legacy-catalog-read.js';
+import {createGuardedExpenseCategoryStatusAdapter}
+  from '../../src/db/expense-category-status-update.js';
 import {importSourceExpenseCategoriesWithD1}
   from '../../src/db/expense-category-source-import.js';
 import publicWorker from '../../src/index.js';
@@ -104,4 +106,40 @@ test('actual D1 refuses gapped or NULL legacy physical rows rather than misaddre
   }
   assert.deepEqual(await reader().getAllRows_('EXPENSE_CATEGORIES'),rows);
   assert.equal(await count(),3);
+});
+
+test('real local Workerd/D1 source status CAS updates only reviewed expense taxonomy row, never financial transactions',async()=>{
+  const write=createGuardedExpenseCategoryStatusAdapter({DB});
+  const expected={
+    sourceId:'EXCAT-1',name:'দোকান ভাড়া',description:'  মাসিক ভাড়া  ',
+    status:'Active',createdAt:'2026-11-15T10:00:00.000Z'
+  };
+  const before=(await DB.prepare('SELECT * FROM expense_categories ORDER BY legacy_sheet_row').all()).results;
+  assert.equal(await write.updateRowFields_('EXPENSE_CATEGORIES',2,
+    {Status:'Inactive'},expected),undefined);
+  const latest=await reader().getAllRows_('EXPENSE_CATEGORIES');
+  assert.equal(latest[0].Status,'Inactive');
+  assert.equal(latest[0]['Category ID'],'EXCAT-1');
+  assert.equal(latest[0].Description,'  মাসিক ভাড়া  ');
+  assert.equal(latest[0]['Created At'],'2026-11-15T10:00:00.000Z');
+  assert.equal(latest[1].Status,'Inactive');
+  assert.equal(latest[2].Status,'');
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM expense_categories').first()).n,3);
+  await assert.rejects(()=>write.updateRowFields_('EXPENSE_CATEGORIES',2,
+    {Status:'Inactive'},expected),/stale|unsafe|review|refus|invalid/i);
+  await assert.rejects(()=>write.updateRowFields_('EXPENSE_CATEGORIES',3,
+    {Status:'Active'},expected),/stale|unsafe|review|refus|invalid/i);
+  const after=(await DB.prepare('SELECT * FROM expense_categories ORDER BY legacy_sheet_row').all()).results;
+  assert.deepEqual({...after[0]},{...before[0],status:'Inactive'});
+  assert.deepEqual(after.slice(1),before.slice(1));
+
+  // A new migrated reader sees the changed Status, not a stale promise/cache.
+  assert.equal((await createLegacyCatalogReadAdapter({DB})
+    .findRow_('EXPENSE_CATEGORIES','Category ID','EXCAT-1')).row.Status,'Inactive');
+  assert.equal((await worker.fetch('http://expense-read.local/__m03_test__/category-status',
+    {method:'POST'})).status,404,'no new Worker endpoint');
+  assert.equal((await publicWorker.fetch(new Request('https://erp.invalid/api/rpc',{
+    method:'POST',headers:{Origin:'https://erp.invalid','Content-Type':'application/json'},
+    body:JSON.stringify({fnName:'setExpenseCategoryStatus',args:['a'.repeat(64),'EXCAT-1','Active']})
+  }),{DB})).status,501,'no public expense RPC');
 });
