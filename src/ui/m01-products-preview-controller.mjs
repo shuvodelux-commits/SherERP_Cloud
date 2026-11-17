@@ -21,6 +21,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
     '#m01ProductUnitPanel {border:1px solid var(--color-border,#d8deea);border-radius:7px;padding:12px;min-width:0;}',
     '#m01ProductUnitPanel .m01-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}',
     '#m01ProductUnitPanel .m01-fields>label {min-width:0;display:block;font-size:12px;}',
+    '#m01ProductUnitPanel label[hidden] {display:none!important}',
     '#m01ProductUnitPanel .m01-fields>label input, #m01ProductUnitPanel .m01-fields>label select {width:100%;min-width:0;margin-top:5px;}',
     '#m01ProductUnitPanel .m01-title {font-weight:600;margin:0 0 8px;}',
     '#m01ProductUnitPanel .m01-message {font-size:12px;color:var(--color-text-muted,#5d6473);margin:8px 0 0;}',
@@ -130,6 +131,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
     tileFields.hidden=!tile;
     manufacturerFields.hidden=!tile||byId('m01CoveragePolicy').value!=='manufacturer';
     areaFields.hidden=!tile||byId('m01OpeningMode').value!=='area';
+    byId('m01CaseSize').parentElement.hidden=tile;
     byId('m01CartonFields').hidden=!useCarton.checked;
     byId('m01OpeningOuter').parentElement.hidden=!useCarton.checked;
     preview.hidden=!advanced;
@@ -141,7 +143,7 @@ if(modal&&unit&&type&&save&&!byId('m01ProductUnitMode')){
       const stock=unit.value;
       if(!stock)throw new Error('Choose the physical stock unit above (e.g. Pcs).');
       const pack=byId('m01CaseUnit').value.trim(),outer=byId('m01CartonUnit').value.trim();
-      const packCount=quantityString('m01CaseSize');
+      const packCount=quantityString(tile?'m01TilesPerBox':'m01CaseSize');
       const relations=useCarton.checked?[
         {leftQty:1,leftUnit:outer,rightQty:Number(quantityString('m01CartonSize')),rightUnit:pack},
         {leftQty:1,leftUnit:pack,rightQty:Number(packCount),rightUnit:stock}
