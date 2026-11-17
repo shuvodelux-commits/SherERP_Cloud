@@ -1,0 +1,14 @@
+# M09 six-Report source evidence + Return lineage composition
+
+**Lane:** M09 only. **Issue:** #431; coordination #456. **Base:** main `bcd2d3adbd03f35612c50c1a144a472b1683b412`. **Merged prerequisites:** #450 source evidence, #459 Sales Return audit, #473 Purchase Return audit. **Frozen source:** Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2, Reports.gs, Utils.gs, DeleteEngine.gs, Config.gs.
+
+## Problem
+The existing `evaluateM09ReportsSourceEligibility` requires a reviewed `returnLineageReconciled` manifest Boolean for Sales, Purchase and Profit, but a Boolean does not prove that source parent-child keys reconcile. The new merged pure Sales/Purchase Return audits provide an independent source-shaped check, but a future integration reader could accidentally overlook them. This thin internal composition gate requires both audits, in addition to the already reviewed source receipt manifest, before declaring *source evidence* complete for the dependent reports. It **never activates a report**.
+
+## Input/output
+`evaluateM09ReportsLineageEvidence({manifest,salesSnapshot,purchaseSnapshot})` receives trusted internal, original-source-shaped full snapshots, including soft deleted rows. Root must be a plain own-data object and no getter may run. The three existing pure modules remain unchanged. Missing snapshots produce fixed `SALES_RETURN_LINEAGE_MISSING` / `PURCHASE_RETURN_LINEAGE_MISSING`; malformed snapshots produce `*_INVALID`; audited mismatch, orphan, duplicated source IDs or zero-child header produces `*_NEEDS_REVIEW`. These messages never include original purchase/invoice/return IDs or amounts.
+
+Output is `{ready:false,reports:...}`, preserving each existing source eligibility item's keys and adding `lineageBlockers:string[]`. Sales depends only on the Sales Return audit, Purchase only on the Purchase Return audit, Profit on both. Stock, Cash/Bank, limited Balance Sheet are not blocked by unrelated return links. If a report has missing/invalid lineage, its `evidenceComplete` becomes false and `status:'BLOCKED'`. Even with clean lineage and all independent source receipts positive, `ready:false` and `status:'AWAITING_AUTHENTICATED_D1_GATE'` persist. The composition checks the entire supplied history; it is not a date-scoped report query.
+
+## Safety/limits
+No direct D1/auth/SQL, no RPC registration, no stock/financial posting, no source modification, no printing/UI changes. This pure gate neither proves import provenance nor tenant-local authority, historical completeness, gross Party reconciliation or that a live D1 snapshot has been obtained atomically. Later M03/M04 integration must consume independently reviewed source and authorization contracts; M05/M06/M07/M08 parity, M10 historical rehearsal and M11 cutover remain blocked. This scope deliberately avoids rewriting the original projectors or adding a generic preflight framework.
