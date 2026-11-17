@@ -4,6 +4,30 @@
 
 **Source-of-truth baseline at this review:** `shuvodelux-commits/SherERP_Cloud@bcd2d3adbd03f35612c50c1a144a472b1683b412`; frozen original `shuvodelux-commits/Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`. On the reviewed GitHub issues [M10 #312](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/312) had **9/9 unchecked** acceptance items and [M11 #306](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/306) had **10/10 unchecked** release items. Those are documentary gate statuses, not percentages of source code completed.
 
+## Gate BP0 — Require actual GitHub main protection before release approval
+
+**Observed 2026-11-17 at `main@7c81dca09f975fbda37586eb50c2763c7f8506df`: BLOCKED.** The read-only GitHub `GET /repos/shuvodelux-commits/SherERP_Cloud/branches/main` result reported:
+
+```json
+{
+  "protected": false,
+  "protection": {
+    "enabled": false,
+    "required_status_checks": {
+      "enforcement_level": "off",
+      "contexts": [],
+      "checks": []
+    }
+  }
+}
+```
+
+These are the relevant returned fields, not an independently signed configuration attestation. The repository-level rulesets API returned `[]`. The detailed `/branches/main/protection` endpoint returned `403 Resource not accessible by integration`, and this connector cannot inspect GitHub staging environment reviewer/branch restrictions. **Therefore the current PR review and full-CI-before-merge rules are not enforced by GitHub `main` branch protection.** Do not infer that staging environment protection is absent; that remains independently **UNVERIFIED**.
+
+**Required owner/admin action:** In repository **Settings → Rules → Rulesets** (or **Settings → Branches**), establish and activate a branch rule that targets `main`. Require pull requests with reviewer approval, required stable status checks, resolved conversations, and a branch update policy consistent with the full exact-head CI gate. Disallow force pushes/deletion and unauthorized admin bypass; verify the chosen merge restrictions do not silently skip the mandatory existing Node, real Workerd/D1, source/accounting, security, UI/Playwright or preview-no-deploy checks. A passing static YAML check or voluntarily green PR is **not** an acceptable substitute. Repository settings require separate authorized administrator action; this documentation PR does not change them.
+
+**Independent acceptance evidence:** From a privileged owner/admin session, record only non-sensitive proof that `main.protected === true`, required PR approval and status checks are **enforced**, and actual current required checks match reviewed Actions jobs; inspect the GitHub `cloudflare-staging-db` environment's required reviewers, allowed branches and secret permissions separately. Preserve evidence references and reviewer decision outside sensitive logs. Recheck after ruleset updates, and do not assume GitHub mergeability alone means the rule is working. Mark this gate clear only after independently verified, owner-reviewed settings enforcement; **M10 and the ten original M11 acceptance gates remain separate**.
+
 ## The critical path: what must actually happen next
 
 **PARALLEL PREPARATION READY / SHARED TRANSACTION WRITES BLOCKED** remains authoritative in [M03 readiness](../M03_PARALLEL_READINESS.md), [parallel execution rules](../PARALLEL_EXECUTION.md) and [coordination #456](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456). The M11 CI-preflight work [#465](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/465), [#470](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/470) and [#475](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/475) is integrated on main. Those controls check source-only preview/CI safety and a reviewed staging workflow; they do not read the Cloudflare account configuration or prove an active financial ERP.
