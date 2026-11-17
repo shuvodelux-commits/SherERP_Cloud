@@ -15,8 +15,16 @@ const KEYS=Object.keys(SOURCE_ID_PREFIXES);
 const TENANT=/^[A-Z0-9][A-Z0-9_-]{0,127}$/;
 const FAIL='M03 private source ID floor installation rejected';
 const reject=()=>{throw new Error(FAIL);};
+// These family keys and prefixes come solely from the fixed source-pinned
+// Config inventory, never from evidence or a client request. Bind only the
+// 38 private floor numbers (+ 3 tenant scopes) to stay within D1's 100 limit.
+function sqlLiteral(value,pattern){
+ if(typeof value!=='string'||!pattern.test(value))reject();
+ return "'"+value+"'";
+}
 const INSERT='WITH floors(id_key,prefix,current_sequence) AS (VALUES '+
- KEYS.map(()=>'(?,?,?)').join(',')+
+ KEYS.map(key=>'('+sqlLiteral(key,/^[A-Z][A-Z0-9_]{0,63}$/)+','+
+  sqlLiteral(SOURCE_ID_PREFIXES[key],/^[A-Z][A-Z0-9]{0,15}$/)+',?)').join(',')+
  ') INSERT INTO synthetic_m03_id_counters'+
  ' (tenant_id,id_key,prefix,current_sequence)'+
  ' SELECT ?,id_key,prefix,current_sequence FROM floors'+
@@ -60,7 +68,7 @@ function parameterFloors(evidence){
   }
   const floor=Math.max(maxHistorical,property);
   if(floor>=Number.MAX_SAFE_INTEGER)reject();
-  params.push(key,prefix,floor);
+  params.push(floor);
  }
  return params;
 }
