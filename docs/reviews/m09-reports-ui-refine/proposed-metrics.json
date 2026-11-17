@@ -1,0 +1,213 @@
+[
+  {
+    "label": "desktop",
+    "width": 1440,
+    "docWidth": 1440,
+    "root": {
+      "x": 92,
+      "y": 80,
+      "width": 1324,
+      "height": 848,
+      "right": 1416
+    },
+    "toolbar": {
+      "x": 92,
+      "y": 80,
+      "width": 1324,
+      "height": 37,
+      "right": 1416
+    },
+    "tabs": {
+      "x": 92,
+      "y": 133,
+      "width": 1324,
+      "height": 53,
+      "right": 1416
+    },
+    "buttons": [
+      {
+        "label": "11/01/2026▣",
+        "x": 131,
+        "y": 81,
+        "width": 108,
+        "height": 36,
+        "right": 240
+      },
+      {
+        "label": "11/17/2026▣",
+        "x": 274,
+        "y": 81,
+        "width": 107,
+        "height": 36,
+        "right": 381
+      },
+      {
+        "label": "Run",
+        "x": 391,
+        "y": 80,
+        "width": 60,
+        "height": 37,
+        "right": 451
+      },
+      {
+        "label": "Today",
+        "x": 1144,
+        "y": 80,
+        "width": 75,
+        "height": 37,
+        "right": 1220
+      },
+      {
+        "label": "This Month",
+        "x": 1230,
+        "y": 80,
+        "width": 110,
+        "height": 37,
+        "right": 1340
+      },
+      {
+        "label": "Print",
+        "x": 1350,
+        "y": 80,
+        "width": 66,
+        "height": 37,
+        "right": 1416
+      }
+    ],
+    "dates": [
+      {
+        "value": "2026-11-01",
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0
+      },
+      {
+        "value": "2026-11-17",
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0
+      }
+    ],
+    "tabScrollWidth": 1324,
+    "tabClientWidth": 1324,
+    "clipping": [],
+    "pageErrors": []
+  },
+  {
+    "label": "mobile",
+    "width": 390,
+    "docWidth": 390,
+    "root": {
+      "x": 12,
+      "y": 68,
+      "width": 366,
+      "height": 1250,
+      "right": 378
+    },
+    "toolbar": {
+      "x": 12,
+      "y": 68,
+      "width": 366,
+      "height": 173,
+      "right": 378
+    },
+    "tabs": {
+      "x": 12,
+      "y": 253,
+      "width": 366,
+      "height": 45,
+      "right": 378
+    },
+    "buttons": [
+      {
+        "label": "Run",
+        "x": 12,
+        "y": 145,
+        "width": 179,
+        "height": 44,
+        "right": 191
+      },
+      {
+        "label": "Today",
+        "x": 199,
+        "y": 145,
+        "width": 179,
+        "height": 44,
+        "right": 378
+      },
+      {
+        "label": "This Month",
+        "x": 12,
+        "y": 197,
+        "width": 179,
+        "height": 44,
+        "right": 191
+      },
+      {
+        "label": "Print",
+        "x": 199,
+        "y": 197,
+        "width": 179,
+        "height": 44,
+        "right": 378
+      }
+    ],
+    "dates": [
+      {
+        "value": "2026-11-01",
+        "x": 12,
+        "y": 91,
+        "width": 179,
+        "height": 46,
+        "right": 191
+      },
+      {
+        "value": "2026-11-17",
+        "x": 199,
+        "y": 91,
+        "width": 179,
+        "height": 46,
+        "right": 378
+      }
+    ],
+    "tabScrollWidth": 613,
+    "tabClientWidth": 363,
+    "clipping": [
+      {
+        "id": "Cash & Bankক্যাশ ও ব",
+        "rect": {
+          "x": 321,
+          "y": 253,
+          "width": 111,
+          "height": 44,
+          "right": 431
+        }
+      },
+      {
+        "id": "Profitলাভের হিসাব",
+        "rect": {
+          "x": 435,
+          "y": 253,
+          "width": 63,
+          "height": 44,
+          "right": 498
+        }
+      },
+      {
+        "id": "Balance Sheetসম্পদ ও",
+        "rect": {
+          "x": 502,
+          "y": 253,
+          "width": 123,
+          "height": 44,
+          "right": 625
+        }
+      }
+    ],
+    "pageErrors": []
+  }
+]
