@@ -17,9 +17,9 @@ before(async()=>{
 });
 after(async()=>harness.close());
 
-test('real versioned D1 migrates 0001–0012: four nullable source columns and two immutability guards',async()=>{
+test('real versioned D1 migrates 0001–0014: four nullable source columns and two immutability guards',async()=>{
   const migration=(await DB.prepare('SELECT COUNT(*) AS n FROM d1_migrations').first()).n;
-  assert.equal(migration,13);
+  assert.equal(migration,14);
   const users=await DB.prepare("SELECT name FROM pragma_table_info('auth_users') WHERE name IN ('source_created_by','source_created_at_iso','source_last_login_iso')").all();
   const roles=await DB.prepare("SELECT name FROM pragma_table_info('auth_roles') WHERE name='source_created_at_iso'").all();
   assert.equal(users.results.length,3);
