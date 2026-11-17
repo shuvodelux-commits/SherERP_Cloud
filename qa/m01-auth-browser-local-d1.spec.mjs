@@ -172,3 +172,129 @@ test('original Chromium login/restore/logout use real isolated M04 auth D1, not 
     await harness.close();
   }
 });
+
+
+test('real isolated M04 D1 Clerk session preserves source mobile More nav, restore and logout',async()=>{
+  // This test is committed before the M01-owned D1 bootstrap helper (RED).
+  // Login/validateSession/logout MUST reach reviewed M04 + local actual D1,
+  // never a Playwright synthetic authentication response.
+  const {createM01PhoneD1AuthFixture}=
+    await import('./m01-mobile-d1-fixture.mjs');
+  const fixture=await createM01PhoneD1AuthFixture({now:NOW});
+  let browser,page;
+  const requests=[];
+  try{
+    browser=await chromium.launch({
+      headless:true,
+      ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+        ? {executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})
+    });
+    page=await browser.newPage({
+      viewport:{width:375,height:812},isMobile:true,hasTouch:true
+    });
+    const shell={
+      shopName:'Synthetic M01 Local D1 Phone',
+      currencySymbol:'৳',
+      navItems:[
+        {key:'dashboard',label:'Dashboard',icon:'dashboard',
+          sidebarGroup:0,sidebarOrder:1},
+        {key:'reports',label:'Reports',icon:'reports',
+          sidebarGroup:3,sidebarOrder:2},
+        {key:'bank',label:'Bank',icon:'bank',
+          sidebarGroup:3,sidebarOrder:3}
+      ]
+    };
+    await page.route('**/api/rpc',async route=>{
+      const body=route.request().postDataJSON();
+      requests.push(body?.fnName);
+      if(body?.fnName!=='getAppShellData')return route.continue();
+      await route.fulfill({
+        status:200,contentType:'application/json',
+        body:JSON.stringify({success:true,data:shell})
+      });
+    });
+
+    await page.goto(fixture.site.url,{waitUntil:'domcontentloaded'});
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.locator('#loginMobile').fill(fixture.mobile);
+    await page.locator('#loginPassword').fill(fixture.password);
+    const loginReply=page.waitForResponse(rpcMatch('login'));
+    await page.locator('#loginSubmitBtn').tap();
+    const response=await loginReply;
+    assert.equal(response.status(),200,'actual M04 authenticated local-D1 RPC');
+    const login=await response.json();
+    assert.equal(login.success,true);
+    assert.match(login.data.token,/^[0-9a-f]{64}$/);
+    assert.equal(login.data.user.id,fixture.userId);
+    assert.deepEqual(login.data.allowedModules,['dashboard','reports']);
+    assert.equal(login.data.permissions?.reports?.view,true);
+    await page.waitForFunction(()=>
+      document.getElementById('loginOverlay')?.hidden===true);
+    await page.locator('#navList [data-page="reports"]')
+      .waitFor({state:'attached'});
+    assert.equal(await page.locator('#navList [data-page="bank"]').count(),0);
+    for(const key of ['pos','sales','products']){
+      assert.equal(await page.locator(
+        '#mobileBottomNav [data-mobile-page="'+key+'"]').isVisible(),false,
+        'D1-authenticated Clerk must not get '+key+' on phone');
+    }
+    const more=page.locator('#mobileBottomNav [data-mobile-page="more"]');
+    await more.tap();
+    await page.locator('#mobileMoreSheet:not([hidden])').waitFor();
+    assert.equal(await page.locator(
+      '#mobileMoreList [data-mobile-target="reports"]').count(),1);
+    assert.equal(await page.locator(
+      '#mobileMoreList [data-mobile-target="bank"]').count(),0);
+    await page.locator(
+      '#mobileMoreList [data-mobile-target="reports"]').tap();
+    assert.equal(await page.evaluate(()=>currentPage),'reports');
+    assert.equal(await page.locator('#mobileMoreSheet').isVisible(),false);
+    assert.equal(await more.getAttribute('aria-current'),'page');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('hwerp.session.token')),
+      login.data.token);
+
+    const validateReply=page.waitForResponse(rpcMatch('validateSession'));
+    await page.reload({waitUntil:'domcontentloaded'});
+    const validated=await validateReply;
+    assert.equal(validated.status(),200);
+    assert.equal((await validated.json()).data.token,login.data.token);
+    await page.waitForFunction(()=>
+      document.getElementById('loginOverlay')?.hidden===true);
+    assert.equal(await page.locator('#navList [data-page="bank"]').count(),0);
+    assert.equal(await page.evaluate(()=>isPhoneViewport_()),true);
+
+    await page.setViewportSize({width:812,height:375});
+    assert.equal(await page.evaluate(()=>isPhoneViewport_()),true,
+      'coarse pointer landscape must retain phone layout');
+    await more.tap();
+    await page.locator('#mobileMoreSheet:not([hidden])').waitFor();
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#mobileMoreSheet').isVisible(),false,
+      'original global Escape closes mobile More on authenticated landscape');
+    assert.equal(await page.evaluate(()=>
+      document.body.classList.contains('mobile-sheet-open')),false);
+    await page.evaluate(()=>goToPage('bank'));
+    assert.equal(await page.evaluate(()=>currentPage),'dashboard',
+      'D1 Clerk must never navigate to Bank through a direct browser call');
+
+    const logoutReply=page.waitForResponse(rpcMatch('logout'));
+    await page.evaluate(()=>{void doLogout_();});
+    assert.equal((await logoutReply).status(),200);
+    await page.locator('#loginOverlay:not([hidden])').waitFor();
+    await page.waitForFunction(()=>localStorage.getItem('hwerp.session.token')===null);
+    const session=await fixture.db.prepare(
+      'SELECT revoked_at_ms FROM auth_sessions WHERE token_hash=?'
+    ).bind(digest(login.data.token)).first();
+    assert.ok(session && session.revoked_at_ms!==null,
+      'actual local D1 session must be revoked by original logout');
+    assert.equal(await page.locator('#app').evaluate(
+      el=>getComputedStyle(el).visibility),'hidden');
+    assert.equal(requests.filter(name=>name==='login').length,1);
+    assert.equal(requests.filter(name=>name==='validateSession').length,1);
+    assert.equal(requests.filter(name=>name==='logout').length,1);
+  }finally{
+    await page?.close();
+    await browser?.close();
+    await fixture.close();
+  }
+});
