@@ -19,7 +19,7 @@
 | `tests/fixtures/m03-authorized-post-contract.mjs`, `tests/fixtures/m03-reversal-contract.mjs` and their local Workerd/D1 suites | Synthetic SQL-atomic authority+stock+receipt and once-only owned-stock reversal proofs | Synthetic roles and stock only; not approved live M05/M06/M07/M08 posting or reversal |
 | `src/rpc/registry.js`, `src/rpc/handler.js`, `src/index.js` | Public registry deliberately **empty**; Worker health reports `database:not-connected`; private bridge tests are opt-in only | **No public D1-backed sale/purchase/return/cash mutation is approved** |
 
-The pinned source's `docs/baseline/m03-async-closure.json` / `tests/m03-async-closure.test.mjs` record a conservative transitive audit: **47 original .gs files, 614 functions, 394 affected functions**. These are migration *work items*, not 394 verified ports. Re-run the documented `scripts/audit-m03-async-closure.mjs --check` and record endpoint-specific awaited call-chain coverage before claiming closure.
+The pinned source's `docs/baseline/m03-async-caller-closure.json` / `tests/m03-async-closure.test.mjs` record a conservative transitive audit: **47 original .gs files, 614 functions, 394 affected functions**. These are migration *work items*, not 394 verified ports. Re-run the documented `scripts/audit-m03-async-closure.mjs --check` and record endpoint-specific awaited call-chain coverage before claiming closure.
 
 ## 2. Proposed private G1 contract — dependencies, not an implemented API
 
