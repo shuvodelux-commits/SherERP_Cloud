@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 
 const frozenReports=readFileSync(new URL('../legacy/source/Reports.gs',import.meta.url),'utf8');
 const frozenUtils=readFileSync(new URL('../legacy/source/Utils.gs',import.meta.url),'utf8');
+const frozenDelete=readFileSync(new URL('../legacy/source/DeleteEngine.gs',import.meta.url),'utf8');
 function nativeFunction(source,name){
   const start=source.indexOf('function '+name+'(');
   assert.ok(start!==-1,'Pinned GAS source missing '+name);
@@ -13,6 +14,7 @@ function nativeFunction(source,name){
   return source.slice(start,end+2);
 }
 const frozenCode=[
+  nativeFunction(frozenDelete,'isDeleted_'),
   ...['roundMoney_','economicReturnLineAmount_','duplicateSalesInvoiceIdMap_',
     'assertUniqueSalesInvoiceIds_'].map(n=>nativeFunction(frozenUtils,n)),
   ...['reportRange_','inRange_','sortedByDesc_','getSalesReport'].map(n=>nativeFunction(frozenReports,n))
@@ -78,7 +80,6 @@ function sourceOracle(snapshot,filters,today='2026-11-15'){
       const due=state.dueByInvoice[sale['Invoice ID']];
       return due===undefined?null:{dueAmount:due};
     },
-    isDeleted_:row=>row['Is Deleted']===true||row['Is Deleted']==='TRUE',
     formatDate_:()=>today,
     safeDateOnly_:value=>!value?'':String(value).slice(0,10),
     sanitizeInput_:value=>value==null?'':String(value).trim(),
@@ -213,4 +214,26 @@ test('report is pure and never exposes RPC or changes source, frontend or financ
   const source=readFileSync(new URL('../src/modules/sales-report-read.js',import.meta.url),'utf8');
   assert.doesNotMatch(source,/\b(?:fetch|prepare|batch|exec)\s*\(/);
   assert.doesNotMatch(source,/function\s+getSalesReport\s*\(/);
+});
+
+
+test('frozen DeleteEngine mixed-case TRUE excludes deleted invoices from Sales Report',()=>{
+  const s=base();
+  s.allSales[0]['Is Deleted']='true';
+  s.allSales[1]['Is Deleted']='TrUe';
+  const before=clone(s);
+  const result=parity(s);
+  assert.equal(result.totals.invoices,1);
+  assert.equal(result.totals.grossSales,70);
+  assert.equal(result.totals.returned,5);
+  assert.equal(result.totals.netSales,65);
+  assert.deepEqual(s,before);
+});
+
+test('frozen DeleteEngine keeps FALSE, false and numeric zero source invoices active',()=>{
+  for(const status of ['false','FALSE',false,0,'']){
+    const s=base();
+    s.allSales[4]['Is Deleted']=status;
+    assert.equal(parity(s).totals.invoices,4);
+  }
 });
