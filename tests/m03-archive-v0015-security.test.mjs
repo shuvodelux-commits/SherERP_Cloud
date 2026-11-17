@@ -203,3 +203,31 @@ test('RED v0015: a failed source-row insert inside a transaction rolls back all 
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM m03_archive_rows").get().n,before);
  });
 });
+
+test('RED v0015: cross-tenant SQL triggers deny forged rows even with foreign_keys OFF',async()=>{
+ const db=new DatabaseSync(':memory:');
+ try{
+  db.exec('PRAGMA foreign_keys=OFF');
+  db.exec(sql);
+  assert.equal(db.prepare('PRAGMA foreign_keys').get().foreign_keys,0);
+  batch(db,'TENANT_ALPHA','BATCH_1');
+  group(db,'TENANT_ALPHA','BATCH_1','PRODUCTS',[]);
+  assert.throws(()=>db.prepare('INSERT INTO m03_archive_rows VALUES (?,?,?,?,?)')
+   .run('TENANT_BETA','BATCH_1','PRODUCTS',2,'[]'),err);
+  assert.throws(()=>db.prepare('INSERT INTO m03_archive_groups VALUES (?,?,?,?,?,?,?)')
+   .run('TENANT_BETA','BATCH_1','LOGS',JSON.stringify(FROZEN_SOURCE_COLUMNS.LOGS),0,checksum('LOGS',[]),'STAGING'),err);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM m03_archive_rows').get().n,0);
+ }finally{db.close();}
+});
+test('RED v0015: source headers and cells require JSON arrays, never objects or malformed JSON',async()=>{
+ await withDb(db=>{
+  batch(db);
+  group(db,'TENANT_ALPHA','BATCH_1','LOGS',[]);
+  assert.throws(()=>db.prepare('INSERT INTO m03_archive_rows VALUES (?,?,?,?,?)')
+   .run('TENANT_ALPHA','BATCH_1','LOGS',2,'{}'),err);
+  assert.throws(()=>db.prepare('INSERT INTO m03_archive_rows VALUES (?,?,?,?,?)')
+   .run('TENANT_ALPHA','BATCH_1','LOGS',2,'not-json'),/malformed|JSON|constraint|CHECK/i);
+  assert.throws(()=>db.prepare('INSERT INTO m03_archive_groups VALUES (?,?,?,?,?,?,?)')
+   .run('TENANT_ALPHA','BATCH_1','CUSTOMERS','{}',0,checksum('CUSTOMERS',[]),'STAGING'),err);
+ });
+});
