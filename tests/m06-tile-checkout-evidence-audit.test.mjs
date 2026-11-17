@@ -72,7 +72,7 @@ test('exact two-Tile rational Sqft and original split tender are consistent with
  assert.deepEqual(input,original,'audit may not mutate caller-supplied evidence');
 });
 test('rounded Sqft display is not multiplied into the actual line amount',()=>{
- const x=preview();assert.equal(x.lines[0].quantity.displaySqft,'35.33');
+ const x=structuredClone(preview());assert.equal(x.lines[0].quantity.displaySqft,'35.33');
  assert.equal(x.lines[0].salePreview.lineAmountMinor,'134267');
  assert.equal(audit(x).ready,true);
 });
@@ -82,7 +82,7 @@ test('changed saved physical area, Box or pieces invalidate historical measureme
   x=>{x.lines[0].quantity.pieces='52';},
   x=>{x.lines[0].quantity.boxes='1';},
   x=>{x.lines[0].quantity.displaySqft='35.32';}
- ]){const x=preview();change(x);has(audit(x),'TILE_QUANTITY_MISMATCH');}
+ ]){const x=structuredClone(preview());change(x);has(audit(x),'TILE_QUANTITY_MISMATCH');}
 });
 test('product, original revision and pricing snapshot substitutions reject without current catalog reads',()=>{
  for(const [change,code] of [
@@ -91,55 +91,55 @@ test('product, original revision and pricing snapshot substitutions reject witho
   [x=>{x.lines[0].salePreview.priceSnapshot.unitPriceText='0.01';},'PRICE_SNAPSHOT_MISMATCH'],
   [x=>{x.lines[0].salePreview.pricingUnit='Box';},'TILE_QUOTE_MISMATCH'],
   [x=>{x.lines[0].salePreview.lineAmountMinor='134266';},'TILE_QUOTE_MISMATCH']
- ]){const x=preview();change(x);has(audit(x),code);}
+ ]){const x=structuredClone(preview());change(x);has(audit(x),code);}
 });
 test('duplicate logical Product IDs and quote cents vs display money reject',()=>{
- const x=preview();x.lines[1].productId='T-A';has(audit(x),'DUPLICATE_PRODUCT_ID');
- const y=preview();y.lines[0].lineTotal=1342.68;has(audit(y),'LINE_AMOUNT_MISMATCH');
+ const x=structuredClone(preview());x.lines[1].productId='T-A';has(audit(x),'DUPLICATE_PRODUCT_ID');
+ const y=structuredClone(preview());y.lines[0].lineTotal=1342.68;has(audit(y),'LINE_AMOUNT_MISMATCH');
 });
 test('original subtotal, discount clamp and Grand are integer-paisa conserved',()=>{
  for(const [field,value,code] of [
   ['subtotal',1642.68,'SUBTOTAL_MISMATCH'],
   ['discount',42.68,'GRAND_TOTAL_MISMATCH'],
   ['grandTotal',1599.99,'GRAND_TOTAL_MISMATCH']
- ]){const x=preview();x[field]=value;has(audit(x),code);}
- const x=preview();x.discount=1700;x.grandTotal=0;x.allocation=normalizeSalePayments_(0,[],accounts());
+ ]){const x=structuredClone(preview());x[field]=value;has(audit(x),code);}
+ const x=structuredClone(preview());x.discount=1700;x.grandTotal=0;x.allocation=normalizeSalePayments_(0,[],accounts());
  assert.equal(audit(x).ready,true,'source discount greater than subtotal clamps Grand at zero');
 });
 test('invoice header paid/due and Cash returned change are independently conserved',()=>{
- const x=preview();x.allocation.paidAmount=1599.99;has(audit(x),'PAID_DUE_MISMATCH');
- const y=preview();y.allocation.changeAmount=49;has(audit(y),'CASH_CHANGE_MISMATCH');
- const z=preview();z.allocation.payments[2].tendered=849;has(audit(z),'CASH_TENDER_MISMATCH');
+ const x=structuredClone(preview());x.allocation.paidAmount=1599.99;has(audit(x),'PAID_DUE_MISMATCH');
+ const y=structuredClone(preview());y.allocation.changeAmount=49;has(audit(y),'CASH_CHANGE_MISMATCH');
+ const z=structuredClone(preview());z.allocation.payments[2].tendered=849;has(audit(z),'CASH_TENDER_MISMATCH');
 });
 test('Bank and Mobile cannot create change or lose their original account ID',()=>{
- const x=preview();x.allocation.payments[0].change=1;has(audit(x),'NONCASH_TENDER_MISMATCH');
- const y=preview();y.allocation.payments[1].bankAccountId='';has(audit(y),'NONCASH_ACCOUNT_MISMATCH');
+ const x=structuredClone(preview());x.allocation.payments[0].change=1;has(audit(x),'NONCASH_TENDER_MISMATCH');
+ const y=structuredClone(preview());y.allocation.payments[1].bankAccountId='';has(audit(y),'NONCASH_ACCOUNT_MISMATCH');
 });
 test('duplicate payment row identifiers/orders and source payment header drift reject',()=>{
- const x=preview();x.allocation.payments[1].rowId='BANK';has(audit(x),'DUPLICATE_PAYMENT_ROW_ID');
- const y=preview();y.allocation.payments[2].rowOrder=1;has(audit(y),'DUPLICATE_PAYMENT_ORDER');
- const z=preview();z.allocation.paymentMethod='Cash';has(audit(z),'PAYMENT_HEADER_MISMATCH');
+ const x=structuredClone(preview());x.allocation.payments[1].rowId='BANK';has(audit(x),'DUPLICATE_PAYMENT_ROW_ID');
+ const y=structuredClone(preview());y.allocation.payments[2].rowOrder=1;has(audit(y),'DUPLICATE_PAYMENT_ORDER');
+ const z=structuredClone(preview());z.allocation.paymentMethod='Cash';has(audit(z),'PAYMENT_HEADER_MISMATCH');
 });
 test('no-stock preview and postingAllowed=false cannot be forged into posting authorization',()=>{
- const x=preview();x.postingAllowed=true;has(audit(x),'UNAUTHORIZED_POSTING_CLAIM');
- const y=preview();y.lines[0].stockAuthority='loaded';has(audit(y),'UNAUTHORIZED_POSTING_CLAIM');
- const z=preview();z.lines[0].salePreview.postingAllowed=true;has(audit(z),'UNAUTHORIZED_POSTING_CLAIM');
+ const x=structuredClone(preview());x.postingAllowed=true;has(audit(x),'UNAUTHORIZED_POSTING_CLAIM');
+ const y=structuredClone(preview());y.lines[0].stockAuthority='loaded';has(audit(y),'UNAUTHORIZED_POSTING_CLAIM');
+ const z=structuredClone(preview());z.lines[0].salePreview.postingAllowed=true;has(audit(z),'UNAUTHORIZED_POSTING_CLAIM');
 });
 test('unknown, invalid or unsafe money and malformed invoices fail closed',()=>{
- const x=preview();x.lines=[];has(audit(x),'EMPTY_SALE');
- const y=preview();y.lines[0].salePreview.lineAmountMinor='9007199254740992';has(audit(y),'TILE_QUOTE_MISMATCH');
- const z=preview();z.discount=-1;has(audit(z),'INVALID_CHECKOUT_MONEY');
- const bad=preview();bad.allocation.payments=Array.from({length:21},(_,i)=>({...bad.allocation.payments[0],rowId:'B'+i,rowOrder:i+1}));has(audit(bad),'TOO_MANY_PAYMENT_ROWS');
+ const x=structuredClone(preview());x.lines=[];has(audit(x),'EMPTY_SALE');
+ const y=structuredClone(preview());y.lines[0].salePreview.lineAmountMinor='9007199254740992';has(audit(y),'TILE_QUOTE_MISMATCH');
+ const z=structuredClone(preview());z.discount=-1;has(audit(z),'INVALID_CHECKOUT_MONEY');
+ const bad=structuredClone(preview());bad.allocation.payments=Array.from({length:21},(_,i)=>({...bad.allocation.payments[0],rowId:'B'+i,rowOrder:i+1}));has(audit(bad),'TOO_MANY_PAYMENT_ROWS');
 });
 test('accessor-backed and malformed data rejected without executing getters',()=>{
- const x=preview();Object.defineProperty(x.lines[0].quantity.measurementSnapshot,'length',{
+ const x=structuredClone(preview());Object.defineProperty(x.lines[0].quantity.measurementSnapshot,'length',{
   enumerable:true,get(){throw Error('GETTER_MUST_NOT_RUN');}
  });
  assert.throws(()=>audit(x),/accessor|record|Invalid/i);
- const y=preview();Object.defineProperty(y.allocation.payments[0],'applied',{
+ const y=structuredClone(preview());Object.defineProperty(y.allocation.payments[0],'applied',{
   enumerable:true,get(){throw Error('GETTER_MUST_NOT_RUN');}
  });
  assert.throws(()=>audit(y),/accessor|record|Invalid/i);
- const z=preview();delete z.lines[1].quantity.requestSnapshot;
+ const z=structuredClone(preview());delete z.lines[1].quantity.requestSnapshot;
  has(audit(z),'INVALID_TILE_SNAPSHOT');
 });
