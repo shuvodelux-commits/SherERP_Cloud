@@ -322,3 +322,18 @@ node scripts/check-m11-single-writer-timeline.mjs \
 ```
 
 The tool emits fixed blocker codes, not source data, raw event IDs or secrets. A structurally complete report is **not an authenticated live source freeze, production GO, safe rollback, authorization to resume legacy/D1 writes, or proof of a finished ERP migration**. Require real M10/production acceptance, independent source and target journal/readback evidence, gross-role Party accounts, stock/FIFO parity, correct D1 Time Travel retention and a separate documented owner decision. Do not bind public previews to D1 or write to the original business Sheets during this review.
+
+
+## M11-12 — GitHub Actions deployment-ownership audit (source only)
+
+**Scope:** GitHub-based M11 preparation under `AGENTS.md`, `docs/PARALLEL_EXECUTION.md` and coordination issue #456. Cloudflare Workers Builds is the sole automatic deployment owner for the inert `shererp-cloud-preview` Worker. The normal pull-request workflows run tests, local Workerd/D1 fixtures and `wrangler deploy --dry-run`; they must never publish a Worker, access remote D1, or receive deployment secrets. This is not approval to activate production RPC, import real historical data or bind D1 to a public preview.
+
+Run the dependency-free, read-only repository audit as an extra operator check:
+
+```sh
+node scripts/m11-ci-deployment-ownership.mjs
+```
+
+The audit scans every `.github/workflows/*.yml`/`*.yaml` file, verifies the existing DB-free preview Wrangler config, and rejects direct Wrangler publish commands, unexpected Cloudflare deployment actions, remote operations in ordinary workflows, or secret expressions in those workflows. The existing `remote-d1-staging.yml` is a **narrow manual exception**: `workflow_dispatch` only, exact `main` ref and approved `APPLY_STAGING_D1_SCHEMA_ONLY` confirmation, protected `cloudflare-staging-db` environment, verified database target and existing limited migration count. This exception does not authorize new staging migrations or private customer data, and it does not make GitHub Actions the owner of public preview deployment.
+
+The companion `tests/m11-ci-deployment-ownership.test.mjs` uses synthetic mutations to prove that new PR deployments, PR-secret access, alternate remote D1 targets and weakening the manual staging conditions are blocked. The test suite reads all current workflow files through `npm test`, and the standard full PR CI must remain green before this guard or any later M11 change merges. A green static audit does **not** prove GitHub protected-environment policies, cloud-account permissions, Workers Builds identity, live database binding state or real traffic routing; those controls need independently reviewed authority. The audit performs no Cloudflare API calls and never writes D1 or GAS/Sheets.
