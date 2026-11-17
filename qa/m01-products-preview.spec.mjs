@@ -208,7 +208,10 @@ test('Products table uses M05 source metadata when available and preserves fallb
   await page.waitForFunction(()=>document.querySelector('#prodTableBody tr:first-child td:nth-child(5)')?.textContent==='2 Box 5 Pcs');
   assert.equal(await page.locator('#prodTableBody tr:nth-child(2) td:nth-child(5)').textContent(),'45 Pcs');
   await mkdir(EVIDENCE_DIR,{recursive:true});
-  await page.evaluate(()=>{document.getElementById('prodModal').hidden=true});
+  await page.evaluate(()=>{
+   const modal=document.getElementById('prodModal');
+   modal.hidden=true;modal.style.display='none'; // synthetic fixture originally used inline display:flex
+  });
   await page.locator('#prodTable').screenshot({path:join(EVIDENCE_DIR,'products-desktop-after-stock-table.png'),animations:'disabled'});
  }finally{await page.close();}
 });
