@@ -1,0 +1,24 @@
+name: M08 opening Cash explanation source parity local Workerd D1 (read-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  m08-opening-local-d1:
+    name: M08 opening Cash explanation source parity (local D1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned local-only Wrangler
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Run opening source parity on real local Workerd D1
+        run: node --test tests/integration/m08-d1-opening-explanation-workerd.spec.mjs
