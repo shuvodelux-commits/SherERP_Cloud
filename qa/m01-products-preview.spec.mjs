@@ -1,7 +1,7 @@
 import test,{before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {chromium} from 'playwright';
@@ -10,6 +10,11 @@ import {patchServerCall} from '../scripts/patch-rpc.mjs';
 import {patchPosV2HiddenVisibility} from '../scripts/patch-posv2-visibility.mjs';
 import {patchM01ProductsPreview,installM01ProductsPreviewAssets} from '../scripts/patch-m01-products-preview.mjs';
 
+const EVIDENCE_DIR=new URL('../test-results/m01-browser/',import.meta.url).pathname;
+async function captureProductPreview(page,name){
+ await mkdir(EVIDENCE_DIR,{recursive:true});
+ await page.screenshot({path:join(EVIDENCE_DIR,name+'.png'),animations:'disabled'});
+}
 let dir,server,browser,url;
 before(async()=>{
  dir=await mkdtemp(join(tmpdir(),'shererp-m01-products-preview-'));
@@ -113,8 +118,10 @@ test('desktop product modal previews 2 Box 5 Pcs without changing legacy Save or
  const page=await openProductModal(1440);
  try{
   assert.equal(await page.locator('#m01ProductUnitMode').count(),1);
+  await captureProductPreview(page,'products-desktop-before-single');
   await chooseProductPreviewOption(page,'m01ProductUnitMode','multi');
   await page.locator('#m01StockPreview').getByText('2 Box 5 Pcs',{exact:false}).waitFor();
+  await captureProductPreview(page,'products-desktop-after-multiunit');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
   assert.equal(await page.locator('#prodBundleEditor').count(),1);
   await chooseProductPreviewOption(page,'m01ProductUnitMode','single');
@@ -130,6 +137,7 @@ test('Tiles 24x24 and 25 Pcs per Box project 5 Box 3 Pcs and 512.00 Sqft',async(
   await page.locator('#m01OpeningCase').fill('5');
   await page.locator('#m01OpeningBase').fill('3');
   await page.locator('#m01StockPreview').getByText('5 Box 3 Pcs · 512.00 Sqft',{exact:false}).waitFor();
+  await captureProductPreview(page,'products-desktop-after-tiles');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
  }finally{await page.close();}
 });
@@ -142,6 +150,9 @@ test('Tiles requested area is rounded to actual physical Pcs and visible on 390p
   await chooseProductPreviewOption(page,'m01OpeningMode','area');
   await page.locator('#m01RequestedSqft').fill('355.00');
   await page.locator('#m01StockPreview').getByText('3 Box 14 Pcs · 356.00 Sqft',{exact:false}).waitFor();
+  await captureProductPreview(page,'products-mobile-after-tiles');
+  await page.locator('#m01StockPreview').scrollIntoViewIfNeeded();
+  await captureProductPreview(page,'products-mobile-after-tiles-preview');
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
   const metrics=await page.evaluate(()=>{
    const p=document.getElementById('m01ProductUnitPanel');
@@ -160,5 +171,32 @@ test('manufacturer coverage requires source evidence and never posts stock',asyn
   await chooseProductPreviewOption(page,'m01CoveragePolicy','manufacturer');
   await page.locator('#m01StockPreview').getByText(/evidence|manufacturer|mismatch/i).waitFor();
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
+ }finally{await page.close();}
+});
+
+
+test('Products table uses M05 source metadata when available and preserves fallback for unknown rows',async()=>{
+ const page=await openProductModal(1440);
+ try{
+  await page.evaluate(()=>{
+   const state=globalThis.prodState;
+   const original={productId:'P-BOX',unitMasters:[
+     {'Unit Name':'Pcs',Status:'Active'},
+     {'Unit Name':'Box',Status:'Active'}
+   ],unitRelations:[{leftQty:1,leftUnit:'Box',rightQty:20,rightUnit:'Pcs'}]};
+   state.products=[
+     {'Product ID':'P-BOX','Current Stock':45,'M05 Stock Preview':original},
+     {'Product ID':'P-UNKNOWN','Current Stock':45}
+   ];
+   const body=document.getElementById('prodTableBody');
+   body.innerHTML='<tr><td>Box Product</td><td></td><td></td><td></td>'+
+     '<td><div class="prod-cell-main">45 Pcs</div></td><td></td><td></td>'+
+     '<td><button data-id="P-BOX"></button></td></tr>'+
+     '<tr><td>Unknown</td><td></td><td></td><td></td>'+
+     '<td><div class="prod-cell-main">45 Pcs</div></td><td></td><td></td>'+
+     '<td><button data-id="P-UNKNOWN"></button></td></tr>';
+  });
+  await page.waitForFunction(()=>document.querySelector('#prodTableBody tr:first-child td:nth-child(5)')?.textContent==='2 Box 5 Pcs');
+  assert.equal(await page.locator('#prodTableBody tr:nth-child(2) td:nth-child(5)').textContent(),'45 Pcs');
  }finally{await page.close();}
 });
