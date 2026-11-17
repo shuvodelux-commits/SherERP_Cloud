@@ -12,11 +12,12 @@ export async function inspectPrivateHistoryArchive(env){
     env.DB===env.HISTORY_ARCHIVE){
   throw new Error('Private history archive binding unavailable');
  }
- const sheets=await env.HISTORY_ARCHIVE.prepare(
+ const DB=env.HISTORY_ARCHIVE;
+ const sheets=await DB.prepare(
   'SELECT COUNT(*) AS total_sheets, COALESCE(SUM(populated_data_rows),0) AS populated_rows, '+
   'COALESCE(SUM(physical_data_rows),0) AS physical_rows FROM archive_sheets'
  ).first();
- const parts=await env.HISTORY_ARCHIVE.prepare(
+ const parts=await DB.prepare(
   'SELECT COUNT(*) AS workbook_chunks FROM archive_source_parts'
  ).first();
  const integers=[sheets?.total_sheets,sheets?.populated_rows,
