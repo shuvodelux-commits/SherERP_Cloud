@@ -1,0 +1,20 @@
+name: M05 tile purchase receiving atomicity real local D1 (synthetic only)
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  synthetic-tile-receiving:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: Validate isolated tile receipt SQL and schema with Node SQLite
+        run: node --test tests/m05-tile-atomic-receiving.test.mjs
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Real ephemeral Workerd D1 stock CAS, lot, replay and ledger rollback
+        run: node --test tests/integration/m05-tile-atomic-receiving-workerd.spec.mjs
