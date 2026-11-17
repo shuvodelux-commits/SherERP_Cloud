@@ -1,0 +1,31 @@
+name: M03 private SALES_DRAFT_AUDIT read — isolated local D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  private-draft-audit:
+    name: Prove private source audit import-to-read on real local Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked Node modules
+        run: npm ci --no-audit --no-fund
+      - name: Check source-shaped reader unit contract
+        run: node --test tests/m03-sales-draft-audit-read.test.mjs
+      - name: Install pinned isolated Workerd runner
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify M02 immutable source import and M03 private reader in actual local D1
+        run: node --test tests/integration/m03-sales-draft-audit-read-workerd.spec.mjs
