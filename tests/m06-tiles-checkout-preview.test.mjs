@@ -221,9 +221,20 @@ test('historical current-revision quote and original account names are preserved
   assert.equal(money.includes('purchasePriceText'),false);
   assert.equal(first.lines[0].quantity.measurementSnapshot.revision,'1');
   assert.equal(first.allocation.payments[0].bankAccountName,'Bank One');
-  db.prepare("UPDATE product_tile_measurement_revisions SET selling_sqft_price_override_text='50.00' WHERE product_id='T-A' AND revision=1").run();
+  // Immutable revision 1 must never be UPDATEd. Publish a new reviewed
+  // revision and move only the product's current-revision pointer instead.
+  db.prepare("INSERT INTO product_unit_profiles(product_id,revision,stock_unit_name,selling_anchor_unit_name) VALUES('T-A',2,'Pcs','Pcs')").run();
+  db.prepare("INSERT INTO product_unit_conversions(product_id,revision,conversion_id,unit_name,factor_text) VALUES('T-A',2,'CTN','Carton','25.000')").run();
+  db.prepare(insertSql).run(...values(row('T-A',{
+    revision:2,selling_pricing_unit:'Sqft',
+    selling_sqft_price_override_text:'50.00'
+  })));
+  db.prepare("UPDATE products SET current_unit_revision=2 WHERE product_id='T-A'").run();
   const now=await run(db);
   assert.equal(first.lines[0].salePreview.lineAmountMinor,'134267');
+  assert.equal(first.lines[0].quantity.measurementSnapshot.revision,'1');
   assert.equal(now.lines[0].salePreview.lineAmountMinor,'176667');
+  assert.equal(now.lines[0].quantity.measurementSnapshot.revision,'2');
+  assert.equal(db.prepare("SELECT selling_sqft_price_override_text v FROM product_tile_measurement_revisions WHERE product_id='T-A' AND revision=1").get().v,'38.00');
  }finally{db.close();}
 });
