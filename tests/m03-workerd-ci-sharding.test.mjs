@@ -11,7 +11,8 @@ const extra=[
  'm03-daybook-http-workerd.spec.mjs',
  'm03-expense-category-read-workerd.spec.mjs',
  'm03-expense-payee-party-proof-workerd.spec.mjs',
- 'm03-invoice-edit-audit-read-workerd.spec.mjs'
+ 'm03-invoice-edit-audit-read-workerd.spec.mjs',
+ 'm03-frozen-source-readback-workerd.spec.mjs'
 ];
 test('M03 sharded integration preserves every former imported suite exactly once plus standalone cases',()=>{
  const aggregate=read(aggregator);
@@ -45,4 +46,14 @@ test('M03 aggregate check is fail-closed across six parallel local Workerd/D1 sh
  assert.match(ci,/needs\.verify-repo\.result/);
  assert.match(ci,/needs\.workerd-shards\.result/);
  assert.doesNotMatch(ci,/continue-on-error|test-skip-pattern|--test-name-pattern/);
+});
+
+test('M03 private frozen-source Workerd readback must execute exactly once in required CI',()=>{
+ const name='m03-frozen-source-readback-workerd.spec.mjs';
+ const ci=read(workflow);
+ assert.equal(ci.split('tests/integration/'+name).length-1,1,'the four-case source readback must run in one real Workerd shard');
+ const suite=read('tests/integration/'+name);
+ assert.equal(suite.split('test(').length-1,4,'the source-readback suite must retain all four safety cases');
+ assert.match(suite,/createFrozenSourceReadback/);
+ assert.match(suite,/readAllSourceGroups/);
 });
