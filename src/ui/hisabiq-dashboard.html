@@ -252,7 +252,7 @@
     elements[item[0]]=node;
     definitions[item[0]]={id:item[0],kind:item[1],visible:item[2]};
   });
-  var widgets=[],editing=false,storedKey=null,hadActor=false,focusReturn=null,dragTouch=null;
+  var widgets=[],editing=false,storedKey=null,sessionToken=null,hadActor=false,focusReturn=null,dragTouch=null;
   var live=document.getElementById('hdb-announcement');
   function announce(message){if(live)live.textContent=message;}
   function defaultLayout(){return defaults.map(function(w){return {id:w[0],visible:w[2]};});}
@@ -304,7 +304,9 @@
   }
   function syncIdentity(){
     var next=identityKey();
-    if(next===storedKey)return false;
+    // Same actor/tenant can start a new login session; never reuse old DOM totals.
+    var token=next && typeof authToken==='string' ? authToken : null;
+    if(next===storedKey && token===sessionToken)return false;
     // The first account on a fresh page may retain its own source-load result.
     // Subsequent switches, logout and login must discard the old DOM summary.
     if(hadActor)clearLegacySummaryOnActorChange();
@@ -314,6 +316,7 @@
     if(!dialog.hidden)closeDialog(false);
     editing=false;clearTouchDrag();
     storedKey=next;
+    sessionToken=token;
     widgets=restore(next);
     render();
     return true;
@@ -541,7 +544,8 @@
   function hydrate(){
     var loginOverlay=document.getElementById('loginOverlay');
     var active=typeof authToken==='string' && !!authToken && currentUser &&
-      loginOverlay && loginOverlay.hidden && storedKey && storedKey===identityKey();
+      loginOverlay && loginOverlay.hidden && storedKey && storedKey===identityKey() &&
+      sessionToken===authToken;
     root.querySelectorAll('[data-hdb-value]').forEach(function(output){
       var id=output.dataset.hdbValue;
       if(!active || id==='unavailable'){output.textContent='—';return;}
