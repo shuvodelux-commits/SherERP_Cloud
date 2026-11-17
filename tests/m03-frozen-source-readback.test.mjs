@@ -78,10 +78,10 @@ test('reading never mutates original rows or converts original strings',async()=
  });
 });
 for(const [label,change] of [
- ['missing group',x=>x.sql.prepare("DELETE FROM m03_private_source_seals WHERE source_group='LOGS'").run()],
+ ['missing group',x=>{x.sql.prepare("DELETE FROM m03_private_source_rows WHERE source_group='LOGS'").run();x.sql.prepare("DELETE FROM m03_private_source_seals WHERE source_group='LOGS'").run();}],
  ['unsealed group',x=>x.sql.prepare("UPDATE m03_private_source_seals SET status='STAGING' WHERE source_group='SETTINGS'").run()],
  ['forged count',x=>x.sql.prepare("UPDATE m03_private_source_seals SET expected_rows=888 WHERE source_group='PRODUCTS'").run()],
- ['stale commit',x=>x.sql.prepare("UPDATE m03_private_source_seals SET source_commit='0000000000000000000000000000000000000000' WHERE source_group='LOGS'").run()],
+ ['stale commit',x=>{x.sql.prepare("DELETE FROM m03_private_source_rows WHERE source_group='LOGS'").run();x.sql.prepare("UPDATE m03_private_source_seals SET source_commit='0000000000000000000000000000000000000000' WHERE source_group='LOGS'").run();}],
  ['extra group',x=>x.sql.prepare("INSERT INTO m03_private_source_seals VALUES (?,?,?,?,?,?)").run(pin,'EXTRA_GROUP','[]',0,'a'.repeat(64),'SEALED')],
  ['wrong headers',x=>x.sql.prepare("UPDATE m03_private_source_seals SET headers_json='[\"forged\"]' WHERE source_group='SALES'").run()],
  ['changed seal digest',x=>x.sql.prepare("UPDATE m03_private_source_seals SET source_digest=? WHERE source_group='VENDORS'").run('a'.repeat(64))]
