@@ -1,6 +1,8 @@
 import test, {before, after} from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
+import {mkdir} from 'node:fs/promises';
+import {join} from 'node:path';
 import {serveCompiledUi} from './serve-compiled-ui.mjs';
 import {installM01SyntheticNavigation} from './m01-auth-nav-fixture.mjs';
 
@@ -102,5 +104,66 @@ test('M01 mobile More keyboard dialog contains focus and restores it to the open
           'synthetic keyboard navigation must not post any financial RPC');
       }finally{await page.close();}
     });
+  }
+});
+
+/**
+ * Super Board ui-refine-loop Playwright screenshot evidence for the single
+ * original "/" shell, using only synthetic account/permissions.
+ * GitHub Actions uploads test-results/m01-browser/ as m01-browser-evidence.
+ * Original UI source and public RPC contracts stay untouched.
+ */
+test('M01 ui-refine-loop captures public login and synthetic More screenshots in light/dark emulation',async t=>{
+  const evidenceDir=join(process.cwd(),'test-results','m01-browser');
+  await mkdir(evidenceDir,{recursive:true});
+  for(const vp of [
+    {name:'desktop-1440',width:1440,height:900},
+    {name:'mobile-390',width:390,height:844}
+  ]){
+    for(const scheme of ['light','dark']){
+      await t.test(vp.name+'-'+scheme,async()=>{
+        const mobile=vp.width<600;
+        const page=await browser.newPage({
+          viewport:{width:vp.width,height:vp.height},
+          isMobile:mobile,hasTouch:mobile,deviceScaleFactor:mobile?2:1,
+          colorScheme:scheme
+        });
+        try{
+          await page.goto(server.url,{waitUntil:'domcontentloaded'});
+          await page.locator('#loginOverlay:not([hidden])').waitFor();
+          assert.equal(await page.locator('#loginMobile').getAttribute('id'),'loginMobile');
+          assert.equal(await page.evaluate(()=>document.documentElement.lang),'en');
+          assert.equal(await page.title(),'Hardware Store ERP');
+          await page.screenshot({
+            path:join(evidenceDir,'ui-refine-login-'+vp.name+'-'+scheme+'.png'),
+            fullPage:true
+          });
+          const {calls}=await installM01SyntheticNavigation(page);
+          await page.locator('#loginMobile').fill('01710000001');
+          await page.locator('#loginPassword').fill('m01-synthetic-only');
+          await page.locator('#loginSubmitBtn').click();
+          await page.waitForFunction(()=>document.getElementById('loginOverlay')?.hidden===true);
+          if(mobile){
+            await page.locator('#mobileBottomNav [data-mobile-page="more"]').click();
+            await page.locator('#mobileMoreSheet:not([hidden])').waitFor();
+            assert.equal(await page.evaluate(()=>{
+              const sheet=document.getElementById('mobileMoreSheet');
+              return sheet.querySelector('[role="dialog"][aria-modal="true"]')
+                .contains(document.activeElement)
+                && document.getElementById('mobileBottomNav').inert
+                && document.querySelector('#app > .main').inert;
+            }),true,'More modal must contain keyboard focus and disable its background');
+          }
+          assert.equal(await page.evaluate(()=>
+            Math.max(0,document.documentElement.scrollWidth-innerWidth)),0,
+            'original shell must not overflow the screen horizontally');
+          await page.screenshot({
+            path:join(evidenceDir,'ui-refine-shell-'+vp.name+'-'+scheme+'.png'),
+            fullPage:true
+          });
+          assert.equal(calls.filter(x=>/Sale|Payment|Purchase|Return|Posting/.test(x.fnName)).length,0);
+        }finally{await page.close();}
+      });
+    }
   }
 });
