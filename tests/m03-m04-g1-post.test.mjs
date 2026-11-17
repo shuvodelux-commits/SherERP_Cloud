@@ -46,6 +46,8 @@ function fixture(){
     .run('BUSINESS-A','PIPE-1',2);
   db.prepare('INSERT INTO synthetic_m03_g1_stock(business_id,sku,available) VALUES(?,?,?)')
     .run('BUSINESS-B','PIPE-1',5);
+  db.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions(business_id,session_id,status)
+    VALUES('BUSINESS-A','SESSION-1','Open')`).run();
   const DB={prepare(sql){
     const statement=db.prepare(sql);
     return {bind(...args){return {
@@ -228,4 +230,90 @@ test('private G1 proof is absent from public RPC, Worker and production migratio
   const source=paths.map(path=>{try{return readFileSync(new URL(path,import.meta.url),'utf8');}catch{return ''}}).join('\n');
   assert.equal(source.includes('m04-atomic-g1-sale-proof'),false);
   assert.equal(source.includes('synthetic_m03_g1_stock'),false);
+});
+
+test('G2 Cash Session is mandatory for a new sale: absent or non-Open session never posts',async()=>{
+  for(const status of ['absent','Starting','Closing','Closed']){
+    const x=fixture();try{
+      if(status==='absent'){
+        x.db.exec("DELETE FROM synthetic_m03_g1_cash_sessions WHERE business_id='BUSINESS-A'");
+      }else{
+        x.db.prepare("UPDATE synthetic_m03_g1_cash_sessions SET status=? WHERE business_id='BUSINESS-A'")
+          .run(status);
+      }
+      const before=x.state();
+      assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-CASH-GATE')),{
+        status:'DECLINED',operationId:'OP-CASH-GATE'
+      });
+      assert.deepEqual(x.state(),before);
+    }finally{x.close();}
+  }
+});
+
+test('G2 open session permits sale, closed session cannot post new sale but original receipt still replays',async()=>{
+  const x=fixture();try{
+    assert.equal((await x.post.post_(intent(ADMIN,'OP-OPEN'))).status,'COMMITTED');
+    const original=x.state();
+    x.db.exec("UPDATE synthetic_m03_g1_cash_sessions SET status='Closing' WHERE business_id='BUSINESS-A'");
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-OPEN')),{
+      status:'REPLAY',operationId:'OP-OPEN',resultRef:'SYNTH-OP-OPEN'
+    });
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-NEW')),{
+      status:'DECLINED',operationId:'OP-NEW'
+    });
+    assert.deepEqual(x.state(),original);
+  }finally{x.close();}
+});
+
+test('G2 only one Starting/Open/Closing session per business; another business cannot satisfy required session',async()=>{
+  const x=fixture();try{
+    assert.throws(()=>x.db.prepare(`INSERT INTO synthetic_m03_g1_cash_sessions
+      (business_id,session_id,status) VALUES('BUSINESS-A','SESSION-2','Starting')`).run(),/unique|constraint/i);
+    x.db.exec("DELETE FROM synthetic_m03_g1_cash_sessions WHERE business_id='BUSINESS-A'");
+    x.db.exec("INSERT INTO synthetic_m03_g1_cash_sessions(business_id,session_id,status) VALUES('BUSINESS-B','B-OPEN','Open')");
+    assert.deepEqual(await x.post.post_(intent(ADMIN,'OP-CROSS-SESSION')),{
+      status:'DECLINED',operationId:'OP-CROSS-SESSION'
+    });
+    assert.equal(x.state().receipts.length,0);
+  }finally{x.close();}
+});
+
+test('G2 closes Cash Session between actor read and SQL claim without committing receipt or ledger',async()=>{
+  const x=fixture();try{
+    let hit=false;
+    const proxy={prepare(sql){
+      const p=x.DB.prepare(sql);
+      if(!sql.includes('INSERT INTO operation_receipts'))return p;
+      return {bind(...args){
+        const bound=p.bind(...args);
+        return {...bound,async first(){
+          if(!hit){
+            hit=true;
+            x.db.exec("UPDATE synthetic_m03_g1_cash_sessions SET status='Closing' WHERE business_id='BUSINESS-A'");
+          }
+          return bound.first();
+        }};
+      }};
+    }};
+    const posting=createM04AtomicG1SaleProof({DB:proxy},{businessId:'BUSINESS-A'});
+    const before=x.state();
+    assert.deepEqual(await posting.post_(intent(ADMIN,'OP-SESSION-RACE')),{
+      status:'DECLINED',operationId:'OP-SESSION-RACE'
+    });
+    assert.equal(hit,true);
+    assert.deepEqual(x.state(),before);
+  }finally{x.close();}
+});
+
+test('G2 even a direct synthetic receipt INSERT cannot bypass DB Cash Session guard',async()=>{
+  const x=fixture();try{
+    x.db.exec("UPDATE synthetic_m03_g1_cash_sessions SET status='Closing' WHERE business_id='BUSINESS-A'");
+    const before=x.state();
+    assert.throws(()=>x.db.prepare(`INSERT INTO operation_receipts(
+      tenant_id,operation_id,actor_id,operation_type,payload_hash,result_ref,
+      committed_at,sku,units,amount_cents)
+      VALUES('BUSINESS-A','OP-DIRECT','ADMIN','sales.post',?,'SYNTH-OP-DIRECT',
+        '2026-11-17T08:00:00Z','PIPE-1',1,12000)`).run('a'.repeat(64)),/cash session|required|abort/i);
+    assert.deepEqual(x.state(),before);
+  }finally{x.close();}
 });
