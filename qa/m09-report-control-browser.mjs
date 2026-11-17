@@ -97,11 +97,45 @@ try {
     await page.keyboard.press('Enter');
     const keyboard=await page.evaluate(()=>rptState.activeTab==='rptProfit');
 
+    // A genuinely completed current-tab result must still be printable.
+    await page.evaluate(()=>{
+      rptState.loaded.rptProfit=true;
+      if(window.__m09PreviewMarkLoaded)window.__m09PreviewMarkLoaded('rptProfit');
+    });
+    const priorValid=await page.evaluate(()=>window.__m09PrintCalls);
+    await page.locator('#rptPrintBtn').click();
+    const validPrintAllowed=await page.evaluate(n=>window.__m09PrintCalls===n+1,priorValid);
+
+    // Date-independent snapshot reports must print when their own result
+    // is loaded, even if period selector fields are blank.
+    await page.locator('#page-reports .tab-btn[data-tab="rptStock"]').click();
+    await page.evaluate(()=>{
+      for(const id of ['rptFrom','rptTo']){
+        const input=document.getElementById(id);
+        input.value='';
+        input.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+      rptState.loaded.rptStock=true;
+      if(window.__m09PreviewMarkLoaded)window.__m09PreviewMarkLoaded('rptStock');
+    });
+    const priorSnapshot=await page.evaluate(()=>window.__m09PrintCalls);
+    await page.locator('#rptPrintBtn').click();
+    const snapshotPrintAllowed=await page.evaluate(n=>window.__m09PrintCalls===n+1,priorSnapshot);
+
+    let pendingPrintBlocked=true;
+    if(proposal){
+      await page.evaluate(()=>window.__m09PreviewSetPending('rptStock',true));
+      const priorPending=await page.evaluate(()=>window.__m09PrintCalls);
+      await page.locator('#rptPrintBtn').click();
+      pendingPrintBlocked=await page.evaluate(n=>window.__m09PrintCalls===n,priorPending);
+      await page.evaluate(()=>window.__m09PreviewSetPending('rptStock',false));
+    }
+
     await page.screenshot({path:root+'/'+label+(proposal?'-preview':'-baseline')+'.png',fullPage:true});
     const result={
       viewport:label,emptyBlocked,cacheInvalidated,stalePrintBlocked,
       allTabs:tabChecks.every(item=>item.selected&&item.active&&item.visible),
-      keyboard,errors
+      keyboard,validPrintAllowed,snapshotPrintAllowed,pendingPrintBlocked,errors
     };
     results.push(result);
     await page.close();
@@ -113,6 +147,9 @@ try {
   for(const row of results){
     assert.equal(row.allTabs,true,'all six Reports tabs must remain reachable');
     assert.equal(row.keyboard,true,'keyboard Enter must select a report tab');
+    assert.equal(row.validPrintAllowed,true,'successfully loaded period report must print');
+    assert.equal(row.snapshotPrintAllowed,true,'loaded Stock snapshot must ignore period selectors');
+    assert.equal(row.pendingPrintBlocked,true,'in-flight snapshot must not print');
     assert.deepEqual(row.errors,[],'no uncaught browser page errors');
     if(assertFixed){
       assert.equal(row.emptyBlocked,true,'Print before successful report load must be blocked');
