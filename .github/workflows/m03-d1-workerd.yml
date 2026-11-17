@@ -94,6 +94,7 @@ jobs:
               tests/integration/m07-purchase-cash-delete-workerd.spec.mjs
               tests/integration/m07-quantity-preflight-workerd.spec.mjs
               tests/integration/m03-expense-category-read-workerd.spec.mjs
+              tests/integration/m03-frozen-source-readback-workerd.spec.mjs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
