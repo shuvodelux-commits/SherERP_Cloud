@@ -9,6 +9,7 @@ const preview = JSON.parse(readFileSync(new URL('../wrangler.preview.jsonc', imp
 test('staging binding is isolated, non-public and points only to the chosen D1 database', () => {
   assert.equal(validateStagingConfig(staging, preview), true);
   assert.equal(staging.d1_databases[0].database_id, 'aa04618e-1639-4cb9-bdf5-7b967d8b968b');
+  assert.equal(staging.d1_databases[1].database_id, '3328e5c8-7695-4d6c-8bcf-9725437ebdd5');
 });
 test('never permit public staging routes or production Worker name', () => {
   assert.throws(() => validateStagingConfig({...staging,workers_dev:true},preview), /workers_dev/);
@@ -17,7 +18,7 @@ test('never permit public staging routes or production Worker name', () => {
   assert.throws(() => validateStagingConfig({...staging,name:'shererp-cloud-preview'},preview), /staging/);
 });
 test('reject wrong binding, database, id, migrations path or extra resources',()=>{
-  const altered=(change)=>({...staging,d1_databases:[{...staging.d1_databases[0],...change}]});
+  const altered=(change)=>({...staging,d1_databases:[{...staging.d1_databases[0],...change},staging.d1_databases[1]]});
   assert.throws(()=>validateStagingConfig(altered({binding:'PROD_DB'}),preview), /binding|database/);
   assert.throws(()=>validateStagingConfig(altered({database_name:'production'}),preview), /database/);
   assert.throws(()=>validateStagingConfig(altered({database_id:'nope'}),preview), /database|id/);
