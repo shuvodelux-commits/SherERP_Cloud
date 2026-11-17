@@ -67,14 +67,18 @@ test('M01 mobile More keyboard dialog contains focus and restores it to the open
           return {
             dialogOpen:!sheet.hidden,
             focusInDialog:dialog.contains(document.activeElement),
-            backgroundInert:document.getElementById('app')?.inert===true,
+            backgroundInert:document.getElementById('mobileBottomNav')?.inert===true &&
+              document.querySelector('#app > .main')?.inert===true,
+            dialogInteractive:sheet.inert===false,
             focusIsBackground:document.querySelector('#app')?.contains(document.activeElement)||false
           };
         });
         assert.equal((await state()).focusInDialog,true,
           'opening an aria-modal dialog must focus an actionable element inside it');
         assert.equal((await state()).backgroundInert,true,
-          'a modal dialog must render the underlying original ERP shell inert');
+          'a modal dialog must render the underlying original ERP controls inert');
+        assert.equal((await state()).dialogInteractive,true,
+          'the dialog must remain interactive while sibling shell regions are inert');
         for(let i=0;i<10;i++){
           await page.keyboard.press('Tab');
           assert.equal((await state()).focusInDialog,true,
@@ -90,8 +94,10 @@ test('M01 mobile More keyboard dialog contains focus and restores it to the open
           'Escape must close original More sheet');
         assert.equal(await opener.evaluate(el=>el===document.activeElement),true,
           'focus must return to original More trigger after Escape');
-        assert.equal(await page.locator('#app').evaluate(el=>el.inert),false,
-          'closing More must restore original app interactivity');
+        assert.equal(await page.locator('#mobileBottomNav').evaluate(el=>el.inert),false,
+          'closing More must restore original mobile nav interactivity');
+        assert.equal(await page.locator('#app > .main').evaluate(el=>el.inert),false,
+          'closing More must restore original main app interactivity');
         assert.equal(calls.filter(x=>/Sale|Payment|Purchase|Return|Posting/.test(x.fnName)).length,0,
           'synthetic keyboard navigation must not post any financial RPC');
       }finally{await page.close();}
