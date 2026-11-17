@@ -9,6 +9,7 @@ import {buildFrontend} from '../scripts/build-frontend.mjs';
 import {patchServerCall} from '../scripts/patch-rpc.mjs';
 import {patchPosV2HiddenVisibility} from '../scripts/patch-posv2-visibility.mjs';
 import {patchM01ProductsPreview,installM01ProductsPreviewAssets} from '../scripts/patch-m01-products-preview.mjs';
+import {patchM01ReportPrintSafety} from '../scripts/patch-m01-report-print-safety.mjs';
 
 const EVIDENCE_DIR=new URL('../test-results/m01-browser/',import.meta.url).pathname;
 async function captureProductPreview(page,name){
@@ -21,8 +22,11 @@ before(async()=>{
  const {outputPath}=await buildFrontend({
    sourceDir:new URL('../legacy/source/',import.meta.url).pathname,outputDir:dir
  });
- const html=patchM01ProductsPreview(patchPosV2HiddenVisibility(
+ const compiled=patchM01ProductsPreview(patchPosV2HiddenVisibility(
    patchServerCall(await readFile(outputPath,'utf8'))));
+ // Isolated M01 integration candidate: intentionally NOT yet in production build.
+ const controller=await readFile(new URL('../src/ui/m01-report-print-controller.js',import.meta.url),'utf8');
+ const html=patchM01ReportPrintSafety(compiled,controller);
  await installM01ProductsPreviewAssets(dir);
  server=createServer(async(req,res)=>{
    const pathname=new URL(req.url,'http://127.0.0.1').pathname;
