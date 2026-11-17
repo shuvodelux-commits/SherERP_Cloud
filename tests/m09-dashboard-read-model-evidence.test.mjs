@@ -171,3 +171,16 @@ test('the dashboard gate contains no D1/RPC/financial projection and has no fake
   const r=evaluateM09DashboardReadModelEvidence(manifestData);
   assert.ok(r.widgets.every(w=>w.summary.ready===false&&w.detail.ready===false));
 });
+
+test('M09 gate exactly tracks shipped Dashboard widgets and frozen source group inventory',()=>{
+  const sourceGroups=readFileSync(
+    new URL('../legacy/source/Config.gs',import.meta.url),'utf8');
+  for(const group of GROUPS)
+    assert.match(sourceGroups,new RegExp('\\\\b'+group+'\\\\b'),
+      'unrecognized frozen source group '+group);
+  const browserWidgets=[...new Set(
+    [...ui.matchAll(/data-hdb-widget="([^"]+)"/g)].map(match=>match[1])
+  )].sort();
+  assert.deepEqual(browserWidgets,[...EXPECTED].sort(),
+    'dashboard widget additions/removals require M09 source-evidence review');
+});
