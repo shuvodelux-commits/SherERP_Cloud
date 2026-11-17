@@ -260,6 +260,7 @@ export async function validateSessionWithD1(db,{token,nowMs}={}){
        AND last_activity_at_ms>? AND last_activity_at_ms<=?
        AND EXISTS (SELECT 1 FROM auth_users u
          WHERE u.user_id=auth_sessions.user_id AND u.status='Active'
+         AND u.credential_state='Modern'
          AND u.auth_version=auth_sessions.user_auth_version
          AND u.credential_version=auth_sessions.credential_version
          AND ((u.role_name='Administrator' AND auth_sessions.role_auth_version IS NULL)
@@ -274,7 +275,8 @@ export async function validateSessionWithD1(db,{token,nowMs}={}){
      WHERE s.token_hash=? AND s.revoked_at_ms IS NULL
        AND s.created_at_ms<=? AND s.expires_at_ms>?
        AND s.last_activity_at_ms>? AND s.last_activity_at_ms<=?
-       AND u.status='Active' AND u.auth_version=s.user_auth_version
+       AND u.status='Active' AND u.credential_state='Modern'
+       AND u.auth_version=s.user_auth_version
        AND u.credential_version=s.credential_version
        AND ((u.role_name='Administrator' AND s.role_auth_version IS NULL)
          OR EXISTS (SELECT 1 FROM auth_roles r WHERE r.role_name=u.role_name
