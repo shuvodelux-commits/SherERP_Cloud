@@ -3,6 +3,10 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   private-product-read:
     name: Product revision text and immutable source identity
@@ -12,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          cache: npm
           node-version: '22'
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund

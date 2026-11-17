@@ -3,6 +3,10 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   tile-measurement-d1:
     runs-on: ubuntu-latest
@@ -11,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          cache: npm
           node-version: '22'
       - run: npm ci --no-audit --no-fund
       - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0

@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   m08-multi-local-d1:
     name: M08 multi-entry Cash reconciliation local D1 proof
@@ -15,6 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          cache: npm
           node-version: '22'
       - name: Install locked Node dependencies
         run: npm ci --no-audit --no-fund

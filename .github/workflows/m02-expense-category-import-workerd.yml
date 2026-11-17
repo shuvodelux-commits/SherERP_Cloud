@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   expense-category-local-d1:
     name: Validate Expense Categories full-snapshot import against local D1
@@ -17,6 +21,7 @@ jobs:
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
+          cache: npm
           node-version: '22'
       - name: Install baseline dependencies
         run: npm ci --no-audit --no-fund

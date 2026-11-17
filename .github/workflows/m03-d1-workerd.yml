@@ -4,6 +4,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify-repo:
     name: Verify repository and test-only Worker isolation policy
@@ -13,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          cache: npm
           node-version: '22'
       - name: Install locked Node dependencies
         run: npm ci --no-audit --no-fund
@@ -93,6 +98,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          cache: npm
           node-version: '22'
       - name: Install locked Node dependencies
         run: npm ci --no-audit --no-fund

@@ -3,6 +3,10 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   synthetic-tile-receiving:
     runs-on: ubuntu-latest
@@ -11,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          cache: npm
           node-version: '22'
       - run: npm ci --no-audit --no-fund
       - name: Validate isolated tile receipt SQL and schema with Node SQLite
