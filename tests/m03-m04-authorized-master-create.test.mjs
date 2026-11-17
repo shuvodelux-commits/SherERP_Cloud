@@ -216,3 +216,29 @@ test('no public Worker, RPC handler or production migration activation',()=>{
   assert(!live.includes('m04-authorized-product-master-create'));
   assert(!live.includes('synthetic_m03_master_intents'));
 });
+
+test('atomic category creation rejects a lagging original PCAT source-ID floor without writes',async()=>{
+  const x=fixture();
+  try{
+    x.db.prepare("INSERT INTO product_categories(category_id,category_name,status,legacy_sheet_row) VALUES('PCAT-000090','Legacy Imported','Active',6)").run();
+    const before=x.state();
+    await assert.rejects(
+      ()=>x.creator.createCategory_(req(T.ADMIN,'OP-CAT-STALE-FLOOR','Washers')),
+      /counter floor|source.id|mismatch/i
+    );
+    assert.deepEqual(x.state(),before,'no category, intent, receipt or counter may change');
+  }finally{x.close();}
+});
+
+test('atomic unit creation rejects a lagging original PUNT source-ID floor without writes',async()=>{
+  const x=fixture();
+  try{
+    x.db.prepare("INSERT INTO product_units(unit_id,unit_name,status,legacy_sheet_row) VALUES('PUNT-000090','Legacy Box','Active',3)").run();
+    const before=x.state();
+    await assert.rejects(
+      ()=>x.creator.createUnit_(req(T.ADMIN,'OP-UNIT-STALE-FLOOR','Metre')),
+      /counter floor|source.id|mismatch/i
+    );
+    assert.deepEqual(x.state(),before,'no unit, intent, receipt or counter may change');
+  }finally{x.close();}
+});
