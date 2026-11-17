@@ -162,7 +162,7 @@ test('M01 Step 3 RED: source-backed dashboard route registry, auth guard and con
     'native destination displays which dashboard summary originated the visit');
   assert.match(html,/id="hdb-navigation-status"/,
     'blocked or unavailable navigation is announced in an accessible in-page status');
-  assert.match(html,/hdb-route-allowlist/,
+  assert.match(html,/var hdbRouteAllowlist=Object\.freeze\(/,
     'only known, reviewed source page IDs can be opened');
   assert.match(html,/smDateFrom/);
   assert.match(html,/smDateTo/);
