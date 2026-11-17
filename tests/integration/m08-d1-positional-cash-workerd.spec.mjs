@@ -1322,9 +1322,9 @@ async function vpSeed(tenant,masters=[],ledger=[],payees=[],expenses=[]){
   }
   for(let i=ledger.length-1;i>=0;i--){
     const e=ledger[i];
-    await DB.prepare('INSERT INTO m08_vp_ledger VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    await DB.prepare('INSERT INTO m08_vp_ledger VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
       .bind(tenant,i+2,e['Ledger ID'],e['Vendor ID'],
-        e.Date,e.Type,e.Reference,e['Balance Type'],
+        e['Vendor Name'],e.Date,e.Type,e.Reference,e['Balance Type'],
         cents(e.Debit),cents(e.Credit),cents(e.Balance),
         deleted(e),e['Created At']).run();
   }
