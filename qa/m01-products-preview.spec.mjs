@@ -9,6 +9,7 @@ import {buildFrontend} from '../scripts/build-frontend.mjs';
 import {patchServerCall} from '../scripts/patch-rpc.mjs';
 import {patchPosV2HiddenVisibility} from '../scripts/patch-posv2-visibility.mjs';
 import {patchM01ProductsPreview,installM01ProductsPreviewAssets} from '../scripts/patch-m01-products-preview.mjs';
+import {patchM01ReportPrintSafety} from '../scripts/patch-m01-report-print-safety.mjs';
 
 const EVIDENCE_DIR=new URL('../test-results/m01-browser/',import.meta.url).pathname;
 async function captureProductPreview(page,name){
@@ -21,8 +22,11 @@ before(async()=>{
  const {outputPath}=await buildFrontend({
    sourceDir:new URL('../legacy/source/',import.meta.url).pathname,outputDir:dir
  });
- const html=patchM01ProductsPreview(patchPosV2HiddenVisibility(
+ const compiled=patchM01ProductsPreview(patchPosV2HiddenVisibility(
    patchServerCall(await readFile(outputPath,'utf8'))));
+ // Isolated M01 integration candidate: intentionally NOT yet in production build.
+ const controller=await readFile(new URL('../src/ui/m01-report-print-controller.js',import.meta.url),'utf8');
+ const html=patchM01ReportPrintSafety(compiled,controller);
  await installM01ProductsPreviewAssets(dir);
  server=createServer(async(req,res)=>{
    const pathname=new URL(req.url,'http://127.0.0.1').pathname;
@@ -299,5 +303,99 @@ test('stale or malformed M05 metadata also blocks legacy editing while plain Pro
   await page.waitForFunction(()=>!document.getElementById('prodSaveBtn').disabled);
   assert.equal((await page.locator('#prodSaveBtn').textContent()).trim(),'Save Product');
   assert.equal(await page.locator('#m01PreviewReadOnly').isVisible(),false);
+ }finally{await page.close();}
+});
+
+
+test('M01 Reports compiled Print rejects unloaded, stale and failed synthetic reports at desktop',async()=>{
+ const page=await openProductModal(1440);
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ try{
+  const data=await page.evaluate(async()=>{
+   const el=id=>document.getElementById(id);
+   el('prodModal').hidden=true;el('prodModal').style.display='none';
+   el('page-products').hidden=true;el('page-products').style.display='none';
+   el('page-reports').hidden=false;el('page-reports').style.display='block';
+   el('shopNameLabel').textContent='Synthetic Shop';
+   authToken='SYNTHETIC-REPORT-SESSION';
+   currentUser={id:'SYNTH-REPORT-ACTOR',tenantId:'SYNTH-REPORT-TENANT'};
+   el('rptFrom').value='2026-11-01';el('rptTo').value='2026-11-17';
+   rptState.activeTab='rptSales';rptState.loaded={};
+   let prints=0;
+   window.print=()=>{prints++;};
+   const button=el('rptPrintBtn');
+   const initiallyDisabled=button.disabled;
+   button.click();
+   const emptyBlocked=prints===0;
+   RPT_LOADERS.rptSales=()=>Promise.resolve();
+   await rptRunActive_(true);
+   const loaded=button.disabled===false;
+   button.click();
+   const successfulPrinted=prints===1;
+   el('rptTo').value='2026-11-16';
+   el('rptTo').dispatchEvent(new Event('input',{bubbles:true}));
+   button.click();
+   const staleBlocked=button.disabled && prints===1 && rptState.loaded.rptSales===false;
+   RPT_LOADERS.rptSales=()=>Promise.reject(new Error('Synthetic report failure'));
+   await rptRunActive_(true);
+   button.click();
+   const failureBlocked=button.disabled && prints===1;
+   return {initiallyDisabled,emptyBlocked,loaded,successfulPrinted,staleBlocked,failureBlocked};
+  });
+  assert.deepEqual(data,{
+   initiallyDisabled:true,emptyBlocked:true,loaded:true,
+   successfulPrinted:true,staleBlocked:true,failureBlocked:true
+  });
+  await captureProductPreview(page,'m01-reports-print-safety-desktop-1440');
+  assert.deepEqual(errors,[]);
+ }finally{await page.close();}
+});
+
+test('M01 Reports mobile stale response, snapshot and session turnover never print old data',async()=>{
+ const page=await openProductModal(390);
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ try{
+  const data=await page.evaluate(async()=>{
+   const el=id=>document.getElementById(id);
+   el('prodModal').hidden=true;el('prodModal').style.display='none';
+   el('page-products').hidden=true;el('page-products').style.display='none';
+   el('page-reports').hidden=false;el('page-reports').style.display='block';
+   el('shopNameLabel').textContent='Synthetic Shop';
+   authToken='SYNTHETIC-REPORT-SESSION';
+   currentUser={id:'SYNTH-ACTOR',tenantId:'SYNTH-TENANT'};
+   el('rptFrom').value='2026-11-01';el('rptTo').value='2026-11-17';
+   rptState.activeTab='rptSales';rptState.loaded={};
+   let prints=0;window.print=()=>{prints++;};
+   let finishOld;
+   RPT_LOADERS.rptSales=()=>new Promise(resolve=>{finishOld=resolve;});
+   const older=rptRunActive_(true);
+   // The guarded loader starts in a Promise microtask. Let its original
+   // synthetic request actually begin before replacing the test stub.
+   await Promise.resolve();
+   if(typeof finishOld!=='function')throw Error('Synthetic old report did not start');
+   const pendingBlocked=el('rptPrintBtn').disabled;
+   RPT_LOADERS.rptSales=()=>Promise.resolve();
+   await rptRunActive_(true);
+   const newerReady=!el('rptPrintBtn').disabled;
+   finishOld();await older;
+   const lateBlocked=el('rptPrintBtn').disabled &&
+     rptState.loaded.rptSales===false;
+   rptState.activeTab='rptStock';
+   RPT_LOADERS.rptStock=()=>Promise.resolve();
+   await rptRunActive_(true);
+   el('rptTo').value='2026-11-16';
+   el('rptTo').dispatchEvent(new Event('change',{bubbles:true}));
+   const snapshotReady=!el('rptPrintBtn').disabled;
+   authToken='SYNTHETIC-ROTATED-SESSION';
+   el('rptPrintBtn').click();
+   const sessionBlocked=prints===0 && el('rptPrintBtn').disabled;
+   return {pendingBlocked,newerReady,lateBlocked,snapshotReady,sessionBlocked};
+  });
+  assert.deepEqual(data,{
+   pendingBlocked:true,newerReady:true,lateBlocked:true,
+   snapshotReady:true,sessionBlocked:true
+  });
+  await captureProductPreview(page,'m01-reports-print-safety-mobile-390');
+  assert.deepEqual(errors,[]);
  }finally{await page.close();}
 });
