@@ -141,32 +141,118 @@ test('caller arguments cannot override the frozen 49-group readback scope',async
  });
 });
 
-test('Super QA: a completely sealed 1001-row source group must not yield a partial 1000-row archive',async()=>{
+function resealSyntheticSourceGroup(x,group,total,{gapAfter=Infinity}={}){
+ const headers=schema.tables.find(t=>t.sheetKey===group)?.columns;
+ assert.ok(headers);
+ x.sql.prepare('DELETE FROM m03_private_source_rows WHERE source_group=?').run(group);
+ const insert=x.sql.prepare('INSERT INTO m03_private_source_rows VALUES (?,?,?,?)');
+ const rows=[];
+ for(let i=0;i<total;i++){
+  const cells=headers.map((h,j)=>h==='Message'
+   ?'বাংলা '+i+' original '+j
+   :h==='Timestamp'?'2026-11-17T10:20:00.000+06:00'
+    :'synthetic-page-'+i+'-'+j);
+  const row={sheetRow:i+2+(i>=gapAfter?3:0),cells};
+  rows.push(row);
+  insert.run(pin,group,row.sheetRow,JSON.stringify(row.cells));
+ }
+ const fullDigest=digest(group,headers,rows);
+ x.sql.prepare('UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group=?')
+  .run(rows.length,fullDigest,group);
+ return rows;
+}
+test('Super QA / RED: 1001 original rows from a correctly sealed group read back exactly, not truncated',async()=>{
  await withDb(async x=>{
-  const group='LOGS',headers=schema.tables.find(t=>t.sheetKey===group).columns;
-  x.sql.prepare("DELETE FROM m03_private_source_rows WHERE source_group='LOGS'").run();
-  const insert=x.sql.prepare('INSERT INTO m03_private_source_rows VALUES (?,?,?,?)');
-  const rows=[];
-  for(let i=0;i<1001;i++){
-   const row={sheetRow:i+2,cells:headers.map((_,k)=>'test-log-'+i+'-'+k)};
-   rows.push(row);
-   insert.run(pin,group,row.sheetRow,JSON.stringify(row.cells));
-  }
-  const fullDigest=digest(group,headers,rows);
-  x.sql.prepare("UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group='LOGS'")
-   .run(rows.length,fullDigest);
-  assert.equal(x.sql.prepare("SELECT COUNT(*) AS n FROM m03_private_source_rows WHERE source_group='LOGS'").get().n,1001);
-  const seal=x.sql.prepare("SELECT source_digest,expected_rows FROM m03_private_source_seals WHERE source_group='LOGS'").get();
-  assert.equal(seal.source_digest,fullDigest);
-  assert.equal(seal.expected_rows,1001);
-  await assert.rejects(()=>createFrozenSourceReadback(x.env).readAllSourceGroups(),e=>{
-   assert.equal(e.message,'Invalid or incomplete private M03 source archive');
-   assert.doesNotMatch(e.message,/test-log|original|SQL|source_digest/);
-   return true;
-  });
+  const group='LOGS';
+  const rows=resealSyntheticSourceGroup(x,group,1001,{gapAfter:512});
+  const actual=await createFrozenSourceReadback(x.env).readAllSourceGroups();
+  assert.deepEqual(actual.groups.LOGS.rows,rows);
+  assert.equal(actual.groups.LOGS.rows[512].sheetRow,517);
+  assert.equal(actual.groups.LOGS.rows[1000].cells[2],'বাংলা 1000 original 2');
+  const source=original();source.groups.LOGS.rows=rows;
+  const parity=reviewOfflineSourceParity({schema,pinnedSourceCommit:pin,sourceExport:source,candidateExport:actual});
+  assert.equal(parity.exactTextParity,true);
+  assert.equal(parity.d1Verified,false);
  });
 });
-
+test('RED: 2049 source rows cross nine keyset pages with original row gaps and full digest',async()=>{
+ await withDb(async x=>{
+  const rows=resealSyntheticSourceGroup(x,'LOGS',2049,{gapAfter:1300});
+  const got=await createFrozenSourceReadback(x.env).readAllSourceGroups();
+  assert.deepEqual(got.groups.LOGS.rows,rows);
+  const r=got.groups.LOGS.rows;
+  assert.equal(r.length,2049);
+  assert.equal(r[1300].sheetRow,1305);
+  assert.equal(got.groups.LOGS.headers.length,3);
+  const reads=x.statements.filter(q=>q.includes('FROM m03_private_source_rows')&&q.includes('legacy_sheet_row > ?'));
+  assert.ok(reads.length>=10,'must page with a bounded source-row cursor');
+  assert.ok(reads.every(q=>!q.includes(' OFFSET ')),'offset paging can skip rows across deletions');
+ });
+});
+test('RED: sealed count cannot under-report an additional original row after page boundaries',async()=>{
+ await withDb(async x=>{
+  const rows=resealSyntheticSourceGroup(x,'LOGS',1001);
+  const headers=schema.tables.find(t=>t.sheetKey==='LOGS').columns;
+  x.sql.prepare('UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group=?')
+   .run(1000,digest('LOGS',headers,rows.slice(0,1000)),'LOGS');
+  await assert.rejects(()=>createFrozenSourceReadback(x.env).readAllSourceGroups(),errorMsg);
+ });
+});
+test('RED: a removed row in the second page fails whole-group count/digest',async()=>{
+ await withDb(async x=>{
+  resealSyntheticSourceGroup(x,'LOGS',1001);
+  x.sql.prepare('DELETE FROM m03_private_source_rows WHERE source_group=? AND legacy_sheet_row=?')
+   .run('LOGS',520);
+  await assert.rejects(()=>createFrozenSourceReadback(x.env).readAllSourceGroups(),errorMsg);
+ });
+});
+test('RED: duplicate/out-of-order result row at later keyset page boundary fails redacted',async()=>{
+ for(const mode of ['duplicate','backwards']){
+  await withDb(async x=>{
+   resealSyntheticSourceGroup(x,'LOGS',1001);
+   const DB={prepare(sql){
+    const query=x.env.DB.prepare(sql);
+    return {bind(...args){const stmt=query.bind(...args);return {async all(){
+     const response=await stmt.all();
+     if(sql.includes('FROM m03_private_source_rows') && args[1]==='LOGS' &&
+        args[2]>=2 && response.results.length){
+      response.results[0].legacy_sheet_row=mode==='duplicate'?args[2]:args[2]-1;
+     }
+     return response;
+    }};}};
+   }};
+   await assert.rejects(()=>createFrozenSourceReadback({DB}).readAllSourceGroups(),e=>{
+    assert.equal(e.message,'Invalid or incomplete private M03 source archive');
+    assert.doesNotMatch(e.message,/synthetic-page|legacy_sheet_row|LOGS/);
+    return true;
+   });
+  });
+ }
+});
+test('RED: source-commit sealed metadata changing during pagination invalidates entire read',async()=>{
+ await withDb(async x=>{
+  resealSyntheticSourceGroup(x,'LOGS',1001);
+  let mutated=false;
+  const DB={prepare(sql){
+   const query=x.env.DB.prepare(sql);
+   return {bind(...args){const stmt=query.bind(...args);return {async all(){
+    const result=await stmt.all();
+    if(!mutated&&sql.includes('FROM m03_private_source_rows')&&args[1]==='LOGS'){
+     mutated=true;
+     x.sql.prepare("UPDATE m03_private_source_seals SET status='STAGING' WHERE source_group='LOGS'").run();
+    }
+    return result;
+   }};}};
+  }};
+  await assert.rejects(()=>createFrozenSourceReadback({DB}).readAllSourceGroups(),errorMsg);
+ });
+});
+test('RED: large source count above explicit resource budget fails closed before unbounded queries',async()=>{
+ await withDb(async x=>{
+  x.sql.prepare("UPDATE m03_private_source_seals SET expected_rows=250001 WHERE source_group='LOGS'").run();
+  await assert.rejects(()=>createFrozenSourceReadback(x.env).readAllSourceGroups(),errorMsg);
+ });
+});
 test('Super QA: unexpected private D1 columns fail without emitting any sensitive row values',async()=>{
  await withDb(async x=>{
   const DB={prepare(sql){
@@ -215,5 +301,24 @@ test('Super QA: malicious D1 row accessor is rejected without executing its gett
    return true;
   });
   assert.equal(called,0,'source readback may not execute D1 accessor side effects');
+ });
+});
+
+test('page resource budget rejects a correctly sealed 8MiB+ cell before any partial source output',async()=>{
+ await withDb(async x=>{
+  const name='LOGS';
+  const headers=schema.tables.find(t=>t.sheetKey===name).columns;
+  const huge='q'.repeat(8*1024*1024+1);
+  const rows=[{sheetRow:2,cells:['2026-11-17T00:00:00+06:00','QA',huge]}];
+  x.sql.prepare('DELETE FROM m03_private_source_rows WHERE source_group=?').run(name);
+  x.sql.prepare('INSERT INTO m03_private_source_rows VALUES (?,?,?,?)')
+   .run(pin,name,2,JSON.stringify(rows[0].cells));
+  x.sql.prepare('UPDATE m03_private_source_seals SET expected_rows=?,source_digest=? WHERE source_group=?')
+   .run(1,digest(name,headers,rows),name);
+  await assert.rejects(()=>createFrozenSourceReadback(x.env).readAllSourceGroups(),e=>{
+   assert.equal(e.message,'Invalid or incomplete private M03 source archive');
+   assert.doesNotMatch(e.message,/qqqq|LOGS|SQL/);
+   return true;
+  });
  });
 });
