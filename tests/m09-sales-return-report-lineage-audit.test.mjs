@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 
 const impl=await import('../src/modules/m09-sales-return-report-lineage-audit.js')
   .catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return null;throw error;});
@@ -125,4 +127,78 @@ test('M09 rejects missing arrays and accessor-backed source rows without invokin
   assert.equal(calls,0);
   assert.equal(JSON.stringify(audit(snapshot())).includes('INV-1'),false);
   assert.equal(JSON.stringify(audit(snapshot())).includes('RET-1'),false);
+});
+
+/**
+ * The frozen Sales Report checks invoice collisions against ALL historical
+ * Sales rows, including soft-deleted rows; unlike active-only lineage counts.
+ */
+const frozenUtils=readFileSync(new URL('../legacy/source/Utils.gs',import.meta.url),'utf8');
+const frozenDelete=readFileSync(new URL('../legacy/source/DeleteEngine.gs',import.meta.url),'utf8');
+function originalFunction(source,name){
+  const start=source.indexOf('function '+name+'(');
+  assert.ok(start>=0,'missing frozen GAS '+name);
+  const end=source.indexOf('\n}',start);
+  assert.ok(end>start,'incomplete frozen GAS '+name);
+  return source.slice(start,end+2);
+}
+const sourceIntegrityCode=[
+  originalFunction(frozenDelete,'isDeleted_'),
+  originalFunction(frozenUtils,'duplicateSalesInvoiceIdMap_'),
+  originalFunction(frozenUtils,'assertUniqueSalesInvoiceIds_')
+].join('\n');
+function originalInvoiceIntegrity(allSales){
+  return runInNewContext(sourceIntegrityCode+
+    '\nassertUniqueSalesInvoiceIds_(allSales.filter(s=>!isDeleted_(s)), "Report", allSales)',
+    {allSales});
+}
+
+test('M09 historical deleted alias of live invoice must block original report source evidence',()=>{
+  const s=snapshot();
+  s.allSales.push(sale('INV-1','true'));
+  assert.throws(()=>originalInvoiceIntegrity(s.allSales),/Duplicate invoice ID/);
+  const before=JSON.stringify(s);
+  const r=audit(s);
+  assert.deepEqual(r.issues,['AMBIGUOUS_HISTORICAL_SALE_INVOICE_ID']);
+  assert.equal(r.status,'NEEDS_REVIEW');
+  assert.equal(r.lineageComplete,false);
+  assert.equal(r.ready,false);
+  assert.equal(JSON.stringify(s),before);
+  assert.equal(JSON.stringify(r).includes('INV-1'),false);
+});
+
+test('M09 original trims invoice IDs for historical duplicate detection',()=>{
+  const s=snapshot();
+  s.allSales.push(sale('  INV-1  ','TrUe'));
+  assert.throws(()=>originalInvoiceIntegrity(s.allSales),/Duplicate invoice ID/);
+  assert.deepEqual(audit(s).issues,['AMBIGUOUS_HISTORICAL_SALE_INVOICE_ID']);
+});
+
+test('M09 source-normalized duplicate active Invoice IDs remain active-source blocker',()=>{
+  const s=snapshot();
+  s.allSales.push(sale(' INV-1 '));
+  assert.throws(()=>originalInvoiceIntegrity(s.allSales),/Duplicate invoice ID/);
+  assert.deepEqual(audit(s).issues,['DUPLICATE_ACTIVE_SALE_INVOICE']);
+});
+
+test('M09 deleted-only historical duplicates do not block unrelated active Sales',()=>{
+  const s=snapshot();
+  s.allSales.push(sale(' OLD ','True'));
+  s.allSales.push(sale('OLD','true'));
+  assert.equal(originalInvoiceIntegrity(s.allSales),true);
+  assert.deepEqual(audit(s).issues,[]);
+  assert.equal(audit(s).ready,false);
+});
+
+test('M09 simultaneous historical and active ambiguity yield redacted issue codes',()=>{
+  const s=snapshot();
+  s.allSales.push(sale('INV-1','true'));
+  s.allSales.push(sale(' INV-2 '));
+  assert.throws(()=>originalInvoiceIntegrity(s.allSales),/Duplicate invoice ID/);
+  const issues=audit(s).issues;
+  assert.ok(issues.includes('AMBIGUOUS_HISTORICAL_SALE_INVOICE_ID'));
+  assert.ok(issues.includes('DUPLICATE_ACTIVE_SALE_INVOICE'));
+  assert.equal(issues.length,2);
+  assert.equal(JSON.stringify(issues).includes('INV-1'),false);
+  assert.equal(JSON.stringify(issues).includes('INV-2'),false);
 });
