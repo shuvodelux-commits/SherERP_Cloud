@@ -75,9 +75,18 @@
   .hdb-dialog-grid { display:grid; grid-template-columns:1fr; gap:20px; }
   .hdb-dialog h3 { margin:0 0 9px; color:#84929e; text-transform:uppercase; font-size:11px; letter-spacing:.045em; }
   .hdb-dialog-list { list-style:none; display:grid; gap:6px; padding:0; margin:0; }
-  .hdb-dialog-row { display:flex; align-items:center; gap:7px; padding:8px; border:1px solid var(--hdb-border); border-radius:8px; background:white; cursor:grab; min-width:0; }
+  .hdb-dialog-row { display:flex; align-items:center; gap:6px; padding:8px; border:1px solid var(--hdb-border); border-radius:8px; background:white; min-width:0; }
+  .hdb-dialog-row.hdb-drop-target { outline:2px solid var(--hdb-teal); outline-offset:-2px; background:#eaf6f4; }
+  .hdb-dialog-row.hdb-hidden .hdb-dialog-label { opacity:.58; }
   .hdb-dialog-row.hdb-dragging { opacity:.48; }
-  .hdb-grip { color:#8c9aa5; font-size:18px; cursor:grab; }
+  .hdb-grip { color:#8c9aa5; font-size:18px; cursor:grab; border:0; border-radius:5px; background:transparent; touch-action:none; user-select:none; min-height:28px; min-width:28px; padding:2px 4px; flex-shrink:0; }
+  .hdb-grip:active { cursor:grabbing; }
+  .hdb-list-move { border:1px solid #e3e8ee; background:#fff; color:#526576; border-radius:5px; min-width:27px; min-height:28px; font-size:15px; padding:2px; flex-shrink:0; cursor:pointer; }
+  .hdb-list-move:hover:not(:disabled),.hdb-grip:hover { background:#eaf6f4; color:#0a625c; }
+  .hdb-list-move:disabled { opacity:.35; cursor:not-allowed; }
+  .hdb-list-move:focus-visible,.hdb-grip:focus-visible,.hdb-switch:focus-visible { outline:2px solid var(--hdb-teal); outline-offset:2px; }
+  .hdb-visually-hidden { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  @media(max-width:400px){ .hdb-dialog-row { gap:4px; padding:6px 4px; } .hdb-list-move { min-width:26px; } }
   .hdb-dialog-label { flex:1; font-size:12px; min-width:0; }
   .hdb-dialog-label small { display:block; font-size:10px; color:#96a2ad; }
   .hdb-switch { position:relative; width:32px; height:19px; flex-shrink:0; border:0; border-radius:20px; background:#d0d9dd; cursor:pointer; }
@@ -114,7 +123,7 @@
     <button type="button" class="hdb-btn" data-hdb-route="customers">Payment</button>
   </div>
   <div class="hdb-edit-hint" id="hdb-edit-hint" hidden>
-    <span>Use arrows to move cards or hide unused widgets. Changes save automatically.</span>
+    <span>Move cards with arrows or drag in All widgets. Changes save automatically.</span>
     <button type="button" class="hdb-linklike" data-hdb-action="show-hidden">Show hidden</button>
   </div>
   <div class="hdb-metrics" id="hisabiq-dashboard-metrics">
@@ -194,12 +203,12 @@
 
   <div class="hdb-empty-all" id="hdb-empty-all" hidden><h2>Your dashboard is empty</h2><p>Turn widgets back on to see your numbers.</p><button type="button" class="hdb-btn hdb-btn-primary" data-hdb-action="show-hidden">Choose widgets</button></div>
 
-  <div class="hdb-dialog-mask" id="hisabiq-dashboard-dialog" role="dialog" aria-modal="true" aria-label="Customize dashboard" aria-labelledby="hdb-dialog-title" hidden>
+  <div class="hdb-dialog-mask" id="hisabiq-dashboard-dialog" role="dialog" aria-modal="true" aria-label="Customize dashboard" aria-labelledby="hdb-dialog-title" aria-describedby="hdb-dialog-desc" hidden>
     <div class="hdb-dialog">
       <h2 id="hdb-dialog-title">Customize dashboard</h2>
-      <p class="hdb-dialog-desc">Drag to reorder, switch off what you don't need. <span lang="bn">যা দরকার, শুধু তা-ই দেখুন।</span></p>
+      <p class="hdb-dialog-desc" id="hdb-dialog-desc">Drag, use arrow keys or tap move arrows; switch off what you don't need. <span lang="bn">যা দরকার, শুধু তা-ই দেখুন।</span></p>
       <div class="hdb-dialog-grid">
-        <section><h3>Metric cards</h3><ul class="hdb-dialog-list" data-hdb-list="metric"><li draggable="true" class="hdb-dialog-row">Today's Sales</li></ul></section>
+        <section><h3>Metric cards</h3><ul class="hdb-dialog-list" data-hdb-list="metric"></ul></section>
         <section><h3>Panels</h3><ul class="hdb-dialog-list" data-hdb-list="panel"></ul></section>
       </div>
       <div class="hdb-dialog-footer">
@@ -208,6 +217,7 @@
       </div>
     </div>
   </div>
+  <div id="hdb-announcement" class="hdb-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 </div>
 
 <script id="hisabiq-dashboard-runtime">
@@ -233,13 +243,23 @@
     elements[item[0]]=node;
     definitions[item[0]]={id:item[0],kind:item[1],visible:item[2]};
   });
-  var widgets=[],editing=false,storedKey=null,focusReturn=null;
+  var widgets=[],editing=false,storedKey=null,focusReturn=null,dragTouch=null;
+  var live=document.getElementById('hdb-announcement');
+  function announce(message){if(live)live.textContent=message;}
   function defaultLayout(){return defaults.map(function(w){return {id:w[0],visible:w[2]};});}
   function identityKey(){
+    // The original single-shop UI supplies an actor ID and shop name; the
+    // Cloud tenancy contract supplies the stronger immutable tenant ID.
     if(typeof authToken!=='string' || !authToken || !currentUser)return null;
+    var login=document.getElementById('loginOverlay');
+    if(!login || !login.hidden)return null;
     var user=String(currentUser.id||currentUser.userId||currentUser.mobile||'').trim();
-    var store=String(currentUser.tenantId||currentUser.businessId||
-      (document.getElementById('shopNameLabel')||{}).textContent||'').trim();
+    var tenant=String(currentUser.tenantId||currentUser.businessId||
+      currentUser.shopId||currentUser.organizationId||'').trim();
+    var shop=String((document.getElementById('shopNameLabel')||{}).textContent||'').trim();
+    // Fallback is solely for the historical single-shop deployment: its
+    // same-origin storage is not a substitute for server tenant authority.
+    var store=tenant?'tenant:'+tenant:shop?'legacy-shop:'+shop:'';
     if(!user || !store)return null;
     return 'shererp.hisabiq.dashboard.v1:'+encodeURIComponent(store)+':'+encodeURIComponent(user);
   }
@@ -248,54 +268,74 @@
     if(!key)return basic;
     try{
       var saved=JSON.parse(localStorage.getItem(key));
-      if(!Array.isArray(saved))return basic;
+      if(!Array.isArray(saved) || saved.length>100)return basic;
       var seen=Object.create(null),ordered=[];
       saved.forEach(function(w){
         if(!w||typeof w.id!=='string'||!definitions[w.id]||seen[w.id]||typeof w.visible!=='boolean')return;
-        seen[w.id]=true;ordered.push({id:w.id,visible:w.visible});
+        seen[w.id]=true;
+        ordered.push({id:w.id,visible:w.visible});
       });
       basic.forEach(function(w){if(!seen[w.id])ordered.push(w);});
       return ordered;
     }catch(_){return basic;}
   }
   function persist(){
-    if(!storedKey)return;
+    if(!storedKey || storedKey!==identityKey())return;
     try{localStorage.setItem(storedKey,JSON.stringify(widgets));}catch(_){}
   }
   function syncIdentity(){
     var next=identityKey();
-    if(next===storedKey)return;
+    if(next===storedKey)return false;
+    // A resumed browser or an actor/tenant switch must never keep the old
+    // actor's edit dialog, selected grips or pending touch gesture.
+    if(!dialog.hidden)closeDialog(false);
+    editing=false;clearTouchDrag();
     storedKey=next;
     widgets=restore(next);
     render();
+    return true;
   }
   function ordered(kind){
     return widgets.filter(function(w){return definitions[w.id].kind===kind;});
   }
-  function doMove(id,delta){
+  function changeOrder(id,delta,includeHidden){
+    if(!definitions[id])return;
     var kind=definitions[id].kind;
-    var active=ordered(kind).filter(function(w){return w.visible;});
-    var pos=active.findIndex(function(w){return w.id===id;});
-    var target=active[pos+delta];
-    if(!target)return;
-    var at=widgets.findIndex(function(w){return w.id===id;});
-    var to=widgets.findIndex(function(w){return w.id===target.id;});
-    var temp=widgets[at];widgets[at]=widgets[to];widgets[to]=temp;
+    var group=ordered(kind).filter(function(w){return includeHidden||w.visible;});
+    var at=group.findIndex(function(w){return w.id===id;});
+    if(at<0||!group[at+delta])return;
+    var peer=group[at+delta];
+    var a=widgets.findIndex(function(w){return w.id===id;});
+    var b=widgets.findIndex(function(w){return w.id===peer.id;});
+    var tmp=widgets[a];widgets[a]=widgets[b];widgets[b]=tmp;
     persist();render();
+    announce('Moved '+id+(delta<0?' earlier':' later'));
+    return true;
   }
+  function doMove(id,delta){
+    if(changeOrder(id,delta,false)){
+      var tools=elements[id].querySelector('.hdb-edit-tools');
+      var action=delta<0?'move-prev':'move-next';
+      var button=tools&&tools.querySelector('[data-hdb-action="'+action+'"]');
+      if(button)button.focus();
+    }
+  }
+  function moveInDialog(id,delta){changeOrder(id,delta,true);}
   function toggle(id){
     widgets=widgets.map(function(w){return w.id===id?{id:w.id,visible:!w.visible}:w;});
     persist();render();
+    announce((widgets.find(function(w){return w.id===id;}).visible?'Shown ':'Hidden ')+id);
   }
   function doReorder(from,to){
     if(from===to || !definitions[from] || !definitions[to] ||
        definitions[from].kind!==definitions[to].kind)return;
-    var i=widgets.findIndex(function(w){return w.id===from;});
-    var j=widgets.findIndex(function(w){return w.id===to;});
-    var selected=widgets.splice(i,1)[0];
-    var destination=widgets.findIndex(function(w){return w.id===to;});
-    widgets.splice(destination,0,selected);
-    persist();render();
+    var a=widgets.findIndex(function(w){return w.id===from;});
+    if(a<0)return;
+    var selected=widgets.splice(a,1)[0];
+    var b=widgets.findIndex(function(w){return w.id===to;});
+    widgets.splice(b,0,selected);
+    persist();render();announce('Moved '+from+' before '+to);
+    return true;
   }
   function editTools(id){
     var toolbar=document.createElement('div');
@@ -318,48 +358,119 @@
     });
     container.hidden=!ordered(kind).some(function(w){return w.visible;});
   }
-  function makeDialogRow(w){
+  function restoreDialogFocus(id,action){
+    if(dialog.hidden||!id||!action||!definitions[id])return;
+    var row=dialog.querySelector('[data-hdb-list] > [data-hdb-id="'+id+'"]');
+    if(!row)return;
+    var target=row.querySelector('[data-hdb-action="'+action+'"]');
+    if(!target||target.disabled)target=row.querySelector('[data-hdb-action="drag-grip"]');
+    if(target)target.focus();
+  }
+  function clearTouchDrag(){
+    dialog.querySelectorAll('.hdb-drop-target').forEach(function(row){row.classList.remove('hdb-drop-target');});
+    dragTouch=null;
+  }
+  function touchTarget(ev,kind){
+    var hit=document.elementFromPoint(ev.clientX,ev.clientY);
+    var row=hit&&hit.closest('.hdb-dialog-row');
+    return row&&dialog.contains(row)&&definitions[row.dataset.hdbId]&&
+      definitions[row.dataset.hdbId].kind===kind ? row:null;
+  }
+  function makeDialogRow(w,idx,group){
     var node=elements[w.id];
     var label=node.querySelector('.hdb-widget-label')||node.querySelector('.hdb-panel-head h2');
     var small=node.querySelector('.hdb-widget-label small')||node.querySelector('.hdb-panel-head p');
-    var li=document.createElement('li');li.className='hdb-dialog-row';li.draggable=true;
-    li.setAttribute('draggable','true');li.dataset.hdbId=w.id;
-    var grip=document.createElement('span');grip.className='hdb-grip';
-    grip.textContent='⠿';grip.setAttribute('aria-hidden','true');li.appendChild(grip);
+    var display=label?label.childNodes[0].textContent.trim():w.id;
+    var li=document.createElement('li');li.className='hdb-dialog-row'+(w.visible?'':' hdb-hidden');
+    li.draggable=true;li.setAttribute('draggable','true');li.dataset.hdbId=w.id;
+    li.setAttribute('aria-label',display+' (position '+(idx+1)+' of '+group.length+')');
+    var grip=document.createElement('button');grip.type='button';grip.className='hdb-grip';
+    grip.textContent='⠿';grip.dataset.hdbAction='drag-grip';grip.dataset.hdbId=w.id;
+    grip.setAttribute('aria-label','Drag '+display+' to reorder; use Up and Down arrow keys');
+    grip.title='Drag to reorder, or press Up / Down';
+    li.appendChild(grip);
     var name=document.createElement('span');name.className='hdb-dialog-label';
-    name.appendChild(document.createTextNode(label?label.childNodes[0].textContent.trim():w.id));
+    name.appendChild(document.createTextNode(display));
     if(small){var hint=document.createElement('small');hint.textContent=small.textContent;name.appendChild(hint);}
     li.appendChild(name);
+    [['list-prev','↑','Move '+display+' up',idx===0],
+      ['list-next','↓','Move '+display+' down',idx===group.length-1]].forEach(function(action){
+      var btn=document.createElement('button');btn.type='button';btn.className='hdb-list-move';
+      btn.textContent=action[1];btn.title=action[2];btn.setAttribute('aria-label',action[2]);
+      btn.dataset.hdbAction=action[0];btn.dataset.hdbId=w.id;btn.disabled=action[3];
+      li.appendChild(btn);
+    });
     var sw=document.createElement('button');sw.type='button';sw.className='hdb-switch';
     sw.setAttribute('role','switch');sw.setAttribute('aria-checked',w.visible?'true':'false');
-    sw.setAttribute('aria-label','Show '+w.id);sw.dataset.hdbAction='toggle';sw.dataset.hdbId=w.id;
+    sw.setAttribute('aria-label','Show '+display);sw.dataset.hdbAction='toggle';sw.dataset.hdbId=w.id;
     li.appendChild(sw);
+    grip.addEventListener('keydown',function(ev){
+      if(ev.key!=='ArrowUp'&&ev.key!=='ArrowDown')return;
+      ev.preventDefault();moveInDialog(w.id,ev.key==='ArrowUp'?-1:1);
+    });
+    grip.addEventListener('pointerdown',function(ev){
+      if(ev.pointerType==='mouse'||ev.button!==0||dialog.hidden)return;
+      ev.preventDefault();
+      dragTouch={id:w.id,kind:w.kind,pointerId:ev.pointerId,target:null};
+      try{grip.setPointerCapture(ev.pointerId);}catch(_){}
+      li.classList.add('hdb-dragging');
+    });
+    grip.addEventListener('pointermove',function(ev){
+      if(!dragTouch||dragTouch.pointerId!==ev.pointerId||dragTouch.id!==w.id)return;
+      ev.preventDefault();
+      dialog.querySelectorAll('.hdb-drop-target').forEach(function(r){r.classList.remove('hdb-drop-target');});
+      var target=touchTarget(ev,w.kind);
+      if(target && target.dataset.hdbId!==w.id){
+        target.classList.add('hdb-drop-target');dragTouch.target=target.dataset.hdbId;
+      }else dragTouch.target=null;
+    });
+    grip.addEventListener('pointerup',function(ev){
+      if(!dragTouch||dragTouch.pointerId!==ev.pointerId||dragTouch.id!==w.id)return;
+      var target=dragTouch.target;
+      clearTouchDrag();li.classList.remove('hdb-dragging');
+      if(target)doReorder(w.id,target);
+    });
+    grip.addEventListener('pointercancel',function(){
+      clearTouchDrag();li.classList.remove('hdb-dragging');
+    });
     li.addEventListener('dragstart',function(ev){
+      if(ev.target.closest && ev.target.closest('[data-hdb-action]:not([data-hdb-action="drag-grip"])')){
+        ev.preventDefault();return;
+      }
       li.classList.add('hdb-dragging');
       ev.dataTransfer.setData('text/plain',w.id);
       ev.dataTransfer.effectAllowed='move';
     });
     li.addEventListener('dragend',function(){li.classList.remove('hdb-dragging');});
-    li.addEventListener('dragover',function(ev){ev.preventDefault();ev.dataTransfer.dropEffect='move';});
+    li.addEventListener('dragover',function(ev){
+      if(!ev.dataTransfer||!Array.prototype.includes.call(ev.dataTransfer.types,'text/plain'))return;
+      ev.preventDefault();ev.dataTransfer.dropEffect='move';
+    });
     li.addEventListener('drop',function(ev){
       ev.preventDefault();
       var from=ev.dataTransfer.getData('text/plain');
-      if(definitions[from] && definitions[from].kind===definitions[w.id].kind)doReorder(from,w.id);
+      if(definitions[from] && definitions[from].kind===w.kind)doReorder(from,w.id);
     });
     return li;
   }
   function renderDialog(){
+    var active=dialog.contains(document.activeElement)?document.activeElement:null;
+    var restoreId=active&&active.dataset.hdbId,restoreAction=active&&active.dataset.hdbAction;
     ['metric','panel'].forEach(function(kind){
       var list=dialog.querySelector('[data-hdb-list="'+kind+'"]');
+      var group=ordered(kind);
       list.replaceChildren();
-      ordered(kind).forEach(function(w){list.appendChild(makeDialogRow(w));});
+      group.forEach(function(w,i){list.appendChild(makeDialogRow(w,i,group));});
     });
+    restoreDialogFocus(restoreId,restoreAction);
   }
   function render(){
     root.classList.toggle('is-editing',editing);
     renderGroup('metric',metrics);renderGroup('panel',panels);
     root.querySelector('#hdb-empty-all').hidden=widgets.some(function(w){return w.visible;});
     root.querySelector('#hdb-edit-hint').hidden=!editing;
+    var hidden=widgets.filter(function(w){return !w.visible;}).length;
+    root.querySelector('#hdb-edit-hint [data-hdb-action="show-hidden"]').textContent='Show hidden ('+hidden+')';
     root.querySelector('#hisabiq-dashboard-customize').hidden=editing;
     root.querySelector('[data-hdb-action="finish"]').hidden=!editing;
     root.querySelector('#hdb-all-widgets').hidden=!editing;
@@ -390,13 +501,15 @@
     root.querySelector('#hdb-subtitle-bn').textContent=bnDate+' · '+(store||'আপনার ব্যবসা');
   }
   function openDialog(){
+    if(syncIdentity())return;
     focusReturn=document.activeElement;
     renderDialog();dialog.hidden=false;
     dialog.querySelector('[data-hdb-action="dialog-close"]').focus();
   }
-  function closeDialog(){
-    dialog.hidden=true;
-    if(focusReturn && typeof focusReturn.focus==='function')focusReturn.focus();
+  function closeDialog(restoreFocus){
+    dialog.hidden=true;clearTouchDrag();
+    if(restoreFocus!==false && focusReturn && typeof focusReturn.focus==='function' &&
+       focusReturn.isConnected && !focusReturn.hidden)focusReturn.focus();
     focusReturn=null;
   }
   function navigate(route){
@@ -404,18 +517,23 @@
     if(typeof goToPage==='function')goToPage(route);
   }
   root.addEventListener('click',function(ev){
+    var changed=syncIdentity();
     var button=ev.target.closest('[data-hdb-action]');
     if(button && root.contains(button)){
       var action=button.dataset.hdbAction,id=button.dataset.hdbId;
+      if(changed && action!=='customize' && action!=='show-hidden')return;
       if(action==='customize'){editing=true;render();return;}
       if(action==='finish'){editing=false;render();return;}
       if(action==='show-hidden'){openDialog();return;}
       if(action==='dialog-close'){closeDialog();return;}
-      if(action==='reset'){widgets=defaultLayout();persist();render();return;}
+      if(action==='reset'){widgets=defaultLayout();persist();render();announce('Dashboard layout reset to default');return;}
       if(action==='toggle' && definitions[id]){toggle(id);return;}
       if(action==='hide' && definitions[id]){toggle(id);return;}
       if(action==='move-prev' && definitions[id]){doMove(id,-1);return;}
       if(action==='move-next' && definitions[id]){doMove(id,1);return;}
+      if(action==='list-prev' && definitions[id]){moveInDialog(id,-1);return;}
+      if(action==='list-next' && definitions[id]){moveInDialog(id,1);return;}
+      if(action==='drag-grip')return;
     }
     var link=ev.target.closest('[data-hdb-route]');
     if(link && root.contains(link) && !editing){navigate(link.dataset.hdbRoute);}
@@ -424,11 +542,17 @@
   dialog.addEventListener('keydown',function(ev){
     if(ev.key==='Escape'){ev.preventDefault();closeDialog();return;}
     if(ev.key!=='Tab')return;
-    var focusable=Array.prototype.slice.call(dialog.querySelectorAll('button:not([hidden])'));
+    var focusable=Array.prototype.slice.call(dialog.querySelectorAll('button:not([hidden]):not([disabled])'));
     if(!focusable.length)return;
     var first=focusable[0],last=focusable[focusable.length-1];
     if(ev.shiftKey && document.activeElement===first){ev.preventDefault();last.focus();}
     else if(!ev.shiftKey && document.activeElement===last){ev.preventDefault();first.focus();}
+  });
+  document.addEventListener('focusin',function(ev){
+    if(!dialog.hidden && !dialog.contains(ev.target)){
+      var close=dialog.querySelector('[data-hdb-action="dialog-close"]');
+      if(close)close.focus();
+    }
   });
   var source=document.querySelector('#page-dashboard > .stat-grid');
   if(source){
