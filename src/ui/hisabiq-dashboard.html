@@ -413,7 +413,7 @@
     });
     function updateDropTarget(point){
       dialog.querySelectorAll('.hdb-drop-target').forEach(function(r){r.classList.remove('hdb-drop-target');});
-      var target=touchTarget(point,w.kind);
+      var target=touchTarget(point,definitions[w.id].kind);
       if(target && target.dataset.hdbId!==w.id){
         target.classList.add('hdb-drop-target');
         dragTouch.target=target.dataset.hdbId;
@@ -431,7 +431,7 @@
     grip.addEventListener('touchstart',function(ev){
       if(dialog.hidden || !ev.changedTouches.length)return;
       ev.preventDefault();
-      dragTouch={id:w.id,kind:w.kind,pointerId:'touch',target:null};
+      dragTouch={id:w.id,kind:definitions[w.id].kind,pointerId:'touch',target:null};
       li.classList.add('hdb-dragging');
     },{passive:false});
     grip.addEventListener('touchmove',function(ev){
@@ -454,7 +454,7 @@
     grip.addEventListener('pointerdown',function(ev){
       if(ev.pointerType==='mouse'||ev.pointerType==='touch'||ev.button!==0||dialog.hidden)return;
       ev.preventDefault();
-      dragTouch={id:w.id,kind:w.kind,pointerId:ev.pointerId,target:null};
+      dragTouch={id:w.id,kind:definitions[w.id].kind,pointerId:ev.pointerId,target:null};
       try{grip.setPointerCapture(ev.pointerId);}catch(_){}
       li.classList.add('hdb-dragging');
     });
@@ -487,7 +487,7 @@
     li.addEventListener('drop',function(ev){
       ev.preventDefault();
       var from=ev.dataTransfer.getData('text/plain');
-      if(definitions[from] && definitions[from].kind===w.kind)doReorder(from,w.id);
+      if(definitions[from] && definitions[from].kind===definitions[w.id].kind)doReorder(from,w.id);
     });
     return li;
   }
