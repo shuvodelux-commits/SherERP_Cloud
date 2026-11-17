@@ -30,6 +30,15 @@ const REVIEWED=Object.freeze({
   'src/rpc/internal-daybook-bootstrap.js':Object.freeze(['getBootstrap'])
 });
 export const REVIEWED_AWAIT_FILES=Object.freeze(Object.keys(REVIEWED));
+const EXPECTED_SITES=Object.freeze({
+  'src/db/legacy-catalog-read.js':5,
+  'src/db/settings-read.js':2,
+  'src/db/party-identity-read.js':2,
+  'src/modules/product-master-options.js':4,
+  'src/modules/source-app-shell-reader.js':1,
+  'src/rpc/internal-daybook-bootstrap.js':1
+});
+
 
 const deny=()=>new Error('M03 reviewed async conversion missing await or invalid source');
 const isFn=node=>node?.type==='FunctionDeclaration'||
@@ -94,7 +103,11 @@ export function auditReviewedM03AwaitChains(sources){
     const prop=Object.getOwnPropertyDescriptor(sources,path);
     if(!prop?.enumerable||!Object.hasOwn(prop,'value')||
        typeof prop.value!=='string'||!prop.value.trim())throw deny();
-    total+=allAwaitedCalls(prop.value,REVIEWED[path]);
+    const count=allAwaitedCalls(prop.value,REVIEWED[path]);
+    // Removing one of several expected reads (e.g. one Settings query)
+    // must never pass merely because another call uses the same name.
+    if(count!==EXPECTED_SITES[path])throw deny();
+    total+=count;
   }
   return Object.freeze({
     status:'REVIEWED_M03_AWAITED_ONLY',
