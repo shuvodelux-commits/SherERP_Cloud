@@ -53,3 +53,9 @@ test('patcher never edits the frozen source or introduces source-of-truth postin
  assert.doesNotMatch(updated,/addProduct\(|updateProduct\(|INSERT INTO|UPDATE products/);
  assert.equal((updated.match(/m05-products\/m01-products-preview-controller/g)||[]).length,1);
 });
+
+
+test('normal frontend build includes this read-only Products asset patch, not only manual QA',async()=>{
+ const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
+ assert.match(pkg.scripts['build:frontend'],/node scripts\/patch-m01-products-preview\.mjs dist\/index\.html/);
+});
