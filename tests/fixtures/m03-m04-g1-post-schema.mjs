@@ -20,6 +20,15 @@ export const M03_G1_POST_DDL=Object.freeze([
      FOREIGN KEY(business_id,operation_id)
        REFERENCES operation_receipts(tenant_id,operation_id)
    ) STRICT`,
+  `CREATE TABLE synthetic_m03_g1_stock_movements(
+     business_id TEXT NOT NULL,
+     operation_id TEXT NOT NULL,
+     sku TEXT NOT NULL CHECK(sku='PIPE-1'),
+     units_out INTEGER NOT NULL CHECK(units_out>0),
+     PRIMARY KEY(business_id,operation_id),
+     FOREIGN KEY(business_id,operation_id)
+       REFERENCES operation_receipts(tenant_id,operation_id)
+   ) STRICT`,
   `CREATE TABLE synthetic_m03_g1_cash_sessions(
      business_id TEXT NOT NULL,
      session_id TEXT NOT NULL CHECK(length(trim(session_id))>0),
@@ -53,6 +62,9 @@ export const M03_G1_POST_DDL=Object.freeze([
         AND available>=NEW.units;
       SELECT CASE WHEN changes()=1 THEN 1
         ELSE RAISE(ABORT,'G1 stock CAS failed') END;
+      INSERT INTO synthetic_m03_g1_stock_movements
+        (business_id,operation_id,sku,units_out)
+      VALUES(NEW.tenant_id,NEW.operation_id,NEW.sku,NEW.units);
       INSERT INTO synthetic_m03_g1_journal
         (business_id,operation_id,account_kind,signed_cents)
       VALUES(NEW.tenant_id,NEW.operation_id,'cash',NEW.amount_cents);
@@ -60,6 +72,12 @@ export const M03_G1_POST_DDL=Object.freeze([
         (business_id,operation_id,account_kind,signed_cents)
       VALUES(NEW.tenant_id,NEW.operation_id,'sales_revenue',-NEW.amount_cents);
     END`,
+  `CREATE TRIGGER synthetic_m03_g3_movement_immutable_update
+    BEFORE UPDATE ON synthetic_m03_g1_stock_movements
+    BEGIN SELECT RAISE(ABORT,'G3 stock movement immutable'); END`,
+  `CREATE TRIGGER synthetic_m03_g3_movement_immutable_delete
+    BEFORE DELETE ON synthetic_m03_g1_stock_movements
+    BEGIN SELECT RAISE(ABORT,'G3 stock movement immutable'); END`,
   `CREATE TRIGGER synthetic_m03_g1_journal_immutable_update
     BEFORE UPDATE ON synthetic_m03_g1_journal
     BEGIN SELECT RAISE(ABORT,'G1 journal immutable'); END`,
