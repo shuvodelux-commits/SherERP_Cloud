@@ -110,7 +110,7 @@ test('approved exact manual staging workflow is sealed against second remote SQL
   assert.ok(m);
   m.content=m.content.replace(
     'npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --remote --config wrangler.staging.jsonc',
-    'npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --remote --config wrangler.staging.jsonc\\n          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --remote --config wrangler.staging.jsonc --command "DELETE FROM parties"'
+    'npx --yes wrangler@4.161.0 d1 migrations apply shererp-staging-db --remote --config wrangler.staging.jsonc\n          npx --yes wrangler@4.161.0 d1 execute shererp-staging-db --remote --config wrangler.staging.jsonc --command "DELETE FROM parties"'
   );
   checkBlocked(examine({workflows:a}),'M11_CI_STAGING_UNREVIEWED_CHANGE');
 });
@@ -136,6 +136,6 @@ test('manual staging migration count cannot be changed by retaining an old value
   const approved='EXPECTED_REMOTE_MIGRATION_COUNT=2';
   assert.ok(m.content.includes(approved));
   m.content=m.content.replace(approved,
-    'EXPECTED_REMOTE_MIGRATION_COUNT=3\\n          # '+approved);
+    'EXPECTED_REMOTE_MIGRATION_COUNT=3\n          # '+approved);
   checkBlocked(examine({workflows:a}),'M11_CI_STAGING_UNREVIEWED_CHANGE');
 });
