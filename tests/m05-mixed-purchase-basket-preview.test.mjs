@@ -127,7 +127,7 @@ test('manufacturer area keeps evidenced 300.024 Sqft distinct from physical nomi
 test('trusted source conversions beat spoofed browser price/factor/label; accepted original legacy editable price stays explicit',async()=>{
  const db=sqlite();try{
   seed(db,'T-8X12-A');const {DB}=d1(db);
-  const spoof=cable({name:'Fake cable',unitPrice:0.01,unitBreakdown:[
+  const spoof=cable({name:'Fake cable',qty:undefined,unitPrice:0.01,unitBreakdown:[
    {conversionId:'C-BAG',qty:1,factor:1,unitPrice:1,unitName:'Fake'}]});
   const s=source({payload:{supplierId:'SUP-A',items:[spoof,pipe({unitPrice:9.75})]}});
   const r=await quote(DB,{standard:s,tileLines:[tiles()[0]]});
