@@ -165,7 +165,10 @@ test('M01 synthetic Clerk mobile and tablet navigation keeps source role filteri
         assert.equal((await loginReply).status(),200);
         await page.waitForFunction(()=>
           document.getElementById('loginOverlay')?.hidden===true);
-        await page.locator('#navList .nav-item[data-page="reports"]').waitFor();
+        // Phone CSS intentionally hides the desktop sidebar. Its role-filtered
+        // DOM entry must exist, but only the mobile More action is visible.
+        await page.locator('#navList .nav-item[data-page="reports"]')
+          .waitFor({state:'attached'});
         assert.equal(await page.locator('#navList .nav-item[data-page="bank"]').count(),0,
           'Clerk cannot see Bank in desktop sidebar');
         assert.equal(await page.locator('#navList .nav-item[data-page="dashboard"]').count(),1);
