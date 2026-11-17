@@ -22,6 +22,7 @@ export const M08_VENDOR_PAYEE_DDL=Object.freeze([
     legacy_row INTEGER NOT NULL CHECK (legacy_row>=2),
     ledger_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
+    vendor_name TEXT NOT NULL,
     date_text TEXT NOT NULL,
     entry_type TEXT NOT NULL,
     reference TEXT NOT NULL,
