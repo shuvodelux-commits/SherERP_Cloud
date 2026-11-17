@@ -111,3 +111,60 @@ test('pure source-freeze helper never uses D1, fetch, console or public RPC wiri
   const manifest=readFileSync(new URL('../.github/workflows/remote-d1-staging.yml',import.meta.url),'utf8');
   assert.match(manifest,/EXPECTED_REMOTE_MIGRATION_COUNT=2/);
 });
+
+
+test('identically unreviewed root, array and row export metadata cannot certify staff freeze',()=>{
+  const changes=[
+    s=>{s.sessions=[{Token:'SYNTHETIC_PRIVATE_SESSION'}];},
+    s=>Object.defineProperty(s,'hiddenSecret',{value:'SYNTHETIC_PRIVATE',enumerable:false}),
+    s=>{s[Symbol('unreviewed')]='SYNTHETIC_SYMBOL';},
+    s=>Object.setPrototypeOf(s,{unreviewedInherited:true}),
+    s=>{s.users.extraSource='SYNTHETIC_PRIVATE';},
+    s=>Object.defineProperty(s.roles,'hiddenExtra',{value:'SYNTHETIC_PRIVATE',enumerable:false}),
+    s=>{s.roles[Symbol('secret')]='SYNTHETIC_PRIVATE';},
+    s=>{s.users[0]['Future Private Source Column']='SYNTHETIC_PRIVATE';},
+    s=>Object.defineProperty(s.roles[0],'hiddenRoleField',{
+      value:'SYNTHETIC_PRIVATE',enumerable:false
+    }),
+    s=>{s.users[1][Symbol('unreviewed')]='SYNTHETIC_PRIVATE';},
+  ];
+  for(const mutate of changes){
+    const first=source(),confirmation=source();
+    mutate(first);
+    mutate(confirmation);
+    const report=auditStableLegacyStaffFreeze(first,confirmation);
+    assert.equal(report.freezeMatch,false,
+      'two matching but unreviewed exports must not pass the freeze');
+    assert.deepEqual(report.issues,[
+      {scope:'snapshot',row:null,code:'SOURCE_PREFLIGHT_FAILED'}
+    ]);
+    assert.doesNotMatch(JSON.stringify(report),
+      /SYNTHETIC_PRIVATE|SESSION|PASSWORD|0179000/i);
+  }
+});
+
+test('unknown export accessors and enumeration traps fail without execution or leaked details',()=>{
+  let invoked=0;
+  const changes=[
+    s=>Object.defineProperty(s,'futureSecret',{
+      enumerable:true,get(){invoked++;throw Error('SYNTHETIC_PRIVATE_GETTER');}
+    }),
+    s=>Object.defineProperty(s.users,'futureSecret',{
+      enumerable:true,get(){invoked++;throw Error('SYNTHETIC_PRIVATE_GETTER');}
+    }),
+    s=>{s.roles=new Proxy(s.roles,{
+      ownKeys(){throw Error('SYNTHETIC_PRIVATE_TRAP');}
+    });}
+  ];
+  for(const mutate of changes){
+    const a=source(),b=source();
+    mutate(a);mutate(b);
+    const result=auditStableLegacyStaffFreeze(a,b);
+    assert.equal(result.freezeMatch,false);
+    assert.deepEqual(result.issues,[{
+      scope:'snapshot',row:null,code:'SOURCE_PREFLIGHT_FAILED'
+    }]);
+    assert.doesNotMatch(JSON.stringify(result),/PRIVATE|TRAP/);
+  }
+  assert.equal(invoked,0);
+});

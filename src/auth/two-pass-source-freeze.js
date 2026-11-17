@@ -26,15 +26,44 @@ const invalid=()=>({
   issues:[issue('snapshot',null,'SOURCE_PREFLIGHT_FAILED')],
 });
 
+// Mirror the already-approved offline importer export shape, without
+// reading unknown properties, invoking accessors or retaining source secrets.
+function exactRows(rows,fields){
+  if(!Array.isArray(rows) || rows.length>10000 ||
+     Reflect.ownKeys(rows).length!==rows.length+1)return false;
+  for(let i=0;i<rows.length;i++){
+    const entry=Object.getOwnPropertyDescriptor(rows,String(i));
+    if(!entry?.enumerable || !Object.hasOwn(entry,'value'))return false;
+    const row=entry.value;
+    if(!row || typeof row!=='object' || Array.isArray(row))return false;
+    const proto=Object.getPrototypeOf(row);
+    if(proto!==Object.prototype && proto!==null)return false;
+    const keys=Reflect.ownKeys(row);
+    if(keys.length!==fields.length ||
+       keys.some(key=>typeof key!=='string'||!fields.includes(key)))
+      return false;
+    for(const field of fields){
+      const desc=Object.getOwnPropertyDescriptor(row,field);
+      if(!desc?.enumerable || !Object.hasOwn(desc,'value'))return false;
+    }
+  }
+  return true;
+}
+
 function sourceArrays(snapshot){
   try{
     if(!snapshot || typeof snapshot!=='object' || Array.isArray(snapshot))
       return null;
+    const prototype=Object.getPrototypeOf(snapshot);
+    if(prototype!==Object.prototype && prototype!==null)return null;
+    const keys=Reflect.ownKeys(snapshot);
+    if(keys.length!==2 || !keys.includes('users') || !keys.includes('roles'))
+      return null;
     const user=Object.getOwnPropertyDescriptor(snapshot,'users');
     const role=Object.getOwnPropertyDescriptor(snapshot,'roles');
-    if(!user || !role || !Object.hasOwn(user,'value') ||
-       !Object.hasOwn(role,'value') ||
-       !Array.isArray(user.value) || !Array.isArray(role.value))
+    if(!user?.enumerable || !role?.enumerable ||
+       !Object.hasOwn(user,'value') || !Object.hasOwn(role,'value') ||
+       !exactRows(user.value,USER_FIELDS) || !exactRows(role.value,ROLE_FIELDS))
       return null;
     return {users:user.value,roles:role.value};
   }catch{
