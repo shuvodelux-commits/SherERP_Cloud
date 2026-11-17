@@ -45,3 +45,5 @@ function buildMoneyGuard(){
 }
 
 export const M05_TILE_EXACT_MONEY_GUARD_SQL=buildMoneyGuard();
+
+export {fixed4,decimalWithinFour,inchInteger};
