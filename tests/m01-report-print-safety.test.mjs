@@ -9,10 +9,11 @@ const syntheticController='(function(){window.__m01ReportPrintState={};})();';
 test('M01 Reports Print must wrap only the original active report loader in compiled HTML',()=>{
   const compiled=patchM01ReportPrintSafety(reports,syntheticController);
   assert.notEqual(compiled,reports,'an unmodified original source prints without a valid report');
-  assert.match(compiled,/__m01ReportPrintState\.start\(tab\)/);
-  assert.match(compiled,/__m01ReportPrintState\.complete\(ticket\)/);
-  assert.match(compiled,/__m01ReportPrintState\.fail\(ticket\)/);
-  assert.equal((compiled.match(/__m01ReportPrintState\.start\(tab\)/g)||[]).length,1);
+  assert.match(compiled,/var guard = window\.__m01ReportPrintState/);
+  assert.match(compiled,/guard\.start\(tab\)/);
+  assert.match(compiled,/guard\.complete\(ticket\)/);
+  assert.match(compiled,/guard\.fail\(ticket\)/);
+  assert.equal((compiled.match(/guard\.start\(tab\)/g)||[]).length,1);
   assert.match(compiled,/getSalesReport/);
   assert.match(compiled,/getBalanceSheetReport/);
   assert.match(compiled,/window\.print\(\)/,'original print lifecycle remains intact');
