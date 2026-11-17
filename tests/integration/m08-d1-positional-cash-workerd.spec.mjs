@@ -1372,7 +1372,9 @@ function vpSource(masters,ledger,payees){
   const vendorList=plain(src.getAllVendorsForUI_());
   const payeeList=plain(src.getActiveExpensePayeesForUI_());
   const ledgerDisplay=plain(src.recalculateLedgerBalancesForDisplay_(
-    ledger.filter(row=>row['Is Deleted']!==true &&
+    ledger.map((row,i)=>({
+      ...row,_rowIndex:row._rowIndex ?? i+2
+    })).filter(row=>row['Is Deleted']!==true &&
       String(row['Is Deleted']||'').toUpperCase()!=='TRUE'), 'Balance Type'
   ));
   return {vendorList,payeeList,ledgerDisplay};
@@ -1550,4 +1552,70 @@ test('M08 VP invalid requests, imported cents and public Worker route fail close
   assert.equal((await worker.fetch('https://m08-vp.test/api/rpc',{
     method:'POST',body:JSON.stringify(vpReq())
   })).status,404);
+});
+
+
+test('M08 QA #596 Vendor original physical row survives chronological projection and deleted gaps',async()=>{
+  await vpReset();
+  const sourceRows=[
+    vpLedger('TIE-A','V1','Payable',12,0,{
+      Balance:12,'Created At':'2026-11-17T10:00:00Z'}),
+    vpLedger('DELETED','V1','Payable',900,0,{
+      'Is Deleted':'TRUE','Created At':'2026-11-17T10:00:00Z'}),
+    vpLedger('TIE-B','V1','Payable',8,0,{
+      Balance:20,'Created At':'2026-11-17T10:00:00Z'}),
+    vpLedger('EARLY','V1','Receivable',5,0,{
+      Balance:5,'Created At':'2026-11-17T08:00:00Z'})
+  ].map((entry,i)=>({...entry,_rowIndex:i+2}));
+  const masters=[vpVendor('V1','Original Vendor',{
+    'Current Due':20,'Current Receivable':5
+  })];
+  const payees=[vpPayee()];
+  await vpSeed('SHOP-A',masters,sourceRows,payees);
+  const result=await vpRead();
+  assert.deepEqual(result.vendor.ledger.map(row=>[
+    row['Ledger ID'],row._rowIndex
+  ]),[
+    ['TIE-A',2],['TIE-B',4],['EARLY',5]
+  ]);
+  assert.deepEqual(result.vendor.ledger,
+    vpSource(masters,sourceRows,payees).ledgerDisplay,
+    'original GAS ledger projection must retain physical source _rowIndex');
+  assert.deepEqual(result.vendor.reconstructed,{
+    payable:20,receivable:5
+  });
+  assert.deepEqual(result.vendor.drift,[]);
+  assert.ok((await vpSnapshot()).m08_vp_ledger
+    .some(row=>row.legacy_row===3 && row.is_deleted===1),
+    'deleted source row remains in historical D1 audit');
+});
+
+test('M08 QA #596 Payee expenses expose their original EXPENSES Ledger ID for every status',async()=>{
+  await vpReset();
+  const expenses=[
+    vpExpense('EXP-A','SAME',45),
+    vpExpense('EXP-CANCEL','SAME',23,{Status:'Cancelled'}),
+    vpExpense('EXP-DELETE','SAME',19,{'Is Deleted':'TRUE'})
+  ];
+  await vpSeed('SHOP-A',[vpVendor('SAME','Unrelated Vendor')],[],
+    [vpPayee('SAME','Identical ID Payee')],expenses);
+  const result=await vpRead(vpReq({
+    vendorId:'SAME',payeeId:'SAME'
+  }));
+  assert.deepEqual(result.payee.expenses.map(row=>[
+    row.expenseId,row.payeeId,row.legacyRow
+  ]),[
+    ['EXP-A','SAME',2],
+    ['EXP-CANCEL','SAME',3],
+    ['EXP-DELETE','SAME',4]
+  ]);
+  assert.deepEqual(result.payee.expenses.map(row=>row.payeeId),
+    expenses.map(row=>row['Ledger ID']),
+    'expense Payee ID must be the preserved original source Ledger ID');
+  assert.equal(result.payee.activeExpenseTotal,45);
+  assert.equal(result.payee.createsPayable,false);
+  assert.equal(result.payee.liabilityAmount,null);
+  assert.deepEqual(result.vendor.reconstructed,{
+    payable:0,receivable:0
+  });
 });
