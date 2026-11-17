@@ -19,4 +19,4 @@
 
 **File ownership:** M05 exclusively: `src/modules/m05-product-form-stock-preview.js`, `tests/m05-product-form-stock-preview.test.mjs` and this new plan. No shared infrastructure or source data edits. Production transaction writes remain BLOCKED under `docs/M03_PARALLEL_READINESS.md`.
 
-**Roll back:** revert the two focused code/test changes; no data or schema rollback. **Source:** `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, approved optional `sherERP_Mohim@590adfad128fe7155bfb7b6085b202a9c`.
+**Roll back:** revert the two focused code/test changes; no data or schema rollback. **Source:** `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`, approved optional `sherERP_Mohim@590adfad128fe7155bfb7b608a2ed5665b202a9c`.
