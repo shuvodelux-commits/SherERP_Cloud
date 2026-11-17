@@ -10,7 +10,8 @@ jobs:
   local-worker-d1:
     name: Test read-only adapters against local workerd and D1
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # M03 real-D1 regression now exceeds 30 min; retain full tests, do not skip.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
