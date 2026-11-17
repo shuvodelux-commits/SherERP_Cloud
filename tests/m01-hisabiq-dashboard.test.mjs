@@ -56,3 +56,25 @@ test('M01: dashboard customization source is accessible and isolated from financ
   assert.match(html,/currentUser/);
   assert.doesNotMatch(html,/\b(INSERT INTO|UPDATE parties|DELETE FROM|fetch\('https?:)\b/i);
 });
+
+
+test('M01 Step 1 RED: reference header hierarchy, Lucide SVGs and honest chart geometry',async t=>{
+  const html=await compiled(t);
+  assert.match(html,/id="hdb-welcome-title"/,'English primary heading must be addressable');
+  assert.match(html,/id="hdb-welcome-bn" lang="bn"/,'Bangla helper shares the heading row');
+  assert.match(html,/id="hdb-subtitle-bn" lang="bn"/,'Bangla calendar date is visible');
+  assert.equal((html.match(/<svg data-hdb-icon=/g)||[]).length,6,
+    'the 6 default KPI tiles use SVG rather than emoji/symbol placeholders');
+  assert.match(html,/\.hdb-panel-head\s*\{[^}]*border-bottom:\s*1px solid var\(--hdb-border\)/,
+    'panel headers use the source Panel component border');
+  assert.match(html,/\.hdb-chart-shell\s*\{[^}]*min-height:\s*220px/,
+    'charts reserve 220px like reference even while authorized series are unavailable');
+  assert.match(html,/\.hdb-head h1\s*\{[^}]*font-size:\s*20px/,
+    'HisabIQ header uses text-xl, not a large promotional headline');
+  assert.match(html,/@media\(min-width:640px\)\s*\{[^}]*\.hdb-dialog-grid/,
+    'reference customizer switches to two columns at small tablet');
+  assert.match(html,/<div class="hdb-chart-shell"[^>]*data-hdb-chart="sales-trend"/);
+  assert.match(html,/<div class="hdb-chart-shell"[^>]*data-hdb-chart="cashflow"/);
+  assert.doesNotMatch(html,/hdb-chart-point|hdb-mock-revenue|hdb-demo-sales/,
+    'do not fake financial chart data to imitate screenshot');
+});
