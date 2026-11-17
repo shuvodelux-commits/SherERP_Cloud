@@ -1,17 +1,18 @@
 <!-- M01 HisabIQ dashboard parity: compiled-only overlay; preserved original fields follow. -->
 <style id="hisabiq-dashboard-style">
+  @import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Hind+Siliguri:wght@400;500;600;700&display=swap");
   #page-dashboard > .stat-grid, #page-dashboard > .mobile-quick-actions { display: none !important; }
   #page-dashboard .hdb [hidden] { display: none !important; }
   #page-dashboard .hdb {
-    --hdb-ink: #192c3b; --hdb-muted: #667786; --hdb-border: #e2e9ec;
-    --hdb-teal: #087f78; --hdb-bg: #f4f8f8;
+    --hdb-ink: #0b1a2c; --hdb-muted: #5a6b80; --hdb-border: #e3e8ee;
+    --hdb-teal: #0d7c74; --hdb-bg: #f5f7fa;
     max-width: 1440px; margin: 0 auto; color: var(--hdb-ink);
-    font-family: Inter, "Noto Sans Bengali", sans-serif; display: grid; gap: 16px;
+    font-family: "Geist", "Hind Siliguri", system-ui, sans-serif; display: grid; gap: 16px;
   }
   .hdb * { box-sizing: border-box; }
   .hdb-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
   .hdb-head h1 { font-size:24px; line-height:1.22; margin:0; font-weight:700; letter-spacing:-.03em; }
-  .hdb-head .hdb-bn { font-family:"Noto Sans Bengali",sans-serif; color:#81909b; font-size:12px; margin:2px 0 0; }
+  .hdb-head .hdb-bn { font-family:"Hind Siliguri",sans-serif; color:#81909b; font-size:12px; margin:2px 0 0; }
   .hdb-head p { margin:6px 0 0; font-size:12px; color:var(--hdb-muted); }
   .hdb-actions { display:flex; gap:7px; align-items:center; }
   .hdb button { font-family:inherit; }
