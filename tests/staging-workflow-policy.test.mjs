@@ -8,7 +8,7 @@ test('staging CI never modifies remote D1 or deploys a public Worker',()=>{
   assert.doesNotMatch(workflow,/\s+push:/);
   assert.doesNotMatch(workflow,/secrets\.|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID/);
   assert.doesNotMatch(workflow,/--remote\b|d1\s+create|migrations\s+apply.*--remote/);
-  assert.match(workflow,/migrations apply shererp-operational-staging-20261118 --local/);
+  assert.match(workflow,/migrations apply shererp-staging-db --local/);
   assert.match(workflow,/--persist-to/);
   assert.match(workflow,/deploy --dry-run --config wrangler\.staging\.jsonc/);
 });
