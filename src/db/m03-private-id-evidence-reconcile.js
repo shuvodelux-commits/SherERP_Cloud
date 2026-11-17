@@ -32,7 +32,7 @@ function exact(record,names){
 function dense(rows){
  if(!Array.isArray(rows)||Object.getPrototypeOf(rows)!==Array.prototype||
     rows.length>250000||Reflect.ownKeys(rows).length!==rows.length+1)reject();
- return rows.map((_,i)=>{
+ return Array.from({length:rows.length},(_,i)=>{
   const d=Object.getOwnPropertyDescriptor(rows,String(i));
   if(!d?.enumerable||!Object.hasOwn(d,'value'))reject();
   return d.value;
