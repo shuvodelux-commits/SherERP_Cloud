@@ -83,6 +83,7 @@ test('missing, unexpected and duplicated group rows are explicit integrity failu
     edit(x);
     const r=assessM10RestoreIntegrity(x);
     assert.equal(r.candidateRestoreParity,false);
+    assert.equal(r.groupsComparedComplete,false,'extra or duplicate groups are not complete evidence');
     assert.equal(issue(r,code),1);
   }
 });
