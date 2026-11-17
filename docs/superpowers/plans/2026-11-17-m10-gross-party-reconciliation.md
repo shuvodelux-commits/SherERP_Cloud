@@ -22,12 +22,12 @@
 
 ## File and dependency ownership
 
-- **New, M10-only:** `src/migration/m10-gross-party-reconcile.js`, `tests/m10-gross-party-reconcile.test.mjs`, `docs/runbooks/M10_GROSS_ACCOUNT_REHEARSAL.md`, and this plan.
+- **New, M10-only:** `src/migration/m10-gross-party-reconcile.js`, `tests/m10-gross-party-reconcile.test.mjs`, `scripts/m10-gross-party-check.mjs`, `tests/m10-gross-party-cli.test.mjs`, `docs/runbooks/M10_GROSS_ACCOUNT_REHEARSAL.md`, and this plan.
 - **Read-only dependencies:** ADR-007, issue #312, 49-group frozen inventory, M02/M02-P source account/legacy-link mapping, M08 relationship ledger contracts. Rehearsal evaluator M10-01 remains unchanged pending a separately reviewed adapter to consume this proof.
 - **No shared changes:** `src/db/**`, numbered migrations, `src/rpc/**`, `src/index.js`, Workers bindings/workflows, the shared posting/reversal kernel, private data, original GAS/Sheets or deployed state.
 - **No SQL table, original ID or public RPC mutation** and no new financial writer.
 - **Merge:** independent PR into `main`, verify test-first RED and minimal GREEN, full exact-head GitHub CI including local Workerd/D1 and policy suites, reviewed owner merge gate, verify landed main code.
-- **Rollback:** revert four new module-only files; zero D1/data rollback.
+- **Rollback:** revert six new module-only files; zero D1/data rollback.
 
 ## Exact supplied evidence contract (aligned to existing M02 source checkpoint)
 
@@ -47,6 +47,10 @@ Account: `sourceGroup`, `legacyIdDigest`, `accountKind`, `sourceField`, `basis`,
 - `amountMinor` is a strictly positive canonical decimal integer string (up to 38 digits), never a floating-point BDT amount. Zero source balances result in no checkpoint row, but the required domain must still be attested.
 - `legacyIdDigest` is an externally supplied SHA-256 commitment to original ID identity, not a fabricated Party ID. This M10 contract **does not** require a `contractDigest` not provided by the current M02 checkpoint shape. Future contract-level loan subaccounts require a separately reviewed M02 schema/identity contract.
 - Historical-source row identity, amount sign interpretation, mapping of original finance persons/transactions, and receipt provenance remain external M02-P/M08 reviewer obligations. Test fixture positives never certify real source data.
+
+## Local operator preflight (nondeployable)
+
+The additive `scripts/m10-gross-party-check.mjs` accepts exactly one explicit local regular JSON evidence file and prints only the redacted issue-count report from this module. It never reads from a D1 binding, fetches any source Sheet or writes a file. It rejects flags, missing files, symlinks, malformed input and failed parity with exit code 2; zero means candidate-only offline comparison, **not a GO decision**. Seven synthetic CLI tests cover positive evidence, mismatch, privacy, argument handling and symlink rejection, in addition to 20 isolated comparator tests. A real private input requires separate explicit authorization; no production/private fixture is committed or sent to GitHub Actions.
 
 ## Exit remains NO-GO
 
