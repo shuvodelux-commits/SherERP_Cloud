@@ -322,7 +322,7 @@ test('G3 SQL-atomic commit persists exactly one immutable stock movement and bal
   const x=fixture();try{
     assert.equal((await x.post.post_(intent(ADMIN,'OP-G3-VALID'))).status,'COMMITTED');
     assert.deepEqual(x.db.prepare(`SELECT business_id,operation_id,sku,units_out
-      FROM synthetic_m03_g1_stock_movements ORDER BY operation_id`).all(),[
+      FROM synthetic_m03_g1_stock_movements ORDER BY operation_id`).all().map(row=>({...row})),[
       {business_id:'BUSINESS-A',operation_id:'OP-G3-VALID',sku:'PIPE-1',units_out:1}
     ]);
     const prior=x.state();
