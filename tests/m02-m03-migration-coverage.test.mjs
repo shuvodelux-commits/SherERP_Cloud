@@ -58,12 +58,12 @@ test('rejects duplicate or malformed source groups, blank migration and invalid 
   }),/commit/i);
 });
 
-test('frozen 49-group Config inventory and thirteen local migration files yield zero fully reconciled groups',()=>{
+test('frozen 49-group Config inventory and fourteen local migration files yield zero fully reconciled groups',()=>{
   const current=inventorySchema(readFileSync(new URL('../legacy/source/Config.gs',import.meta.url),'utf8'));
   const baseline=JSON.parse(readFileSync(new URL('../docs/baseline/schema-inventory.json',import.meta.url),'utf8'));
   assert.deepEqual(current,baseline,'original source config must match frozen inventory');
   const files=readdirSync(new URL('../migrations/',import.meta.url)).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
-  assert.deepEqual(files.map(x=>x.slice(0,4)),['0001','0002','0003','0004','0005','0006','0007','0008','0009','0010','0011','0012','0013']);
+  assert.deepEqual(files.map(x=>x.slice(0,4)),['0001','0002','0003','0004','0005','0006','0007','0008','0009','0010','0011','0012','0013','0014']);
   const migrations=Object.fromEntries(files.map(x=>
     [x,readFileSync(new URL('../migrations/'+x,import.meta.url),'utf8')]));
   const closure=JSON.parse(readFileSync(new URL('../docs/baseline/m03-async-caller-closure.json',import.meta.url),'utf8'));

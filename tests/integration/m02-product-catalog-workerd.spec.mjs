@@ -8,7 +8,7 @@ before(async()=>{await harness.listen();await worker.applyD1Migrations('DB');({D
 after(async()=>harness.close());
 const count=async(table)=>(await DB.prepare('SELECT count(*) n FROM '+table).first()).n;
 test('D1 migration 0013 contains a new empty inert operational catalog',async()=>{
- assert.equal((await DB.prepare('SELECT count(*) n FROM d1_migrations').first()).n,13);
+ assert.equal((await DB.prepare('SELECT count(*) n FROM d1_migrations').first()).n,14);
  for(const table of ['products','product_unit_profiles','product_unit_conversions'])assert.equal(await count(table),0);
 });
 test('canonical product identity is tied to original source row, not matching name or barcode',async()=>{

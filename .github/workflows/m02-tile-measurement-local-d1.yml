@@ -1,0 +1,20 @@
+name: M02 immutable tile measurements real local D1
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tile-measurement-d1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify SQLite tile measurement constraints
+        run: node --test tests/m02-tile-measurement-schema.test.mjs
+      - name: Verify real local D1 immutable measurements and atomic rollback
+        run: node --test tests/integration/m02-tile-measurement-workerd.spec.mjs

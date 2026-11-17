@@ -9,8 +9,8 @@ export function validateLocalD1SchemaReport(output) {
   if(!obj || obj.success !== true || !Array.isArray(obj.results) || obj.results.length!==1)
     throw new Error('Unexpected local D1 query result');
   const row=obj.results[0];
-  if(row.app_tables!==19 || row.applied_migrations!==13 || row.history_triggers!==4 ||
-     row.delete_audit_guards!==2 || row.draft_audit_guards!==2 || row.invoice_edit_audit_guards!==2 || row.opening_balance_audit_guards!==2 || row.stock_lot_cost_audit_guards!==2 || row.product_snapshot_guards!==4 || row.product_catalog_guards!==9 ||
+  if(row.app_tables!==20 || row.applied_migrations!==14 || row.history_triggers!==4 ||
+     row.delete_audit_guards!==2 || row.draft_audit_guards!==2 || row.invoice_edit_audit_guards!==2 || row.opening_balance_audit_guards!==2 || row.stock_lot_cost_audit_guards!==2 || row.product_snapshot_guards!==4 || row.product_catalog_guards!==9 || row.tile_measurement_guards!==3 ||
      row.auth_tables!==5 || row.auth_session_guards!==3 ||
      row.provenance_columns!==4 || row.provenance_guards!==2)
     throw new Error('Local D1 schema verification failed: table, migration, column or trigger count mismatch');
@@ -20,6 +20,6 @@ if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url))
   try {
     const input=JSON.parse(readFileSync(resolve(process.argv[2]),'utf8'));
     validateLocalD1SchemaReport(input);
-    console.log('Local D1 verified: 19 core/diagnostic/audit/archive/candidate catalog tables, 5 auth tables, 13 migrations, 4 Party triggers, 3 session guards, 4 source provenance columns and 2 immutable-history guards');
+    console.log('Local D1 verified: 20 core/diagnostic/audit/archive/candidate catalog/tile tables, 5 auth tables, 14 migrations, 4 Party triggers, 3 tile measurement guards, 3 session guards, 4 source provenance columns and 2 immutable-history guards');
   }catch(e){console.error('Local D1 verification failed: '+e.message);process.exitCode=1;}
 }
