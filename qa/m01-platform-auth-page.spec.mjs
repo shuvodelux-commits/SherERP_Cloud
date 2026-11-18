@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import {chromium} from 'playwright';
+import privateWorker from '../src/m03-private-platform-auth-worker.js';
 
 const origin='https://platform.example.test';
 const pageRoot=new URL('../frontend/platform-auth/',import.meta.url);
@@ -23,6 +24,7 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
   try{
     const page=await browser.newPage({viewport:{width:320,height:640}});
     let active=false;
+    let delayedChallenge;
     const calls=[];
     await page.route('https://accounts.google.com/gsi/client',route=>route.fulfill({
       body:fakeGoogle,contentType:'text/javascript',
@@ -31,16 +33,28 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
       const request=route.request();
       const path=new URL(request.url()).pathname;
       if(!path.startsWith('/api/')){
-        const file=path==='/'?'index.html':path.slice(1);
-        const type=file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html';
-        return route.fulfill({body:file==='index.html'?html:await readFile(new URL(file,pageRoot)),contentType:type});
+        const reply=await privateWorker.fetch(new Request(request.url()),{
+          PLATFORM_AUTH_SCOPE:'private-platform-auth',PLATFORM_AUTH_ORIGIN:origin,
+          PLATFORM_CLIENT_ID:'123-example.apps.googleusercontent.com',
+          PLATFORM_INGRESS:{limit(){}},CONTROL_DB:{prepare(){},batch(){}},
+          ASSETS:{async fetch(assetRequest){
+            const file=new URL(assetRequest.url).pathname.slice(1);
+            return new Response(file==='index.html'?html:await readFile(new URL(file,pageRoot)));
+          }},
+        });
+        return route.fulfill({
+          status:reply.status,headers:Object.fromEntries(reply.headers),
+          body:Buffer.from(await reply.arrayBuffer()),
+        });
       }
       const input=request.postDataJSON();
       calls.push({path,input});
       if(path==='/api/platform/auth/session')
         return route.fulfill({status:active?200:401,json:active?{role:'PlatformSuperAdmin'}:{}});
-      if(path.endsWith('/challenge'))
+      if(path.endsWith('/challenge')){
+        if(path==='/api/platform/auth/challenge'&&delayedChallenge)await delayedChallenge;
         return route.fulfill({json:{clientId:'123-example.apps.googleusercontent.com',nonce:'a'.repeat(43)}});
+      }
       if(path==='/api/platform/setup')
         return route.fulfill({json:{enrolled:true}});
       if(path==='/api/platform/auth/login'){
@@ -72,7 +86,16 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
       await page.getByRole('button',{name:'Sign in with Google'}).click();
       await page.getByLabel('Authenticator code').waitFor();
     }
-    await openAuthenticator();
+    let releaseChallenge;
+    delayedChallenge=new Promise(resolve=>{releaseChallenge=resolve;});
+    await page.getByRole('button',{name:'Start sign-in'}).click();
+    try{
+      assert.equal(await page.getByRole('button',{name:'Cancel'}).isDisabled(),true);
+    }finally{
+      releaseChallenge();
+      delayedChallenge=undefined;
+    }
+    await page.getByRole('button',{name:'Sign in with Google'}).click();
     await page.getByLabel('Authenticator code').fill('111111');
     await page.getByRole('button',{name:'Verify and sign in'}).click();
     await page.getByText('Could not sign in. Start sign-in again.').waitFor();

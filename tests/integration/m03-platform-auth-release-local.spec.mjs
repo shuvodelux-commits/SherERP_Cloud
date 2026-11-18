@@ -37,7 +37,9 @@ test('private platform assets and isolated Control D1 migrations run together in
     assert.equal((await worker.fetch(origin+'/api/platform/auth/session')).status,401);
     assert.equal((await worker.fetch(origin+'/index.html')).status,404);
     assert.equal((await worker.fetch('https://another.example.test/')).status,403);
-    assert.equal((await publicWorker.fetch(new Request(origin+'/platform-auth.js'),{})).status,404);
+    const publicConfig=JSON.parse(await readFile('./wrangler.jsonc','utf8'));
+    assert.notEqual(publicConfig.assets.directory,config.assets.directory);
+    assert.equal((await publicWorker.fetch(new Request(origin+'/api/platform/auth/session'),{})).status,404);
   }finally{
     await harness.close();
   }
