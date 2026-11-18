@@ -129,6 +129,7 @@ test('staging config is distinct from public Worker and binds only operational D
  assert.equal(normal.main,'src/index.js');
  assert.equal(normal.d1_databases,undefined);
  assert.equal(stage.name,'shererp-cloud-auth-staging-candidate');
+ assert.equal(stage.account_id,'ac66126a5dc7c2f21ae5c146341a5dfb');
  assert.equal(stage.main,'src/m03-auth-staging-worker.js');
  assert.equal(stage.workers_dev,false);
  assert.equal(stage.routes,undefined);
