@@ -1,8 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import {createHonoApp} from '../src/http/app.js';
 
 const req = (path, options = {}) => new Request('https://preview.example' + path, options);
+
+test('the production router is a Hono app with strict legacy path matching', async () => {
+  const app = createHonoApp();
+  assert.ok(app.routes.some(route => route.path === '/api/health'));
+  assert.ok(app.routes.some(route => route.path === '/api/rpc'));
+  for (const path of ['/api/health/', '/api/%68ealth', '/api/rpc/', '/api/auth/google']) {
+    const response = await app.fetch(req(path), {ASSETS:{fetch(){throw Error('asset must not be called')}}});
+    assert.equal(response.status, 404, path);
+    assert.deepEqual(await response.json(), {success:false,message:'API route not found'});
+  }
+});
+
+test('special methods preserve the Worker contract under Hono routing', async () => {
+  for (const [path, allowed] of [['/api/health','GET'],['/api/rpc','POST']]) {
+    const response = await worker.fetch(req(path, {method:'HEAD'}), {});
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get('Allow'), allowed);
+  }
+  const request = req('/products?mode=quick', {method:'HEAD'});
+  const response = await worker.fetch(request, {ASSETS:{fetch(raw){
+    assert.equal(raw, request);
+    return new Response(null, {headers:{'x-asset-contract':'preserved'}});
+  }}});
+  assert.equal(response.headers.get('x-asset-contract'), 'preserved');
+});
 
 test('health probe is explicit, unauthenticated, and never claims DB readiness', async () => {
   const res = await worker.fetch(req('/api/health'), {});
