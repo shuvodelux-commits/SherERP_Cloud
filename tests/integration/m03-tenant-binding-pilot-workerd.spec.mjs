@@ -57,6 +57,7 @@ test('separate local D1 bindings enforce shop membership and verify the bound sh
       ['a',ownerA,200,'fixture-a'],['b',ownerA,403],['b',ownerB,200,'fixture-b'],['a',ownerB,403],
       ['a',both,200,'fixture-a'],['b',both,200,'fixture-b'],['a',platformAdmin,403],
       ['constructor',ownerA,404],['a','unverified',403],
+      ['a',randomBytes(32).toString('hex'),403],
     ];
     for(const [shop,token,status,value] of cases){
       const response=await request(shop,token);
@@ -69,6 +70,9 @@ test('separate local D1 bindings enforce shop membership and verify the bound sh
     await CONTROL.prepare("UPDATE tenants SET active=0 WHERE id='a'").run();
     assert.equal((await request('a',ownerA)).status,403,'suspended shop fails closed');
     await CONTROL.prepare("UPDATE tenants SET active=1 WHERE id='a'").run();
+    await CONTROL.prepare("UPDATE sessions SET expires_at=0 WHERE user_id='owner-b'").run();
+    await SHOP_B.prepare("UPDATE shop_marker SET id='b' WHERE id='a'").run();
+    assert.equal((await request('b',ownerB)).status,403,'expired session fails closed');
     await CONTROL.prepare("UPDATE sessions SET revoked=1 WHERE user_id='owner-a'").run();
     assert.equal((await request('a',ownerA)).status,403,'revoked session fails closed');
   }finally{

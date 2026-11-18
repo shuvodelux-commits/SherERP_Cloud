@@ -13,7 +13,7 @@ Status: proposed for M03, M04 and M11 review. This change adds a local feasibili
 
 ## Local feasibility evidence
 
-`tests/integration/m03-tenant-binding-pilot-workerd.spec.mjs` runs a Worker with three freshly generated local-only D1 bindings. It models a minimal Control D1 with sessions, membership and tenant status and a sentinel row in each shop. It accepts a user with memberships in both shops, rejects cross-shop and unverified requests, denies implicit access for a synthetic platform identity, rejects a revoked session and stops on a mismatch between shop and database identity. This read-only fixture has no deployments or business APIs.
+`tests/integration/m03-tenant-binding-pilot-workerd.spec.mjs` runs a Worker with three freshly generated local-only D1 bindings. It models a minimal Control D1 with sessions, membership and tenant status and a sentinel row in each shop. It accepts a user with memberships in both shops, rejects cross-shop and unverified requests, denies implicit access for a synthetic platform identity, rejects expired and revoked sessions and stops on a mismatch between the selected shop and its stored marker. This tests marker mismatches and membership denial. It does not verify hosted database UUIDs or exercise platform RBAC. This read-only fixture has no deployments or business APIs.
 
 Run with the pinned local Wrangler used by M03 CI:
 
