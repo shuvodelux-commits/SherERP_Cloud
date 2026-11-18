@@ -29,15 +29,26 @@ function authorizationCookie(headers){
   return token;
 }
 
-async function isValidAccessToken(token,audience,operator){
+async function fetchAccessKeys(){
+  try{
+    const response=await fetch(ACCESS_KEYS,{redirect:'error',signal:AbortSignal.timeout(3000)});
+    if(!response.ok)return null;
+    const {keys}=await response.json();
+    return Array.isArray(keys)?keys:null;
+  }catch{
+    return null;
+  }
+}
+
+async function isValidAccessToken(token,keys,audience,operator){
   if(!token || token.length>8192 || !COMPACT_ASSERTION.test(token))return false;
   let claims;
   try{
     claims=await verifyWithJwks(token,{
-      jwks_uri:ACCESS_KEYS,
+      keys,
       allowedAlgorithms:['RS256'],
       verification:{iss:ACCESS_ISSUER,aud:audience},
-    },{redirect:'error',signal:AbortSignal.timeout(3000)});
+    });
   }catch{
     return false;
   }
@@ -58,8 +69,20 @@ export default {
     // Static Assets does not forward ctx.access. Verify the signed application
     // assertion or signed browser cookie before serving assets or reaching D1.
     const assertion=request.headers.get('Cf-Access-Jwt-Assertion');
-    if(!await isValidAccessToken(assertion,audience,operator) &&
-       !await isValidAccessToken(authorizationCookie(request.headers),audience,operator))return denied();
+    let keys;
+    let keysFetched=false;
+    let accepted=false;
+    if(assertion && assertion.length<=8192 && COMPACT_ASSERTION.test(assertion)){
+      keys=await fetchAccessKeys();
+      keysFetched=true;
+      accepted=!!keys && await isValidAccessToken(assertion,keys,audience,operator);
+    }
+    if(!accepted){
+      const cookie=authorizationCookie(request.headers);
+      if(!cookie || cookie.length>8192 || !COMPACT_ASSERTION.test(cookie))return denied();
+      if(!keysFetched)keys=await fetchAccessKeys();
+      if(!keys || !await isValidAccessToken(cookie,keys,audience,operator))return denied();
+    }
     return platformAuth.fetch(request,env,ctx);
   },
 };
