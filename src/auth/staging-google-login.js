@@ -36,12 +36,13 @@ async function passwordLockKey(phone){
  * Auth-only staging app. The dedicated Worker supplies trusted origin,
  * database and verifier configuration. Public previews do not mount it.
  */
-export function createStagingGoogleLoginApp({db,origin,clientId}){
+function createStagingGoogleLoginApp(){
   const app=new Hono();
   app.onError((_error,c)=>c.json({success:false,message:'Google sign-in unavailable'},503));
   app.use('*',async(c,next)=>{
     c.header('Cache-Control','no-store');
     c.header('X-Content-Type-Options','nosniff');
+    const origin=c.env.M03_GOOGLE_AUTH_ORIGIN;
     if(new URL(c.req.url).origin!==origin ||
        (c.req.raw.method==='POST' && c.req.header('Origin')!==origin))
       return c.json({success:false,message:'Origin forbidden'},403);
@@ -49,6 +50,7 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
   });
 
   app.post('/api/auth/google/challenge',async c=>{
+    const {DB:db,GOOGLE_CLIENT_ID:clientId}=c.env;
     const binding=newToken();
     const nonce=newNonce();
     const bindingHash=await tokenFingerprint(binding);
@@ -80,6 +82,7 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
     maxSize:10240,
     onError:c=>c.json({success:false,message:'Request too large'},413),
   }),async c=>{
+    const {DB:db,GOOGLE_CLIENT_ID:clientId}=c.env;
     if(c.req.header('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json')
       return c.json({success:false,message:'JSON request required'},415);
     let body;
@@ -129,6 +132,7 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
   });
 
   app.get('/api/auth/google/session',async c=>{
+    const db=c.env.DB;
     const tokenHash=await tokenFingerprint(getCookie(c,SESSION_COOKIE));
     if(!tokenHash)return denied(c);
     const now=Date.now();
@@ -138,6 +142,7 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
   });
 
   app.get('/api/auth/google/shell',async c=>{
+    const db=c.env.DB;
     const tokenHash=await tokenFingerprint(getCookie(c,SESSION_COOKIE));
     if(!tokenHash)return denied(c);
     const now=Date.now();
@@ -152,6 +157,7 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
   });
 
   app.post('/api/auth/google/logout',async c=>{
+    const db=c.env.DB;
     const tokenHash=await tokenFingerprint(getCookie(c,SESSION_COOKIE));
     if(tokenHash){
       const now=Date.now();
@@ -164,3 +170,5 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
   });
   return app;
 }
+
+export const stagingGoogleLoginApp=createStagingGoogleLoginApp();

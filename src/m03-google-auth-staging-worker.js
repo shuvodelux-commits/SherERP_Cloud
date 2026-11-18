@@ -1,4 +1,4 @@
-import {createStagingGoogleLoginApp} from './auth/staging-google-login.js';
+import {stagingGoogleLoginApp} from './auth/staging-google-login.js';
 import passwordStagingWorker from './m03-auth-staging-worker.js';
 import {rpcRegistry} from './rpc/registry.js';
 
@@ -23,10 +23,7 @@ export default {
     if(path==='/api/auth/google' || path.startsWith('/api/auth/google/')){
       if(typeof env.GOOGLE_CLIENT_ID!=='string' || !CLIENT_ID.test(env.GOOGLE_CLIENT_ID))
         return unavailable();
-      const app=createStagingGoogleLoginApp({
-        db:env.DB,origin:env.M03_GOOGLE_AUTH_ORIGIN,clientId:env.GOOGLE_CLIENT_ID,
-      });
-      return app.fetch(request,env,ctx);
+      return stagingGoogleLoginApp.fetch(request,env,ctx);
     }
     return passwordStagingWorker.fetch(request,env,ctx);
   },
