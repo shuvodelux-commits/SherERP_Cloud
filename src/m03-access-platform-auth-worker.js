@@ -16,10 +16,7 @@ const headers={
 const denied=()=>Response.json({error:'Access required'},{status:403,headers});
 const unavailable=()=>Response.json({error:'Platform authentication unavailable'},{status:503,headers});
 
-function accessToken(headers){
-  const assertion=headers.get('Cf-Access-Jwt-Assertion');
-  if(assertion!==null)return assertion;
-
+function authorizationCookie(headers){
   const cookies=headers.get('Cookie');
   if(!cookies||cookies.length>16384)return null;
   let token=null;
@@ -32,6 +29,24 @@ function accessToken(headers){
   return token;
 }
 
+async function isValidAccessToken(token,audience,operator){
+  if(!token || token.length>8192 || !COMPACT_ASSERTION.test(token))return false;
+  let claims;
+  try{
+    claims=await verifyWithJwks(token,{
+      jwks_uri:ACCESS_KEYS,
+      allowedAlgorithms:['RS256'],
+      verification:{iss:ACCESS_ISSUER,aud:audience},
+    },{redirect:'error',signal:AbortSignal.timeout(3000)});
+  }catch{
+    return false;
+  }
+  return claims.type==='app' && Number.isSafeInteger(claims.iat) &&
+    Number.isSafeInteger(claims.exp) && claims.iat>=0 && claims.exp>claims.iat &&
+    typeof claims.sub==='string' && !!claims.sub.trim() && claims.sub.length<=255 &&
+    typeof claims.email==='string' && claims.email.toLowerCase()===operator;
+}
+
 export default {
   async fetch(request,env,ctx){
     const origin=new URL(request.url).origin;
@@ -42,22 +57,9 @@ export default {
 
     // Static Assets does not forward ctx.access. Verify the signed application
     // assertion or signed browser cookie before serving assets or reaching D1.
-    const token=accessToken(request.headers);
-    if(!token || token.length>8192 || !COMPACT_ASSERTION.test(token))return denied();
-    let claims;
-    try{
-      claims=await verifyWithJwks(token,{
-        jwks_uri:ACCESS_KEYS,
-        allowedAlgorithms:['RS256'],
-        verification:{iss:ACCESS_ISSUER,aud:audience},
-      },{redirect:'error',signal:AbortSignal.timeout(3000)});
-    }catch{
-      return denied();
-    }
-    if(claims.type!=='app' || !Number.isSafeInteger(claims.iat) ||
-       !Number.isSafeInteger(claims.exp) || claims.iat<0 || claims.exp<=claims.iat ||
-       typeof claims.sub!=='string' || !claims.sub.trim() || claims.sub.length>255 ||
-       typeof claims.email!=='string' || claims.email.toLowerCase()!==operator)return denied();
+    const assertion=request.headers.get('Cf-Access-Jwt-Assertion');
+    if(!await isValidAccessToken(assertion,audience,operator) &&
+       !await isValidAccessToken(authorizationCookie(request.headers),audience,operator))return denied();
     return platformAuth.fetch(request,env,ctx);
   },
 };
