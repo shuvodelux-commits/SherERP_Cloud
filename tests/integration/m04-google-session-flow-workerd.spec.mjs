@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {generateKeyPairSync,sign} from 'node:crypto';
+import {createHash,generateKeyPairSync,sign} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {after,before,test} from 'node:test';
 import {createTestHarness} from 'wrangler';
@@ -127,6 +127,17 @@ test('wrong browser, unlinked subject with the same email and cross-origin attem
   assert.equal((await request('/api/rpc',{payload:{fnName:'completeSale',args:[]}})).status,404);
 });
 
+test('a linked Administrator cannot start a Google session during an active account lock',async(t)=>{
+  stubKeys(t);
+  const hash=createHash('sha256').update('01710000801').digest('hex');
+  const now=Date.now();
+  await DB.prepare(`INSERT INTO auth_login_throttle
+    (login_hash,failure_count,locked_until_ms,reset_at_ms) VALUES (?,5,?,?)`)
+    .bind(hash,now+60000,now+120000).run();
+  assert.equal((await login(await start())).status,401);
+  await DB.prepare('DELETE FROM auth_login_throttle WHERE login_hash=?').bind(hash).run();
+});
+
 test('disabling staff or revoking the link invalidates existing Google sessions',async(t)=>{
   stubKeys(t);
   const makeSession=async()=>cookiePair(await login(await start()),'__Host-shererp-google-session');
@@ -147,4 +158,17 @@ test('disabling staff or revoking the link invalidates existing Google sessions'
   assert.equal((await restore(linked)).status,401);
   assert.equal((await shell(linked)).status,401);
   assert.equal((await login(await start())).status,401);
+});
+
+test('parallel challenge creation is capped and removes only unused expired challenges',async()=>{
+  const expired='f'.repeat(64);
+  await DB.prepare('INSERT INTO auth_google_challenges VALUES (?,?,?)')
+    .bind(expired,'unused-expired-challenge',1).run();
+  const responses=await Promise.all(Array.from({length:16},()=>
+    request('/api/auth/google/challenge')));
+  assert.ok(responses.some(response=>response.status===429));
+  assert.ok(responses.every(response=>response.status===200||response.status===429));
+  assert.equal(await DB.prepare('SELECT count(*) AS n FROM auth_google_challenges').first('n'),12);
+  assert.equal(await DB.prepare('SELECT nonce FROM auth_google_challenges WHERE binding_hash=?')
+    .bind(expired).first(),null);
 });
