@@ -3,14 +3,18 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {setTimeout} from 'node:timers/promises';
+import {chromium} from 'playwright';
 import {createTestHarness} from 'wrangler';
 import stagingWorker from '../../src/m03-auth-staging-worker.js';
 import {rehearseAdminFirstLegacyStaffImportWithD1}
   from '../../src/auth/m04-admin-first-enrollment.js';
 
-const harness=createTestHarness({workers:[{
- configPath:'./wrangler.m03-auth-staging-local-test.jsonc'
-}]});
+// Run npm run build:frontend before enabling the Chromium check.
+const runBrowser=process.env.M03_STAGING_BROWSER==='1';
+const configPath=runBrowser
+ ? './wrangler.m03-auth-staging-browser-test.jsonc'
+ : './wrangler.m03-auth-staging-local-test.jsonc';
+const harness=createTestHarness({workers:[{configPath}]});
 const worker=harness.getWorker('shererp-m03-staging-auth-local-test-only');
 const PASSWORD='SyntheticM03StagingAdminPassword!2026';
 const SALT='123e4567-e89b-42d3-a456-426614174000';
@@ -46,9 +50,9 @@ async function rpc(fnName,args,headers={}){
  });
  return {status:response.status,body:await response.json()};
 }
-let DB;
+let DB, browserUrl;
 before(async()=>{
- await harness.listen();
+ ({url:browserUrl}=await harness.listen());
  await worker.applyD1Migrations('DB');
  ({DB}=await worker.getEnv());
  const first=snapshot(),confirmation=snapshot();
@@ -127,6 +131,56 @@ test('publicly reachable staging endpoint exposes no unsupported business RPC or
  assert.equal(withoutSession.status,503);
  assert.equal(attacker.status,403);
  assert.equal(JSON.stringify(business).includes(PASSWORD),false);
+});
+
+test('preserved Chromium UI signs in, restores the D1 session and signs out',
+ {skip:!runBrowser},async()=>{
+ await DB.prepare("INSERT INTO settings(key,value) VALUES ('Shop Name','Synthetic Staging Browser')").run();
+ const browser=await chromium.launch({
+  executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+ });
+ try{
+  const page=await browser.newPage();
+  page.setDefaultTimeout(10000);
+  const waitRpc=name=>page.waitForResponse(response=>
+   response.url()===new URL('/api/rpc',browserUrl).href &&
+   response.request().method()==='POST' && response.request().postDataJSON().fnName===name);
+  await page.goto(browserUrl.href,{waitUntil:'domcontentloaded'});
+  await page.locator('#loginOverlay').waitFor();
+  await page.locator('#loginMobile').fill('01710000101');
+  await page.locator('#loginPassword').fill('wrong-synthetic');
+  await page.getByRole('button',{name:'Login',exact:true}).click();
+  await page.locator('#loginError').getByText('Invalid mobile number or password.').waitFor();
+
+  await page.locator('#loginPassword').fill(PASSWORD);
+  const [login,shell,dashboard]=await Promise.all([
+   waitRpc('login'),waitRpc('getAppShellData'),waitRpc('getDashboardStats'),
+   page.getByRole('button',{name:'Login',exact:true}).click(),
+  ]);
+  const authenticated=await login.json();
+  assert.equal(authenticated.success,true);
+  assert.equal((await shell.json()).data.shopName,'Synthetic Staging Browser');
+  // This release candidate only activates the shell and session RPCs.
+  assert.equal(dashboard.status(),501);
+  await page.locator('#page-dashboard').waitFor();
+
+  const [restored,restoredShell]=await Promise.all([
+   waitRpc('validateSession'),waitRpc('getAppShellData'),
+   page.reload({waitUntil:'domcontentloaded'}),
+  ]);
+  assert.equal((await restored.json()).success,true);
+  assert.equal((await restoredShell.json()).data.shopName,'Synthetic Staging Browser');
+  await page.locator('#page-dashboard').waitFor();
+
+  const [logout]=await Promise.all([
+   waitRpc('logout'),page.evaluate(()=>{void doLogout_();}),
+  ]);
+  assert.equal(logout.status(),200);
+  await page.locator('#loginOverlay').waitFor();
+  assert.equal((await rpc('validateSession',[authenticated.data.token])).body.success,false);
+ }finally{
+  await browser.close();
+ }
 });
 
 test('staging config is distinct from public Worker and binds only operational D1',()=>{
