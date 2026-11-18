@@ -3,7 +3,7 @@ import {createHash,generateKeyPairSync,sign} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {after,before,test} from 'node:test';
 import {createTestHarness} from 'wrangler';
-import {createStagingGoogleLoginApp} from '../../src/auth/staging-google-login.js';
+import stagingWorker from '../../src/m03-google-auth-staging-worker.js';
 
 const origin='https://google-auth.example.test';
 const clientId='123456-example.apps.googleusercontent.com';
@@ -20,7 +20,7 @@ const credential=(nonce,overrides={})=>{
   return `${input}.${sign('RSA-SHA256',Buffer.from(input),privateKey).toString('base64url')}`;
 };
 const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-http-test.jsonc'}]});
-let DB,app;
+let DB,env;
 before(async()=>{
   await harness.listen();
   const worker=harness.getWorker('shererp-m04-auth-http-local-only');
@@ -37,7 +37,7 @@ before(async()=>{
       ('Currency Symbol','৳'),
       ('Unrelated Setting','synthetic-private-value')`),
   ]);
-  const schema=await readFile(new URL('../fixtures/m04-google-session-proof.sql',import.meta.url),'utf8');
+  const schema=await readFile(new URL('../../staging-migrations/google-auth/0015_google_staging_auth.sql',import.meta.url),'utf8');
   await DB.batch(schema.split('-- next statement').map(text=>DB.prepare(text.trim())));
   await DB.prepare(`INSERT INTO auth_users
     (user_id,full_name,phone_key,role_name,status,credential_state,
@@ -49,7 +49,10 @@ before(async()=>{
     .bind('a'.repeat(64),'b'.repeat(48),'a'.repeat(64),'b'.repeat(48)).run();
   await DB.prepare(`INSERT INTO auth_google_links(issuer,subject,user_id)
     VALUES ('https://accounts.google.com',?,'USR-GOOGLE')`).bind(subject).run();
-  app=createStagingGoogleLoginApp({db:DB,origin,clientId});
+  env={DB,GOOGLE_CLIENT_ID:clientId,M03_GOOGLE_AUTH_ORIGIN:origin,
+    M03_GOOGLE_AUTH_SCOPE:'reviewed-google-staging-auth-only',
+    M03_AUTH_SCOPE:'reviewed-staging-auth-only',
+    M03_AUTH_D1_UUID:'aa04618e-1639-4cb9-bdf5-7b967d8b968b'};
 });
 after(()=>harness.close());
 
@@ -64,7 +67,7 @@ function request(path,{cookie,method='POST',payload,requestOrigin=origin,authori
   if(cookie)headers.set('Cookie',cookie);
   if(authorization)headers.set('Authorization',authorization);
   if(payload)headers.set('Content-Type','application/json');
-  return app.fetch(new Request(origin+path,{method,headers,body:payload&&JSON.stringify(payload)}));
+  return stagingWorker.fetch(new Request(origin+path,{method,headers,body:payload&&JSON.stringify(payload)}),env);
 }
 const cookiePair=(response,name)=>response.headers.getSetCookie().find(x=>x.startsWith(name+'='))?.split(';')[0];
 async function start(){
@@ -124,7 +127,7 @@ test('wrong browser, unlinked subject with the same email and cross-origin attem
     method:'GET',authorization:'Bearer '+'a'.repeat(64),
   })).status,401);
   assert.equal((await request('/api/auth/google/challenge',{requestOrigin:'https://foreign.example.test'})).status,403);
-  assert.equal((await request('/api/rpc',{payload:{fnName:'completeSale',args:[]}})).status,404);
+  assert.equal((await request('/api/rpc',{payload:{fnName:'completeSale',args:[]}})).status,501);
 });
 
 test('a linked Administrator cannot start a Google session during an active account lock',async(t)=>{

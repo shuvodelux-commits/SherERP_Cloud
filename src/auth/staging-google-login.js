@@ -9,6 +9,8 @@ const CHALLENGE_COOKIE='__Host-shererp-google-challenge';
 const SESSION_COOKIE='__Host-shererp-google-session';
 const CHALLENGE_SECONDS=5*60;
 const SESSION_SECONDS=30*60;
+const CHALLENGE_WINDOW_SECONDS=60;
+const MAX_CHALLENGES_PER_WINDOW=12;
 const COOKIE={path:'/',secure:true,httpOnly:true,sameSite:'Strict'};
 const AUTHORIZED_SESSION=`WITH authorized AS (
   SELECT u.user_id AS id,u.full_name AS name,u.role_name AS role
@@ -25,10 +27,14 @@ const newNonce=()=>btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8A
   .replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
 const denied=c=>c.json({success:false,message:'Google sign-in unavailable or invalid'},401);
 const success=(c,data)=>c.json({success:true,data});
+async function passwordLockKey(phone){
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(phone));
+  return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+}
 
 /**
- * Isolated staging proof. The schema is test-only, and no deployable Worker
- * imports this app. The caller supplies trusted origin and verifier settings.
+ * Auth-only staging app. The dedicated Worker supplies trusted origin,
+ * database and verifier configuration. Public previews do not mount it.
  */
 export function createStagingGoogleLoginApp({db,origin,clientId}){
   const app=new Hono();
@@ -45,10 +51,27 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
   app.post('/api/auth/google/challenge',async c=>{
     const binding=newToken();
     const nonce=newNonce();
-    const saved=await db.prepare(`INSERT INTO auth_google_challenges
-      (binding_hash,nonce,expires_at_ms) VALUES (?,?,?)`)
-      .bind(await tokenFingerprint(binding),nonce,Date.now()+CHALLENGE_SECONDS*1000).run();
-    if(saved.meta?.changes!==1)return denied(c);
+    const bindingHash=await tokenFingerprint(binding);
+    const now=Date.now();
+    const expires=now+CHALLENGE_SECONDS*1000;
+    const [,saved]=await db.batch([
+      db.prepare(`DELETE FROM auth_google_challenges WHERE binding_hash IN (
+        SELECT c.binding_hash FROM auth_google_challenges c
+        WHERE c.expires_at_ms<=?
+          AND NOT EXISTS(SELECT 1 FROM auth_google_sessions s WHERE s.binding_hash=c.binding_hash)
+        ORDER BY c.expires_at_ms LIMIT 64
+      )`).bind(now),
+      db.prepare(`INSERT INTO auth_google_challenges(binding_hash,nonce,expires_at_ms)
+        SELECT ?,?,? WHERE (
+          SELECT count(*) FROM auth_google_challenges WHERE expires_at_ms>?
+        )<?`).bind(bindingHash,nonce,expires,expires-CHALLENGE_WINDOW_SECONDS*1000,
+          MAX_CHALLENGES_PER_WINDOW),
+    ]);
+    if(saved?.success!==true)return denied(c);
+    if(saved.meta?.changes!==1){
+      c.header('Retry-After',String(CHALLENGE_WINDOW_SECONDS));
+      return c.json({success:false,message:'Try signing in again in a minute.'},429);
+    }
     setCookie(c,CHALLENGE_COOKIE,binding,{...COOKIE,maxAge:CHALLENGE_SECONDS});
     return success(c,{nonce,clientId});
   });
@@ -75,6 +98,13 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
     });
     if(!identity)return denied(c);
 
+    const linked=await db.prepare(`SELECT u.phone_key
+      FROM auth_google_links l JOIN auth_users u ON u.user_id=l.user_id
+      WHERE l.issuer=? AND l.subject=? AND l.revoked_at_ms IS NULL
+        AND u.status='Active' AND u.role_name='Administrator'`)
+      .bind(identity.issuer,identity.subject).first();
+    if(!linked)return denied(c);
+    const throttleKey=await passwordLockKey(linked.phone_key);
     const token=newToken();
     const tokenHash=await tokenFingerprint(token);
     const now=Date.now();
@@ -86,10 +116,12 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
       FROM auth_google_challenges c
       JOIN auth_google_links l ON l.issuer=? AND l.subject=? AND l.revoked_at_ms IS NULL
       JOIN auth_users u ON u.user_id=l.user_id AND u.status='Active' AND u.role_name='Administrator'
-      WHERE c.binding_hash=? AND c.nonce=? AND c.expires_at_ms>?
-        AND NOT EXISTS(SELECT 1 FROM auth_google_sessions s WHERE s.binding_hash=c.binding_hash)`)
+      WHERE c.binding_hash=? AND c.nonce=? AND c.expires_at_ms>? AND u.phone_key=?
+        AND NOT EXISTS(SELECT 1 FROM auth_google_sessions s WHERE s.binding_hash=c.binding_hash)
+        AND NOT EXISTS(SELECT 1 FROM auth_login_throttle t
+          WHERE t.login_hash=? AND t.locked_until_ms>? AND t.reset_at_ms>?)`)
       .bind(tokenHash,now,now+SESSION_SECONDS*1000,identity.issuer,identity.subject,
-        bindingHash,challenge.nonce,now).run();
+        bindingHash,challenge.nonce,now,linked.phone_key,throttleKey,now,now).run();
     if(issued.meta?.changes!==1)return denied(c);
     setCookie(c,CHALLENGE_COOKIE,'',{...COOKIE,maxAge:0});
     setCookie(c,SESSION_COOKIE,token,{...COOKIE,maxAge:SESSION_SECONDS});
