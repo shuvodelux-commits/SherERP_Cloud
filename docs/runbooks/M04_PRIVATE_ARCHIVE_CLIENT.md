@@ -35,6 +35,6 @@ This command performs **no remote writes**, prints **only counts and blocked fla
 
 ## Superpowers evidence
 
-- RED: protected archive client tests introduced before the helper; the new imported module is absent.
+- RED checkpoint: test-first commit `834268c673956e036d847adfb7959fa71f82c575` introduced the missing-helper tests before implementation; the expected absent-module failure was **not independently executed** because the owner's local device integration reached its monthly usage limit. Do not claim an observed RED run. Independent reviewers should verify this preimplementation commit or reproduce RED before promoting this gate.
 - GREEN: minimal Node client delegates to merged source verification, exact M04 Administrator-first validation and private operator. Six focused Node cases verify malformed archive, historical phone representation, Owner preservation, missing approvals, unsafe token modes, one-shot fixed destination and safe failure without retry. GitHub M04 Workerd workflow includes this suite; exact-head CI and independent review required.
 - No real staff values, phone numbers, legacy verifier, token or SQL dump were committed.
