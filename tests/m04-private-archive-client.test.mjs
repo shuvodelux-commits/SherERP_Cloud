@@ -109,7 +109,7 @@ test('approved single loopback POST sends two complete source captures and retur
      pendingLegacyCredentials:2,deferredOwnerUsers:1,
      sourceTwoPassMatch:true,readbackMatch:true,
      publicAuthenticationEnabled:false,productionReady:false,
-    }),{status:200,headers:{'content-type':'application/json'}});
+    }),{status:200,headers:{'content-type':'application/json; charset=utf-8'}});
    },
   });
   assert.equal(calls,1);
@@ -129,5 +129,24 @@ test('failed or ambiguous response never retries, returns only fixed rejection',
    transport:async()=>{called++;return new Response('private backend error',{status:409});},
   }),err=>err?.message==='M04 private client rejected');
   assert.equal(called,1);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('success without JSON media type or with non-UTF8 charset fails closed',async()=>{
+ const {dir,filename}=stash();
+ let calls=0;
+ try{
+  for(const mime of ['text/html','application/jsonp','application/json; charset=iso-8859-1']){
+   await assert.rejects(()=>submitApprovedPrivateM04StaffImport({
+    first:source(),confirmation:source(),tokenFile:filename,approval:approval(),
+    transport:async()=>{calls++;return new Response(JSON.stringify({
+     imported:true,originalUsers:3,importedUsers:2,importedRoles:2,
+     pendingLegacyCredentials:2,deferredOwnerUsers:1,
+     sourceTwoPassMatch:true,readbackMatch:true,
+     publicAuthenticationEnabled:false,productionReady:false,
+    }),{status:200,headers:{'content-type':mime}});},
+   }),err=>err?.message==='M04 private client rejected');
+  }
+  assert.equal(calls,3);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
