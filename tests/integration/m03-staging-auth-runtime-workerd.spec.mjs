@@ -1,5 +1,6 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
 import stagingWorker from '../../src/m03-auth-staging-worker.js';
@@ -118,4 +119,26 @@ test('publicly reachable staging endpoint exposes no unsupported business RPC or
  assert.equal(withoutSession.status,503);
  assert.equal(attacker.status,403);
  assert.equal(JSON.stringify(business).includes(PASSWORD),false);
+});
+
+test('staging config is distinct from public Worker and binds only operational D1',()=>{
+ const stage=JSON.parse(readFileSync(new URL(
+  '../../wrangler.m03-auth-staging.jsonc',import.meta.url),'utf8'));
+ const normal=JSON.parse(readFileSync(new URL(
+  '../../wrangler.jsonc',import.meta.url),'utf8'));
+ assert.equal(normal.main,'src/index.js');
+ assert.equal(normal.d1_databases,undefined);
+ assert.equal(stage.name,'shererp-cloud-auth-staging-candidate');
+ assert.equal(stage.main,'src/m03-auth-staging-worker.js');
+ assert.equal(stage.workers_dev,false);
+ assert.equal(stage.routes,undefined);
+ assert.equal(stage.d1_databases.length,1);
+ assert.deepEqual(stage.d1_databases[0],{
+  binding:'DB',
+  database_name:'shererp-staging-db',
+  database_id:'aa04618e-1639-4cb9-bdf5-7b967d8b968b'
+ });
+ assert.equal(stage.vars.M03_AUTH_SCOPE,'reviewed-staging-auth-only');
+ assert.equal(stage.vars.M03_AUTH_D1_UUID,stage.d1_databases[0].database_id);
+ assert.ok(!JSON.stringify(stage).includes('3328e5c8-7695-4d6c-8bcf-9725437ebdd5'));
 });
