@@ -109,6 +109,32 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal((await call('/api/platform/setup',{payload:setupPayload,cookie:setupCookie})).status,401);
 
   await db.prepare('INSERT INTO platform_admin_auth VALUES (1,1,1)').run();
+  const pending=await call('/api/platform/auth/challenge');
+  const pendingCookie=cookie(pending,'__Host-shererp-platform-challenge');
+  const {nonce:pendingNonce}=await pending.json();
+  let interrupted=false;
+  const queuedDb={
+    batch:db.batch.bind(db),
+    prepare(sql){
+      const statement=db.prepare(sql);
+      if(!sql.includes('INSERT INTO platform_admin_sessions'))return statement;
+      return {bind(...values){
+        const bound=statement.bind(...values);
+        return {async first(){
+          interrupted=true;
+          assert.equal((await call('/api/platform/auth/logout',{cookie:pendingCookie})).status,200);
+          return bound.first();
+        }};
+      }};
+    },
+  };
+  const queued=await call('/api/platform/auth/login',{
+    cookie:pendingCookie,bindings:{...env,CONTROL_DB:queuedDb},
+    payload:{credential:credential(pendingNonce),code:await authenticatorCode()},
+  });
+  assert.equal(interrupted,true,'sign-out must run while the session write is queued');
+  assert.equal(queued.status,401,'queued login may not mint a session after sign-out');
+
   const challenge=await call('/api/platform/auth/challenge');
   assert.equal(challenge.status,200);
   assert.equal(challenge.headers.get('Cache-Control'),'no-store');
@@ -128,10 +154,12 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(restore.status,200);
   assert.deepEqual(await restore.json(),{role:'PlatformSuperAdmin'});
   assert.equal((await call(sessionPath,{method:'GET',cookie:browser})).status,401);
-  const logout=await call('/api/platform/auth/logout',{cookie:session});
+  const logout=await call('/api/platform/auth/logout',{cookie:browser});
   assert.equal(logout.status,200);
   assert.ok(logout.headers.getSetCookie().some(value=>value.includes('Max-Age=0')));
-  assert.equal((await call(sessionPath,{method:'GET',cookie:session})).status,401);
+  assert.equal((await call(sessionPath,{method:'GET',cookie:session})).status,401,
+    'sign-out revokes a session issued before its cookie arrived');
+  assert.equal((await call('/api/platform/auth/logout',{cookie:session})).status,200);
 });
 
 test('D1 limits parallel browser challenge creation before external verification',async()=>{
