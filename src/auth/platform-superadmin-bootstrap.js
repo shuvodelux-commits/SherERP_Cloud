@@ -6,6 +6,19 @@ const ACTIVE_TICKET=`token_hash=? AND issued_at_ms<=${D1_NOW_MS} AND expires_at_
   AND revoked_at_ms IS NULL
   AND NOT EXISTS(SELECT 1 FROM platform_first_superadmin WHERE singleton=1)`;
 
+async function activeSetupTicket(controlDb,ticketHash){
+  return controlDb.prepare(`SELECT nonce,issuer,subject FROM platform_setup_tickets
+    WHERE ${ACTIVE_TICKET}`).bind(ticketHash).first();
+}
+
+/** Read the approved ticket nonce to initialize Google verification in the browser. */
+export async function readPlatformSetupNonce(controlDb,setupToken){
+  const ticketHash=await hashOpaqueSessionToken(setupToken);
+  if(!ticketHash)return null;
+  const ticket=await activeSetupTicket(controlDb,ticketHash);
+  return ticket?.nonce??null;
+}
+
 /**
  * Consume a pre-approved first-admin ticket on the trusted Control D1 binding.
  * The trusted caller supplies the OAuth client ID. No platform session or shop
@@ -14,8 +27,7 @@ const ACTIVE_TICKET=`token_hash=? AND issued_at_ms<=${D1_NOW_MS} AND expires_at_
 export async function bootstrapPlatformSuperAdmin({controlDb,clientId,setupToken,credential}){
   const ticketHash=await hashOpaqueSessionToken(setupToken);
   if(!ticketHash)return false;
-  const ticket=await controlDb.prepare(`SELECT nonce,issuer,subject FROM platform_setup_tickets
-    WHERE ${ACTIVE_TICKET}`).bind(ticketHash).first();
+  const ticket=await activeSetupTicket(controlDb,ticketHash);
   if(!ticket)return false;
 
   const identity=await verifyGoogleLoginIdToken({token:credential,clientId,expectedNonce:ticket.nonce});
