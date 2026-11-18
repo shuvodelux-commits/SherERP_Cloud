@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash,generateKeyPairSync,randomBytes,sign} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {after,before,test} from 'node:test';
+import {setTimeout} from 'node:timers/promises';
 import {createTestHarness} from 'wrangler';
 import {bootstrapPlatformSuperAdmin} from '../../src/auth/platform-superadmin-bootstrap.js';
 
@@ -33,15 +34,15 @@ function signedCredential(nonce,overrides={}){
   return input+'.'+sign('RSA-SHA256',Buffer.from(input),privateKey).toString('base64url');
 }
 
-async function makeTicket({expectedSubject=subject,expired=false,revoked=false}={}){
+async function makeTicket({expectedSubject=subject,expired=false,revoked=false,lifetimeMs=60_000}={}){
   const token=randomBytes(32).toString('hex');
   const nonce=randomBytes(32).toString('base64url');
   const now=Date.now();
-  const expires=expired?now-1000:now+60_000;
+  const expires=expired?now-1000:now+lifetimeMs;
   await db.prepare(`INSERT INTO platform_setup_tickets
     (token_hash,nonce,issuer,subject,issued_at_ms,expires_at_ms,revoked_at_ms)
     VALUES (?,?,?,?,?,?,?)`).bind(hash(token),nonce,issuer,expectedSubject,now-5000,expires,revoked?now:null).run();
-  return {token,nonce};
+  return {token,nonce,expires};
 }
 
 function supplyGoogleKeys(t,readKeys=()=>{}){
@@ -85,6 +86,31 @@ test('rechecks revocation at insert even when the credential was already being v
     return Response.json({keys:[jwk]});
   });
   assert.equal(await bootstrap(ticket),false);
+});
+
+test('D1 refuses a final write queued past ticket expiration',async t=>{
+  supplyGoogleKeys(t);
+  const ticket=await makeTicket({lifetimeMs:1500});
+  let queued=false;
+  const delayedDb={
+    prepare(sql){
+      const statement=db.prepare(sql);
+      if(!sql.includes('INSERT INTO platform_first_superadmin'))return statement;
+      return {bind(...values){
+        const bound=statement.bind(...values);
+        return {async run(){
+          queued=true;
+          await setTimeout(Math.max(0,ticket.expires-Date.now())+40);
+          return bound.run();
+        }};
+      }};
+    },
+  };
+  const granted=await bootstrapPlatformSuperAdmin({
+    controlDb:delayedDb,clientId,setupToken:ticket.token,credential:signedCredential(ticket.nonce),
+  });
+  assert.equal(queued,true,'the ticket must reach the final atomic write before expiring');
+  assert.equal(granted,false);
 });
 
 test('exactly one first Super Admin is created across parallel tickets and replays',async t=>{
