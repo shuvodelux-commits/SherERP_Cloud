@@ -22,3 +22,13 @@ node --test tests/integration/m03-tenant-binding-pilot-workerd.spec.mjs
 ```
 
 Before opening the Owner flow, prove atomic invite acceptance and overlapping provisioning retries, test actual sessions with two nonproduction shops, rehearse backup and recovery, and measure binding changes and limits at the planned scale. Keep historical SQL import separate from account configuration and point the business import at the intended shop database only after reconciliation.
+
+## First-admin enrollment proof
+
+The internal bootstrap uses a trusted Control D1 binding and OAuth client ID. A future operator flow must preapprove the exact Google issuer and subject, mint a random 256-bit setup token and a unique Google nonce, and cap ticket validity at ten minutes. The proposed schema stores the token digest. Keep setup tokens out of URLs, logs and GitHub. The bootstrap checks the signed credential against the ticket nonce and the preapproved subject. Its conditional D1 insert consumes the ticket by recording it in the permanent first-admin enrollment row. The row stays immutable as an audit record, including if future operational access is revoked or recovered.
+
+The current SQL is a local test fixture. The bootstrap issues no session, opens no HTTP endpoint and grants no shop membership. Live enrollment still requires an approved Control D1 migration, a reviewed ticket issuance and recovery workflow, platform MFA, and the hosted CPU release check.
+
+```sh
+node --test tests/integration/m04-platform-superadmin-bootstrap-workerd.spec.mjs
+```
