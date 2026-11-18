@@ -1,5 +1,6 @@
 {
   "name": "shererp-cloud-auth-staging-candidate",
+  "account_id": "ac66126a5dc7c2f21ae5c146341a5dfb",
   "main": "src/m03-auth-staging-worker.js",
   "compatibility_date": "2026-11-14",
   "workers_dev": false,
