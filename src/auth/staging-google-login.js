@@ -1,6 +1,7 @@
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCookie,setCookie} from 'hono/cookie';
+import {buildSourceAppShellData} from '../modules/source-app-shell-reader.js';
 import {tokenFingerprint} from './d1-legacy-rpc.js';
 import {verifyGoogleLoginIdToken} from './google-id-token.js';
 
@@ -9,6 +10,15 @@ const SESSION_COOKIE='__Host-shererp-google-session';
 const CHALLENGE_SECONDS=5*60;
 const SESSION_SECONDS=30*60;
 const COOKIE={path:'/',secure:true,httpOnly:true,sameSite:'Strict'};
+const AUTHORIZED_SESSION=`WITH authorized AS (
+  SELECT u.user_id AS id,u.full_name AS name,u.role_name AS role
+  FROM auth_google_sessions s
+  JOIN auth_google_links l ON l.issuer=s.issuer AND l.subject=s.subject
+    AND l.user_id=s.user_id AND l.revoked_at_ms IS NULL
+  JOIN auth_users u ON u.user_id=s.user_id AND u.status='Active' AND u.role_name='Administrator'
+    AND u.auth_version=s.user_auth_version AND u.credential_version=s.credential_version
+  WHERE s.token_hash=? AND s.revoked_at_ms IS NULL AND s.created_at_ms<=? AND s.expires_at_ms>?
+)`;
 const newToken=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),
   byte=>byte.toString(16).padStart(2,'0')).join('');
 const newNonce=()=>btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
@@ -90,15 +100,23 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
     const tokenHash=await tokenFingerprint(getCookie(c,SESSION_COOKIE));
     if(!tokenHash)return denied(c);
     const now=Date.now();
-    const user=await db.prepare(`SELECT u.user_id AS id,u.full_name AS name,u.role_name AS role
-      FROM auth_google_sessions s
-      JOIN auth_google_links l ON l.issuer=s.issuer AND l.subject=s.subject
-        AND l.user_id=s.user_id AND l.revoked_at_ms IS NULL
-      JOIN auth_users u ON u.user_id=s.user_id AND u.status='Active' AND u.role_name='Administrator'
-        AND u.auth_version=s.user_auth_version AND u.credential_version=s.credential_version
-      WHERE s.token_hash=? AND s.revoked_at_ms IS NULL AND s.created_at_ms<=? AND s.expires_at_ms>?`)
+    const user=await db.prepare(`${AUTHORIZED_SESSION} SELECT id,name,role FROM authorized`)
       .bind(tokenHash,now,now).first();
     return user?success(c,{user}):denied(c);
+  });
+
+  app.get('/api/auth/google/shell',async c=>{
+    const tokenHash=await tokenFingerprint(getCookie(c,SESSION_COOKIE));
+    if(!tokenHash)return denied(c);
+    const now=Date.now();
+    // Authorize the same D1 snapshot that supplies the two shell settings.
+    const settings=await db.prepare(`${AUTHORIZED_SESSION}
+      SELECT
+        COALESCE((SELECT NULLIF(value,'') FROM settings WHERE key='Shop Name'),
+                 'Hardware Store ERP') AS shopName,
+        COALESCE((SELECT value FROM settings WHERE key='Currency Symbol'),'') AS currencySymbol
+      FROM authorized`).bind(tokenHash,now,now).first();
+    return settings?c.json(buildSourceAppShellData(settings)):denied(c);
   });
 
   app.post('/api/auth/google/logout',async c=>{
