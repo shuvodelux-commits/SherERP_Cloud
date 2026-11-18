@@ -50,7 +50,7 @@ test('runtime test workflow is PR-only, local-only, secret-free and excludes dep
 
 test('production and PR-preview config retain their original DB-free status',()=>{
   const cfg=JSON.parse(read('wrangler.preview.jsonc'));
-  assert.equal(cfg.name,'shererp-cloud-preview');
+  assert.equal(cfg.name,'hisabiq');
   assert.equal(cfg.d1_databases,undefined);
   assert.deepEqual(cfg.previews,{});
   assert.match(read('src/index.js'),/database:'not-connected'/);

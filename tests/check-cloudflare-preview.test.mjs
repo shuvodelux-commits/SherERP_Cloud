@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { validateCloudflarePreviewConfig } from '../scripts/check-cloudflare-preview.mjs';
 
 const base = () => ({
-  name: 'shererp-cloud-preview',
+  name: 'hisabiq',
   main: 'src/index.js',
   compatibility_date: '2026-11-14',
   workers_dev: true,
@@ -22,6 +22,7 @@ test('allows only the isolated, asset-only preview Worker', () => {
 
 test('rejects the production Worker name and non-workers.dev routing', () => {
   assert.throws(() => validateCloudflarePreviewConfig({...base(), name:'shererp-cloud'}), /preview|name/i);
+  assert.throws(() => validateCloudflarePreviewConfig({...base(), name:'shererp-cloud-preview'}), /preview|name/i);
   assert.throws(() => validateCloudflarePreviewConfig({...base(), routes:['example.com/*']}), /unexpected|route/i);
   assert.throws(() => validateCloudflarePreviewConfig({...base(), workers_dev:false}), /workers_dev/i);
 });
