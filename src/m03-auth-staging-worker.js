@@ -7,10 +7,10 @@
  */
 import publicWorker from './index.js';
 import {handleRpc} from './rpc/handler.js';
+import {createM04AppShellRpcBridge} from './rpc/internal-m04-shell-bridge.js';
 import {rpcRegistry} from './rpc/registry.js';
 import {createD1LegacyAuthRpc} from './auth/d1-legacy-rpc.js';
 import {normalizeLegacyStaffPhoneSearch} from './auth/staff-phone-identity.js';
-import {createSourceShapedAppShellReader} from './modules/source-app-shell-reader.js';
 
 const STAGING_D1='aa04618e-1639-4cb9-bdf5-7b967d8b968b';
 const SYNTHETIC_D1='00000000-0000-0000-0000-000000000022';
@@ -28,18 +28,6 @@ function stagingAuthOnly(env){
          env.M03_AUTH_D1_UUID===SYNTHETIC_D1);
 }
 
-/** App-shell metadata is for presentation; only a fresh D1 bearer validates it. */
-function createAuthenticatedShell(env,authAdapter){
- const reader=createSourceShapedAppShellReader(env);
- return Object.freeze({
-  async invoke({token}={}){
-   const validated=await authAdapter.validateSession(token);
-   if(validated?.success!==true)return null;
-   return reader.getAppShellData();
-  },
- });
-}
-
 export default {
  async fetch(request,env,ctx){
   const pathname=new URL(request.url).pathname;
@@ -52,7 +40,7 @@ export default {
     const authAdapter=createD1LegacyAuthRpc(env.DB,{
      normalizeMobile:normalizeLegacyStaffPhoneSearch,
     });
-    const appShellBridge=createAuthenticatedShell(env,authAdapter);
+    const appShellBridge=createM04AppShellRpcBridge(env);
     // Auth/session and bearer-protected source app-shell ONLY. All other
     // business RPCs remain 501 because the public registry stays empty.
     return await handleRpc(request,{authAdapter,appShellBridge});
