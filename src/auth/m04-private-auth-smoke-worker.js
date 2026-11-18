@@ -6,6 +6,7 @@
  * The public Worker intentionally remains without D1/auth bindings.
  */
 import {handleRpc} from '../rpc/handler.js';
+import {rpcRegistry} from '../rpc/registry.js';
 import {createD1LegacyAuthRpc} from './d1-legacy-rpc.js';
 import {normalizeLegacyStaffPhoneSearch} from './staff-phone-identity.js';
 
@@ -52,6 +53,10 @@ function localAuthRequest(request){
  * opt-in. All other RPCs remain unavailable. No credentials are logged.
  */
 export async function handlePrivateM04AuthSmoke(request,env){
+ // This private harness may never inherit later public business handlers.
+ // If M03 activates any registry method, stop this old operator and require
+ // a fresh reviewed private auth-only adapter rather than widening its scope.
+ if(Reflect.ownKeys(rpcRegistry).length!==0)return deny();
  if(!acceptedScope(env)||!localAuthRequest(request))return deny();
  if(!sameSecret(request.headers.get('x-m04-operator-key'),
                 env.M04_OPERATOR_TOKEN))return deny();
