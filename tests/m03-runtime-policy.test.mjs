@@ -54,7 +54,8 @@ test('production and PR-preview config retain their original DB-free status',()=
   assert.equal(cfg.d1_databases,undefined);
   assert.deepEqual(cfg.previews,{});
   assert.match(read('src/index.js'),/database:'not-connected'/);
-  assert.doesNotMatch(read('src/index.js'),/m03-readonly-worker|createCatalogReader|resolveLegacyPartyId/);
+  assert.doesNotMatch(read('src/index.js')+read('src/http/app.js'),
+    /m03-readonly-worker|createCatalogReader|resolveLegacyPartyId/);
 });
 
 test('separate catalog write fixture is local-only and isolated from deployed Worker',()=>{
@@ -70,6 +71,6 @@ test('separate catalog write fixture is local-only and isolated from deployed Wo
     database_id:'00000000-0000-0000-0000-000000000002',
     migrations_dir:'migrations'
   }]);
-  const live=read('src/index.js')+read('src/rpc/registry.js')+read('wrangler.preview.jsonc');
+  const live=read('src/index.js')+read('src/http/app.js')+read('src/rpc/registry.js')+read('wrangler.preview.jsonc');
   assert.doesNotMatch(live,/m03-write-worker|legacy-catalog-append|__m03_write_test__|shererp-m03-write-workerd-test/);
 });
