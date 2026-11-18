@@ -1,0 +1,33 @@
+name: M03 Auth-only staging Worker — isolated Workerd/D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  staged-auth-only:
+    name: Stage Administrator login against synthetic Workerd/D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install disposable real Workerd/D1
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify private staging login, shell and no business RPC
+        run: node --test tests/integration/m03-staging-auth-runtime-workerd.spec.mjs
+      - name: Build preserved source UI without modifying it
+        run: npm run build:frontend
+      - name: Compile exact auth staging candidate without deployment
+        run: npx --no-install wrangler deploy --dry-run --config wrangler.m03-auth-staging.jsonc --outdir .wrangler-m03-auth-staging
