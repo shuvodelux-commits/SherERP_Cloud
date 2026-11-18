@@ -6,4 +6,4 @@ The Cloudflare Worker uses Hono to match HTTP routes. Existing static assets, RP
 - `src/index.js` exports the Hono app as the Worker entry point. The separate staging Worker can continue calling it for the assets it already delegates.
 - `tests/worker-router.test.mjs` covers routing, fail-closed RPC, and raw Request forwarding, including HEAD. The Google route stays unavailable until M04 integrates an approved authentication and session path.
 
-The frontend remains the pinned SherERP HTML, CSS and JavaScript. This change adds no database schema, auth provider, business RPC, or release configuration. The PR stacks after #642 because both updates touch the package manifest and lockfile.
+The frontend remains the pinned SherERP HTML, CSS and JavaScript. This change adds no database schema, auth provider, business RPC, or release configuration. The branch carries the Hono patch from #644 onto main after #642. The earlier Hono merge went into the password compatibility branch and did not put Hono on main.
