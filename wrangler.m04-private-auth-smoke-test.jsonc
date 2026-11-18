@@ -1,0 +1,17 @@
+{
+  "name": "shererp-m04-private-auth-smoke-local-test-only",
+  "main": "src/auth/m04-private-auth-smoke-worker.js",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "vars": {
+    "M04_PRIVATE_AUTH_SCOPE": "synthetic-workerd-only",
+    "M04_D1_UUID": "00000000-0000-0000-0000-000000000022",
+    "M04_OPERATOR_TOKEN": "synthetic-operator-key-not-for-live-staff-2026-11-18"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-m04-private-auth-smoke-local-test-only",
+    "database_id": "00000000-0000-0000-0000-000000000022",
+    "migrations_dir": "migrations"
+  }]
+}
