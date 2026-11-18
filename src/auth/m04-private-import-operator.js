@@ -7,10 +7,8 @@
  * Secret-bearing request bodies must not be logged, cached, or echoed.
  * The imported rows are written only by the existing SQL-atomic M04 helper.
  */
-import {
-  prepareAdminFirstLegacyStaffEnrollment,
-  rehearseAdminFirstLegacyStaffImportWithD1,
-} from './m04-admin-first-enrollment.js';
+import {prepareAdminFirstLegacyStaffEnrollment} from './m04-admin-first-enrollment.js';
+import {importLegacyStaffSnapshotWithD1} from './d1-offline-staff-import.js';
 
 const PATH='/_private/m04/staff-import-once';
 const STAGING_ID='aa04618e-1639-4cb9-bdf5-7b967d8b968b';
@@ -77,8 +75,7 @@ export async function handlePrivateM04Import(request,env){
   const prepared=prepareAdminFirstLegacyStaffEnrollment(input.first,input.confirmation);
   // The existing importer owns the single database batch and exact readback.
   // D1's nonempty-store claim prevents a second/concurrent successful import.
-  const outcome=await rehearseAdminFirstLegacyStaffImportWithD1(
-    env.DB,input.first,input.confirmation);
+  const outcome=await importLegacyStaffSnapshotWithD1(env.DB,prepared.snapshot);
   if(!outcome.imported||!outcome.readbackMatch||
      outcome.counts?.users!==prepared.report.importableUsers||
      outcome.counts?.roles!==prepared.report.sourceRoles||
