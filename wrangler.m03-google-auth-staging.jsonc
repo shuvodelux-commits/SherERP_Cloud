@@ -1,0 +1,26 @@
+{
+  "name": "shererp-cloud-google-staging-candidate",
+  "account_id": "ac66126a5dc7c2f21ae5c146341a5dfb",
+  "main": "src/m03-google-auth-staging-worker.js",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "M03_GOOGLE_AUTH_SCOPE": "reviewed-google-staging-auth-only",
+    "M03_GOOGLE_AUTH_ORIGIN": "https://shererp-cloud-google-staging-candidate.agnishuvo.workers.dev",
+    "M03_AUTH_SCOPE": "reviewed-staging-auth-only",
+    "M03_AUTH_D1_UUID": "aa04618e-1639-4cb9-bdf5-7b967d8b968b"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-staging-db",
+    "database_id": "aa04618e-1639-4cb9-bdf5-7b967d8b968b",
+    "migrations_dir": "staging-migrations/google-auth"
+  }],
+  "assets": {
+    "directory": "./dist-google-staging",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -1,5 +1,6 @@
 # Generated and local files
 dist/
+dist-google-staging/
 node_modules/
 .wrangler/
 .superpowers/

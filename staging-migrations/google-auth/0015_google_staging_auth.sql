@@ -1,4 +1,5 @@
--- Local test fixture, outside the deployable migrations directory.
+-- Candidate for auth-only staging after the exact 0001–0004 prefix and a
+-- separate approved backup/cutover. Never apply the root migration queue.
 CREATE TABLE auth_google_links (
   issuer TEXT NOT NULL CHECK (issuer='https://accounts.google.com'),
   subject TEXT NOT NULL CHECK (length(subject) BETWEEN 1 AND 255),
@@ -12,6 +13,8 @@ CREATE TABLE auth_google_challenges (
   nonce TEXT NOT NULL UNIQUE,
   expires_at_ms INTEGER NOT NULL
 ) STRICT;
+-- next statement
+CREATE INDEX google_challenge_expiry ON auth_google_challenges(expires_at_ms);
 -- next statement
 CREATE TABLE auth_google_sessions (
   token_hash TEXT PRIMARY KEY,
