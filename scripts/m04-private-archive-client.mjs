@@ -118,8 +118,13 @@ export async function submitApprovedPrivateM04StaffImport({
    headers:{authorization:'Bearer '+token,'content-type':'application/json'},
    body,redirect:'error',cache:'no-store',
   });
+  // The private Worker's JSON response includes UTF-8 charset. Refuse
+  // other media types/charsets; a false negative after SQL commit would leave
+  // the operator uncertain whether the one-shot import succeeded.
+  const contentType=response?.headers?.get('content-type');
   if(!response||response.status!==200||
-     response.headers?.get('content-type')!=='application/json')throw deny();
+     typeof contentType!=='string'||
+     !/^application\/json(?:;\s*charset=utf-8)?$/i.test(contentType))throw deny();
   const text=await response.text();
   if(typeof text!=='string'||new TextEncoder().encode(text).length>1024)throw deny();
   const result=JSON.parse(text);
