@@ -30,6 +30,8 @@ jobs:
           node --test --test-concurrency=1
           tests/integration/m03-staging-auth-runtime-workerd.spec.mjs
           tests/integration/m04-google-session-flow-workerd.spec.mjs
+      - name: Verify separate shop bindings in local Workerd
+        run: node --test tests/integration/m03-tenant-binding-pilot-workerd.spec.mjs
       - name: Build preserved source UI without modifying it
         run: npm run build:frontend
       - name: Compile exact auth staging candidate without deployment
