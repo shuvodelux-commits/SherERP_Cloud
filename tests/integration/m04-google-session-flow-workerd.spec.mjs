@@ -27,7 +27,7 @@ before(async()=>{
   await worker.applyD1Migrations('DB');
   ({DB}=await worker.getEnv());
   const schema=await readFile(new URL('../fixtures/m04-google-session-proof.sql',import.meta.url),'utf8');
-  await DB.batch(schema.split(';').map(text=>text.trim()).filter(Boolean).map(text=>DB.prepare(text)));
+  await DB.batch(schema.split('-- next statement').map(text=>DB.prepare(text.trim())));
   await DB.prepare(`INSERT INTO auth_users
     (user_id,full_name,phone_key,role_name,status,credential_state,
      password_hash,password_salt,password_iterations)
@@ -58,7 +58,9 @@ const cookiePair=(response,name)=>response.headers.getSetCookie().find(x=>x.star
 async function start(){
   const response=await request('/api/auth/google/challenge');
   assert.equal(response.status,200);
-  assert.match(response.headers.get('Set-Cookie'),/Secure.*HttpOnly.*SameSite=Strict/i);
+  const attributes=response.headers.get('Set-Cookie').split('; ');
+  for(const flag of ['Secure','HttpOnly','SameSite=Strict'])
+    assert.ok(attributes.includes(flag),`missing ${flag} cookie flag`);
   return {nonce:(await response.json()).data.nonce,
     cookie:cookiePair(response,'__Host-shererp-google-challenge')};
 }
@@ -81,7 +83,11 @@ test('one browser-bound Google challenge issues at most one revocable session on
   assert.equal(await DB.prepare("SELECT credential_state FROM auth_users WHERE user_id='USR-GOOGLE'")
     .first('credential_state'),'LegacyPending');
   assert.equal((await request('/api/auth/google/logout',{cookie:session})).status,200);
+  await assert.rejects(DB.prepare('UPDATE auth_google_sessions SET revoked_at_ms=NULL').run());
+  await assert.rejects(DB.prepare('DELETE FROM auth_google_sessions').run());
+  await assert.rejects(DB.prepare('INSERT OR REPLACE INTO auth_google_sessions SELECT * FROM auth_google_sessions').run());
   assert.equal((await restore(session)).status,401);
+  assert.equal((await login(attempt)).status,401);
 });
 
 test('wrong browser, unlinked subject with the same email and cross-origin attempts are denied',async(t)=>{
@@ -107,6 +113,9 @@ test('disabling staff or revoking the link invalidates existing Google sessions'
   assert.equal((await restore(linked)).status,200);
   await DB.prepare('UPDATE auth_google_links SET revoked_at_ms=? WHERE subject=?')
     .bind(Date.now(),subject).run();
+  await assert.rejects(DB.prepare('UPDATE auth_google_links SET revoked_at_ms=NULL').run());
+  await assert.rejects(DB.prepare('DELETE FROM auth_google_links').run());
+  await assert.rejects(DB.prepare('INSERT OR REPLACE INTO auth_google_links SELECT * FROM auth_google_links').run());
   assert.equal((await restore(linked)).status,401);
   assert.equal((await login(await start())).status,401);
 });
