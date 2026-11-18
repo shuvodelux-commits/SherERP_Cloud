@@ -38,6 +38,8 @@ jobs:
         run: node --test tests/integration/m04-platform-superadmin-session-workerd.spec.mjs
       - name: Verify private platform browser authentication on local D1
         run: node --test tests/integration/m04-platform-browser-auth-workerd.spec.mjs
+      - name: Verify private platform assets and local Control D1 migrations
+        run: node --test tests/integration/m03-platform-auth-release-local.spec.mjs
       - name: Build preserved source UI without modifying it
         run: npm run build:frontend
       - name: Compile exact auth staging candidate without deployment

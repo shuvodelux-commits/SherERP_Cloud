@@ -42,6 +42,34 @@ app.use('*',async(c,next)=>{
   await next();
 });
 
+const pageCsp=[
+  "default-src 'none'","base-uri 'none'","frame-ancestors 'none'","form-action 'none'",
+  "script-src 'self' https://accounts.google.com/gsi/client",
+  "style-src 'self' https://accounts.google.com/gsi/style",
+  "connect-src 'self' https://accounts.google.com/gsi/",
+  "frame-src https://accounts.google.com/gsi/",
+].join('; ');
+
+for(const [route,asset,type] of [
+  ['/','/index.html','text/html; charset=utf-8'],
+  ['/platform-auth.css','/platform-auth.css','text/css; charset=utf-8'],
+  ['/platform-auth.js','/platform-auth.js','text/javascript; charset=utf-8'],
+]){
+  app.get(route,async c=>{
+    const assets=c.env.ASSETS;
+    if(typeof assets?.fetch!=='function')return unavailable(c);
+    const assetRequest=new Request(new URL(asset,c.req.url));
+    const reply=await assets.fetch(assetRequest);
+    if(reply.status!==200)return unavailable(c);
+    if(route==='/'){
+      c.header('Content-Security-Policy',pageCsp);
+      c.header('Cross-Origin-Opener-Policy','same-origin-allow-popups');
+      c.header('Referrer-Policy','strict-origin-when-cross-origin');
+    }
+    return c.body(reply.body,200,{'Content-Type':type});
+  });
+}
+
 async function limitIngress(c,next){
   const result=await c.env.PLATFORM_INGRESS.limit({key:'platform-browser-auth'});
   if(result?.success!==true)return limited(c);
