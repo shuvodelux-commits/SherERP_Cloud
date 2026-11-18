@@ -50,6 +50,8 @@ test('only the dedicated admin workers.dev hostname can use the isolated staging
   const cfg=JSON.parse(readFileSync(new URL('../wrangler.m03-platform-auth-access-staging.jsonc',import.meta.url)));
   const preview=JSON.parse(readFileSync(new URL('../wrangler.preview.jsonc',import.meta.url)));
   assert.equal(cfg.name,'admin-hisabiq');
+  assert.equal(cfg.account_id,'ac66126a5dc7c2f21ae5c146341a5dfb');
+  assert.equal(cfg.keep_vars,true);
   assert.equal(cfg.main,'src/m03-access-platform-auth-worker.js');
   assert.equal(cfg.workers_dev,true);
   assert.equal(cfg.preview_urls,false);
