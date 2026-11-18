@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SherERP Cloud · Platform sign-in</title>
+  <link rel="stylesheet" href="/platform-auth.css">
+  <script src="/platform-auth.js" defer></script>
+</head>
+<body>
+  <main class="login-card">
+    <header class="login-brand">SherERP Cloud</header>
+    <p id="status" role="status" aria-live="polite">Checking session…</p>
+
+    <section id="login" hidden>
+      <h1 tabindex="-1">Platform sign-in</h1>
+      <p>Use your enrolled Google account and authenticator app.</p>
+      <button id="start-login" class="primary" type="button">Start sign-in</button>
+      <button id="open-setup" class="secondary" type="button">Set up administrator</button>
+    </section>
+
+    <section id="setup" hidden>
+      <h1 tabindex="-1">Set up administrator</h1>
+      <form id="setup-form">
+        <label for="setup-ticket">Setup ticket</label>
+        <input id="setup-ticket" type="password" required minlength="64" maxlength="64" autocomplete="off" spellcheck="false">
+        <button class="primary" type="submit">Continue setup</button>
+      </form>
+      <button id="back-setup" class="secondary" type="button">Back to sign-in</button>
+    </section>
+
+    <section id="google" hidden>
+      <h1 tabindex="-1">Continue with Google</h1>
+      <div id="google-button"></div>
+      <button id="back-google" class="secondary" type="button">Cancel</button>
+    </section>
+
+    <section id="mfa" hidden>
+      <h1 tabindex="-1">Verify your sign-in</h1>
+      <form id="mfa-form">
+        <label for="auth-code">Authenticator code</label>
+        <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+          pattern="[0-9]{6}" maxlength="6" required>
+        <button class="primary" type="submit">Verify and sign in</button>
+      </form>
+      <button id="back-mfa" class="secondary" type="button">Cancel</button>
+    </section>
+
+    <section id="signed-in" hidden>
+      <h1 tabindex="-1">Signed in as Platform Super Admin</h1>
+      <button id="sign-out" class="primary" type="button">Sign out</button>
+    </section>
+
+    <noscript><p>Enable JavaScript to sign in.</p></noscript>
+  </main>
+</body>
+</html>

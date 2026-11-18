@@ -24,8 +24,8 @@ let db,env;
 before(async()=>{
   await harness.listen();
   ({DB:db}=await harness.getWorker('shererp-m04-auth-http-local-only').getEnv());
-  for(const name of ['m04-platform-bootstrap','m04-platform-session']){
-    const sql=await readFile(new URL('../fixtures/'+name+'.sql',import.meta.url),'utf8');
+  for(const name of ['0001_platform_bootstrap','0002_platform_sessions']){
+    const sql=await readFile(new URL('../../staging-migrations/platform-auth/'+name+'.sql',import.meta.url),'utf8');
     await db.batch(sql.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
   }
   const now=Date.now();

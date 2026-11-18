@@ -22,7 +22,7 @@ before(async()=>{
   await harness.listen();
   const worker=harness.getWorker('shererp-m04-auth-http-local-only');
   ({DB:db}=await worker.getEnv());
-  const schema=await readFile(new URL('../fixtures/m04-platform-bootstrap.sql',import.meta.url),'utf8');
+  const schema=await readFile(new URL('../../staging-migrations/platform-auth/0001_platform_bootstrap.sql',import.meta.url),'utf8');
   await db.batch(schema.trim().split('-- next statement').map(text=>db.prepare(text.trim())));
 });
 after(()=>harness.close());
