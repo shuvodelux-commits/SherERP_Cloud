@@ -40,6 +40,10 @@ jobs:
         run: node --test tests/integration/m04-platform-browser-auth-workerd.spec.mjs
       - name: Verify private platform assets and local Control D1 migrations
         run: node --test tests/integration/m03-platform-auth-release-local.spec.mjs
+      - name: Verify Access-gated workers.dev candidate without deployment
+        run: |
+          node --test tests/m03-platform-access-workers-dev.test.mjs tests/integration/m03-platform-access-release-local.spec.mjs
+          npx --no-install wrangler deploy --dry-run --config wrangler.m03-platform-auth-access-staging.jsonc --outdir .wrangler-m03-platform-access
       - name: Build preserved source UI without modifying it
         run: npm run build:frontend
       - name: Compile exact auth staging candidate without deployment
