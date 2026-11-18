@@ -6,6 +6,8 @@
  * Do not use a legacy SHA256 password as a PBKDF2 credential.
  * Do not accept the time or canonical phone directly from a browser.
  */
+import {pbkdf2} from '@noble/hashes/pbkdf2.js';
+import {sha256} from '@noble/hashes/sha2.js';
 import {verifyLegacyPassword} from './legacy-password.js';
 
 export const AUTH_POLICY=Object.freeze({
@@ -59,12 +61,20 @@ async function sha256Hex(bytes) {
 }
 async function credentialDigest(password,salt,iterations){
   const c=requireCrypto();
-  const key=await c.subtle.importKey('raw',new TextEncoder().encode(password),
+  const passwordBytes=new TextEncoder().encode(password);
+  const saltBytes=hexToBytes(salt);
+  const key=await c.subtle.importKey('raw',passwordBytes,
     'PBKDF2',false,['deriveBits']);
-  const result=await c.subtle.deriveBits({
-    name:'PBKDF2',hash:'SHA-256',salt:hexToBytes(salt),iterations,
-  },key,256);
-  return hex(new Uint8Array(result));
+  try{
+    const result=await c.subtle.deriveBits({
+      name:'PBKDF2',hash:'SHA-256',salt:saltBytes,iterations,
+    },key,256);
+    return hex(new Uint8Array(result));
+  }catch(error){
+    // Hosted Workers reject the existing iteration count in native Web Crypto.
+    if(error?.name!=='NotSupportedError')throw error;
+    return hex(pbkdf2(sha256,passwordBytes,saltBytes,{c:iterations,dkLen:32}));
+  }
 }
 
 /**
