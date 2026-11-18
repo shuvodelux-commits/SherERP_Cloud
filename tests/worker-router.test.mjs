@@ -1,12 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import {createHonoApp} from '../src/http/app.js';
 
 const req = (path, options = {}) => new Request('https://preview.example' + path, options);
 
 test('the production router is a Hono app with strict legacy path matching', async () => {
-  const app = createHonoApp();
+  const app = worker;
   assert.ok(app.routes.some(route => route.path === '/api/health'));
   assert.ok(app.routes.some(route => route.path === '/api/rpc'));
   for (const path of ['/api/health/', '/api/%68ealth', '/api/rpc/', '/api/auth/google']) {
