@@ -1,0 +1,96 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {test} from 'node:test';
+import {chromium} from 'playwright';
+
+const origin='https://platform.example.test';
+const pageRoot=new URL('../frontend/platform-auth/',import.meta.url);
+const fakeGoogle=`
+  window.google={accounts:{id:{
+    initialize(options){window.fixtureGoogle=options;},
+    renderButton(target){
+      const button=document.createElement('button');
+      button.textContent='Sign in with Google';
+      button.onclick=()=>window.fixtureGoogle.callback({credential:'fixture-signed-assertion'});
+      target.replaceChildren(button);
+    }
+  }}};
+`;
+
+test('private platform page sets up the admin, signs in with MFA, restores and signs out',async()=>{
+  const html=await readFile(new URL('index.html',pageRoot));
+  const browser=await chromium.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:320,height:640}});
+    let active=false;
+    const calls=[];
+    await page.route('https://accounts.google.com/gsi/client',route=>route.fulfill({
+      body:fakeGoogle,contentType:'text/javascript',
+    }));
+    await page.route(origin+'/**',async route=>{
+      const request=route.request();
+      const path=new URL(request.url()).pathname;
+      if(!path.startsWith('/api/')){
+        const file=path==='/'?'index.html':path.slice(1);
+        const type=file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html';
+        return route.fulfill({body:file==='index.html'?html:await readFile(new URL(file,pageRoot)),contentType:type});
+      }
+      const input=request.postDataJSON();
+      calls.push({path,input});
+      if(path==='/api/platform/auth/session')
+        return route.fulfill({status:active?200:401,json:active?{role:'PlatformSuperAdmin'}:{}});
+      if(path.endsWith('/challenge'))
+        return route.fulfill({json:{clientId:'123-example.apps.googleusercontent.com',nonce:'a'.repeat(43)}});
+      if(path==='/api/platform/setup')
+        return route.fulfill({json:{enrolled:true}});
+      if(path==='/api/platform/auth/login'){
+        if(input?.code==='111111')return route.fulfill({status:401,json:{}});
+        active=true;
+        return route.fulfill({json:{role:'PlatformSuperAdmin'}});
+      }
+      if(path==='/api/platform/auth/logout'){
+        active=false;
+        return route.fulfill({json:{signedOut:true}});
+      }
+      return route.fulfill({status:404});
+    });
+
+    await page.goto(origin);
+    await page.getByRole('heading',{name:'Platform sign-in'}).waitFor();
+    await page.getByRole('button',{name:'Set up administrator'}).click();
+    const ticket=page.getByLabel('Setup ticket');
+    await ticket.fill('a'.repeat(64));
+    await page.getByRole('button',{name:'Continue setup'}).click();
+    await page.getByRole('button',{name:'Sign in with Google'}).click();
+    await page.getByText('Setup complete. Sign in to continue.').waitFor();
+    assert.deepEqual(calls.find(call=>call.path==='/api/platform/setup/challenge')?.input,{setupToken:'a'.repeat(64)});
+    assert.deepEqual(calls.find(call=>call.path==='/api/platform/setup')?.input,{credential:'fixture-signed-assertion'});
+    assert.equal(await ticket.inputValue(),'');
+
+    async function openAuthenticator(){
+      await page.getByRole('button',{name:'Start sign-in'}).click();
+      await page.getByRole('button',{name:'Sign in with Google'}).click();
+      await page.getByLabel('Authenticator code').waitFor();
+    }
+    await openAuthenticator();
+    await page.getByLabel('Authenticator code').fill('111111');
+    await page.getByRole('button',{name:'Verify and sign in'}).click();
+    await page.getByText('Could not sign in. Start sign-in again.').waitFor();
+    await openAuthenticator();
+    await page.getByLabel('Authenticator code').fill('123456');
+    await page.getByRole('button',{name:'Verify and sign in'}).click();
+    await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();
+    assert.deepEqual(calls.filter(call=>call.path==='/api/platform/auth/login').at(-1)?.input,
+      {credential:'fixture-signed-assertion',code:'123456'});
+    assert.equal(await page.getByLabel('Authenticator code').inputValue(),'');
+    assert.deepEqual(await page.evaluate(()=>[localStorage.length,sessionStorage.length,location.search]),[0,0,'']);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),320);
+
+    await page.reload();
+    await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();
+    await page.getByRole('button',{name:'Sign out'}).click();
+    await page.getByRole('heading',{name:'Platform sign-in'}).waitFor();
+  }finally{
+    await browser.close();
+  }
+});
