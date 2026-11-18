@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential} from '../../src/auth/d1-auth-core.js';
+import {resolveAccessAdministrator} from '../../src/auth/m04-access-admin-identity.js';
 
 const TIME=1_800_400_000_000;
 const PASSWORD='Synthetic!TestOnly#2026';
@@ -127,4 +128,39 @@ test('test Worker is local-only and has no public RPC or migration',async()=>{
   assert.equal(production.includes('authAdapter'),false);
   assert.equal(registry.includes('createD1LegacyAuthRpc'),false);
   assert.equal(preview.d1_databases,undefined);
+});
+
+test('Access resolves only the mapped active Administrator without changing password or session state',async()=>{
+  const userId='USR-ACCESS-ADMIN';
+  await DB.prepare(`INSERT INTO auth_users
+    (user_id,full_name,phone_key,role_name,status,credential_state,
+     password_hash,password_salt,password_iterations)
+    VALUES (?,?,'01710000901','Administrator','Active','LegacyPending',?,?,210000)`)
+    .bind(userId,'Synthetic Access Administrator','a'.repeat(64),'b'.repeat(48)).run();
+  const readCredential=()=>DB.prepare(
+    'SELECT credential_state,credential_version FROM auth_users WHERE user_id=?'
+  ).bind(userId).first();
+  const audience='a'.repeat(64);
+  const email='admin@example.test';
+  const env={DB,M04_ACCESS_AUDIENCE:audience,M04_ACCESS_ADMIN_EMAIL:email,
+    M04_ACCESS_ADMIN_USER_ID:userId};
+  const principal={aud:audience,getIdentity:async()=>({email})};
+  const original=await readCredential();
+  assert.deepEqual(await resolveAccessAdministrator({access:principal},env),{
+    id:userId,name:'Synthetic Access Administrator',role:'Administrator',
+  });
+  assert.deepEqual(await readCredential(),original);
+  assert.equal(await DB.prepare('SELECT count(*) AS n FROM auth_sessions WHERE user_id=?')
+    .bind(userId).first('n'),0);
+  assert.equal(await resolveAccessAdministrator({headers:new Headers({
+    'Cf-Access-Authenticated-User-Email':email,
+  })},env),null);
+  assert.equal(await resolveAccessAdministrator({access:{...principal,aud:'b'.repeat(64)}},env),null);
+  assert.equal(await resolveAccessAdministrator({access:{...principal,
+    getIdentity:async()=>({email:'other@example.test'})}},env),null);
+  assert.equal(await resolveAccessAdministrator({access:principal},{
+    ...env,M04_ACCESS_ADMIN_USER_ID:'USR-HTTP-CASH',
+  }),null);
+  await DB.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id=?").bind(userId).run();
+  assert.equal(await resolveAccessAdministrator({access:principal},env),null);
 });
