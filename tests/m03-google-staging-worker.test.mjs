@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
+import {SmartRouter} from 'hono/router/smart-router';
 import worker from '../src/m03-google-auth-staging-worker.js';
 import publicWorker from '../src/index.js';
 
@@ -31,4 +32,28 @@ test('the staging Worker denies unknown hosts and incomplete setup before D1',as
   assert.equal((await worker.fetch(request('https://another.example'),{
     ...env,GOOGLE_CLIENT_ID:'123456-fixture.apps.googleusercontent.com',
   })).status,403);
+});
+
+test('warm Google requests reuse the router and keep D1 and client configuration request-scoped',async t=>{
+  const database=()=>({
+    writes:0,
+    prepare(){return {bind(){return {};}};},
+    async batch(){
+      this.writes++;
+      return [{success:true},{success:true,meta:{changes:1}}];
+    },
+  });
+  const first={...config.vars,DB:database(),GOOGLE_CLIENT_ID:'123456-first.apps.googleusercontent.com'};
+  const second={...config.vars,DB:database(),GOOGLE_CLIENT_ID:'123456-second.apps.googleusercontent.com',
+    M03_GOOGLE_AUTH_ORIGIN:'https://other-staging.example'};
+  const firstResponse=await worker.fetch(request(),first);
+  assert.equal(firstResponse.status,200);
+  assert.equal((await firstResponse.json()).data.clientId,first.GOOGLE_CLIENT_ID);
+  const routes=t.mock.method(SmartRouter.prototype,'add');
+  const secondResponse=await worker.fetch(request(second.M03_GOOGLE_AUTH_ORIGIN),second);
+  assert.equal(secondResponse.status,200);
+  assert.equal((await secondResponse.json()).data.clientId,second.GOOGLE_CLIENT_ID);
+  assert.equal(first.DB.writes,1);
+  assert.equal(second.DB.writes,1);
+  assert.equal(routes.mock.callCount(),0,'warm requests must not register Hono routes again');
 });
