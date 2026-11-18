@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,mkdir} from 'node:fs/promises';
+import {mkdtemp,readFile,mkdir,rm,symlink,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {test} from 'node:test';
 
-test('the opt-in Google build retains the password form and leaves normal assets untouched',async()=>{
+test('the opt-in Google build retains the password form and leaves normal assets untouched',async(t)=>{
   const root=await mkdtemp(join(tmpdir(),'shererp-google-ui-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
   const plain=join(root,'plain');
   const google=join(root,'google');
   await mkdir(plain);
@@ -23,6 +24,20 @@ test('the opt-in Google build retains the password form and leaves normal assets
   assert.match(staged,/id="shererp-google-signin"/);
   assert.match(staged,/src="\/staging-google-signin.js"/);
   const script=await readFile(join(google,'staging-google-signin.js'),'utf8');
-  assert.match(script,/\/api\/auth\/google\/logout/);
+  assert.match(script,/call\('\/logout',\{method:'POST'\}/);
   assert.doesNotMatch(script,/localStorage|sessionStorage/);
+});
+
+test('the staging builder cannot overwrite the target of a linked input page',async(t)=>{
+  const root=await mkdtemp(join(tmpdir(),'shererp-google-ui-link-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const plain=join(root,'plain');
+  const target=join(root,'original.html');
+  const html='<body><p class="login-footnote">Original</p></body></html>';
+  await mkdir(plain);
+  await writeFile(target,html);
+  await symlink(target,join(plain,'index.html'));
+  const run=spawnSync(process.execPath,['scripts/build-staging-google-ui.mjs',plain,join(root,'staging')]);
+  assert.equal(await readFile(target,'utf8'),html);
+  assert.notEqual(run.status,0);
 });

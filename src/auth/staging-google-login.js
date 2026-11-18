@@ -50,7 +50,7 @@ export function createStagingGoogleLoginApp({db,origin,clientId}){
       .bind(await tokenFingerprint(binding),nonce,Date.now()+CHALLENGE_SECONDS*1000).run();
     if(saved.meta?.changes!==1)return denied(c);
     setCookie(c,CHALLENGE_COOKIE,binding,{...COOKIE,maxAge:CHALLENGE_SECONDS});
-    return success(c,{nonce});
+    return success(c,{nonce,clientId});
   });
 
   app.post('/api/auth/google',bodyLimit({
