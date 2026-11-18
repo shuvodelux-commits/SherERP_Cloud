@@ -40,4 +40,5 @@ jobs:
             tests/m04-admin-first-enrollment.test.mjs \
             tests/integration/m04-admin-first-enrollment-workerd.spec.mjs \
             tests/m04-private-staging-operator-bundle.test.mjs \
-            tests/integration/m04-private-import-operator-workerd.spec.mjs
+            tests/integration/m04-private-import-operator-workerd.spec.mjs \
+            tests/m04-private-archive-client.test.mjs
