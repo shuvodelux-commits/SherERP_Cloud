@@ -34,6 +34,8 @@ jobs:
         run: node --test tests/integration/m03-tenant-binding-pilot-workerd.spec.mjs
       - name: Verify one-time platform Super Admin bootstrap on local D1
         run: node --test tests/integration/m04-platform-superadmin-bootstrap-workerd.spec.mjs
+      - name: Verify platform MFA and revocable sessions on local D1
+        run: node --test tests/integration/m04-platform-superadmin-session-workerd.spec.mjs
       - name: Build preserved source UI without modifying it
         run: npm run build:frontend
       - name: Compile exact auth staging candidate without deployment
