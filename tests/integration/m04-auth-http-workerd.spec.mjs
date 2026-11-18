@@ -2,6 +2,7 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import './m04-google-session-flow-workerd.spec.mjs';
 import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential} from '../../src/auth/d1-auth-core.js';
 import {resolveAccessAdministrator} from '../../src/auth/m04-access-admin-identity.js';
