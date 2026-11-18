@@ -125,12 +125,37 @@ test('a signed browser Access cookie can supply a missing assertion header',asyn
   assert.equal(badOrigin.status,403);
 });
 
+test('a signed browser Access cookie can supply proof when the assertion header is rejected',async t=>{
+  trustFixtureKeys(t);
+  const cookie='CF_Authorization='+assertion();
+  const rejectedAssertions=[assertion({},badKey),assertion({aud:['b'.repeat(64)]}),
+    assertion({email:'someone-else@example.test'})];
+  for(const token of rejectedAssertions){
+    const response=await worker.fetch(request('/',{token,extra:{Cookie:cookie}}),bindings);
+    assert.equal(response.status,200);
+    assert.equal(await response.text(),'Private fixture');
+  }
+  const blankHeader=await worker.fetch(request('/',{
+    extra:{'Cf-Access-Jwt-Assertion':'',Cookie:cookie},
+  }),bindings);
+  assert.equal(blankHeader.status,200);
+  const rejectedCookies=[
+    'CF_Authorization='+assertion({aud:['b'.repeat(64)]}),
+    'CF_Authorization='+assertion({email:'someone-else@example.test'}),
+    cookie+'; '+cookie,
+  ];
+  for(const invalidCookie of rejectedCookies){
+    const response=await worker.fetch(request('/',{
+      token:assertion({},badKey),extra:{Cookie:invalidCookie},
+    }),bindings);
+    assert.equal(response.status,403);
+  }
+});
+
 test('invalid headers, forged cookies and duplicate cookie names fail closed',async t=>{
   trustFixtureKeys(t);
   const valid='CF_Authorization='+assertion();
   const cookieCases=[
-    request('/',{token:assertion({},badKey),extra:{Cookie:valid}}),
-    request('/',{extra:{'Cf-Access-Jwt-Assertion':'',Cookie:valid}}),
     request('/',{extra:{Cookie:valid+'; '+valid}}),
     request('/',{extra:{Cookie:'CF_Authorization=; '+valid}}),
     request('/',{extra:{Cookie:'CF_Authorization='+assertion({},badKey)}}),
