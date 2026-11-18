@@ -69,6 +69,7 @@ test('only the dedicated admin workers.dev hostname can use the isolated staging
 });
 
 test('Access is required for HTML, assets and API even if the edge stops enforcing it',async t=>{
+  t.mock.method(console,'warn',()=>{});
   const getKeys=t.mock.method(globalThis,'fetch',()=>assert.fail('early denials must not fetch signing keys'));
   const guarded={...bindings,ASSETS:{fetch(){assert.fail('private assets must not be reached');}}};
   for(const path of ['/','/platform-auth.js','/platform-auth.css','/api/platform/auth/challenge']){
@@ -84,6 +85,7 @@ test('Access is required for HTML, assets and API even if the edge stops enforci
 });
 
 test('only a current signed Access application token for this audience and human operator is accepted',async t=>{
+  t.mock.method(console,'warn',()=>{});
   trustFixtureKeys(t);
   const denied=[assertion({},badKey),assertion({iss:'https://another.cloudflareaccess.com'}),
     assertion({aud:['b'.repeat(64)]}),assertion({type:'org'}),assertion({email:'someone@example.test'}),
@@ -126,6 +128,7 @@ test('a signed browser Access cookie can supply a missing assertion header',asyn
 });
 
 test('a signed browser Access cookie can supply proof when the assertion header is rejected',async t=>{
+  t.mock.method(console,'warn',()=>{});
   trustFixtureKeys(t);
   const cookie='CF_Authorization='+assertion();
   const rejectedAssertions=[assertion({},badKey),assertion({aud:['b'.repeat(64)]}),
@@ -167,6 +170,7 @@ test('rejected assertion and cookie proofs reuse one Access signing-key fetch',a
 });
 
 test('invalid headers, forged cookies and duplicate cookie names fail closed',async t=>{
+  t.mock.method(console,'warn',()=>{});
   trustFixtureKeys(t);
   const valid='CF_Authorization='+assertion();
   const cookieCases=[
@@ -191,8 +195,29 @@ test('Access denial logs only proof presence and signing-key availability',async
   assert.equal(response.status,403);
   assert.deepEqual(warning,[
     'platform_access_denied',
-    {assertionPresent:true,authorizationCookiePresent:true,jwksAvailable:false},
+    {assertionPresent:true,assertionAccepted:false,
+      authorizationCookiePresent:true,authorizationCookieAccepted:false,jwksAvailable:false},
   ]);
   assert.equal(JSON.stringify(warning).includes(token),false);
   assert.deepEqual(await response.json(),{error:'Access required'});
+});
+
+test('Access denial distinguishes rejected proofs from unavailable signing keys without logging credentials',async t=>{
+  trustFixtureKeys(t);
+  let warning;
+  t.mock.method(console,'warn',(...args)=>{warning=args;});
+  const assertionToken=assertion({},badKey);
+  const cookieToken=assertion({email:'someone-else@example.test'});
+  const response=await worker.fetch(request('/',{
+    token:assertionToken,extra:{Cookie:'CF_Authorization='+cookieToken},
+  }),bindings);
+  assert.equal(response.status,403);
+  assert.deepEqual(warning,[
+    'platform_access_denied',
+    {assertionPresent:true,assertionAccepted:false,
+      authorizationCookiePresent:true,authorizationCookieAccepted:false,jwksAvailable:true},
+  ]);
+  const serialized=JSON.stringify(warning);
+  assert.equal(serialized.includes(assertionToken),false);
+  assert.equal(serialized.includes(cookieToken),false);
 });
