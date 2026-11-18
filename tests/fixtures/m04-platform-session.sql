@@ -28,6 +28,13 @@ CREATE TABLE platform_login_challenges (
   expires_at_ms INTEGER NOT NULL CHECK(expires_at_ms>0)
 ) STRICT;
 -- next statement
+CREATE INDEX platform_login_challenge_expiry ON platform_login_challenges(expires_at_ms);
+-- next statement
+CREATE TABLE platform_login_cancellations (
+  binding_hash TEXT PRIMARY KEY REFERENCES platform_login_challenges(binding_hash),
+  cancelled_at_ms INTEGER NOT NULL CHECK(cancelled_at_ms>0)
+) STRICT;
+-- next statement
 CREATE TABLE platform_login_attempts (
   binding_hash TEXT PRIMARY KEY REFERENCES platform_login_challenges(binding_hash),
   attempted_at_ms INTEGER NOT NULL CHECK(attempted_at_ms>0)

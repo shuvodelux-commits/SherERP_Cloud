@@ -81,7 +81,10 @@ function cookie(response,name){
 test('private platform auth requires trusted exact origin and an ingress limiter before touching D1',async()=>{
   const path='/api/platform/auth/challenge';
   const guarded={
-    ...env,CONTROL_DB:{prepare(){assert.fail('D1 must not be reached');}},
+    ...env,CONTROL_DB:{
+      prepare(){assert.fail('D1 must not be reached');},
+      batch(){assert.fail('D1 must not be reached');},
+    },
     PLATFORM_INGRESS:{async limit(){return {success:false};}},
   };
   assert.equal((await call(path,{urlOrigin:'https://other.example.test',bindings:guarded})).status,403);
@@ -91,6 +94,8 @@ test('private platform auth requires trusted exact origin and an ingress limiter
   assert.equal((await call(path,{bindings:guarded})).status,429);
   assert.equal((await call(path+'?token=synthetic',{bindings:guarded})).status,400);
   assert.equal((await call('/api/platform/tenants',{bindings:guarded})).status,404);
+  assert.equal((await call('/api/platform/auth/login',{payload:{credential:'x'.repeat(10241),code:'123456'},
+    bindings:{...guarded,PLATFORM_INGRESS:env.PLATFORM_INGRESS}})).status,413);
   assert.equal((await publicWorker.fetch(new Request(origin+path,{method:'POST'}),{})).status,404);
 });
 
@@ -168,6 +173,9 @@ test('D1 limits parallel browser challenge creation before external verification
   assert.ok(accepted>=1 && accepted<=8);
   assert.ok(responses.some(r=>r.status===429));
   assert.ok(responses.every(r=>[200,429].includes(r.status)));
+  const issued=await db.prepare(`SELECT count(*) AS n FROM platform_login_challenges
+    WHERE expires_at_ms>CAST(unixepoch('subsec')*1000 AS INTEGER)+60000`).first();
+  assert.equal(issued.n,8);
   for(const denied of responses.filter(r=>r.status===429)){
     assert.equal(denied.headers.has('Set-Cookie'),false);
   }

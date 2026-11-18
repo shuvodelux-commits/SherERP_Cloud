@@ -10,7 +10,8 @@ const SESSION_MS=15*60_000;
 const CHALLENGE=`FROM platform_login_challenges c
   JOIN platform_admin_auth a ON a.singleton=1 AND a.enabled=1
   JOIN platform_first_superadmin f ON f.singleton=a.singleton
-  WHERE c.binding_hash=? AND a.factor_version=? AND c.expires_at_ms>${NOW}`;
+  WHERE c.binding_hash=? AND a.factor_version=? AND c.expires_at_ms>${NOW}
+    AND NOT EXISTS(SELECT 1 FROM platform_login_cancellations x WHERE x.binding_hash=c.binding_hash)`;
 
 const UNUSED='AND NOT EXISTS(SELECT 1 FROM platform_login_attempts used WHERE used.binding_hash=c.binding_hash)';
 
@@ -83,4 +84,20 @@ export async function revokePlatformSuperAdminSession(controlDb,token){
   const result=await controlDb.prepare(`UPDATE platform_admin_sessions SET revoked_at_ms=${NOW}
     WHERE token_hash=? AND issued_at_ms<=${NOW} AND revoked_at_ms IS NULL`).bind(tokenHash).run();
   return result.success===true && result.meta?.changes===1;
+}
+
+/** Cancel a browser login and revoke its sessions in a single Control D1 transaction. */
+export async function signOutPlatformBrowser(controlDb,{sessionToken,browserToken}){
+  const [tokenHash,bindingHash]=await Promise.all([
+    hashOpaqueSessionToken(sessionToken),hashOpaqueSessionToken(browserToken),
+  ]);
+  if(!tokenHash&&!bindingHash)return;
+  await controlDb.batch([
+    controlDb.prepare(`INSERT INTO platform_login_cancellations(binding_hash,cancelled_at_ms)
+      SELECT binding_hash,${NOW} FROM platform_login_challenges WHERE binding_hash=?
+      ON CONFLICT(binding_hash) DO NOTHING`).bind(bindingHash),
+    controlDb.prepare(`UPDATE platform_admin_sessions SET revoked_at_ms=${NOW}
+      WHERE (token_hash=? OR binding_hash=?) AND issued_at_ms<=${NOW} AND revoked_at_ms IS NULL`)
+      .bind(tokenHash,bindingHash),
+  ]);
 }

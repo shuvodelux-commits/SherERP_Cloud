@@ -42,3 +42,18 @@ The fixture uses monotonically increasing factor versions so re-enabling the acc
 ```sh
 node --test tests/integration/m04-platform-superadmin-session-workerd.spec.mjs
 ```
+
+## Private browser transport
+
+The separate `src/m03-private-platform-auth-worker.js` entry exposes JSON routes only. It requires a dedicated HTTPS origin, the Control D1 binding and a configured ingress limiter. The origin must match exactly on the request URL and on browser POST requests. The route rejects query parameters. Use the following endpoints from the same origin:
+
+| Method and path | Browser action |
+| --- | --- |
+| `POST /api/platform/setup/challenge` | Submit the privately issued setup ticket in JSON as `setupToken` and receive the Google client ID and nonce. |
+| `POST /api/platform/setup` | Submit the signed Google `credential`. The setup cookie supplies the ticket. This records enrollment without creating a session. |
+| `POST /api/platform/auth/challenge` | Start a browser-bound Google login challenge. D1 permits eight issued challenges per rolling minute for this single-admin pilot. |
+| `POST /api/platform/auth/login` | Submit the Google `credential` and authenticator `code`. The Worker returns the role and sets the session cookie. |
+| `GET /api/platform/auth/session` | Restore the role from the D1-backed session cookie. |
+| `POST /api/platform/auth/logout` | Cancel a pending browser challenge and revoke any related session, along with the session cookie presented by the browser. |
+
+All auth cookies are host-only, Secure, HttpOnly and SameSite=Strict. Sign-out and queued login are serialized by D1, so a login cannot leave a valid session if it races sign-out with the same challenge. Preserve cancellation records until the associated challenges can no longer be used. The Cloudflare limiter executes before reading credential bodies or looking up Google keys. Its per-location allowance is approximate and does not authenticate the caller. Before attaching any route, establish a private-host admission control, verify its limits, and approve a distinct Control D1 binding, migrations, ticket and authenticator provisioning, associated Google client settings, and the hosted CPU and recovery checks. The default Worker remains database-free and has no platform auth route. There is no staging deployment configuration or platform browser page in this change.
