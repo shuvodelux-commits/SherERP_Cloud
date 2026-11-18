@@ -36,7 +36,7 @@ export function validateStagingConfig(staging, preview) {
   }
   exactKeys(preview,['name','main','compatibility_date','workers_dev','assets','previews'],'preview config');
   exactKeys(preview.previews, [], 'DB-free Worker Previews configuration');
-  if(preview.name !== 'shererp-cloud-preview' || preview.name === staging.name) throw new Error('Preview and staging Workers must stay separate');
+  if(preview.name !== 'hisabiq' || preview.name === staging.name) throw new Error('Preview and staging Workers must stay separate');
   return true;
 }
 

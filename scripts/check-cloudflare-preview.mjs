@@ -12,7 +12,7 @@ export function validateCloudflarePreviewConfig(config) {
   for (const key of Object.keys(config)) {
     if (!allowed.has(key)) throw new Error('Unexpected preview config field: '+key);
   }
-  if (config.name !== 'shererp-cloud-preview') throw new Error('Expected isolated preview Worker name');
+  if (config.name !== 'hisabiq') throw new Error('Expected isolated preview Worker name');
   if (config.main !== 'src/index.js') throw new Error('Unexpected Worker entry point');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(config.compatibility_date || '')) {
     throw new Error('Invalid compatibility date');
