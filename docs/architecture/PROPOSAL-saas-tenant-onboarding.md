@@ -32,3 +32,13 @@ The current SQL is a local test fixture. The bootstrap issues no session, opens 
 ```sh
 node --test tests/integration/m04-platform-superadmin-bootstrap-workerd.spec.mjs
 ```
+
+## Platform session proof
+
+The private session service requires the enrolled Google subject, a browser-bound nonce, and a six-digit authenticator code. The trusted server supplies the OAuth client ID, the factor version, and a separate 160-bit authenticator secret through its protected configuration. It keeps the authenticator secret out of D1. Native Web Crypto verifies RFC 6238 codes in the current or immediately previous 30-second step. D1 limits the single admin to five Google-verified OTP attempts per rolling minute and allows one attempt per browser challenge. The limit is enforced after Google verification. The private ingress must independently limit traffic before verification and Google signing-key fetches. The final insert rejects already-used or older code steps and any challenge that is no longer current. The session expires after 15 minutes. D1 stores only its digest and checks current admin state and factor version on every validation. Protected writes must recheck authorization at their atomic write boundary.
+
+The fixture uses monotonically increasing factor versions so re-enabling the account cannot restore prior sessions. Advance the version with factor rotation, disablement and re-enablement. Keep successful session/step evidence during this pilot. A future cleanup must preserve replay protection and cannot clear the active attempt window. TOTP does not provide phishing-resistant MFA. Before any remote route, review the separate admin origin, public ingress limits, challenge creation, secure cookies, CSRF, secret enrollment and recovery, and the hosted CPU release check. This module and fixture do not attach a route, provision a shop or issue a client Owner invitation.
+
+```sh
+node --test tests/integration/m04-platform-superadmin-session-workerd.spec.mjs
+```
