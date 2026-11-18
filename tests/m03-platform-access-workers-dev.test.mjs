@@ -165,3 +165,20 @@ test('invalid headers, forged cookies and duplicate cookie names fail closed',as
   ];
   for(const req of cookieCases)assert.equal((await worker.fetch(req,bindings)).status,403);
 });
+
+test('Access denial logs only proof presence and signing-key availability',async t=>{
+  const token=assertion();
+  let warning;
+  t.mock.method(console,'warn',(...args)=>{warning=args;});
+  t.mock.method(globalThis,'fetch',async()=>Response.json({error:'unavailable'},{status:503}));
+  const response=await worker.fetch(request('/',{
+    token,extra:{Cookie:'CF_Authorization='+token},
+  }),bindings);
+  assert.equal(response.status,403);
+  assert.deepEqual(warning,[
+    'platform_access_denied',
+    {assertionPresent:true,authorizationCookiePresent:true,jwksAvailable:false},
+  ]);
+  assert.equal(JSON.stringify(warning).includes(token),false);
+  assert.deepEqual(await response.json(),{error:'Access required'});
+});
