@@ -2,6 +2,7 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {setTimeout} from 'node:timers/promises';
 import {createTestHarness} from 'wrangler';
 import stagingWorker from '../../src/m03-auth-staging-worker.js';
 import {rehearseAdminFirstLegacyStaffImportWithD1}
@@ -94,12 +95,19 @@ test('real local D1 first-login from historical 10 digit Administrator mobile, s
  assert.equal(restored.status,200);
  assert.equal(restored.body.success,true);
  assert.equal(restored.body.data.user.id,'USR-M03-ADM');
+ const tokenHash=createHash('sha256').update(Buffer.from(login.body.data.token,'hex')).digest('hex');
+ const sessionActivity=()=>DB.prepare(
+  'SELECT last_activity_at_ms FROM auth_sessions WHERE token_hash=?'
+ ).bind(tokenHash).first('last_activity_at_ms');
+ const restoredAt=await sessionActivity();
+ await setTimeout(20);
  const shell=await rpc('getAppShellData',[login.body.data.token]);
  assert.equal(shell.status,200);
  assert.equal(shell.body.success,true);
  assert.equal(shell.body.data.shopName,'Hardware Store ERP');
  assert.ok(Array.isArray(shell.body.data.navItems));
  assert.ok(shell.body.data.navItems.length>10);
+ assert.equal(await sessionActivity(),restoredAt,'reading shell metadata leaves session activity untouched');
  assert.deepEqual(await rpc('logout',[login.body.data.token]),
   {status:200,body:{success:true,data:'logged out'}});
  assert.deepEqual(await rpc('validateSession',[login.body.data.token]),
@@ -132,6 +140,7 @@ test('staging config is distinct from public Worker and binds only operational D
  assert.equal(stage.account_id,'ac66126a5dc7c2f21ae5c146341a5dfb');
  assert.equal(stage.main,'src/m03-auth-staging-worker.js');
  assert.equal(stage.workers_dev,false);
+ assert.equal(stage.preview_urls,false);
  assert.equal(stage.routes,undefined);
  assert.equal(stage.d1_databases.length,1);
  assert.deepEqual(stage.d1_databases[0],{
