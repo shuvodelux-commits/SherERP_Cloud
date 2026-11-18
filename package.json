@@ -21,6 +21,7 @@
     "playwright": "1.65.1"
   },
   "dependencies": {
-    "@noble/hashes": "2.4.0"
+    "@noble/hashes": "2.4.0",
+    "hono": "4.13.19"
   }
 }
