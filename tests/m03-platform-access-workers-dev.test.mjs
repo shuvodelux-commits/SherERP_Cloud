@@ -152,6 +152,20 @@ test('a signed browser Access cookie can supply proof when the assertion header 
   }
 });
 
+test('rejected assertion and cookie proofs reuse one Access signing-key fetch',async t=>{
+  let fetches=0;
+  t.mock.method(globalThis,'fetch',async url=>{
+    assert.equal(url,issuer+'/cdn-cgi/access/certs');
+    fetches++;
+    return Response.json({keys:[jwk]});
+  });
+  const response=await worker.fetch(request('/',{
+    token:assertion({},badKey),extra:{Cookie:'CF_Authorization='+assertion()},
+  }),bindings);
+  assert.equal(response.status,200);
+  assert.equal(fetches,1);
+});
+
 test('invalid headers, forged cookies and duplicate cookie names fail closed',async t=>{
   trustFixtureKeys(t);
   const valid='CF_Authorization='+assertion();
