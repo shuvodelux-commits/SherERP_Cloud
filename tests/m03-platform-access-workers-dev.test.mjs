@@ -34,7 +34,7 @@ const bindings={
 function request(path,{token,base=origin,method='GET',extra={}}={}){
   const headers=new Headers(extra);
   if(token)headers.set('Cf-Access-Jwt-Assertion',token);
-  if(method==='POST')headers.set('Origin',base);
+  if(method==='POST'&&!headers.has('Origin'))headers.set('Origin',base);
   return new Request(base+path,{method,headers});
 }
 
@@ -78,7 +78,7 @@ test('Access is required for HTML, assets and API even if the edge stops enforci
   assert.equal((await worker.fetch(request('/',{token:assertion(),base:'https://preview.example.test'}),guarded)).status,403);
   assert.equal((await worker.fetch(request('/',{token:assertion()}),{...guarded,PLATFORM_ACCESS_AUDIENCE:undefined})).status,503);
   assert.equal((await worker.fetch(request('/',{token:assertion()}),{...guarded,PLATFORM_ACCESS_EMAIL:undefined})).status,503);
-  assert.equal((await worker.fetch(request('/',{extra:{Cookie:'CF_Authorization='+assertion()}}),guarded)).status,403);
+  assert.equal((await worker.fetch(request('/',{extra:{Cookie:'CF_Authorization=malformed'}}),guarded)).status,403);
   assert.equal(getKeys.mock.callCount(),0);
   assert.equal((await publicWorker.fetch(request('/api/platform/auth/session'),{})).status,404);
 });
@@ -104,4 +104,39 @@ test('only a current signed Access application token for this audience and human
   });
   assert.equal(login.status,401);
   assert.equal(login.headers.has('Set-Cookie'),false);
+});
+
+
+test('a signed browser Access cookie can supply a missing assertion header',async t=>{
+  trustFixtureKeys(t);
+  const token=assertion();
+  const cookies='unrelated=value; CF_Authorization='+token+'; trailing=value';
+  for(const path of ['/','/platform-auth.js','/platform-auth.css']){
+    const response=await worker.fetch(request(path,{extra:{Cookie:cookies}}),bindings);
+    assert.equal(response.status,200,path);
+    assert.equal(response.headers.get('Cache-Control'),'no-store');
+  }
+  const session=await worker.fetch(request('/api/platform/auth/session',{extra:{Cookie:cookies}}),bindings);
+  assert.equal(session.status,401,'Access admission cannot create a SherERP session');
+  assert.equal(session.headers.has('Set-Cookie'),false);
+  const badOrigin=await worker.fetch(request('/api/platform/auth/challenge',{
+    method:'POST',extra:{Cookie:cookies,Origin:'https://another.example.test'},
+  }),bindings);
+  assert.equal(badOrigin.status,403);
+});
+
+test('invalid headers, forged cookies and duplicate cookie names fail closed',async t=>{
+  trustFixtureKeys(t);
+  const valid='CF_Authorization='+assertion();
+  const cookieCases=[
+    request('/',{token:assertion({},badKey),extra:{Cookie:valid}}),
+    request('/',{extra:{'Cf-Access-Jwt-Assertion':'',Cookie:valid}}),
+    request('/',{extra:{Cookie:valid+'; '+valid}}),
+    request('/',{extra:{Cookie:'CF_Authorization=; '+valid}}),
+    request('/',{extra:{Cookie:'CF_Authorization='+assertion({},badKey)}}),
+    request('/',{extra:{Cookie:'CF_Authorization='+assertion({aud:['b'.repeat(64)]})}}),
+    request('/',{extra:{Cookie:'CF_Authorization='+assertion({type:'org'})}}),
+    request('/',{extra:{Cookie:'CF_Authorization='+assertion({exp:1})}}),
+  ];
+  for(const req of cookieCases)assert.equal((await worker.fetch(req,bindings)).status,403);
 });

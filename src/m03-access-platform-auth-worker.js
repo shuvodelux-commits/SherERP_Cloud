@@ -16,6 +16,22 @@ const headers={
 const denied=()=>Response.json({error:'Access required'},{status:403,headers});
 const unavailable=()=>Response.json({error:'Platform authentication unavailable'},{status:503,headers});
 
+function accessToken(headers){
+  const assertion=headers.get('Cf-Access-Jwt-Assertion');
+  if(assertion!==null)return assertion;
+
+  const cookies=headers.get('Cookie');
+  if(!cookies||cookies.length>16384)return null;
+  let token=null;
+  for(const cookie of cookies.split(';')){
+    const separator=cookie.indexOf('=');
+    if(separator<0 || cookie.slice(0,separator).trim()!=='CF_Authorization')continue;
+    if(token!==null)return null;
+    token=cookie.slice(separator+1).trim();
+  }
+  return token;
+}
+
 export default {
   async fetch(request,env,ctx){
     const origin=new URL(request.url).origin;
@@ -25,8 +41,8 @@ export default {
        typeof operator!=='string'||operator.length>254||!EMAIL.test(operator))return unavailable();
 
     // Static Assets does not forward ctx.access. Verify the signed application
-    // assertion before reaching any asset, D1 operation or SherERP session route.
-    const token=request.headers.get('Cf-Access-Jwt-Assertion');
+    // assertion or signed browser cookie before serving assets or reaching D1.
+    const token=accessToken(request.headers);
     if(!token || token.length>8192 || !COMPACT_ASSERTION.test(token))return denied();
     let claims;
     try{
