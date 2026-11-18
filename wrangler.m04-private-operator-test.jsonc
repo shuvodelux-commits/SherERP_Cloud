@@ -1,0 +1,17 @@
+{
+  "name": "shererp-m04-private-operator-test-only",
+  "main": "src/auth/m04-private-import-operator.js",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "vars": {
+    "M04_PRIVATE_SCOPE": "synthetic-workerd-only",
+    "M04_IMPORT_TOKEN": "synthetic-m04-test-token-not-a-real-credential-2026",
+    "M04_D1_UUID": "00000000-0000-0000-0000-000000000022"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-m04-private-operator-test-only",
+    "database_id": "00000000-0000-0000-0000-000000000022",
+    "migrations_dir": "migrations"
+  }]
+}
