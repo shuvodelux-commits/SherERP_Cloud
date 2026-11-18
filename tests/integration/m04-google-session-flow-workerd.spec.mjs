@@ -26,6 +26,17 @@ before(async()=>{
   const worker=harness.getWorker('shererp-m04-auth-http-local-only');
   await worker.applyD1Migrations('DB');
   ({DB}=await worker.getEnv());
+  await DB.batch([
+    DB.prepare(`CREATE TABLE settings(
+      row_id INTEGER PRIMARY KEY,
+      key TEXT NOT NULL UNIQUE,
+      value TEXT NOT NULL DEFAULT ''
+    ) STRICT`),
+    DB.prepare(`INSERT INTO settings(key,value) VALUES
+      ('Shop Name','Synthetic Google Shell'),
+      ('Currency Symbol','৳'),
+      ('Unrelated Setting','synthetic-private-value')`),
+  ]);
   const schema=await readFile(new URL('../fixtures/m04-google-session-proof.sql',import.meta.url),'utf8');
   await DB.batch(schema.split('-- next statement').map(text=>DB.prepare(text.trim())));
   await DB.prepare(`INSERT INTO auth_users
@@ -48,9 +59,10 @@ function stubKeys(t){
     request==='https://www.googleapis.com/oauth2/v3/certs'
       ?Promise.resolve(Response.json({keys:[jwk]})):original(request,options));
 }
-function request(path,{cookie,method='POST',payload,requestOrigin=origin}={}){
+function request(path,{cookie,method='POST',payload,requestOrigin=origin,authorization}={}){
   const headers=new Headers({Origin:requestOrigin});
   if(cookie)headers.set('Cookie',cookie);
+  if(authorization)headers.set('Authorization',authorization);
   if(payload)headers.set('Content-Type','application/json');
   return app.fetch(new Request(origin+path,{method,headers,body:payload&&JSON.stringify(payload)}));
 }
@@ -67,6 +79,7 @@ async function start(){
 const login=(attempt,overrides)=>request('/api/auth/google',{cookie:attempt.cookie,
   payload:{credential:credential(attempt.nonce,overrides)}});
 const restore=cookie=>request('/api/auth/google/session',{cookie,method:'GET'});
+const shell=cookie=>request('/api/auth/google/shell',{cookie,method:'GET'});
 
 test('one browser-bound Google challenge issues at most one revocable session on real D1',async(t)=>{
   stubKeys(t);
@@ -76,6 +89,15 @@ test('one browser-bound Google challenge issues at most one revocable session on
   const ok=replies.find(x=>x.ok);
   const session=cookiePair(ok,'__Host-shererp-google-session');
   assert.equal((await restore(session)).status,200);
+  const shellResponse=await shell(session);
+  assert.equal(shellResponse.status,200);
+  assert.equal(shellResponse.headers.get('Cache-Control'),'no-store');
+  const envelope=await shellResponse.json();
+  assert.deepEqual(Object.keys(envelope.data).sort(),['currencySymbol','navItems','shopName']);
+  assert.equal(envelope.data.shopName,'Synthetic Google Shell');
+  assert.equal(envelope.data.currencySymbol,'৳');
+  assert.ok(envelope.data.navItems.some(item=>item.key==='dashboard'));
+  assert.equal(JSON.stringify(envelope).includes('synthetic-private-value'),false);
   const stored=await DB.prepare('SELECT token_hash FROM auth_google_sessions').first('token_hash');
   assert.match(stored,/^[0-9a-f]{64}$/);
   assert.notEqual(stored,session.split('=')[1]);
@@ -87,6 +109,7 @@ test('one browser-bound Google challenge issues at most one revocable session on
   await assert.rejects(DB.prepare('DELETE FROM auth_google_sessions').run());
   await assert.rejects(DB.prepare('INSERT OR REPLACE INTO auth_google_sessions SELECT * FROM auth_google_sessions').run());
   assert.equal((await restore(session)).status,401);
+  assert.equal((await shell(session)).status,401);
   assert.equal((await login(attempt)).status,401);
 });
 
@@ -96,6 +119,10 @@ test('wrong browser, unlinked subject with the same email and cross-origin attem
   const other=await start();
   assert.equal((await login({...attempt,cookie:other.cookie})).status,401);
   assert.equal((await login(attempt,{sub:'other-google-identity'})).status,401);
+  assert.equal((await shell()).status,401);
+  assert.equal((await request('/api/auth/google/shell',{
+    method:'GET',authorization:'Bearer '+'a'.repeat(64),
+  })).status,401);
   assert.equal((await request('/api/auth/google/challenge',{requestOrigin:'https://foreign.example.test'})).status,403);
   assert.equal((await request('/api/rpc',{payload:{fnName:'completeSale',args:[]}})).status,404);
 });
@@ -107,6 +134,7 @@ test('disabling staff or revoking the link invalidates existing Google sessions'
   assert.equal((await restore(active)).status,200);
   await DB.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='USR-GOOGLE'").run();
   assert.equal((await restore(active)).status,401);
+  assert.equal((await shell(active)).status,401);
   assert.equal((await login(await start())).status,401);
   await DB.prepare("UPDATE auth_users SET status='Active' WHERE user_id='USR-GOOGLE'").run();
   const linked=await makeSession();
@@ -117,5 +145,6 @@ test('disabling staff or revoking the link invalidates existing Google sessions'
   await assert.rejects(DB.prepare('DELETE FROM auth_google_links').run());
   await assert.rejects(DB.prepare('INSERT OR REPLACE INTO auth_google_links SELECT * FROM auth_google_links').run());
   assert.equal((await restore(linked)).status,401);
+  assert.equal((await shell(linked)).status,401);
   assert.equal((await login(await start())).status,401);
 });
