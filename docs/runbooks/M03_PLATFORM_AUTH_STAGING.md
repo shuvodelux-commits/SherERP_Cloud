@@ -40,6 +40,14 @@ The additive migration is isolated in `staging-migrations/platform-onboarding` a
 node --test tests/integration/m04-platform-browser-auth-workerd.spec.mjs
 ```
 
+## Private pilot shop binding verification candidate
+
+A separate disabled-by-default `POST /api/platform/shops/verify-binding` accepts only `shopId`. The Worker uses one trusted pilot binding (`PLATFORM_PILOT_DB`) and release values `PLATFORM_PILOT_SHOP_ID`, `PLATFORM_PILOT_D1_ID` and `PLATFORM_PILOT_MARKER`. The Shop D1 singleton identity must match all three values. The Control D1 write rechecks the Super Admin session and matching reservation, and records the identity match once. HTTP 201 records a new receipt and HTTP 200 returns the existing result only after checking the binding again.
+
+Before a separate activation approval, verify the approved Cloudflare account, reserved shop ID, distinct Shop D1 identity, exact database UUID in the binding, and the database's applied migrations. Apply the reviewed Control D1 onboarding migration and Shop D1 identity migration to their separately verified targets after backups and recovery review. Seed the Shop D1 identity with the audited tuple using operator tooling. Only then consider configuring `PLATFORM_SHOP_BINDING_ENABLED=true` on the dedicated private release.
+
+The stored shop UUID is an operator attestation and can be copied with a database export. The Worker cannot independently discover the remote D1 UUID from this row. The receipt records a point-in-time identity match and does not establish that the ERP schema is ready. Recheck the current mapping and marker before granting tenant access. Roll back by disabling the route or restoring the previous Worker and retain both records for reconciliation.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.
