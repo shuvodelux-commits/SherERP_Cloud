@@ -57,13 +57,13 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     assert.equal((await request('b',ownerB.token)).status,401);
     const replacement=await issueOwnerSession(ownerB.env,{issuer:'https://accounts.google.com',subject:'fixture-owner-b'});
     assert.equal(typeof replacement,'string');
-    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,replacement,2),true);
-    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,ownerB.token,1),false);
+    assert.equal(await publishFixtureOwnerGrant(ownerB.env,replacement,2),true);
+    assert.equal(await publishFixtureOwnerGrant(ownerB.env,ownerB.token,1),false);
     const nextDraft={...draft,name:'Replacement session product',operationId:crypto.randomUUID()};
     assert.equal((await request('b',ownerB.token,nextDraft)).status,401);
     assert.equal((await request('b',replacement,nextDraft)).status,201);
     await SHOP_B_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
-    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,replacement,2),false);
+    assert.equal(await publishFixtureOwnerGrant(ownerB.env,replacement,2),false);
     assert.equal((await request('b',replacement,{...nextDraft,name:'Late grant',operationId:crypto.randomUUID()})).status,409);
     const logoutA=await worker.fetch('https://a.example.test/__clean_shop__/logout',{
       method:'POST',headers:{Origin:'https://a.example.test',Cookie:`__Host-shererp-owner-session=${ownerA.token}`},
