@@ -24,14 +24,16 @@ export async function readPlatformSetupNonce(controlDb,setupToken){
  * The trusted caller supplies the OAuth client ID. No platform session or shop
  * membership is issued here. No public Worker imports this bootstrap.
  */
-export async function bootstrapPlatformSuperAdmin({controlDb,clientId,setupToken,credential}){
+export async function bootstrapPlatformSuperAdmin({controlDb,clientId,setupToken,credential,onRejected}){
+  const reject=reason=>{onRejected?.(reason);return false;};
   const ticketHash=await hashOpaqueSessionToken(setupToken);
-  if(!ticketHash)return false;
+  if(!ticketHash)return reject('ticket_cookie');
   const ticket=await activeSetupTicket(controlDb,ticketHash);
-  if(!ticket)return false;
+  if(!ticket)return reject('ticket_inactive');
 
-  const identity=await verifyGoogleLoginIdToken({token:credential,clientId,expectedNonce:ticket.nonce});
-  if(!identity || identity.issuer!==ticket.issuer || identity.subject!==ticket.subject)return false;
+  const identity=await verifyGoogleLoginIdToken({token:credential,clientId,expectedNonce:ticket.nonce,onRejected});
+  if(!identity)return false;
+  if(identity.issuer!==ticket.issuer || identity.subject!==ticket.subject)return reject('account_mismatch');
 
   // Recheck the ticket and the permanent singleton in the same atomic write.
   const result=await controlDb.prepare(`INSERT INTO platform_first_superadmin
@@ -39,5 +41,6 @@ export async function bootstrapPlatformSuperAdmin({controlDb,clientId,setupToken
     SELECT 1,issuer,subject,token_hash,${D1_NOW_MS} FROM platform_setup_tickets
     WHERE ${ACTIVE_TICKET} AND nonce=? AND issuer=? AND subject=?`)
     .bind(ticketHash,ticket.nonce,identity.issuer,identity.subject).run();
-  return result.success===true && result.meta?.changes===1;
+  if(result.success!==true || result.meta?.changes!==1)return reject('ticket_changed');
+  return true;
 }

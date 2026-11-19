@@ -104,6 +104,7 @@ app.post('/api/platform/setup',limitIngress,limitBody,async c=>{
   const enrolled=await bootstrapPlatformSuperAdmin({
     controlDb:c.env.CONTROL_DB,clientId:c.env.PLATFORM_CLIENT_ID,
     setupToken:getCookie(c,SETUP_COOKIE),credential:body.credential,
+    onRejected:reason=>console.warn('platform_enrollment_denied',reason),
   });
   setCookie(c,SETUP_COOKIE,'',{...COOKIE,maxAge:0});
   return enrolled?c.json({enrolled:true}):denied(c);
