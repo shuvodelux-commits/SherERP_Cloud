@@ -23,6 +23,16 @@ node --test tests/integration/m03-tenant-binding-pilot-workerd.spec.mjs
 
 Before opening the Owner flow, prove atomic invite acceptance and overlapping provisioning retries, test actual sessions with two nonproduction shops, rehearse backup and recovery, and measure binding changes and limits at the planned scale. Keep historical SQL import separate from account configuration and point the business import at the intended shop database only after reconciliation.
 
+## Local first Owner reservation and invite proof
+
+An isolated fixture reuses the real platform session schema and performs each authorization and write in one SQL statement. The unique shop and operation IDs prevent duplicate reservations. The first Owner membership is the durable invitation consumption record, so repeated or concurrent acceptance cannot add another Owner. Only the exact intended verified Google issuer and subject can accept an unexpired invitation for a ready shop.
+
+The fixture supplies a verified identity directly and marks provisioning ready in test setup. Hosted Google verification, the readiness and database identity attestation, operator invite delivery and the production schema require separate implementation and review. This proof does not register a route or create a cloud database. A production design must retain consumption independently of any future membership removal.
+
+```sh
+node --test tests/integration/m03-owner-onboarding-workerd.spec.mjs
+```
+
 ## First-admin enrollment proof
 
 The internal bootstrap uses a trusted Control D1 binding and OAuth client ID. A future operator flow must preapprove the exact Google issuer and subject, mint a random 256-bit setup token and a unique Google nonce, and cap ticket validity at ten minutes. The proposed schema stores the token digest. Keep setup tokens out of URLs, logs and GitHub. The bootstrap checks the signed credential against the ticket nonce and the preapproved subject. Its conditional D1 insert consumes the ticket by recording it in the permanent first-admin enrollment row. The row stays immutable as an audit record, including if future operational access is revoked or recovered.
