@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {revokeOwnerSession} from '../../src/auth/platform-owner-sessions.js';
+import {revokeOwnerSession,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {startCleanShopHarness} from '../fixtures/m03-clean-shop-harness.mjs';
 
 test('a new Owner creates a first zero-stock product in an empty shop without archive rows or cross-shop access',async()=>{
@@ -36,6 +36,10 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     assert.equal((await (await request('b',ownerB.token)).json()).data[0].sellingPrice,'14.50');
     assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM legacy_product_snapshots').first()).n,0);
     assert.equal((await SHOP_B_DB.prepare('SELECT count(*) AS n FROM legacy_product_snapshots').first()).n,0);
+    await SHOP_A_DB.prepare('UPDATE fixture_owner_write_grants SET enabled=0').run();
+    assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
+    assert.equal((await request('a',ownerA.token,{...draft,name:'New after revoke',operationId:crypto.randomUUID()})).status,409);
+    assert.equal((await request('a',ownerA.token,draft)).status,409);
     assert.equal(await revokeOwnerSession(ownerA.env,ownerA.token),true);
     assert.equal((await request('a',ownerA.token,{...draft,operationId:crypto.randomUUID()})).status,401);
     assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM products').first()).n,1);
