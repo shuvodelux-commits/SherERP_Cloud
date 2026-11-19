@@ -55,9 +55,9 @@ after(async()=>{
   try{await harness?.close();}finally{if(directory)await rm(directory,{recursive:true,force:true});}
 });
 
-function credential(nonce){
+function credential(nonce,googleSubject=subject){
   const now=Math.floor(Date.now()/1000);
-  const claims={iss:issuer,sub:subject,aud:clientId,nonce,email_verified:true,iat:now-1,exp:now+120};
+  const claims={iss:issuer,sub:googleSubject,aud:clientId,nonce,email_verified:true,iat:now-1,exp:now+120};
   const input=encode({alg:'RS256',kid})+'.'+encode(claims);
   return input+'.'+sign('RSA-SHA256',Buffer.from(input),privateKey).toString('base64url');
 }
@@ -253,7 +253,7 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   const inviteRequest={cookie:session,payload:{googleSubject:'654000000000000000002'}};
   assert.equal((await call(invitePath,inviteRequest)).status,404);
   assert.equal((await publicWorker.fetch(new Request(origin+invitePath,{method:'POST'}),{})).status,404);
-  const inviteBindings={...verifyBindings,PLATFORM_OWNER_INVITATION_ENABLED:'true'};
+  const inviteBindings={...verifyBindings,PLATFORM_OWNER_INVITATION_ENABLED:'true',PLATFORM_OWNER_CLIENT_ID:clientId};
   const invite=(options={})=>call(invitePath,{...inviteRequest,bindings:inviteBindings,...options});
   assert.equal((await invite({cookie:browser})).status,401);
   assert.equal((await invite({requestOrigin:'https://other.example.test'})).status,403);
@@ -261,6 +261,8 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal((await invite({bindings:{...inviteBindings,PLATFORM_PILOT_DB:otherDb}})).status,409);
   const inviteMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0003_owner_invitations.sql',import.meta.url),'utf8');
   await db.batch(inviteMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
+  const membershipMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0004_first_shop_owner.sql',import.meta.url),'utf8');
+  await db.batch(membershipMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
   assert.equal((await invite()).status,409,'the live shop identity is not sufficient without a binding receipt');
   const results=await Promise.all([verify(),verify()]);
   assert.deepEqual(results.map(result=>result.status).sort(),[200,201]);
@@ -308,6 +310,27 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
     recipient_subject:inviteRequest.payload.googleSubject,issued_by_subject:subject});
   assert.equal((await invite()).status,409);
   await assert.rejects(db.prepare('DELETE FROM platform_owner_invitations').run(),/immutable/);
+
+  const {readOwnerInviteChallenge,acceptOwnerInvite}=await import('../../src/auth/platform-owner-acceptance.js');
+  const expiredCode=randomBytes(32).toString('hex');
+  await db.prepare(`INSERT INTO platform_owner_invitations
+    (token_hash,shop_id,recipient_issuer,recipient_subject,issued_by_subject,issued_at_ms,expires_at_ms)
+    VALUES (?,?,?,?,?,1,2)`).bind(hash(expiredCode),reservation.shopId,issuer,inviteRequest.payload.googleSubject,subject).run();
+  assert.equal(await readOwnerInviteChallenge(inviteBindings,expiredCode),null);
+  assert.equal(await readOwnerInviteChallenge(inviteBindings,randomBytes(32).toString('hex')),null);
+  const nonceForOwner=await readOwnerInviteChallenge(inviteBindings,inviteCode);
+  assert.match(nonceForOwner,/^[A-Za-z0-9_-]{43}$/);
+  const accept=(googleCredential,bindings=inviteBindings)=>acceptOwnerInvite(bindings,{inviteCode,credential:googleCredential});
+  const ownerCredential=credential(nonceForOwner,inviteRequest.payload.googleSubject);
+  assert.equal(await accept(credential(nonceForOwner)),null);
+  assert.equal(await accept(credential(setupNonce,inviteRequest.payload.googleSubject)),null);
+  assert.equal(await accept(ownerCredential,{...inviteBindings,PLATFORM_PILOT_DB:otherDb}),null);
+  const accepted=await Promise.all([accept(ownerCredential),accept(ownerCredential)]);
+  assert.deepEqual(accepted.filter(Boolean),[{shopId:reservation.shopId,role:'Owner'}]);
+  assert.equal(await readOwnerInviteChallenge(inviteBindings,inviteCode),null);
+  assert.equal(await accept(ownerCredential),null);
+  assert.equal((await invite()).status,409);
+  await assert.rejects(db.prepare('DELETE FROM platform_first_shop_owners').run(),/immutable/);
 
   let signedOut=false;
   const reservationRaceDb={

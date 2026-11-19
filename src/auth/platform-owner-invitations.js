@@ -27,8 +27,9 @@ export async function issuePlatformOwnerInvitation(env,{googleSubject,sessionTok
     AND EXISTS(SELECT 1 FROM platform_shop_bindings b
       WHERE b.shop_id=? AND b.database_id=? AND b.database_marker=? AND b.verified_by_subject=f.subject)
     AND NOT EXISTS(SELECT 1 FROM platform_owner_invitations WHERE shop_id=? AND expires_at_ms>${NOW})
+    AND NOT EXISTS(SELECT 1 FROM platform_first_shop_owners WHERE shop_id=?)
     RETURNING expires_at_ms AS expiresAtMs`)
-    .bind(inviteHash,shopId,GOOGLE_ISSUER,googleSubject,LIFETIME_MS,sessionHash,shopId,databaseId,databaseMarker,shopId).first();
+    .bind(inviteHash,shopId,GOOGLE_ISSUER,googleSubject,LIFETIME_MS,sessionHash,shopId,databaseId,databaseMarker,shopId,shopId).first();
   if(!receipt)return {status:'conflict'};
   return {status:'created',inviteCode,expiresAtMs:receipt.expiresAtMs};
 }
