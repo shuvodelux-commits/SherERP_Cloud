@@ -100,3 +100,12 @@ test('the public Worker health remains database-free',async()=>{
   const response=await publicWorker.fetch(new Request('https://hisabiq.agnishuvo.workers.dev/api/health'),{});
   assert.equal((await response.json()).database,'not-connected');
 });
+
+test('PORT P1: private native Access admin can use a new account workers.dev host without changing source',async()=>{
+  const other='https://admin-shererp.fresh-shop-account.workers.dev';
+  const otherBindings={...bindings,PLATFORM_AUTH_ORIGIN:other};
+  const accepted=await worker.fetch(request('/',other),otherBindings,{access});
+  assert.equal(accepted.status,200);
+  assert.equal((await worker.fetch(request('/',other),otherBindings,{})).status,403);
+  assert.equal((await worker.fetch(request('/',origin),otherBindings,{access})).status,403);
+});

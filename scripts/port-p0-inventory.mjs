@@ -120,7 +120,7 @@ async function main(){
   if(required.some(path=>!report.pathsScanned.includes(path)) ||
      !report.pathsScanned.some(path=>path.startsWith('.github/workflows/')) ||
      !report.findings.some(row=>row.path==='src/m03-access-platform-auth-worker.js'&&
-       row.kinds.includes('literal_worker_origin')))
+       row.kinds.includes('origin_config')))
     throw new Error('PORT-00 required source coverage unavailable');
   if(process.argv.includes('--check')){
     process.stdout.write('PORT-00 P0: '+report.scannedFileCount+
