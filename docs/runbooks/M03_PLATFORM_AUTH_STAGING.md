@@ -86,6 +86,12 @@ The separate `wrangler.m03-owner-auth-staging.jsonc` bundles the Owner page and 
 
 A later approved staging release needs a distinct client hostname, its exact Google OAuth Authorized JavaScript origin, the verified Control and pilot Shop D1 bindings, and a dedicated ingress limiter. Use the separate Owner OAuth client ID. Set `OWNER_LOGIN_ENABLED` and `OWNER_REDEMPTION_ENABLED` only after reviewing the protected release config, backup, migration status, shop isolation and recovery. Verify the page with the actual Google account, including redemption, sign-in, refresh and logout. The signed-in card shows the shop scope. It does not serve the ERP data dashboard.
 
+## Proposed Gmail approval flow
+
+The intended replacement for manual Owner codes is a private Super Admin approval for one Gmail address and one already verified shop. The Owner opens the existing client site and uses Google sign-in. During first sign-in, verify the Google token signature, client ID and fresh browser nonce, then compare its verified Gmail claim to the approved address. Save the stable Google issuer and subject atomically for future sign-ins. Compare Gmail addresses case-insensitively and preserve dots and plus tags. No code or Google account ID needs to be copied by the user.
+
+The verifier exposes this claim only in its explicit Gmail mode. The live pilot still needs a reviewed approval write and atomic first-login grant before switching to this flow. Preserve existing audit records and keep Super Admin MFA and shop session revocation.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.

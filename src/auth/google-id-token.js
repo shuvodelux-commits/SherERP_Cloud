@@ -6,6 +6,12 @@ const GOOGLE_KEYS='https://www.googleapis.com/oauth2/v3/certs';
 const GOOGLE_CLIENT=/^[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/;
 const NONCE=/^[A-Za-z0-9_-]{43}$/;
 const COMPACT_JWT=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+const GMAIL=/^[a-z0-9][a-z0-9.+_-]{0,63}@gmail\.com$/i;
+
+export function normalizeGoogleGmail(value){
+  return typeof value==='string'&&GMAIL.test(value)?value.toLowerCase():null;
+}
+
 const SUBJECT=/^[!-~]{1,255}$/;
 
 const VERIFICATION_REASONS=new Map([
@@ -26,7 +32,7 @@ function verificationReason(error){
  * from an existing login challenge. The caller must consume the challenge
  * once and resolve an explicit external-identity link before issuing a session.
  */
-export async function verifyGoogleLoginIdToken({token,clientId,expectedNonce,onRejected}={}){
+export async function verifyGoogleLoginIdToken({token,clientId,expectedNonce,onRejected,requireGmail=false}={}){
   const reject=reason=>{onRejected?.(reason);return null;};
   if(typeof token!=='string' || token.length>8192 || !COMPACT_JWT.test(token) ||
      typeof clientId!=='string' || clientId.length>255 || !GOOGLE_CLIENT.test(clientId) ||
@@ -48,5 +54,7 @@ export async function verifyGoogleLoginIdToken({token,clientId,expectedNonce,onR
   if(claims.nonce!==expectedNonce)return reject('nonce');
   if(claims.email_verified!==true)return reject('email_verification');
   if(typeof claims.sub!=='string' || !SUBJECT.test(claims.sub))return reject('subject');
-  return {issuer:ISSUER,subject:claims.sub};
+  if(!requireGmail)return {issuer:ISSUER,subject:claims.sub};
+  const email=normalizeGoogleGmail(claims.email);
+  return email?{issuer:ISSUER,subject:claims.sub,email}:reject('gmail_claim');
 }

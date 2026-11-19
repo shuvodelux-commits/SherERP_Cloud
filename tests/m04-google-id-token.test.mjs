@@ -87,3 +87,16 @@ test('Google keys use the Worker redirect mode and reject redirected keys',async
   assert.equal(await verify(makeToken()),null);
   assert.equal(fetchKeys.mock.callCount(),2);
 });
+
+test('Gmail Owner verification requires a signed verified Gmail claim and returns its exact address',async t=>{
+  stubGoogleKeys(t);
+  const check=token=>verifyGoogleLoginIdToken({token,clientId,expectedNonce:nonce,requireGmail:true});
+  assert.deepEqual(await check(makeToken({email:'Owner.Test+Pilot@GMAIL.com'})),{
+    issuer:'https://accounts.google.com',subject,email:'owner.test+pilot@gmail.com',
+  });
+  for(const claims of [
+    {email:'owner@example.test'},{email:'owner@gmail.com',email_verified:false},
+    {email:'owner@gmail.com.evil.test'},{email:' owner@gmail.com'},{email:undefined},
+  ])assert.equal(await check(makeToken(claims)),null);
+  assert.deepEqual(await verify(makeToken({email:'owner@gmail.com'})),{issuer:'https://accounts.google.com',subject});
+});
