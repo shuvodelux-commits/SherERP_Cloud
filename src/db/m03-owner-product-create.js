@@ -40,12 +40,12 @@ export async function createOwnerProduct(scope,{token,ownerSubject,input}){
   if(!payload)return {status:'invalid'};
   const tokenHash=await hashOpaqueSessionToken(token);
   if(!tokenHash)return {status:'denied'};
-  const {shopDb,shopId,databaseId,databaseMarker}=scope;
+  const {shopDb:DB,shopId,databaseId,databaseMarker}=scope;
   const actorId='google:'+ownerSubject;
   const intent=await hashCanonicalOperationIntent({tenantId:shopId,actorId,operationType:'products.add',payload});
   const authority=[shopId,databaseId,databaseMarker,tokenHash];
-  const [write,read]=await shopDb.batch([
-    shopDb.prepare(`INSERT INTO owner_product_create_receipts
+  const [write,read]=await DB.batch([
+    DB.prepare(`INSERT INTO owner_product_create_receipts
       (operation_id,actor_id,intent_hash,name_key,payload,created_at_ms)
       SELECT ?,?,?,?,?,CAST(unixepoch('subsec')*1000 AS INTEGER)
       WHERE ${EXACT_AUTHORITY} AND ${CLEAN_PRODUCT_SOURCE}
@@ -55,7 +55,7 @@ export async function createOwnerProduct(scope,{token,ownerSubject,input}){
           WHERE r.name_key=? AND p.is_deleted=0)
       RETURNING sequence`).bind(input.operationId,actorId,intent,payload.name.toLowerCase(),
         JSON.stringify(payload),...authority,input.operationId,payload.name.toLowerCase()),
-    shopDb.prepare(`SELECT ${EXACT_AUTHORITY} AS authorized, (${CLEAN_PRODUCT_SOURCE}) AS clean,
+    DB.prepare(`SELECT ${EXACT_AUTHORITY} AS authorized, (${CLEAN_PRODUCT_SOURCE}) AS clean,
       r.sequence,r.actor_id,r.intent_hash FROM (SELECT 1) context
       LEFT JOIN owner_product_create_receipts r ON r.operation_id=?`).bind(...authority,input.operationId),
   ]);
