@@ -41,7 +41,9 @@ export async function startCleanShopHarness(){
     const controlMigrations=await migrationQueue(join(temp,'control'),[
       '0001_shop_reservations','0002_shop_bindings','0003_owner_invitations',
       '0004_first_shop_owner','0005_owner_sessions','0006_owner_login_challenges',
-    ].map(name=>`staging-migrations/platform-onboarding/${name}.sql`));
+    ].map(name=>`staging-migrations/platform-onboarding/${name}.sql`).concat(
+      'staging-migrations/platform-owner-write/0009_owner_session_generation.sql',
+    ));
     const shopMigrations=await migrationQueue(join(temp,'shop'),[
       'staging-migrations/shop-identity/0001_shop_identity.sql','migrations/0001_core_catalog.sql',
       'migrations/0012_legacy_product_snapshots.sql','migrations/0013_product_catalog_revisions.sql',
