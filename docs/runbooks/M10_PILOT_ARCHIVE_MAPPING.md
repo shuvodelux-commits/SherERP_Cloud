@@ -15,6 +15,8 @@ Status: offline review candidate. This plan does not authorize an operational im
 
 ## Rehearsal checklist
 
+The Owner approved keeping the populated `Conversion Unit` and `Conversion Factor` pair in the private archive. The first catalog projection excludes both fields from display and calculations. All 481 rows passed exact readback of the canonical projection in disposable Workerd D1. The stock audit found 41 negative lots across 33 products with unverified sale consumption links, so this catalog projection does not establish opening stock or valuation.
+
 1. Run the existing archive row proof privately and retain the workbook and row parity checks. Derive the header plan by exact frozen column name. Keep the full plan private and record only aggregate outcomes.
 2. Recheck zero rows from metadata and the actual read-only SQLite tables. Distinguish an empty sheet from a missing sheet or omitted capture. Hold unexpected changes.
 3. For the product rehearsal, use the existing bounded canonical snapshot importer on a disposable Workerd/D1 binding. Confirm contiguous original positions and unique original Product IDs. Keep extra cells untouched in the source archive, count any null-to-empty projection, and compare the projected fields exactly on readback. Confirm replay is refused and active catalog tables remain empty.

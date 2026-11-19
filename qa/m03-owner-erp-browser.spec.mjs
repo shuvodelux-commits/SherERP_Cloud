@@ -31,6 +31,11 @@ before(async()=>{
         response.end(JSON.stringify({success:true,data:appShell}));
         return;
       }
+      if(path==='/api/owner/catalog'){
+        response.writeHead(200,{'Content-Type':'application/json'});
+        response.end(JSON.stringify({data:[{productId:'P1',name:'Fixture Drill',category:'Tools',brand:'Maker',unit:'Each',listedPrice:'12.50'}]}));
+        return;
+      }
       if(path==='/api/owner/auth/logout'&&request.method==='POST'){
         logoutCount++;
         response.writeHead(200,{'Content-Type':'application/json'});
@@ -88,6 +93,15 @@ test('Owner session restore opens ERP modules, blocks RPC, and signs out through
     assert.equal(await page.locator('#loginMobile, #loginPassword').count(),0);
     await page.waitForLoadState('networkidle');
     assert.equal(rpcCount,0,'the Owner UI must not send business RPCs');
+
+    await page.locator('#navList .nav-item[aria-label="Products"]').click();
+    const product=page.locator('#prodTableBody tr').filter({hasText:'Fixture Drill'});
+    await product.waitFor({timeout:5000});
+    assert.match(await product.innerText(),/12\.50/);
+    assert.equal(await product.getByText('Unavailable',{exact:true}).count(),3);
+    assert.equal(await page.locator('#prodAddBtn').isVisible(),false);
+    await page.locator('#prodSearch').fill('not in the catalog');
+    await product.waitFor({state:'hidden'});
 
     await page.locator('#logoutBtn').click();
     await page.locator('#confirmActionModal:not([hidden])').waitFor();

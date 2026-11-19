@@ -4,6 +4,7 @@ import {bodyLimit} from 'hono/body-limit';
 import {getCookie,setCookie} from 'hono/cookie';
 import {acceptOwnerInvite,readOwnerInviteChallenge} from './auth/platform-owner-acceptance.js';
 import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
+import {readOwnerCatalog} from './db/m03-owner-catalog-read.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 
@@ -85,6 +86,17 @@ app.post('/api/owner/setup',protect('OWNER_REDEMPTION_ENABLED'),limitBody,async 
 });
 
 const protectLogin=protect('OWNER_LOGIN_ENABLED');
+
+app.get('/api/owner/catalog',protectLogin,async c=>{
+  if(c.env.OWNER_CATALOG_ENABLED!=='true')return c.notFound();
+  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE));
+  if(!session)return denied(c);
+  try{
+    return c.json({data:await readOwnerCatalog(c.env.PLATFORM_PILOT_DB)});
+  }catch{
+    return c.json({error:'Owner catalog unavailable'},503);
+  }
+});
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{
   const challenge=await beginOwnerGoogleLogin(c.env)??

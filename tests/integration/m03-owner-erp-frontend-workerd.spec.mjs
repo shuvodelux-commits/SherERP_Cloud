@@ -68,6 +68,7 @@ test('Owner session serves ERP app and source navigation, then revocation remove
     PLATFORM_OWNER_CLIENT_ID:'654-example.apps.googleusercontent.com',
     PLATFORM_PILOT_SHOP_ID:shopId,PLATFORM_PILOT_D1_ID:cfg.d1_databases[1].database_id,
     PLATFORM_PILOT_MARKER:marker,OWNER_LOGIN_ENABLED:'true',OWNER_DASHBOARD_BOOTSTRAP_ENABLED:'true',
+    OWNER_CATALOG_ENABLED:'true',
   }}]});
   try{
     await harness.listen();
@@ -127,8 +128,24 @@ test('Owner session serves ERP app and source navigation, then revocation remove
     assert.equal(module.status,200);
     assert.equal(module.headers.get('cache-control'),'no-store');
 
+    const catalogPath=origin+'/api/owner/catalog';
+    const catalog=()=>worker.fetch(catalogPath,{headers:{Cookie:cookie}});
+    assert.equal((await catalog()).status,503);
+    const productMigration=await readFile('migrations/0012_legacy_product_snapshots.sql','utf8');
+    const productTable=productMigration.match(/CREATE TABLE legacy_product_snapshots \([\s\S]*?\) STRICT;/)[0];
+    await env.PLATFORM_PILOT_DB.prepare(productTable).run();
+    await env.PLATFORM_PILOT_DB.prepare(`INSERT INTO legacy_product_snapshots
+      (source_profile,legacy_sheet_row,product_id,product_name,current_stock_text)
+      VALUES ('canonical',2,'P1','Fixture Product','99')`).run();
+    const catalogResponse=await catalog();
+    assert.equal(catalogResponse.status,200);
+    assert.equal(catalogResponse.headers.get('cache-control'),'no-store');
+    assert.deepEqual(await catalogResponse.json(),{data:[
+      {productId:'P1',name:'Fixture Product',brand:'',category:'',unit:'',listedPrice:''},
+    ]});
     assert.equal(await revokeOwnerSession(env,sessionToken),true);
     assert.equal(await validateOwnerSession(env,sessionToken),null);
+    assert.equal((await catalog()).status,401);
   }finally{
     await harness.close();
   }
