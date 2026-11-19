@@ -15,9 +15,9 @@ GitHub `main` verified through `7ff6050` (#704). The [clean business milestone #
 
 ## Next visible milestone
 
-**An Owner signs in and saves the first real product for one empty staging shop.** Reuse the original form and operational \`products\` table. Start with a standard product and zero opening stock. The remaining work is:
+**An Owner signs in and saves the first real product for one empty staging shop.** Reuse the original form and operational `products` table. Start with a standard product and zero opening stock. The remaining work is:
 
-1. Connect live-candidate Owner sign-in, sign-out, and access removal to the Shop D1 grant. Keep the permission check inside the product mutation. Control D1 and Shop D1 do not share a transaction, so prove that interrupted or reordered grant updates cannot restore write access after revocation. See \`M04_ATOMIC_AUTHORITY_BOUNDARY.md\` and \`M03_G1_INTEGRATION_HANDOFF.md\`.
+1. Connect live-candidate Owner sign-in, sign-out, and access removal to the Shop D1 grant. Keep the permission check inside the product mutation. Control D1 and Shop D1 do not share a transaction, so prove that interrupted or reordered grant updates cannot restore write access after revocation. See `M04_ATOMIC_AUTHORITY_BOUNDARY.md` and `M03_G1_INTEGRATION_HANDOFF.md`.
 2. Connect the form to a real Product ID and operation receipt. Verify one save on retry, changed-payload rejection, cross-shop denial, refusal after revocation, and no committed row on failure. Reuse the #692 browser flow against the actual release candidate.
 3. After current CI, review, and staging release approval, verify the first product save in the browser on the approved empty shop. Keep the existing pilot and historical archive separate from this test.
 
@@ -29,4 +29,4 @@ GitHub `main` verified through `7ff6050` (#704). The [clean business milestone #
 
 ## Opening the next chat
 
-> Continue SherERP Cloud issue #690. Read \`docs/CLEAN_SHOP_HANDOFF.md\`, \`AGENTS.md\`, and \`docs/PARALLEL_EXECUTION.md\` from the latest GitHub main. Verify open PRs and what is deployed, then make a high-level plan to get a new empty business working. Keep the setup simple for Super Admin, reuse the existing ERP screens, and put historical imports after the clean business workflow works end to end.
+> Continue SherERP Cloud issue #690. Read `docs/CLEAN_SHOP_HANDOFF.md`, `AGENTS.md`, and `docs/PARALLEL_EXECUTION.md` from the latest GitHub main. Verify open PRs and what is deployed, then make a high-level plan to get a new empty business working. Keep the setup simple for Super Admin, reuse the existing ERP screens, and put historical imports after the clean business workflow works end to end.
