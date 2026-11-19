@@ -81,6 +81,47 @@ test('bank purchase records bank debit and no Cash Book movement; fully paid pur
   assert.equal((await one("SELECT payable_paisa FROM m05_suppliers WHERE supplier_id='SUP-1'")).payable_paisa,4000);
 });
 
+test('reference purchases preserve separate supplier lots, payable and drawer movement on local D1',async()=>{
+  await DB.batch([
+    DB.prepare("UPDATE m05_products SET stock=0 WHERE tenant_id='SHOP-A' AND sku='PIPE'"),
+    DB.prepare("UPDATE m05_suppliers SET payable_paisa=0 WHERE tenant_id='SHOP-A' AND supplier_id='SUP-1'"),
+  ]);
+  const credit=input('OP-REFERENCE-CREDIT',{
+    qty:10,unitPrice:'60.00',discount:'0',paidAmount:'0',
+  });
+  const cash=input('OP-REFERENCE-CASH',{
+    qty:10,expectedVersion:2,unitPrice:'75.00',discount:'0',paidAmount:'750.00',date:'2026-11-11',
+  });
+
+  assert.equal((await poster().post(credit)).status,'COMMITTED');
+  assert.equal((await poster().post(cash)).status,'COMMITTED');
+  assert.deepEqual(await rows(`SELECT supplier_id,qty,unit_cost_paisa,purchase_date
+    FROM m05_lots ORDER BY purchase_date`),[
+    {supplier_id:'SUP-1',qty:10,unit_cost_paisa:6000,purchase_date:'2026-11-10'},
+    {supplier_id:'SUP-1',qty:10,unit_cost_paisa:7500,purchase_date:'2026-11-11'},
+  ]);
+  assert.deepEqual(await rows(`SELECT grand_paisa,paid_paisa,due_paisa,payment_method
+    FROM m05_purchases ORDER BY purchase_date`),[
+    {grand_paisa:60000,paid_paisa:0,due_paisa:60000,payment_method:''},
+    {grand_paisa:75000,paid_paisa:75000,due_paisa:0,payment_method:'Cash'},
+  ]);
+  assert.deepEqual(await one('SELECT SUM(qty*unit_cost_paisa) AS value_paisa FROM m05_lots'),{value_paisa:135000});
+  assert.deepEqual(await rows('SELECT balance_stock FROM m05_movements ORDER BY balance_stock'),
+    [{balance_stock:10},{balance_stock:20}]);
+  assert.deepEqual(await rows('SELECT debit_paisa,balance_paisa FROM m05_supplier_ledger'),
+    [{debit_paisa:60000,balance_paisa:60000}]);
+  assert.deepEqual(await rows('SELECT debit_paisa FROM m05_cash_book'),[{debit_paisa:75000}]);
+  assert.deepEqual(await rows('SELECT debit_paisa FROM m05_bank_book'),[]);
+  assert.equal((await one("SELECT stock FROM m05_products WHERE tenant_id='SHOP-A' AND sku='PIPE'")).stock,20);
+  assert.equal((await one("SELECT payable_paisa FROM m05_suppliers WHERE tenant_id='SHOP-A' AND supplier_id='SUP-1'")).payable_paisa,60000);
+  assert.equal((await one("SELECT customer_ar_paisa FROM m05_unrelated_accounts WHERE party_id='PARTY-1'")).customer_ar_paisa,9000);
+
+  const committed=await snapshot();
+  assert.equal((await poster().post(credit)).status,'REPLAY');
+  assert.equal((await poster().post(cash)).status,'REPLAY');
+  assert.deepEqual(await snapshot(),committed);
+});
+
 test('operation replay is exactly once and mutated intent or actor conflicts without effects',async()=>{
   const purchase=input('OP-PUR-000003');
   assert.equal((await poster().post(purchase)).status,'COMMITTED');
@@ -99,6 +140,8 @@ test('stale product version, inactive supplier, unreviewed Party link, closed se
     ['OP-STALE-0002',"UPDATE m05_suppliers SET active=0",{}],
     ['OP-STALE-0003',"UPDATE m05_party_links SET reviewed=0",{}],
     ['OP-STALE-0004',"UPDATE m05_sessions SET state='Closed'",{}],
+    ['OP-STALE-CREDIT',"UPDATE m05_sessions SET state='Closed'",{paidAmount:'0'}],
+    ['OP-STALE-BANK',"UPDATE m05_sessions SET state='Closed'",{paymentMethod:'Bank',bankAccountId:'BANK-1'}],
     ['OP-STALE-0005',"UPDATE m05_banks SET active=0",{paymentMethod:'Bank',bankAccountId:'BANK-1'}]
   ]){
     if(sql)await DB.prepare(sql).run();
