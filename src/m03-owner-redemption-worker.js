@@ -3,6 +3,7 @@ import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCookie,setCookie} from 'hono/cookie';
 import {acceptOwnerInvite,readOwnerInviteChallenge} from './auth/platform-owner-acceptance.js';
+import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 
@@ -12,6 +13,11 @@ const LOGIN_COOKIE='__Host-shererp-owner-login';
 const SESSION_COOKIE='__Host-shererp-owner-session';
 const COOKIE={path:'/',secure:true,httpOnly:true,sameSite:'Strict'};
 const GOOGLE_CLIENT=/^[a-zA-Z0-9-]{1,218}\.apps\.googleusercontent\.com$/;
+const OWNER_APP_ASSETS=new Set([
+  'm01-products-preview-controller.mjs','m05-product-form-stock-preview.js',
+  'm05-product-unit-price-profile.js','m05-tile-stock-view.js',
+  'product-unit-conversions.js','tile-quantity-contract.js',
+]);
 const denied=c=>c.json({error:'Owner setup denied'},401);
 const unavailable=c=>c.json({error:'Owner setup unavailable'},503);
 
@@ -124,6 +130,59 @@ const pageCsp=[
   "connect-src 'self' https://accounts.google.com/gsi/","frame-src https://accounts.google.com/gsi/",
 ].join('; ');
 
+const erpPageCsp=[
+  "default-src 'self'","base-uri 'self'","frame-ancestors 'none'","form-action 'none'",
+  "script-src 'self' 'unsafe-inline'","style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com","img-src 'self' data: blob:",
+  "connect-src 'self'","object-src 'none'",
+].join('; ');
+
+app.get('/app',protectLogin,async c=>{
+  if(c.env.OWNER_DASHBOARD_BOOTSTRAP_ENABLED!=='true')return c.notFound();
+  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE),{dashboard:true});
+  if(!session)return c.redirect('/',302);
+  const assets=c.env.ASSETS;
+  if(typeof assets?.fetch!=='function')return unavailable(c);
+  const reply=await assets.fetch(new Request(new URL('/owner-erp.html',c.req.url)));
+  if(reply.status!==200)return unavailable(c);
+  c.header('Cache-Control','no-store');
+  c.header('Content-Security-Policy',erpPageCsp);
+  c.header('Referrer-Policy','no-referrer');
+  c.header('X-Content-Type-Options','nosniff');
+  return c.body(await reply.text(),200,{'Content-Type':'text/html; charset=utf-8'});
+});
+
+app.get('/index.html',protectLogin,async c=>{
+  if(c.env.OWNER_DASHBOARD_BOOTSTRAP_ENABLED!=='true')return c.notFound();
+  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE),{dashboard:true});
+  return session?c.redirect('/app',302):denied(c);
+});
+
+app.get('/m05-products/*',protectLogin,async c=>{
+  if(c.env.OWNER_DASHBOARD_BOOTSTRAP_ENABLED!=='true')return c.notFound();
+  const filename=c.req.path.slice('/m05-products/'.length);
+  if(!OWNER_APP_ASSETS.has(filename))return c.notFound();
+  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE),{dashboard:true});
+  if(!session)return denied(c);
+  const assets=c.env.ASSETS;
+  if(typeof assets?.fetch!=='function')return unavailable(c);
+  const reply=await assets.fetch(new Request(new URL(c.req.path,c.req.url)));
+  if(reply.status!==200)return c.notFound();
+  c.header('Cache-Control','no-store');
+  c.header('X-Content-Type-Options','nosniff');
+  return c.body(reply.body,200,{'Content-Type':'text/javascript; charset=utf-8'});
+});
+
+app.get('/api/owner/app-shell',protectLogin,async c=>{
+  if(c.env.OWNER_DASHBOARD_BOOTSTRAP_ENABLED!=='true')return c.notFound();
+  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE),{dashboard:true});
+  if(!session)return denied(c);
+  const source=buildSourceAppShellData({
+    shopName:session.dashboard.displayName,currencySymbol:'',
+  });
+  return c.json({success:true,data:source.data});
+});
+
 for(const [route,path,type] of [
   ['/','/index.html','text/html; charset=utf-8'],
   ['/owner-auth.css','/owner-auth.css','text/css; charset=utf-8'],
@@ -139,9 +198,12 @@ for(const [route,path,type] of [
     c.header('Cross-Origin-Opener-Policy','same-origin-allow-popups');
     c.header('Referrer-Policy','strict-origin-when-cross-origin');
     const html=await reply.text();
-    const marker=c.env.OWNER_GMAIL_SIGNUP_ENABLED==='true'?'data-gmail-signin="enabled"':
-      c.env.OWNER_REDEMPTION_ENABLED==='true'?'data-redemption="enabled"':'';
-    const content=marker?html.replace('<body>','<body '+marker+'>'):html;
+    const markers=[
+      c.env.OWNER_GMAIL_SIGNUP_ENABLED==='true'?'data-gmail-signin="enabled"':'',
+      c.env.OWNER_REDEMPTION_ENABLED==='true'?'data-redemption="enabled"':'',
+      c.env.OWNER_DASHBOARD_BOOTSTRAP_ENABLED==='true'?'data-owner-erp="enabled"':'',
+    ].filter(Boolean).join(' ');
+    const content=markers?html.replace('<body>','<body '+markers+'>'):html;
     return c.body(content,200,{'Content-Type':type});
   });
 }

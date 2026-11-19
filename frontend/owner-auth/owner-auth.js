@@ -59,6 +59,12 @@ function googleSdk(){
 
 function showSession(session){
   if(session.role!=='Owner'||typeof session.shopId!=='string')throw new Error('Owner session missing');
+  if(document.body.dataset.ownerErp==='enabled'){
+    if(typeof session.dashboard?.displayName!=='string'||session.dashboard.dataAvailable!==false)
+      throw new Error('Owner dashboard session missing');
+    window.location.replace('/app');
+    return;
+  }
   byId('shop-reference').textContent='Shop ID: '+session.shopId;
   const dashboard=session.dashboard;
   const showDashboard=typeof dashboard?.displayName==='string'&&dashboard.dataAvailable===false;
