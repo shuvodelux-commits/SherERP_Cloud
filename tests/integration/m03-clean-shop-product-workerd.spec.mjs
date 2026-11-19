@@ -37,7 +37,7 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     assert.equal((await (await request('b',ownerB.token)).json()).data[0].sellingPrice,'14.50');
     assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM legacy_product_snapshots').first()).n,0);
     assert.equal((await SHOP_B_DB.prepare('SELECT count(*) AS n FROM legacy_product_snapshots').first()).n,0);
-    await SHOP_A_DB.prepare('UPDATE fixture_owner_write_grants SET enabled=0').run();
+    await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
     assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
     assert.equal((await request('a',ownerA.token,{...draft,name:'New after revoke',operationId:crypto.randomUUID()})).status,409);
     assert.equal((await request('a',ownerA.token,draft)).status,409);
@@ -62,7 +62,7 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     const nextDraft={...draft,name:'Replacement session product',operationId:crypto.randomUUID()};
     assert.equal((await request('b',ownerB.token,nextDraft)).status,401);
     assert.equal((await request('b',replacement,nextDraft)).status,201);
-    await SHOP_B_DB.prepare('UPDATE fixture_owner_write_grants SET enabled=0').run();
+    await SHOP_B_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
     assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,replacement,2),false);
     assert.equal((await request('b',replacement,{...nextDraft,name:'Late grant',operationId:crypto.randomUUID()})).status,409);
     const logoutA=await worker.fetch('https://a.example.test/__clean_shop__/logout',{
