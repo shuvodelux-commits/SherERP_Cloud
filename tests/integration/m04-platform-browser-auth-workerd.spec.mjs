@@ -22,7 +22,8 @@ const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
 const hash=token=>createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
 const pilotDatabaseId=randomUUID();
 const otherDatabaseId=randomUUID();
-let db,env,pilotDb,otherDb,harness,directory;
+const gmailDbId=randomUUID();
+let db,env,pilotDb,otherDb,gmailDb,harness,directory;
 
 before(async()=>{
   directory=await mkdtemp(join(tmpdir(),'shererp-private-binding-proof-'));
@@ -33,11 +34,12 @@ before(async()=>{
   config.d1_databases.push(
     {binding:'PILOT_DB',database_name:'fixture-pilot',database_id:pilotDatabaseId,remote:false},
     {binding:'OTHER_DB',database_name:'fixture-other',database_id:otherDatabaseId,remote:false},
+    {binding:'GMAIL_DB',database_name:'fixture-gmail',database_id:gmailDbId,remote:false},
   );
   await writeFile(configPath,JSON.stringify(config),{mode:0o600});
   harness=createTestHarness({workers:[{configPath}]});
   await harness.listen();
-  ({DB:db,PILOT_DB:pilotDb,OTHER_DB:otherDb}=await harness.getWorker(config.name).getEnv());
+  ({DB:db,PILOT_DB:pilotDb,OTHER_DB:otherDb,GMAIL_DB:gmailDb}=await harness.getWorker(config.name).getEnv());
   for(const name of ['0001_platform_bootstrap','0002_platform_sessions']){
     const sql=await readFile(new URL('../../staging-migrations/platform-auth/'+name+'.sql',import.meta.url),'utf8');
     await db.batch(sql.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
@@ -55,9 +57,9 @@ after(async()=>{
   try{await harness?.close();}finally{if(directory)await rm(directory,{recursive:true,force:true});}
 });
 
-function credential(nonce,googleSubject=subject){
+function credential(nonce,googleSubject=subject,email){
   const now=Math.floor(Date.now()/1000);
-  const claims={iss:issuer,sub:googleSubject,aud:clientId,nonce,email_verified:true,iat:now-1,exp:now+120};
+  const claims={iss:issuer,sub:googleSubject,email,aud:clientId,nonce,email_verified:true,iat:now-1,exp:now+120};
   const input=encode({alg:'RS256',kid})+'.'+encode(claims);
   return input+'.'+sign('RSA-SHA256',Buffer.from(input),privateKey).toString('base64url');
 }
@@ -475,4 +477,63 @@ test('D1 limits parallel browser challenge creation before external verification
   for(const denied of responses.filter(r=>r.status===429)){
     assert.equal(denied.headers.has('Set-Cookie'),false);
   }
+});
+
+test('approved Gmail signs in directly and claims only its intended shop once',async t=>{
+  googleKeys(t);
+  const {default:ownerWorker}=await import('../../src/m03-owner-redemption-worker.js');
+  const now=Date.now();
+  const shopId=randomUUID(),marker=randomUUID();
+  const address='fixture.owner@gmail.com';
+  const ownerOrigin='https://owner.example.test';
+  const bindings={...env,PLATFORM_PILOT_DB:gmailDb,PLATFORM_PILOT_SHOP_ID:shopId,PLATFORM_PILOT_D1_ID:gmailDbId,
+    PLATFORM_PILOT_MARKER:marker,OWNER_AUTH_ORIGIN:ownerOrigin,PLATFORM_OWNER_CLIENT_ID:clientId,
+    OWNER_LOGIN_ENABLED:'true',OWNER_REDEMPTION_ENABLED:'true',OWNER_GMAIL_SIGNUP_ENABLED:'true',
+    OWNER_INGRESS:{limit:async()=>({success:true})}};
+  const migrate=async(target,name)=>{
+    const sql=await readFile(new URL('../../staging-migrations/'+name+'.sql',import.meta.url),'utf8');
+    await target.batch(sql.trim().split('-- next statement').map(statement=>target.prepare(statement.trim())));
+  };
+  await migrate(gmailDb,'shop-identity/0001_shop_identity');
+  await gmailDb.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)').bind(shopId,gmailDbId,marker).run();
+  await db.batch([
+    db.prepare('INSERT INTO platform_shop_reservations VALUES (?,?,?,?,?)').bind(shopId,randomUUID(),'Fixture Gmail shop',subject,now),
+    db.prepare('INSERT INTO platform_shop_bindings VALUES (?,?,?,?,?)').bind(shopId,gmailDbId,marker,subject,now),
+    db.prepare('INSERT INTO platform_owner_gmail_approvals VALUES (?,?,?,?)').bind(shopId,address,subject,now),
+  ]);
+  const request=(path,{data,browserCookie,method='POST',config=bindings}={})=>ownerWorker.fetch(new Request(ownerOrigin+'/api/owner'+path,{
+    method,headers:{...(method==='POST'?{Origin:ownerOrigin}:{}),...(data?{'Content-Type':'application/json'}:{}),
+      ...(browserCookie?{Cookie:browserCookie}:{})},body:data?JSON.stringify(data):undefined,
+  }),config);
+  assert.equal((await request('/setup/challenge',{data:{inviteCode:'a'.repeat(64)}})).status,404);
+  await migrate(db,'platform-onboarding/0008_owner_gmail_challenges');
+  const pending=await request('/auth/challenge');
+  const pendingCookie=cookie(pending,'__Host-shererp-owner-login');
+  const pendingNonce=(await pending.json()).nonce;
+  assert.equal((await request('/auth/logout',{browserCookie:pendingCookie})).status,200);
+  assert.equal((await request('/auth/login',{browserCookie:pendingCookie,
+    data:{credential:credential(pendingNonce,'fixture-gmail-subject',address)}})).status,401);
+  const result=await request('/auth/challenge');
+  assert.equal(result.status,200);
+  const browserCookie=cookie(result,'__Host-shererp-owner-login');
+  const {nonce}=await result.json();
+  const login=(email,owner='fixture-gmail-subject',config=bindings)=>request('/auth/login',{
+    data:{credential:credential(nonce,owner,email)},browserCookie,config,
+  });
+  assert.equal((await login('unapproved@gmail.com')).status,401);
+  assert.equal((await login(address,'fixture-gmail-subject',{...bindings,PLATFORM_PILOT_DB:otherDb})).status,401);
+  await db.prepare('UPDATE platform_owner_gmail_approvals SET email=? WHERE shop_id=?').bind('updated@gmail.com',shopId).run();
+  assert.equal((await login(address)).status,401);
+  const attempts=await Promise.all([login('updated@gmail.com'),login('updated@gmail.com')]);
+  assert.deepEqual(attempts.map(result=>result.status).sort(),[200,401]);
+  const ownerCookie=cookie(attempts.find(result=>result.status===200),'__Host-shererp-owner-session');
+  assert.deepEqual(await (await request('/auth/session',{method:'GET',browserCookie:ownerCookie})).json(),{shopId,role:'Owner'});
+  const next=await request('/auth/challenge');
+  assert.equal(next.status,200);
+  const laterNonce=(await next.json()).nonce;
+  const laterCookie=cookie(next,'__Host-shererp-owner-login');
+  assert.equal((await request('/auth/login',{browserCookie:laterCookie,
+    data:{credential:credential(laterNonce,'wrong-google-subject','updated@gmail.com')}})).status,401);
+  assert.equal((await request('/auth/login',{browserCookie:laterCookie,
+    data:{credential:credential(laterNonce,'fixture-gmail-subject')}})).status,200);
 });
