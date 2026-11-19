@@ -56,17 +56,20 @@ for(const [route,asset,type] of [
   ['/platform-auth.js','/platform-auth.js','text/javascript; charset=utf-8'],
 ]){
   app.get(route,async c=>{
-    const assets=c.env.ASSETS;
-    if(typeof assets?.fetch!=='function')return unavailable(c);
-    const assetRequest=new Request(new URL(asset,c.req.url));
-    const reply=await assets.fetch(assetRequest);
-    if(reply.status!==200)return unavailable(c);
+    let body=c.env.platformPageFiles?.[asset];
+    if(typeof body!=='string'){
+      const assets=c.env.ASSETS;
+      if(typeof assets?.fetch!=='function')return unavailable(c);
+      const reply=await assets.fetch(new Request(new URL(asset,c.req.url)));
+      if(reply.status!==200)return unavailable(c);
+      body=reply.body;
+    }
     if(route==='/'){
       c.header('Content-Security-Policy',pageCsp);
       c.header('Cross-Origin-Opener-Policy','same-origin-allow-popups');
       c.header('Referrer-Policy','strict-origin-when-cross-origin');
     }
-    return c.body(reply.body,200,{'Content-Type':type});
+    return c.body(body,200,{'Content-Type':type});
   });
 }
 
