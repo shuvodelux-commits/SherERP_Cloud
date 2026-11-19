@@ -24,6 +24,8 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
   try{
     const page=await browser.newPage({viewport:{width:320,height:640}});
     let active=false;
+    let reservationsEnabled=false;
+    let reservationAttempts=0;
     let delayedChallenge;
     const calls=[];
     await page.route('https://accounts.google.com/gsi/client',route=>route.fulfill({
@@ -50,7 +52,16 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
       const input=request.postDataJSON();
       calls.push({path,input});
       if(path==='/api/platform/auth/session')
-        return route.fulfill({status:active?200:401,json:active?{role:'PlatformSuperAdmin'}:{}});
+        return route.fulfill({status:active?200:401,json:active?{
+          role:'PlatformSuperAdmin',...(reservationsEnabled?{shopReservationEnabled:true}:{}),
+        }:{}});
+      if(path==='/api/platform/shops'){
+        if(++reservationAttempts===1)return route.fulfill({status:503,json:{}});
+        if(reservationAttempts===3)return route.fulfill({status:409,json:{}});
+        return route.fulfill({status:200,json:{
+          shopId:'11111111-1111-4111-8111-111111111111',displayName:input.displayName,status:'reserved',
+        }});
+      }
       if(path.endsWith('/challenge')){
         if(path==='/api/platform/auth/challenge'&&delayedChallenge)await delayedChallenge;
         return route.fulfill({json:{clientId:'123-example.apps.googleusercontent.com',nonce:'a'.repeat(43)}});
@@ -108,6 +119,33 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
     assert.equal(await page.getByLabel('Authenticator code').inputValue(),'');
     assert.deepEqual(await page.evaluate(()=>[localStorage.length,sessionStorage.length,location.search]),[0,0,'']);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),320);
+
+    assert.equal(await page.getByRole('button',{name:'Create business'}).isVisible(),false);
+    reservationsEnabled=true;
+    await page.reload();
+    const create=page.getByRole('button',{name:'Create business'});
+    const businessName=page.getByRole('textbox',{name:'Business name'});
+    await businessName.fill('আমার দোকান',{timeout:5000});
+    await create.click();
+    await page.getByText('Could not confirm the reservation. Retry to check the same request.').waitFor();
+    await page.reload();
+    await businessName.waitFor();
+    assert.equal(await businessName.inputValue(),'আমার দোকান');
+    await create.click();
+    await page.getByText('11111111-1111-4111-8111-111111111111',{exact:false}).waitFor();
+    const requests=calls.filter(call=>call.path==='/api/platform/shops').map(call=>call.input);
+    assert.equal(requests.length,2);
+    assert.deepEqual(requests[0],requests[1]);
+    assert.equal(requests[0].displayName,'আমার দোকান');
+    assert.match(requests[0].operationId,/^[0-9a-f-]{36}$/);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),320);
+    assert.equal(await page.evaluate(()=>sessionStorage.length),0);
+
+    await businessName.fill('Another business');
+    await create.click();
+    await page.getByText('This request conflicts with an existing reservation.',{exact:false}).waitFor();
+    assert.equal(await businessName.isEditable(),true);
+    assert.equal(await page.evaluate(()=>sessionStorage.length),0);
 
     await page.reload();
     await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();

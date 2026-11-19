@@ -129,6 +129,13 @@ app.post('/api/platform/auth/challenge',limitIngress,async c=>{
   return c.json({clientId:c.env.PLATFORM_CLIENT_ID,nonce});
 });
 
+function signedIn(c){
+  return c.json({
+    role:'PlatformSuperAdmin',
+    ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'?{shopReservationEnabled:true}:{}),
+  });
+}
+
 app.post('/api/platform/auth/login',limitIngress,limitBody,async c=>{
   const body=await expectedJson(c,['credential','code']);
   if(!body)return denied(c);
@@ -143,12 +150,12 @@ app.post('/api/platform/auth/login',limitIngress,limitBody,async c=>{
   await revokePlatformSuperAdminSession(db,getCookie(c,SESSION_COOKIE));
   const maxAge=Math.max(0,Math.floor((session.expiresAtMs-Date.now())/1000));
   setCookie(c,SESSION_COOKIE,session.token,{...COOKIE,maxAge});
-  return c.json({role:'PlatformSuperAdmin'});
+  return signedIn(c);
 });
 
 app.get('/api/platform/auth/session',async c=>{
   const session=await validatePlatformSuperAdminSession(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE));
-  return session?c.json({role:session.role}):denied(c);
+  return session?signedIn(c):denied(c);
 });
 
 app.post('/api/platform/auth/logout',async c=>{
