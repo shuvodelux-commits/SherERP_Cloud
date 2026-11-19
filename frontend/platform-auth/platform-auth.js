@@ -13,6 +13,8 @@ const inviteForm=byId('owner-invitation-form');
 const inviteSubject=byId('owner-google-subject');
 const inviteResult=byId('owner-invitation-result');
 const inviteCode=byId('owner-invitation-code');
+const gmailForm=byId('owner-gmail-form');
+const gmailAddress=byId('owner-gmail-address');
 const RESERVATION_DRAFT='shererp-platform-reservation-draft';
 let generation=0;
 let credential;
@@ -32,6 +34,7 @@ function show(view,message=''){
   code.value='';
   clearInviteCode();
   inviteSubject.value='';
+  gmailAddress.value='';
   mount.replaceChildren();
   cancelGoogle.disabled=false;
   status.textContent=message;
@@ -60,6 +63,8 @@ function reservationDraft(){
 function showSignedIn(session){
   show('signed-in');
   businessForm.hidden=session.shopReservationEnabled!==true;
+  gmailForm.hidden=typeof session.ownerGmailApprovalShopId!=='string';
+  byId('owner-gmail-shop').textContent=gmailForm.hidden?'':'Shop '+session.ownerGmailApprovalShopId;
   inviteForm.hidden=typeof session.ownerInvitationShopId!=='string';
   byId('owner-invitation-shop').textContent=inviteForm.hidden?'':'Shop '+session.ownerInvitationShopId;
   businessReceipt.hidden=true;
@@ -157,6 +162,26 @@ inviteForm.addEventListener('submit',async event=>{
     else if(error.message==='400')status.textContent='Check the verified Google account ID.';
     else if(error.message==='409')status.textContent='The shop binding could not be verified or an invitation is already active.';
     else status.textContent='Could not confirm the invitation. Check before issuing another.';
+  }finally{
+    button.disabled=signOut.disabled=false;
+  }
+});
+
+gmailForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const button=gmailForm.querySelector('button[type="submit"]');
+  if(gmailForm.hidden||button.disabled||signOut.disabled)return;
+  button.disabled=signOut.disabled=true;
+  status.textContent='Saving Owner approval…';
+  try{
+    await api('/shops/approve-owner','POST',{email:gmailAddress.value.trim()});
+    gmailAddress.value='';
+    status.textContent='Owner Gmail approved.';
+  }catch(error){
+    if(error.message==='401')show('login','Sign in again to approve the Owner.');
+    else if(error.message==='400')status.textContent='Enter a Gmail address.';
+    else if(error.message==='409')status.textContent='This shop already has an Owner or its database could not be verified.';
+    else status.textContent='Could not save Owner approval. Try again.';
   }finally{
     button.disabled=signOut.disabled=false;
   }
