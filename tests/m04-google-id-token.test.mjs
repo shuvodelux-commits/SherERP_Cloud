@@ -60,3 +60,15 @@ test('Google verification rejects a forged signature, unknown key and unavailabl
   keys.mock.mockImplementation(async()=>new Response(null,{status:503}));
   assert.equal(await verify(makeToken()),null);
 });
+
+test('enrollment diagnostics distinguish rejection stages with fixed labels',async t=>{
+  const outputs=[];
+  const check=token=>verifyGoogleLoginIdToken({token,clientId,expectedNonce:nonce,onRejected:reason=>outputs.push(reason)});
+  const keys=t.mock.method(globalThis,'fetch',async()=>Response.json({keys:[jwk]}));
+  assert.equal(await check(makeToken({nonce:'wrong'})),null);
+  assert.equal(await check(makeToken({aud:'wrong-client'})),null);
+  assert.equal(await check(makeToken({}, {kid:'unknown'})),null);
+  keys.mock.mockImplementation(async()=>new Response(null,{status:503}));
+  assert.equal(await check(makeToken()),null);
+  assert.deepEqual(outputs,['nonce','audience','key_or_token','keys_unavailable']);
+});
