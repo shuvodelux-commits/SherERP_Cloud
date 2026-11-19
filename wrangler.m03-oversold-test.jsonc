@@ -1,0 +1,7 @@
+{
+  "name": "shererp-m03-oversold-local-test",
+  "main": "tests/fixtures/m03-oversold-test-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [{"binding":"DB","database_name":"shererp-m03-oversold-local", "database_id":"00000000-0000-0000-0000-000000000081", "migrations_dir":"migrations"}]
+}
