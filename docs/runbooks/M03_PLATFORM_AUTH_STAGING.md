@@ -56,6 +56,12 @@ The disabled-by-default `POST /api/platform/shops/invite-owner` accepts one fiel
 
 The third migration in the isolated onboarding queue creates the invitation audit table. Keep `PLATFORM_OWNER_INVITATION_ENABLED` unset until the separate Owner acceptance flow is reviewed, including Google signature, issuer, nonce and stable subject verification, immutable invite consumption, atomic first Owner membership, and signed-in two-shop isolation. The release must prevent issuing another first-Owner invitation once a membership has been created, even after the invite expires. After an interrupted issuance, check the active invitation before retrying. The code cannot be recovered from D1. A lost code expires naturally in this candidate. Obtain separate approval for the migration, activation and delivery to any recipient.
 
+## First Owner acceptance service
+
+The fourth onboarding migration creates the immutable first-Owner record. The internal service uses the invite code to derive a distinct Google nonce, verifies the configured `PLATFORM_OWNER_CLIENT_ID`, signature and invited subject, checks the pilot binding again, and consumes the invite in the same statement as the first Owner record. Issuance checks that record independently of given invite expiry.
+
+The service provides no HTTP route, cookie or ERP access. Before activation, use a separately reviewed client origin and OAuth setup, implement browser redemption and revocable shop sessions, and verify routing and two-shop isolation. Existing invitation issuance must remain disabled until these controls and the reviewed migrations are in place.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.
