@@ -93,10 +93,11 @@ export function patchOwnerApp(html){
             if (fnName === 'getProductsBootstrap') {
               var products = result.data.map(function (row) {
                 return {'Product ID':row.productId,'Product Name':row.name, 'Brand':row.brand,
-                  'Category':row.category,'Unit':row.unit,'Selling Price':row.listedPrice};
+                  'Category':row.category,'Unit':row.unit,'Selling Price':row.listedPrice,
+                  'Purchase Price':row.savedPurchasePrice,'Current Stock':row.stockAtBackup};
               });
               document.getElementById('owner-data-notice').textContent =
-                'Products are available for viewing. Stock, valuation, and saves are unavailable.';
+                'Purchase price and stock are from the backup. Stock value and saves are unavailable.';
               return {products:products,units:[],categories:Array.from(new Set(products.map(function (row) {
                 return row.Category;
               }).filter(Boolean))).map(function (name) { return {name:name}; })};
@@ -112,10 +113,12 @@ export function patchOwnerApp(html){
     ['id="prodAddBtn"', 'id="prodAddBtn" hidden style="display:none!important"'],
     ['id="prodUnpricedLotsBtn"', 'id="prodUnpricedLotsBtn" hidden style="display:none!important"'],
     ['No products yet. Click "Add Product" or load demo data from the Sheet menu.', 'No matching products.'],
-    ["(isBundle ? '—' : formatMoney(p['Purchase Price']))","'Unavailable'"],
+    ['data-sort-key="purchasePrice">Purchase ', 'data-sort-key="purchasePrice">Saved purchase price '],
+    ['data-sort-key="stockQty">Stock ', 'data-sort-key="stockQty">Stock at backup '],
+    ["(isBundle ? '—' : formatMoney(p['Purchase Price']))","escapeHtml(p['Purchase Price'] ?? 'Unavailable')"],
     ["formatMoney(p['Selling Price']) + '</span></td>'","escapeHtml(p['Selling Price'] || 'Unavailable') + '</span></td>'"],
     ["escapeHtml(p['Product Name']) + '</div></td>'","escapeHtml(p['Product Name']) + '</div>' + escapeHtml(p['Unit'] || '') + '</td>'"],
-    ["+ stockCell + '</td>'","+ 'Unavailable' + '</td>'"],
+    ["+ stockCell + '</td>'","+ escapeHtml(p['Current Stock'] ?? 'Unavailable') + '</td>'"],
     ["(isBundle ? '—' : formatMoney(p['Stock Value']))","'Unavailable'"],
   ];
   for(const [original,replacement] of catalogReplacements){

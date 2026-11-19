@@ -141,7 +141,7 @@ test('Owner session serves ERP app and source navigation, then revocation remove
     assert.equal(catalogResponse.status,200);
     assert.equal(catalogResponse.headers.get('cache-control'),'no-store');
     assert.deepEqual(await catalogResponse.json(),{data:[
-      {productId:'P1',name:'Fixture Product',brand:'',category:'',unit:'',listedPrice:''},
+      {productId:'P1',name:'Fixture Product',brand:'',category:'',unit:'',listedPrice:'',savedPurchasePrice:null,stockAtBackup:'99'},
     ]});
     assert.equal(await revokeOwnerSession(env,sessionToken),true);
     assert.equal(await validateOwnerSession(env,sessionToken),null);
