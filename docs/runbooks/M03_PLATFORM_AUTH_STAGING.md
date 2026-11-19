@@ -50,6 +50,12 @@ Before a separate activation approval, verify the approved Cloudflare account, r
 
 The stored shop UUID is an operator attestation and can be copied with a database export. The Worker cannot independently discover the remote D1 UUID from this row. The receipt records a point-in-time identity match and does not establish that the ERP schema is ready. Recheck the current mapping and marker before granting tenant access. Roll back by disabling the route or restoring the previous Worker and retain both records for reconciliation.
 
+## Private first Owner invitation candidate
+
+The disabled-by-default `POST /api/platform/shops/invite-owner` accepts one field, `googleSubject`, from the Super Admin. Obtain the intended Owner's subject from a trusted Google account verification flow. The server chooses the configured pilot shop, checks the live Shop D1 identity and matching Control D1 binding receipt, and rechecks the current Super Admin session in the same SQL statement as issuance. Only one code can be active for the shop. It expires after ten minutes, and Control D1 stores its digest. The browser shows the code on issuance and clears it on sign-out. Treat it like a password and share it only through an approved private channel.
+
+The third migration in the isolated onboarding queue creates the invitation audit table. Keep `PLATFORM_OWNER_INVITATION_ENABLED` unset until the separate Owner acceptance flow is reviewed, including Google signature, issuer, nonce and stable subject verification, immutable invite consumption, atomic first Owner membership, and signed-in two-shop isolation. The release must prevent issuing another first-Owner invitation once a membership has been created, even after the invite expires. After an interrupted issuance, check the active invitation before retrying. The code cannot be recovered from D1. A lost code expires naturally in this candidate. Obtain separate approval for the migration, activation and delivery to any recipient.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.

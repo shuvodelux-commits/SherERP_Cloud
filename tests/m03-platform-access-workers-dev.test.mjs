@@ -40,6 +40,7 @@ test('only the dedicated admin workers.dev hostname can use the isolated staging
   assert.equal(cfg.workers_dev,true);
   assert.equal(cfg.preview_urls,false);
   assert.equal(cfg.routes,undefined);
+  assert.equal(cfg.vars.PLATFORM_OWNER_INVITATION_ENABLED,undefined);
   assert.equal(cfg.assets,undefined);
   assert.equal(cfg.rules[0].type,'Text');
   assert.equal(cfg.vars.PLATFORM_AUTH_ORIGIN,origin);

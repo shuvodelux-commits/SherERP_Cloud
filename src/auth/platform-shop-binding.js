@@ -5,29 +5,36 @@ const UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const NOW="CAST(unixepoch('subsec') * 1000 AS INTEGER)";
 const isUuid=value=>typeof value==='string'&&UUID.test(value);
 
-export async function verifyPlatformShopBinding(env,{shopId,sessionToken}){
-  if(!isUuid(shopId))return 'invalid';
+export function pilotShopConfiguration(env){
   const {
-    CONTROL_DB:controlDb,PLATFORM_PILOT_DB:shopDb,PLATFORM_PILOT_SHOP_ID:expectedShopId,
+    PLATFORM_PILOT_DB:shopDb,PLATFORM_PILOT_SHOP_ID:shopId,
     PLATFORM_PILOT_D1_ID:databaseId,PLATFORM_PILOT_MARKER:databaseMarker,
   }=env;
-  if(typeof shopDb?.prepare!=='function'||!isUuid(expectedShopId)||!isUuid(databaseId)||!isUuid(databaseMarker)){
-    return 'unavailable';
+  if(typeof shopDb?.prepare!=='function'||!isUuid(shopId)||!isUuid(databaseId)||!isUuid(databaseMarker))return null;
+  return {shopDb,shopId,databaseId,databaseMarker};
+}
+
+export async function pilotShopIdentityMatches({shopDb,shopId,databaseId,databaseMarker}){
+  try{
+    const identity=await shopDb.prepare('SELECT shop_id,database_id,database_marker FROM shop_identity WHERE singleton=1').first();
+    return identity?.shop_id===shopId&&identity.database_id===databaseId&&identity.database_marker===databaseMarker;
+  }catch{
+    return false;
   }
+}
+
+export async function verifyPlatformShopBinding(env,{shopId,sessionToken}){
+  if(!isUuid(shopId))return 'invalid';
+  const configuration=pilotShopConfiguration(env);
+  if(!configuration)return 'unavailable';
+  const {CONTROL_DB:controlDb}=env;
+  const {databaseId,databaseMarker}=configuration;
   const sessionHash=await hashOpaqueSessionToken(sessionToken);
   if(!sessionHash||!await controlDb.prepare(`SELECT 1 ${CURRENT_PLATFORM_ADMIN_FROM}`).bind(sessionHash).first()){
     return 'denied';
   }
-  if(shopId!==expectedShopId)return 'not_found';
-  let identity;
-  try{
-    identity=await shopDb.prepare('SELECT shop_id,database_id,database_marker FROM shop_identity WHERE singleton=1').first();
-  }catch{
-    return 'mismatch';
-  }
-  if(identity?.shop_id!==shopId||identity.database_id!==databaseId||identity.database_marker!==databaseMarker){
-    return 'mismatch';
-  }
+  if(shopId!==configuration.shopId)return 'not_found';
+  if(!await pilotShopIdentityMatches(configuration))return 'mismatch';
 
   // The Shop D1 read is a snapshot. In Control D1 check the session again
   // in the same batch that creates or reads the immutable receipt.

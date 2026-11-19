@@ -249,6 +249,19 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   }finally{
     await db.prepare('UPDATE platform_admin_sessions SET factor_version=1').run();
   }
+  const invitePath='/api/platform/shops/invite-owner';
+  const inviteRequest={cookie:session,payload:{googleSubject:'654000000000000000002'}};
+  assert.equal((await call(invitePath,inviteRequest)).status,404);
+  assert.equal((await publicWorker.fetch(new Request(origin+invitePath,{method:'POST'}),{})).status,404);
+  const inviteBindings={...verifyBindings,PLATFORM_OWNER_INVITATION_ENABLED:'true'};
+  const invite=(options={})=>call(invitePath,{...inviteRequest,bindings:inviteBindings,...options});
+  assert.equal((await invite({cookie:browser})).status,401);
+  assert.equal((await invite({requestOrigin:'https://other.example.test'})).status,403);
+  assert.equal((await invite({payload:{...inviteRequest.payload,shopId:reservation.shopId}})).status,400);
+  assert.equal((await invite({bindings:{...inviteBindings,PLATFORM_PILOT_DB:otherDb}})).status,409);
+  const inviteMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0003_owner_invitations.sql',import.meta.url),'utf8');
+  await db.batch(inviteMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
+  assert.equal((await invite()).status,409,'the live shop identity is not sufficient without a binding receipt');
   const results=await Promise.all([verify(),verify()]);
   assert.deepEqual(results.map(result=>result.status).sort(),[200,201]);
   for(const result of results)assert.deepEqual(await result.json(),{shopId:reservation.shopId,status:'binding-verified'});
@@ -257,6 +270,44 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
     {shop_id:reservation.shopId,database_id:pilotDatabaseId,verified_by_subject:subject});
   await assert.rejects(db.prepare('DELETE FROM platform_shop_bindings').run(),/immutable/);
   await assert.rejects(pilotDb.prepare('UPDATE shop_identity SET database_id=?').bind(otherDatabaseId).run(),/immutable/);
+
+  const inviteSession=await call(sessionPath,{method:'GET',cookie:session,bindings:inviteBindings});
+  assert.equal((await inviteSession.json()).ownerInvitationShopId,reservation.shopId);
+  let staleAtWrite=false;
+  const invitationRaceDb={
+    batch:db.batch.bind(db),
+    prepare(sql){
+      const statement=db.prepare(sql);
+      if(!sql.includes('INSERT INTO platform_owner_invitations'))return statement;
+      return {bind(...values){
+        const bound=statement.bind(...values);
+        return {async first(){
+          await db.prepare('UPDATE platform_admin_sessions SET factor_version=2').run();
+          staleAtWrite=true;
+          return bound.first();
+        }};
+      }};
+    },
+  };
+  try{
+    assert.equal((await invite({bindings:{...inviteBindings,CONTROL_DB:invitationRaceDb}})).status,409);
+    assert.equal(staleAtWrite,true);
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_owner_invitations').first()).n,0);
+  }finally{
+    await db.prepare('UPDATE platform_admin_sessions SET factor_version=1').run();
+  }
+  const invitations=await Promise.all([invite(),invite()]);
+  assert.deepEqual(invitations.map(response=>response.status).sort(),[201,409]);
+  const winner=invitations.find(response=>response.status===201);
+  assert.equal(winner.headers.get('Cache-Control'),'no-store');
+  const {inviteCode,expiresAtMs}=await winner.json();
+  assert.match(inviteCode,/^[a-f0-9]{64}$/);
+  assert.ok(expiresAtMs>Date.now());
+  const issued=await db.prepare('SELECT token_hash,shop_id,recipient_subject,issued_by_subject FROM platform_owner_invitations').first();
+  assert.deepEqual(issued,{token_hash:hash(inviteCode),shop_id:reservation.shopId,
+    recipient_subject:inviteRequest.payload.googleSubject,issued_by_subject:subject});
+  assert.equal((await invite()).status,409);
+  await assert.rejects(db.prepare('DELETE FROM platform_owner_invitations').run(),/immutable/);
 
   let signedOut=false;
   const reservationRaceDb={
@@ -279,6 +330,7 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
     'sign-out revokes a session issued before its cookie arrived');
   assert.equal((await call(shopPath,{...shopRequest,bindings})).status,401);
   assert.equal((await verify()).status,401);
+  assert.equal((await invite()).status,401);
   assert.equal((await call('/api/platform/auth/logout',{cookie:session})).status,200);
 });
 
