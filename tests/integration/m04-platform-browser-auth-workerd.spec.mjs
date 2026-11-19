@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {createHash,createHmac,generateKeyPairSync,randomBytes,randomUUID,sign} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
 import {after,before,test} from 'node:test';
 import {createTestHarness} from 'wrangler';
 import worker from '../../src/m03-private-platform-auth-worker.js';
@@ -18,12 +20,24 @@ const {publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
 const jwk={...publicKey.export({format:'jwk'}),kid,alg:'RS256'};
 const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
 const hash=token=>createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
-const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-http-test.jsonc'}]});
-let db,env;
+const pilotDatabaseId=randomUUID();
+const otherDatabaseId=randomUUID();
+let db,env,pilotDb,otherDb,harness,directory;
 
 before(async()=>{
+  directory=await mkdtemp(join(tmpdir(),'shererp-private-binding-proof-'));
+  const configPath=join(directory,'wrangler.json');
+  const config=JSON.parse(await readFile('./wrangler.m04-auth-http-test.jsonc','utf8'));
+  config.main=resolve(config.main);
+  config.d1_databases[0].migrations_dir=resolve(config.d1_databases[0].migrations_dir);
+  config.d1_databases.push(
+    {binding:'PILOT_DB',database_name:'fixture-pilot',database_id:pilotDatabaseId,remote:false},
+    {binding:'OTHER_DB',database_name:'fixture-other',database_id:otherDatabaseId,remote:false},
+  );
+  await writeFile(configPath,JSON.stringify(config),{mode:0o600});
+  harness=createTestHarness({workers:[{configPath}]});
   await harness.listen();
-  ({DB:db}=await harness.getWorker('shererp-m04-auth-http-local-only').getEnv());
+  ({DB:db,PILOT_DB:pilotDb,OTHER_DB:otherDb}=await harness.getWorker(config.name).getEnv());
   for(const name of ['0001_platform_bootstrap','0002_platform_sessions']){
     const sql=await readFile(new URL('../../staging-migrations/platform-auth/'+name+'.sql',import.meta.url),'utf8');
     await db.batch(sql.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
@@ -37,7 +51,9 @@ before(async()=>{
     PLATFORM_INGRESS:{async limit(){return {success:true};}},
   };
 });
-after(()=>harness.close());
+after(async()=>{
+  try{await harness?.close();}finally{if(directory)await rm(directory,{recursive:true,force:true});}
+});
 
 function credential(nonce){
   const now=Math.floor(Date.now()/1000);
@@ -187,6 +203,57 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
 
   await assert.rejects(db.prepare(`INSERT OR REPLACE INTO platform_shop_reservations
     SELECT shop_id,operation_id,'Altered',created_by_subject,created_at_ms FROM platform_shop_reservations`).run(),/immutable/);
+  const verifyPath='/api/platform/shops/verify-binding';
+  const verifyRequest={cookie:session,payload:{shopId:reservation.shopId}};
+  assert.equal((await call(verifyPath,verifyRequest)).status,404,'binding verification is disabled by default');
+  assert.equal((await call(verifyPath,{...verifyRequest,bindings:{...bindings,PLATFORM_SHOP_BINDING_ENABLED:'true'}})).status,503,
+    'enabling without a trusted shop mapping must fail closed');
+
+  const pilotMarker=randomUUID();
+  const verifyBindings={...bindings,PLATFORM_SHOP_BINDING_ENABLED:'true',PLATFORM_PILOT_DB:pilotDb,
+    PLATFORM_PILOT_SHOP_ID:reservation.shopId,PLATFORM_PILOT_D1_ID:pilotDatabaseId,PLATFORM_PILOT_MARKER:pilotMarker};
+  assert.equal((await publicWorker.fetch(new Request(origin+verifyPath,{method:'POST'}),{})).status,404);
+  const verify=async(extra={})=>call(verifyPath,{...verifyRequest,bindings:verifyBindings,...extra});
+  assert.equal((await verify({cookie:browser})).status,401);
+  assert.equal((await verify({payload:{shopId:reservation.shopId,databaseId:pilotDatabaseId}})).status,400);
+  assert.equal((await verify({payload:{shopId:randomUUID()}})).status,404);
+  assert.equal((await verify()).status,409,'a shop with no identity row must not be marked verified');
+
+  const controlMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0002_shop_bindings.sql',import.meta.url),'utf8');
+  await db.batch(controlMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
+  const shopMigration=await readFile(new URL('../../staging-migrations/shop-identity/0001_shop_identity.sql',import.meta.url),'utf8');
+  for(const [shop,databaseId] of [[pilotDb,pilotDatabaseId],[otherDb,otherDatabaseId]]){
+    await shop.batch(shopMigration.trim().split('-- next statement').map(statement=>shop.prepare(statement.trim())));
+    await shop.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)').bind(reservation.shopId,databaseId,pilotMarker).run();
+  }
+  const swapped={...verifyBindings,PLATFORM_PILOT_DB:otherDb};
+  assert.equal((await verify({bindings:swapped})).status,409);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_bindings').first()).n,0);
+  let invalidated=false;
+  const bindingRaceDb={
+    prepare:db.prepare.bind(db),
+    async batch(statements){
+      await db.prepare('UPDATE platform_admin_sessions SET factor_version=2').run();
+      invalidated=true;
+      return db.batch(statements);
+    },
+  };
+  try{
+    assert.equal((await verify({bindings:{...verifyBindings,CONTROL_DB:bindingRaceDb}})).status,401);
+    assert.equal(invalidated,true,'the session became stale immediately before the receipt write');
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_bindings').first()).n,0);
+  }finally{
+    await db.prepare('UPDATE platform_admin_sessions SET factor_version=1').run();
+  }
+  const results=await Promise.all([verify(),verify()]);
+  assert.deepEqual(results.map(result=>result.status).sort(),[200,201]);
+  for(const result of results)assert.deepEqual(await result.json(),{shopId:reservation.shopId,status:'binding-verified'});
+  assert.equal((await verify({bindings:swapped})).status,409,'a previous receipt cannot hide a swapped binding');
+  assert.deepEqual(await db.prepare('SELECT shop_id, database_id, verified_by_subject FROM platform_shop_bindings').first(),
+    {shop_id:reservation.shopId,database_id:pilotDatabaseId,verified_by_subject:subject});
+  await assert.rejects(db.prepare('DELETE FROM platform_shop_bindings').run(),/immutable/);
+  await assert.rejects(pilotDb.prepare('UPDATE shop_identity SET database_id=?').bind(otherDatabaseId).run(),/immutable/);
+
   let signedOut=false;
   const reservationRaceDb={
     prepare:db.prepare.bind(db),
@@ -207,6 +274,7 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal((await call(sessionPath,{method:'GET',cookie:session})).status,401,
     'sign-out revokes a session issued before its cookie arrived');
   assert.equal((await call(shopPath,{...shopRequest,bindings})).status,401);
+  assert.equal((await verify()).status,401);
   assert.equal((await call('/api/platform/auth/logout',{cookie:session})).status,200);
 });
 

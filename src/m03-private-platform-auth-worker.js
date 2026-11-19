@@ -8,6 +8,7 @@ import {
 } from './auth/platform-superadmin-session.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './auth/session-token.js';
 import {reservePlatformShop} from './auth/platform-shop-reservations.js';
+import {verifyPlatformShopBinding} from './auth/platform-shop-binding.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
@@ -172,6 +173,22 @@ app.post('/api/platform/shops',async(c,next)=>{
   if(result.status==='denied')return denied(c);
   if(result.status==='conflict')return c.json({error:'Reservation request conflicts'},409);
   return c.json(result.reservation,result.status==='created'?201:200);
+});
+
+app.post('/api/platform/shops/verify-binding',async(c,next)=>{
+  if(c.env.PLATFORM_SHOP_BINDING_ENABLED!=='true')return c.notFound();
+  await next();
+},limitIngress,limitBody,async c=>{
+  const body=await expectedJson(c,['shopId']);
+  if(!body)return c.json({error:'Invalid business identity'},400);
+  const status=await verifyPlatformShopBinding(c.env,{shopId:body.shopId,sessionToken:getCookie(c,SESSION_COOKIE)});
+  if(status==='invalid')return c.json({error:'Invalid business identity'},400);
+  if(status==='unavailable')return unavailable(c);
+  if(status==='denied')return denied(c);
+  if(status==='not_found')return c.notFound();
+  if(status==='mismatch')return c.json({error:'Shop binding verification failed'},409);
+  if(status!=='created'&&status!=='replayed')return unavailable(c);
+  return c.json({shopId:body.shopId,status:'binding-verified'},status==='created'?201:200);
 });
 
 // Dedicated private entry point. The default public Worker does not import it.
