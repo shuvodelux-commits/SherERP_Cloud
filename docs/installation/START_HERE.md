@@ -6,6 +6,8 @@
 > **Goal:** One reviewed GitHub codebase. A person sets up a new Cloudflare account, enters new account configuration and Google sign-in settings, completes secure first Super Admin setup, and creates new shops from the Control Center—without editing ERP application code or running SQL per tenant.
 >
 > **Available P1 local draft:** [Validate a new instance configuration without deployment](PORT_P1_LOCAL_CONFIGURATION.md). It generates only disabled, ignored Wrangler drafts; Cloudflare provisioning, Access setup and deployment are still gated.
+>
+> **P2 Run 1 review candidate:** [Read-only Cloudflare account/bootstrap preflight](PORT_P2_READONLY_PREFLIGHT.md). Its dry run has no network access; optional live checks issue four GETs only and never authorize deployment.
 
 ## 1. What you are installing
 
