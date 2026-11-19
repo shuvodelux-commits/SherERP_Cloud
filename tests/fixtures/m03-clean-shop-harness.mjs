@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {basename,join,resolve} from 'node:path';
 import {createTestHarness} from 'wrangler';
 import {issueOwnerSession} from '../../src/auth/platform-owner-sessions.js';
-import {publishFixtureOwnerGrant} from './m03-clean-shop-owner-grant.mjs';
+import {publishCurrentOwnerWriteSession} from '../../src/auth/platform-owner-write-session.js';
 
 const tuple=(n)=>({shopId:`00000000-0000-4000-8000-00000000010${n}`,databaseId:`00000000-0000-4000-8000-00000000020${n}`,marker:`00000000-0000-4000-8000-00000000030${n}`});
 async function migrationQueue(dir,files){
@@ -28,7 +28,7 @@ async function seed(CONTROL_DB,DB,scope,subject,index){
   assert.equal(typeof token,'string');
   const migration=await readFile('staging-migrations/shop-owner-write/0002_shop_owner_write_grant.sql','utf8');
   await DB.batch(migration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
-  assert.equal(await publishFixtureOwnerGrant(env,token,1),true);
+  assert.equal(await publishCurrentOwnerWriteSession(env,token),true);
   return {env,token};
 }
 
