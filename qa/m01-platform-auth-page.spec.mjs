@@ -134,7 +134,7 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
     await businessName.waitFor();
     assert.equal(await businessName.inputValue(),'আমার দোকান');
     await create.click();
-    await page.getByText('11111111-1111-4111-8111-111111111111',{exact:false}).waitFor();
+    await page.getByText('Business reserved. Shop ID: 11111111-1111-4111-8111-111111111111.',{exact:false}).waitFor();
     const requests=calls.filter(call=>call.path==='/api/platform/shops').map(call=>call.input);
     assert.equal(requests.length,2);
     assert.deepEqual(requests[0],requests[1]);
