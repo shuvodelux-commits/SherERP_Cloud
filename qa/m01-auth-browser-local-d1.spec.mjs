@@ -6,6 +6,7 @@ import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential} from '../src/auth/d1-auth-core.js';
 import {createD1LegacyAuthRpc} from '../src/auth/d1-legacy-rpc.js';
 import {serveCompiledUi} from './serve-compiled-ui.mjs';
+import './m03-clean-shop-product-form.spec.mjs';
 
 // Nondeployable original Chromium -> source M04 auth HTTP -> isolated actual D1.
 // The shop shell metadata is a synthetic test stub, NOT a migrated RPC.
