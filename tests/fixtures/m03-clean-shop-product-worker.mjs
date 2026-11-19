@@ -2,6 +2,8 @@ import {getCookie,setCookie} from 'hono/cookie';
 import {Hono} from 'hono';
 import {signOutOwnerBrowser,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
+import {pilotShopConfiguration} from '../../src/auth/platform-shop-binding.js';
+import {withdrawOwnerWriteGrant} from '../../src/db/shop-owner-write-grant.js';
 
 // Local test fixture only. Neither the route nor its synthetic shop selection
 // is a deployed write authority. The local grant tests the SQL boundary.
@@ -38,10 +40,10 @@ app.use('/__clean_shop__/*',async(c,next)=>{
 
 app.post('/__clean_shop__/logout',async c=>{
   try{
-    const result=await c.get('shopDb').prepare(
-      'UPDATE shop_owner_write_grant SET enabled=0 WHERE token_hash=?',
-    ).bind(c.get('writeTokenHash')).run();
-    if(result.success!==true)return c.json({error:'Sign-out incomplete'},503);
+    const scope=pilotShopConfiguration(c.get('ownerEnv'));
+    if(!scope||!await withdrawOwnerWriteGrant(scope.shopDb,scope,c.get('sessionToken'))){
+      return c.json({error:'Sign-out incomplete'},503);
+    }
     if(!await signOutOwnerBrowser(c.get('ownerEnv'),{sessionToken:c.get('sessionToken')})){
       return c.json({error:'Sign-out incomplete'},503);
     }
