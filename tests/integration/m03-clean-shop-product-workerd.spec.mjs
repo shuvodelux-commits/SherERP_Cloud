@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {revokeOwnerSession,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
+import {issueOwnerSession,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {startCleanShopHarness} from '../fixtures/m03-clean-shop-harness.mjs';
+import {publishFixtureOwnerGrant} from '../fixtures/m03-clean-shop-owner-grant.mjs';
 
 test('a new Owner creates a first zero-stock product in an empty shop without archive rows or cross-shop access',async()=>{
   const {worker,ownerA,ownerB,SHOP_A_DB,SHOP_B_DB,close}=await startCleanShopHarness();
@@ -40,7 +41,34 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
     assert.equal((await request('a',ownerA.token,{...draft,name:'New after revoke',operationId:crypto.randomUUID()})).status,409);
     assert.equal((await request('a',ownerA.token,draft)).status,409);
-    assert.equal(await revokeOwnerSession(ownerA.env,ownerA.token),true);
+    // B still has an active Shop D1 grant. Fail the Control D1 step after
+    // logout has reached the Shop D1, then retry with the same cookie.
+    const control=ownerB.env.CONTROL_DB;
+    await control.prepare(`CREATE TRIGGER fixture_refuse_logout
+      BEFORE DELETE ON platform_shop_owner_sessions BEGIN SELECT RAISE(ABORT,'fixture'); END;`).run();
+    const logout=()=>worker.fetch('https://b.example.test/__clean_shop__/logout',{
+      method:'POST',headers:{Origin:'https://b.example.test',Cookie:`__Host-shererp-owner-session=${ownerB.token}`},
+    });
+    assert.equal((await logout()).status,503);
+    assert.equal((await validateOwnerSession(ownerB.env,ownerB.token)).role,'Owner');
+    assert.equal((await request('b',ownerB.token,{...draft,name:'Blocked',operationId:crypto.randomUUID()})).status,409);
+    await control.prepare('DROP TRIGGER fixture_refuse_logout').run();
+    assert.equal((await logout()).status,200);
+    assert.equal((await request('b',ownerB.token)).status,401);
+    const replacement=await issueOwnerSession(ownerB.env,{issuer:'https://accounts.google.com',subject:'fixture-owner-b'});
+    assert.equal(typeof replacement,'string');
+    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,replacement,2),true);
+    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,ownerB.token,1),false);
+    const nextDraft={...draft,name:'Replacement session product',operationId:crypto.randomUUID()};
+    assert.equal((await request('b',ownerB.token,nextDraft)).status,401);
+    assert.equal((await request('b',replacement,nextDraft)).status,201);
+    await SHOP_B_DB.prepare('UPDATE fixture_owner_write_grants SET enabled=0').run();
+    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,replacement,2),false);
+    assert.equal((await request('b',replacement,{...nextDraft,name:'Late grant',operationId:crypto.randomUUID()})).status,409);
+    const logoutA=await worker.fetch('https://a.example.test/__clean_shop__/logout',{
+      method:'POST',headers:{Origin:'https://a.example.test',Cookie:`__Host-shererp-owner-session=${ownerA.token}`},
+    });
+    assert.equal(logoutA.status,200);
     assert.equal((await request('a',ownerA.token,{...draft,operationId:crypto.randomUUID()})).status,401);
     assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM products').first()).n,1);
   }finally{
