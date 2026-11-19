@@ -4,6 +4,8 @@
 > Do not use the current staging Wrangler profiles in another account without reviewing and replacing instance-specific resource references. Do not enable real business transactions or run remote D1 imports based on this draft. Production release remains gated by M10/M11.
 >
 > **Goal:** One reviewed GitHub codebase. A person sets up a new Cloudflare account, enters new account configuration and Google sign-in settings, completes secure first Super Admin setup, and creates new shops from the Control Center—without editing ERP application code or running SQL per tenant.
+>
+> **Available P1 local draft:** [Validate a new instance configuration without deployment](PORT_P1_LOCAL_CONFIGURATION.md). It generates only disabled, ignored Wrangler drafts; Cloudflare provisioning, Access setup and deployment are still gated.
 
 ## 1. What you are installing
 
@@ -46,7 +48,7 @@ Use a **reviewed, tested tag or main commit** of \`shuvodelux-commits/SherERP_Cl
 In Cloudflare, connect GitHub under **Workers & Pages → Create / Import a repository** (exact labels may change). Select the approved repository, create separate Worker identities for ERP and private Super Admin, and keep staging/public previews distinct.
 
 **Expected:** Installer records the Cloudflare account, Worker names and account's \`workers.dev\` namespace as configuration.  
-**Current gap:** Existing checked-in Wrangler profiles contain current-account Worker names, UUIDs, and/or origin values. The platform-auth entry also hardcodes the current admin hostname in source.
+**Current gap:** Existing checked-in staging profiles still contain current-account Worker names and D1 UUIDs. The P1 draft accepts a validated per-instance admin hostname in runtime config and generates disabled, ignored instance profiles, but it does not check remote account ownership or deploy anything. See [P1 local configuration](PORT_P1_LOCAL_CONFIGURATION.md).
 
 ### Step 3 — Register Google sign-in
 

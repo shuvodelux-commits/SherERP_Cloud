@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "accountId": "REPLACE_WITH_32_LOWERCASE_HEX_CLOUDFLARE_ACCOUNT_ID",
+  "workersSubdomain": "your-new-account",
+  "workers": {
+    "admin": "admin-shererp",
+    "owner": "owner-shererp"
+  },
+  "origins": {
+    "admin": "https://admin-shererp.your-new-account.workers.dev",
+    "owner": "https://owner-shererp.your-new-account.workers.dev"
+  },
+  "googleClientId": "REPLACE_WITH_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com",
+  "d1": {
+    "control": {
+      "name": "shererp-control",
+      "id": "REPLACE_WITH_CONTROL_D1_UUID"
+    },
+    "pilot": {
+      "name": "shererp-test-shop",
+      "id": "REPLACE_WITH_SHOP_D1_UUID",
+      "shopId": "REPLACE_WITH_REVIEWED_SHOP_UUID",
+      "marker": "REPLACE_WITH_SHOP_IDENTITY_MARKER_UUID"
+    }
+  },
+  "rateLimits": {
+    "adminNamespaceId": "REPLACE_WITH_NAMESPACE_NUMBER",
+    "ownerNamespaceId": "REPLACE_WITH_DIFFERENT_NAMESPACE_NUMBER"
+  }
+}

@@ -115,7 +115,7 @@ test('actual tracked repository inventory covers the current P0 hotspots and nev
     assert.ok(report.pathsScanned.includes(path),'missing tracked source '+path);
   }
   assert.ok(report.pathsScanned.some(p=>p.startsWith('.github/workflows/')));
-  assert.ok(report.findings.some(f=>f.path==='src/m03-access-platform-auth-worker.js'&&f.kinds.includes('literal_worker_origin')));
+  assert.ok(report.findings.some(f=>f.path==='src/m03-access-platform-auth-worker.js'&&f.kinds.includes('origin_config')));
   assert.ok(report.findings.some(f=>f.path==='wrangler.m03-platform-auth-access-staging.jsonc'&&f.kinds.includes('account_id')));
   verifyPublicPreviewIsUnbound(sources['wrangler.preview.jsonc']);
   assert.equal(JSON.stringify(report).includes('ac66126a5dc7c2f21ae5c146341a5dfb'),false);

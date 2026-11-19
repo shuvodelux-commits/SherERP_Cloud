@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,rm,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve,dirname} from 'node:path';
 import {
   validatePortableInstance,buildPortableProfiles,writePortableInstanceConfigs
 } from '../../scripts/port-p1-instance.mjs';
@@ -53,7 +53,7 @@ test('generates isolated, inactive two-Worker config without preview DB or secre
   const profiles=buildPortableProfiles(validatePortableInstance(sample()));
   assert.deepEqual(Object.keys(profiles).sort(),['admin','owner']);
   assert.equal(profiles.admin.name,'admin-shererp');
-  assert.equal(profiles.admin.main,'src/m03-access-platform-auth-worker.js');
+  assert.equal(profiles.admin.main,'../../src/m03-access-platform-auth-worker.js');
   assert.equal(profiles.admin.account_id,sample().accountId);
   assert.equal(profiles.admin.workers_dev,false);
   assert.equal(profiles.admin.preview_urls,false);
@@ -61,7 +61,7 @@ test('generates isolated, inactive two-Worker config without preview DB or secre
   assert.equal(profiles.admin.vars.PLATFORM_CLIENT_ID,sample().googleClientId);
   assert.equal(profiles.admin.d1_databases.length,1);
   assert.equal(profiles.admin.d1_databases[0].binding,'CONTROL_DB');
-  assert.equal(profiles.owner.main,'src/m03-owner-redemption-worker.js');
+  assert.equal(profiles.owner.main,'../../src/m03-owner-redemption-worker.js');
   assert.equal(profiles.owner.vars.OWNER_AUTH_ORIGIN,sample().origins.owner);
   assert.equal(profiles.owner.d1_databases[1].binding,'PLATFORM_PILOT_DB');
   assert.equal(profiles.owner.d1_databases[1].database_id,sample().d1.pilot.id);
@@ -87,6 +87,10 @@ test('writes only gitignored local drafts with safe idempotency and refuses a ch
     const owner=JSON.parse(await readFile(result.ownerPath,'utf8'));
     assert.equal(admin.workers_dev,false);
     assert.equal(owner.workers_dev,false);
+    assert.equal(resolve(dirname(result.adminPath),admin.main),join(root,'src/m03-access-platform-auth-worker.js'));
+    assert.equal(resolve(dirname(result.ownerPath),owner.main),join(root,'src/m03-owner-redemption-worker.js'));
+    assert.equal(resolve(dirname(result.ownerPath),owner.assets.directory),join(root,'dist-owner'));
+    assert.equal(resolve(dirname(result.adminPath),admin.d1_databases[0].migrations_dir),join(root,'staging-migrations/platform-auth'));
     assert.equal((await stat(result.adminPath)).mode&0o077,0);
     assert.deepEqual(await writePortableInstanceConfigs(sample(),root),result);
     const different={...sample(),workers:{...sample().workers,admin:'admin-other'},
