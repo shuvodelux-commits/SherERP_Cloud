@@ -53,7 +53,7 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
       calls.push({path,input});
       if(path==='/api/platform/auth/session')
         return route.fulfill({status:active?200:401,json:active?{
-          role:'PlatformSuperAdmin',...(reservationsEnabled?{shopReservationEnabled:true}:{}),
+          role:'PlatformSuperAdmin',...(reservationsEnabled?{shopReservationEnabled:true,ownerInvitationShopId:'11111111-1111-4111-8111-111111111111'}:{}),
         }:{}});
       if(path==='/api/platform/shops'){
         if(++reservationAttempts===1)return route.fulfill({status:503,json:{}});
@@ -62,6 +62,8 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
           shopId:'11111111-1111-4111-8111-111111111111',displayName:input.displayName,status:'reserved',
         }});
       }
+      if(path==='/api/platform/shops/invite-owner')
+        return route.fulfill({status:201,json:{inviteCode:'a'.repeat(64),expiresAtMs:Date.now()+600_000}});
       if(path.endsWith('/challenge')){
         if(path==='/api/platform/auth/challenge'&&delayedChallenge)await delayedChallenge;
         return route.fulfill({json:{clientId:'123-example.apps.googleusercontent.com',nonce:'a'.repeat(43)}});
@@ -132,7 +134,7 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
     await businessName.waitFor();
     assert.equal(await businessName.inputValue(),'আমার দোকান');
     await create.click();
-    await page.getByText('11111111-1111-4111-8111-111111111111',{exact:false}).waitFor();
+    await page.getByText('Business reserved. Shop ID: 11111111-1111-4111-8111-111111111111.',{exact:false}).waitFor();
     const requests=calls.filter(call=>call.path==='/api/platform/shops').map(call=>call.input);
     assert.equal(requests.length,2);
     assert.deepEqual(requests[0],requests[1]);
@@ -149,8 +151,17 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
 
     await page.reload();
     await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();
+    await page.getByRole('textbox',{name:'Verified Google account ID'}).fill('123456789012345678901',{timeout:5000});
+    await page.getByRole('button',{name:'Invite Owner'}).click();
+    const issuedCode=page.getByRole('textbox',{name:'Owner invitation code'});
+    await issuedCode.waitFor();
+    assert.equal(await issuedCode.inputValue(),'a'.repeat(64));
+    assert.deepEqual(calls.find(call=>call.path==='/api/platform/shops/invite-owner')?.input,
+      {googleSubject:'123456789012345678901'});
+    assert.equal(await page.evaluate(()=>sessionStorage.length),0);
     await page.getByRole('button',{name:'Sign out'}).click();
     await page.getByRole('heading',{name:'Platform sign-in'}).waitFor();
+    assert.equal(await page.locator('#owner-invitation-code').inputValue(),'');
   }finally{
     await browser.close();
   }

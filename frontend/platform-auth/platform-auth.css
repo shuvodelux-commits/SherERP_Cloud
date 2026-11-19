@@ -58,3 +58,8 @@ button:disabled { opacity: .68; cursor: wait; }
 
 #business-form { margin-bottom: 12px; }
 #business-receipt { margin: 12px 0 0; overflow-wrap: anywhere; }
+
+#owner-invitation-form { margin-bottom: 12px; }
+#owner-invitation-form h2 { margin: 0 0 8px; font-size: 16px; }
+#owner-invitation-shop { overflow-wrap: anywhere; }
+#owner-invitation-result { margin-top: 12px; }

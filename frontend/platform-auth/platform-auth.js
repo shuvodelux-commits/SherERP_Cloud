@@ -9,16 +9,29 @@ const businessForm=byId('business-form');
 const businessName=byId('business-name');
 const businessReceipt=byId('business-receipt');
 const signOut=byId('sign-out');
+const inviteForm=byId('owner-invitation-form');
+const inviteSubject=byId('owner-google-subject');
+const inviteResult=byId('owner-invitation-result');
+const inviteCode=byId('owner-invitation-code');
 const RESERVATION_DRAFT='shererp-platform-reservation-draft';
 let generation=0;
 let credential;
 let sdk;
+
+function clearInviteCode(){
+  inviteCode.value='';
+  inviteResult.hidden=true;
+}
+
+window.addEventListener('pagehide',clearInviteCode);
 
 function show(view,message=''){
   generation++;
   credential=undefined;
   ticket.value='';
   code.value='';
+  clearInviteCode();
+  inviteSubject.value='';
   mount.replaceChildren();
   cancelGoogle.disabled=false;
   status.textContent=message;
@@ -47,6 +60,8 @@ function reservationDraft(){
 function showSignedIn(session){
   show('signed-in');
   businessForm.hidden=session.shopReservationEnabled!==true;
+  inviteForm.hidden=typeof session.ownerInvitationShopId!=='string';
+  byId('owner-invitation-shop').textContent=inviteForm.hidden?'':'Shop '+session.ownerInvitationShopId;
   businessReceipt.hidden=true;
   businessReceipt.textContent='';
   businessName.value='';
@@ -67,7 +82,7 @@ businessForm.addEventListener('submit',async event=>{
   event.preventDefault();
   if(businessForm.hidden)return;
   const button=businessForm.querySelector('button[type="submit"]');
-  if(button.disabled)return;
+  if(button.disabled||signOut.disabled)return;
   const name=businessName.value.trim();
   if(!name){
     status.textContent='Enter a business name.';
@@ -110,6 +125,38 @@ businessForm.addEventListener('submit',async event=>{
     }else{
       status.textContent='Could not confirm the reservation. Retry to check the same request.';
     }
+  }finally{
+    button.disabled=signOut.disabled=false;
+  }
+});
+
+inviteForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const button=inviteForm.querySelector('button[type="submit"]');
+  if(inviteForm.hidden||button.disabled||signOut.disabled)return;
+  const googleSubject=inviteSubject.value.trim();
+  if(!googleSubject){
+    status.textContent='Enter the verified Google account ID.';
+    inviteSubject.focus();
+    return;
+  }
+  button.disabled=signOut.disabled=true;
+  status.textContent='Preparing the Owner invitation…';
+  try{
+    const result=await api('/shops/invite-owner','POST',{googleSubject});
+    if(typeof result.inviteCode!=='string'||!/^[a-f0-9]{64}$/.test(result.inviteCode)){
+      throw new Error('Invitation missing');
+    }
+    inviteSubject.value='';
+    inviteCode.value=result.inviteCode;
+    inviteResult.hidden=false;
+    status.textContent='Owner invitation created.';
+    inviteCode.focus();
+  }catch(error){
+    if(error.message==='401')show('login','Sign in again to invite the Owner.');
+    else if(error.message==='400')status.textContent='Check the verified Google account ID.';
+    else if(error.message==='409')status.textContent='The shop binding could not be verified or an invitation is already active.';
+    else status.textContent='Could not confirm the invitation. Check before issuing another.';
   }finally{
     button.disabled=signOut.disabled=false;
   }

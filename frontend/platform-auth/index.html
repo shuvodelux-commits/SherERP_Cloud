@@ -54,6 +54,18 @@
         <button class="primary" type="submit">Create business</button>
         <p id="business-receipt" role="status" hidden></p>
       </form>
+      <form id="owner-invitation-form" hidden>
+        <h2>Invite the first Owner</h2>
+        <p id="owner-invitation-shop"></p>
+        <label for="owner-google-subject">Verified Google account ID</label>
+        <input id="owner-google-subject" type="text" required maxlength="255" autocomplete="off" spellcheck="false">
+        <button class="primary" type="submit">Invite Owner</button>
+        <div id="owner-invitation-result" hidden>
+          <p>Share this code privately with the intended Owner. It expires in 10 minutes.</p>
+          <label for="owner-invitation-code">Owner invitation code</label>
+          <input id="owner-invitation-code" type="text" readonly autocomplete="off" spellcheck="false">
+        </div>
+      </form>
       <button id="sign-out" class="primary" type="button">Sign out</button>
     </section>
 

@@ -8,7 +8,8 @@ import {
 } from './auth/platform-superadmin-session.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './auth/session-token.js';
 import {reservePlatformShop} from './auth/platform-shop-reservations.js';
-import {verifyPlatformShopBinding} from './auth/platform-shop-binding.js';
+import {pilotShopConfiguration,verifyPlatformShopBinding} from './auth/platform-shop-binding.js';
+import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
@@ -130,9 +131,11 @@ app.post('/api/platform/auth/challenge',limitIngress,async c=>{
 });
 
 function signedIn(c){
+  const invitationShop=c.env.PLATFORM_OWNER_INVITATION_ENABLED==='true'?pilotShopConfiguration(c.env):null;
   return c.json({
     role:'PlatformSuperAdmin',
     ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'?{shopReservationEnabled:true}:{}),
+    ...(invitationShop?{ownerInvitationShopId:invitationShop.shopId}:{}),
   });
 }
 
@@ -196,6 +199,20 @@ app.post('/api/platform/shops/verify-binding',async(c,next)=>{
   if(status==='mismatch')return c.json({error:'Shop binding verification failed'},409);
   if(status!=='created'&&status!=='replayed')return unavailable(c);
   return c.json({shopId:body.shopId,status:'binding-verified'},status==='created'?201:200);
+});
+
+app.post('/api/platform/shops/invite-owner',async(c,next)=>{
+  if(c.env.PLATFORM_OWNER_INVITATION_ENABLED!=='true')return c.notFound();
+  await next();
+},limitIngress,limitBody,async c=>{
+  const body=await expectedJson(c,['googleSubject']);
+  if(!body)return c.json({error:'Invalid Owner invitation'},400);
+  const result=await issuePlatformOwnerInvitation(c.env,{googleSubject:body.googleSubject,sessionToken:getCookie(c,SESSION_COOKIE)});
+  if(result.status==='invalid')return c.json({error:'Invalid Owner invitation'},400);
+  if(result.status==='denied')return denied(c);
+  if(result.status==='conflict')return c.json({error:'Owner invitation unavailable for this shop'},409);
+  if(result.status!=='created')return unavailable(c);
+  return c.json({inviteCode:result.inviteCode,expiresAtMs:result.expiresAtMs},201);
 });
 
 // Dedicated private entry point. The default public Worker does not import it.
