@@ -44,3 +44,4 @@ import './m07-purchase-multilot-cash-workerd.spec.mjs'; // M07-B4A isolated mult
 import './m08-reconciliation-atomic-workerd.spec.mjs'; // M08 single closing-entry atomicity, local D1 only; no public writer.
 import './m03-delete-log-audit-read-workerd.spec.mjs'; // M03 private frozen DELETE_LOG M02 import-to-read Workerd/D1 parity.
 import './m03-workerd-core.spec.mjs'; // Ten original root tests, same local-D1 fixture.
+import './m03-oversold-atomic-workerd.spec.mjs'; // Test-only tenant-authorized oversold lot settlement SQL; local D1 only.
