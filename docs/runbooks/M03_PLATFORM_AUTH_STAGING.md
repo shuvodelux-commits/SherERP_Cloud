@@ -92,7 +92,9 @@ The intended replacement for manual Owner codes is a private Super Admin approva
 
 The verifier exposes this claim only in its explicit Gmail mode. The private `POST /api/platform/shops/approve-owner` candidate takes only `email` and derives the shop from trusted configuration. Control D1 rechecks the current Super Admin session and matching binding receipt when saving or correcting the pending address. It stops accepting corrections after the first Owner is recorded. Gmail mode replaces the old invite form and issuance route on the admin Worker.
 
-The isolated seventh migration creates the pending approval table. Keep `PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED` unset until the first-login grant is tested and a separate release disables the old code redemption route for the pilot. Preserve existing audit records and keep Super Admin MFA and shop session revocation.
+The isolated seventh migration creates the pending approval table. Keep `PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED` and `OWNER_GMAIL_SIGNUP_ENABLED` unset until a separate staging release has been approved.
+
+The Owner Worker hides invitation UI and refuses code redemption when Gmail mode is active. The eighth onboarding migration adds the separate short-lived first-login challenges. The first sign-in verifies the current Gmail approval inside the D1 transaction that records the stable Google subject and creates the session. The existing immutable first-Owner foreign key points to an internal audit row without a redeemable code. Subsequent sign-ins use the linked Google subject and the existing session service. Apply migrations 0007–0008 to verified Control D1 after backup and approval before enabling either flag. Verify the signed-in shop and logout on the exact Google client origin. Preserve existing audit records and keep Super Admin MFA and shop session revocation.
 
 ## Release order
 

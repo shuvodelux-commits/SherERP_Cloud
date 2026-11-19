@@ -6,6 +6,7 @@ const invite=byId('invite-code');
 const cancel=byId('cancel-google');
 let generation=0;
 let sdk;
+const gmailMode=document.body.dataset.gmailSignin==='enabled';
 
 function show(view,message=''){
   generation++;
@@ -85,11 +86,15 @@ async function startGoogle(mode,inviteCode){
     status.textContent='';
   }catch(error){
     if(current!==generation)return;
-    show(mode,error.message==='429'?'Too many attempts. Try again in a minute.':'Could not start Google Sign-In. Check your invitation or try signing in again.');
+    show(mode,error.message==='429'?'Too many attempts. Try again in a minute.':(gmailMode?'Could not start Google sign-in. Ask your Super Admin to confirm your Gmail approval.':'Could not start Google Sign-In. Check your invitation or try signing in again.'));
   }
 }
 
-byId('open-setup').hidden=document.body.dataset.redemption!=='enabled';
+byId('open-setup').hidden=gmailMode||document.body.dataset.redemption!=='enabled';
+if(gmailMode){
+  byId('start-login').textContent='Sign in with Google';
+  byId('gmail-signin-help').hidden=false;
+}
 byId('open-setup').addEventListener('click',()=>show('setup'));
 byId('back-setup').addEventListener('click',()=>show('login'));
 cancel.addEventListener('click',()=>show('login'));

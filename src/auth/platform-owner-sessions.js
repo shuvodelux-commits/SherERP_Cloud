@@ -95,6 +95,9 @@ export async function signOutOwnerBrowser(env,{sessionToken,browserToken}){
   const results=await db.batch([
     db.prepare(`DELETE FROM platform_shop_owner_login_challenges WHERE shop_id=? AND challenge_hash=?`)
       .bind(config.shopId,challengeHash),
+    ...(env.OWNER_GMAIL_SIGNUP_ENABLED==='true'?[db.prepare(
+      'DELETE FROM platform_owner_gmail_challenges WHERE shop_id=? AND challenge_hash=?',
+    ).bind(config.shopId,challengeHash)]:[]),
     db.prepare(`DELETE FROM platform_shop_owner_sessions WHERE shop_id=? AND (token_hash=? OR challenge_hash=?)`)
       .bind(config.shopId,sessionHash,challengeHash),
   ]);

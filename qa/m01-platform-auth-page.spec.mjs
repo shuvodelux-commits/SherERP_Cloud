@@ -187,6 +187,7 @@ test('Owner page redeems an invite, signs in, restores and signs out',async()=>{
   try{
     const page=await browser.newPage({viewport:{width:320,height:640}});
     let active=false;
+    let gmailMode=false;
     const seen=[];
     const shopId='11111111-1111-4111-8111-111111111111';
     await page.route('https://accounts.google.com/gsi/client',route=>route.fulfill({
@@ -198,7 +199,7 @@ test('Owner page redeems an invite, signs in, restores and signs out',async()=>{
       if(!path.startsWith('/api/')){
         const reply=await ownerWorker.fetch(new Request(request.url()),{
           OWNER_AUTH_ORIGIN:ownerOrigin,PLATFORM_AUTH_ORIGIN:origin,PLATFORM_OWNER_CLIENT_ID:'654-example.apps.googleusercontent.com',
-          OWNER_LOGIN_ENABLED:'true',OWNER_REDEMPTION_ENABLED:'true',OWNER_INGRESS:{limit:async()=>({success:true})},
+          OWNER_LOGIN_ENABLED:'true',OWNER_REDEMPTION_ENABLED:'true',OWNER_GMAIL_SIGNUP_ENABLED:gmailMode?'true':undefined,OWNER_INGRESS:{limit:async()=>({success:true})},
           CONTROL_DB:{prepare(){}},
           ASSETS:{async fetch(asset){return new Response(await readFile(new URL(new URL(asset.url).pathname.slice(1),assets)));}},
         });
@@ -231,6 +232,15 @@ test('Owner page redeems an invite, signs in, restores and signs out',async()=>{
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),320);
     await page.getByRole('button',{name:'Sign out'}).click();
     await page.getByRole('heading',{name:'Shop Owner sign-in'}).waitFor();
+    gmailMode=true;
+    seen.length=0;
+    await page.reload();
+    await page.getByText('Use the Gmail address your Super Admin approved for this shop.').waitFor();
+    assert.equal(await page.getByRole('button',{name:'Accept invitation'}).isVisible(),false);
+    await page.getByRole('button',{name:'Sign in with Google'}).click();
+    await page.getByRole('button',{name:'Sign in with Google'}).click();
+    await page.getByRole('heading',{name:'Signed in as Shop Owner'}).waitFor();
+    assert.equal(seen.some(item=>item.path.startsWith('/api/owner/setup')),false);
   }finally{
     await browser.close();
   }

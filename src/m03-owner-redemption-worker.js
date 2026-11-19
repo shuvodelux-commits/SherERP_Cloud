@@ -1,3 +1,4 @@
+import {beginFirstOwnerGmailLogin,loginFirstOwnerWithGmail} from './auth/platform-owner-gmail-login.js';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCookie,setCookie} from 'hono/cookie';
@@ -32,7 +33,7 @@ const protect=(flag,rateLimit=true)=>async(c,next)=>{
   c.header('Referrer-Policy','no-referrer');
   c.header('X-Content-Type-Options','nosniff');
   const env=c.env??{};
-  if(env[flag]!=='true')return c.notFound();
+  if(env[flag]!=='true'||(flag==='OWNER_REDEMPTION_ENABLED'&&env.OWNER_GMAIL_SIGNUP_ENABLED==='true'))return c.notFound();
   const {OWNER_AUTH_ORIGIN:ownerOrigin,PLATFORM_AUTH_ORIGIN:adminOrigin,
     PLATFORM_OWNER_CLIENT_ID:client,OWNER_INGRESS:limiter,CONTROL_DB:db}=env;
   if(!isHttpsOrigin(ownerOrigin)||!isHttpsOrigin(adminOrigin)||ownerOrigin===adminOrigin||
@@ -80,7 +81,8 @@ app.post('/api/owner/setup',protect('OWNER_REDEMPTION_ENABLED'),limitBody,async 
 const protectLogin=protect('OWNER_LOGIN_ENABLED');
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{
-  const challenge=await beginOwnerGoogleLogin(c.env);
+  const challenge=await beginOwnerGoogleLogin(c.env)??
+    (c.env.OWNER_GMAIL_SIGNUP_ENABLED==='true'?await beginFirstOwnerGmailLogin(c.env):null);
   if(!challenge)return denied(c);
   setCookie(c,LOGIN_COOKIE,challenge.browserToken,{...COOKIE,maxAge:120});
   return c.json({clientId:c.env.PLATFORM_OWNER_CLIENT_ID,nonce:challenge.nonce});
@@ -89,7 +91,9 @@ app.post('/api/owner/auth/challenge',protectLogin,async c=>{
 app.post('/api/owner/auth/login',protectLogin,limitBody,async c=>{
   const credential=await jsonField(c,'credential');
   if(credential===null)return c.json({error:'Invalid request'},400);
-  const token=await loginOwnerWithGoogle(c.env,{credential,browserToken:getCookie(c,LOGIN_COOKIE)});
+  const input={credential,browserToken:getCookie(c,LOGIN_COOKIE)};
+  const token=await loginOwnerWithGoogle(c.env,input)??
+    (c.env.OWNER_GMAIL_SIGNUP_ENABLED==='true'?await loginFirstOwnerWithGmail(c.env,input):null);
   if(!token)return denied(c);
   setCookie(c,LOGIN_COOKIE,'',{...COOKIE,maxAge:0});
   setCookie(c,SESSION_COOKIE,token,{...COOKIE,maxAge:31_536_000});
@@ -133,8 +137,9 @@ for(const [route,path,type] of [
     c.header('Cross-Origin-Opener-Policy','same-origin-allow-popups');
     c.header('Referrer-Policy','strict-origin-when-cross-origin');
     const html=await reply.text();
-    const content=c.env.OWNER_REDEMPTION_ENABLED==='true'
-      ?html.replace('<body>','<body data-redemption="enabled">'):html;
+    const marker=c.env.OWNER_GMAIL_SIGNUP_ENABLED==='true'?'data-gmail-signin="enabled"':
+      c.env.OWNER_REDEMPTION_ENABLED==='true'?'data-redemption="enabled"':'';
+    const content=marker?html.replace('<body>','<body '+marker+'>'):html;
     return c.body(content,200,{'Content-Type':type});
   });
 }
