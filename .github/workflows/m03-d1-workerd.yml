@@ -61,6 +61,7 @@ jobs:
               tests/integration/m03-authorized-post-workerd.spec.mjs
               tests/integration/m03-master-atomic-workerd.spec.mjs
               tests/integration/m05-purchase-posting-workerd.spec.mjs
+              tests/integration/m03-oversold-atomic-workerd.spec.mjs
               tests/integration/m07-cash-batch-workerd.spec.mjs
               tests/integration/m07-return-edit-read-workerd.spec.mjs
               tests/integration/m03-delete-log-audit-read-workerd.spec.mjs

@@ -17,7 +17,7 @@ const extra=[
 test('M03 sharded integration preserves every former imported suite exactly once plus standalone cases',()=>{
  const aggregate=read(aggregator);
  const imported=[...aggregate.matchAll(/^import '\.\/([^']+\.spec\.mjs)';/gm)].map(x=>x[1]);
- assert.equal(imported.length,45,'44 original suites plus the extracted 10-test core');
+ assert.equal(imported.length,46,'44 original suites plus the extracted 10-test core and oversold synthetic proof');
  assert.ok(imported.includes('m03-workerd-core.spec.mjs'));
  assert.doesNotMatch(aggregate,/\btest\(/,'the aggregator must only compose suites');
  assert.ok(existsSync(new URL('../'+core,import.meta.url)));
