@@ -143,7 +143,7 @@ app.get('/app',protectLogin,async c=>{
   if(!session)return c.redirect('/',302);
   const assets=c.env.ASSETS;
   if(typeof assets?.fetch!=='function')return unavailable(c);
-  const reply=await assets.fetch(new Request(new URL('/index.html',c.req.url)));
+  const reply=await assets.fetch(new Request(new URL('/owner-erp.html',c.req.url)));
   if(reply.status!==200)return unavailable(c);
   c.header('Cache-Control','no-store');
   c.header('Content-Security-Policy',erpPageCsp);

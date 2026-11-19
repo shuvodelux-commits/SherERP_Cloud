@@ -35,7 +35,7 @@
 - Test `tests/integration/m03-owner-erp-frontend-workerd.spec.mjs` and `qa/m03-owner-erp-browser.spec.mjs`.
 
 **Interfaces:**
-- Builder creates `dist-owner/index.html` from the existing frontend, copies Owner login assets, and applies a fail-closed Owner bootstrap patch.
+- Builder writes the compiled ERP to `dist-owner/owner-erp.html` and keeps the Owner sign-in page at `dist-owner/index.html`.
 - Owner bootstrap calls only `/api/owner/auth/session`, `/api/owner/app-shell`, and `/api/owner/auth/logout`.
 
 - [x] Write tests for module visibility, no legacy password form, Owner bootstrap, and local-only allowlisted calls.

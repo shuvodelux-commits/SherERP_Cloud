@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {copyFile,mkdir,readFile,writeFile} from 'node:fs/promises';
+import {copyFile,readFile,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {buildFrontend} from './build-frontend.mjs';
 import {patchServerCall} from './patch-rpc.mjs';
@@ -107,13 +107,12 @@ export async function buildOwnerFrontend({sourceDir='legacy/source',outputDir='d
     patchPosV2HiddenVisibility(patchAuthenticatedShellCall(patchServerCall(html)))));
   await installM01ProductsPreviewAssets(output);
   html=patchOwnerApp(html);
-  await writeFile(built.outputPath,html,'utf8');
-  const authDir=join(output,'owner-auth');
-  await mkdir(authDir,{recursive:true});
-  await copyFile('frontend/owner-auth/index.html',join(authDir,'index.html'));
+  const indexPath=join(output,'owner-erp.html');
+  await writeFile(indexPath,html,'utf8');
+  await copyFile('frontend/owner-auth/index.html',built.outputPath);
   await copyFile('frontend/owner-auth/owner-auth.css',join(output,'owner-auth.css'));
   await copyFile('frontend/owner-auth/owner-auth.js',join(output,'owner-auth.js'));
-  return {...built,outputDir:output,indexPath:built.outputPath};
+  return {...built,outputDir:output,indexPath};
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===new URL(import.meta.url).pathname){

@@ -118,6 +118,8 @@ node --test qa/m03-owner-erp-browser.spec.mjs
 
 The separate Owner profile still has placeholder database IDs and `workers_dev:false`. These checks do not authorize a deployment, remote migration, or database import.
 
+For the separately approved Owner staging release, build `dist-owner/` from the merged release commit and point the protected Owner configuration at that directory. Confirm Worker-first routing, the exact approved Owner origin, disabled previews, and the existing Control and Shop D1 bindings. Retain the previous Owner Worker version. After publishing, check unsigned access to `/app`, the shell API, and a module asset. In an authorized browser, verify Google sign-in, shop name, module navigation, refresh, and sign-out. If verification fails, restore the previous Owner Worker version.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.

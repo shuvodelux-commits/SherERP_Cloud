@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import {createTestHarness} from 'wrangler';
+import {buildOwnerFrontend} from '../../scripts/build-owner-frontend.mjs';
+import './m03-owner-erp-frontend-workerd.spec.mjs';
 
 test('bundled assets and API fail closed without native Access in local Workerd',async()=>{
   const configPath='./wrangler.m03-platform-auth-access-staging.jsonc';
@@ -38,6 +40,7 @@ test('bundled assets and API fail closed without native Access in local Workerd'
 });
 
 test('Owner release candidate gates all assets and rejects alternate origins in Workerd',async()=>{
+  await buildOwnerFrontend();
   const configPath='./wrangler.m03-owner-auth-staging.jsonc';
   const cfg=JSON.parse(await readFile(configPath,'utf8'));
   assert.equal(cfg.workers_dev,false);

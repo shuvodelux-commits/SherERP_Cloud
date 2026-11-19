@@ -9,9 +9,9 @@ import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js
 import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 
 let outputDir,server,browser,url,logoutCount=0,rpcCount=0;
-const shopId='45336a7b-98ac-4049-9179-d265e2de1e19';
-const session={role:'Owner',shopId,dashboard:{displayName:'Alom Machinery',dataAvailable:false}};
-const appShell=buildSourceAppShellData({shopName:'Alom Machinery',currencySymbol:''}).data;
+const shopId='22222222-2222-4222-8222-222222222222';
+const session={role:'Owner',shopId,dashboard:{displayName:'Fixture Machinery',dataAvailable:false}};
+const appShell=buildSourceAppShellData({shopName:'Fixture Machinery',currencySymbol:''}).data;
 
 before(async()=>{
   outputDir=await mkdtemp(join(tmpdir(),'shererp-owner-browser-'));
@@ -43,8 +43,7 @@ before(async()=>{
         response.end(JSON.stringify({error:'RPC method not migrated'}));
         return;
       }
-      const assetPath=path==='/'?'/owner-auth/index.html':
-        path==='/app'||path==='/index.html'?'/index.html':path;
+      const assetPath=path==='/'?'/index.html':path==='/app'?'/owner-erp.html':path;
       const file=resolve(outputDir,'.'+assetPath);
       if(!file.startsWith(resolve(outputDir)+'/')){
         response.writeHead(404);response.end();return;
@@ -81,8 +80,8 @@ test('Owner session restore opens ERP modules, blocks RPC, and signs out through
     await page.waitForURL(url+'/app');
     await page.locator('#owner-data-notice').waitFor();
     assert.equal(await page.locator('#app').evaluate(element=>getComputedStyle(element).visibility),'visible');
-    assert.match(await page.locator('#app').innerText(),/Alom Machinery/);
     await page.locator('#navList .nav-item[aria-label="Sales"]').waitFor();
+    assert.equal(await page.locator('#shopNameLabel').textContent(),'Fixture Machinery');
     await page.locator('#navList .nav-item[aria-label="Products"]').waitFor();
     await page.locator('#logoutBtn').waitFor();
     assert.match(await page.locator('#owner-data-notice').innerText(),/reads and saves are unavailable/);

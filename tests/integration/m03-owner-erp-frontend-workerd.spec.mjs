@@ -61,7 +61,7 @@ test('Owner session serves ERP app and source navigation, then revocation remove
   const configPath='./wrangler.m03-owner-auth-staging.jsonc';
   const cfg=JSON.parse(await readFile(configPath,'utf8'));
   const origin='https://owner.example.test';
-  const shopId='45336a7b-98ac-4049-9179-d265e2de1e19';
+  const shopId='22222222-2222-4222-8222-222222222222';
   const marker='03b2c8f6-ea89-44a7-9032-3e4f17c8c94e';
   const harness=createTestHarness({workers:[{configPath,vars:{
     OWNER_AUTH_ORIGIN:origin,PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
@@ -75,7 +75,11 @@ test('Owner session serves ERP app and source navigation, then revocation remove
     const env=await worker.getEnv();
     const signInPage=await worker.fetch(origin+'/');
     assert.equal(signInPage.status,200);
-    assert.match(await signInPage.text(),/data-owner-erp="enabled"/);
+    const signInHtml=await signInPage.text();
+    assert.match(signInHtml,/Shop Owner sign-in/);
+    assert.match(signInHtml,/data-owner-erp="enabled"/);
+    const directAppAsset=await worker.fetch(origin+'/owner-erp.html',{redirect:'manual'});
+    assert.equal(directAppAsset.status,404);
     const rpc=await worker.fetch(origin+'/api/rpc',{method:'POST',headers:{
       Origin:origin,'Content-Type':'application/json',
     },body:JSON.stringify({fnName:'completeSale',args:[]})});
