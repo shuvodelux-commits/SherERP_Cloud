@@ -30,14 +30,23 @@ export async function issueOwnerSession(env,verifiedIdentity,{challengeHash=null
   return issued?token:null;
 }
 
-export async function validateOwnerSession(env,token){
+async function readOwnerContext(env,token){
   const hash=await hashOpaqueSessionToken(token);
   const config=pilotShopConfiguration(env);
   if(!hash||!config||!await pilotShopIdentityMatches(config))return null;
-  return env.CONTROL_DB.prepare(`SELECT o.shop_id AS shopId,'Owner' AS role ${CURRENT_OWNER}
+  return env.CONTROL_DB.prepare(`SELECT o.shop_id AS shopId,r.display_name AS displayName ${CURRENT_OWNER}
     JOIN platform_shop_owner_sessions s ON s.shop_id=o.shop_id
+    JOIN platform_shop_reservations r ON r.shop_id=o.shop_id
     WHERE o.shop_id=? AND b.database_id=? AND b.database_marker=? AND s.token_hash=?`)
     .bind(...pilotTuple(config),hash).first();
+}
+
+export async function validateOwnerSession(env,token,{dashboard=false}={}){
+  const current=await readOwnerContext(env,token);
+  if(!current)return null;
+  const session={shopId:current.shopId,role:'Owner'};
+  if(!dashboard)return session;
+  return {...session,dashboard:{displayName:current.displayName,dataAvailable:false}};
 }
 
 export async function revokeOwnerSession(env,token){

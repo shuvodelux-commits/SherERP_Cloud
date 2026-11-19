@@ -528,6 +528,15 @@ test('approved Gmail signs in directly and claims only its intended shop once',a
   assert.deepEqual(attempts.map(result=>result.status).sort(),[200,401]);
   const ownerCookie=cookie(attempts.find(result=>result.status===200),'__Host-shererp-owner-session');
   assert.deepEqual(await (await request('/auth/session',{method:'GET',browserCookie:ownerCookie})).json(),{shopId,role:'Owner'});
+  const dashboardConfig={...bindings,OWNER_DASHBOARD_BOOTSTRAP_ENABLED:'true'};
+  const dashboardRequest={method:'GET',browserCookie:ownerCookie,config:dashboardConfig};
+  const dashboard=await request('/auth/session',dashboardRequest);
+  assert.equal(dashboard.status,200);
+  assert.equal(dashboard.headers.get('Cache-Control'),'no-store');
+  assert.deepEqual(await dashboard.json(),{shopId,role:'Owner',
+    dashboard:{displayName:'Fixture Gmail shop',dataAvailable:false}});
+  assert.equal((await request('/auth/session',{...dashboardRequest,browserCookie:undefined})).status,401);
+  assert.equal((await request('/auth/session',{...dashboardRequest,config:{...dashboardConfig,PLATFORM_PILOT_DB:otherDb}})).status,401);
   const next=await request('/auth/challenge');
   assert.equal(next.status,200);
   const laterNonce=(await next.json()).nonce;

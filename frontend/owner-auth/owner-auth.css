@@ -58,3 +58,5 @@ button:disabled { opacity: .68; cursor: wait; }
 
 
 #shop-reference { overflow-wrap: anywhere; }
+
+#dashboard-shop-name { margin: 0 0 8px; font-size: 16px; overflow-wrap: anywhere; }

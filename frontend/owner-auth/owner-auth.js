@@ -11,6 +11,11 @@ const gmailMode=document.body.dataset.gmailSignin==='enabled';
 function show(view,message=''){
   generation++;
   invite.value='';
+  if(view!=='signed-in'){
+    byId('dashboard-bootstrap').hidden=true;
+    byId('dashboard-shop-name').textContent='';
+    byId('shop-reference').textContent='';
+  }
   mount.replaceChildren();
   cancel.disabled=false;
   status.textContent=message;
@@ -55,6 +60,10 @@ function googleSdk(){
 function showSession(session){
   if(session.role!=='Owner'||typeof session.shopId!=='string')throw new Error('Owner session missing');
   byId('shop-reference').textContent='Shop ID: '+session.shopId;
+  const dashboard=session.dashboard;
+  const showDashboard=typeof dashboard?.displayName==='string'&&dashboard.dataAvailable===false;
+  byId('dashboard-bootstrap').hidden=!showDashboard;
+  byId('dashboard-shop-name').textContent=showDashboard?dashboard.displayName:'';
   show('signed-in');
 }
 
