@@ -5,6 +5,11 @@ const mount=byId('google-button');
 const ticket=byId('setup-ticket');
 const code=byId('auth-code');
 const cancelGoogle=byId('back-google');
+const businessForm=byId('business-form');
+const businessName=byId('business-name');
+const businessReceipt=byId('business-receipt');
+const signOut=byId('sign-out');
+const RESERVATION_DRAFT='shererp-platform-reservation-draft';
 let generation=0;
 let credential;
 let sdk;
@@ -30,6 +35,85 @@ async function api(path,method='POST',data){
   if(!response.ok)throw new Error(String(response.status));
   return response.json();
 }
+
+function reservationDraft(){
+  const saved=sessionStorage.getItem(RESERVATION_DRAFT);
+  if(saved===null)return null;
+  const draft=JSON.parse(saved);
+  if(typeof draft?.operationId!=='string'||typeof draft.displayName!=='string')throw new Error('Invalid draft');
+  return {operationId:draft.operationId,displayName:draft.displayName};
+}
+
+function showSignedIn(session){
+  show('signed-in');
+  businessForm.hidden=session.shopReservationEnabled!==true;
+  businessReceipt.hidden=true;
+  businessReceipt.textContent='';
+  businessName.value='';
+  businessName.readOnly=false;
+  if(businessForm.hidden)return;
+  try{
+    const draft=reservationDraft();
+    if(draft){
+      businessName.value=draft.displayName;
+      businessName.readOnly=true;
+    }
+  }catch{
+    status.textContent='This browser could not restore the reservation request.';
+  }
+}
+
+businessForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(businessForm.hidden)return;
+  const button=businessForm.querySelector('button[type="submit"]');
+  if(button.disabled)return;
+  const name=businessName.value.trim();
+  if(!name){
+    status.textContent='Enter a business name.';
+    businessName.focus();
+    return;
+  }
+  let draft;
+  try{
+    draft=reservationDraft()??{operationId:crypto.randomUUID(),displayName:name};
+    sessionStorage.setItem(RESERVATION_DRAFT,JSON.stringify(draft));
+  }catch{
+    status.textContent='This browser could not save the reservation request.';
+    return;
+  }
+  businessName.value=draft.displayName;
+  businessName.readOnly=true;
+  businessReceipt.hidden=true;
+  button.disabled=signOut.disabled=true;
+  status.textContent='Reserving business…';
+  try{
+    const receipt=await api('/shops','POST',draft);
+    if(receipt.status!=='reserved'||typeof receipt.shopId!=='string'||receipt.displayName!==draft.displayName){
+      throw new Error('Reservation missing');
+    }
+    sessionStorage.removeItem(RESERVATION_DRAFT);
+    businessName.value='';
+    businessName.readOnly=false;
+    businessReceipt.textContent='Business reserved. Shop ID: '+receipt.shopId+'. Database setup is next.';
+    businessReceipt.hidden=false;
+    status.textContent='';
+  }catch(error){
+    if(error.message==='401'){
+      show('login','Sign in again to resume the reservation.');
+    }else if(error.message==='400'||error.message==='409'){
+      sessionStorage.removeItem(RESERVATION_DRAFT);
+      businessName.readOnly=false;
+      status.textContent=error.message==='409'
+        ?'This request conflicts with an existing reservation. Check it before submitting a new request.'
+        :'Enter a valid business name and try again.';
+    }else{
+      status.textContent='Could not confirm the reservation. Retry to check the same request.';
+    }
+  }finally{
+    button.disabled=signOut.disabled=false;
+  }
+});
 
 function googleSdk(){
   if(sdk)return sdk;
@@ -125,7 +209,7 @@ byId('mfa-form').addEventListener('submit',async event=>{
   try{
     const session=await api('/auth/login','POST',input);
     if(session.role!=='PlatformSuperAdmin')throw new Error('Role missing');
-    show('signed-in');
+    showSignedIn(session);
   }catch{
     show('login','Could not sign in. Start sign-in again.');
   }finally{
@@ -148,6 +232,6 @@ byId('sign-out').addEventListener('click',async event=>{
 });
 
 api('/auth/session','GET').then(
-  session=>show(session.role==='PlatformSuperAdmin'?'signed-in':'login'),
+  session=>session.role==='PlatformSuperAdmin'?showSignedIn(session):show('login'),
   error=>show('login',error.message==='401'?'':'Could not restore your session.'),
 );

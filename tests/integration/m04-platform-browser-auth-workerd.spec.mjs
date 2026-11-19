@@ -181,6 +181,10 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal((await call(shopPath,shopRequest)).status,404,'disabled by default');
   assert.equal((await publicWorker.fetch(new Request(origin+shopPath,{method:'POST'}),{})).status,404);
   const bindings={...env,PLATFORM_SHOP_RESERVATION_ENABLED:'true'};
+  const enabledSession=await call(sessionPath,{method:'GET',cookie:session,bindings});
+  assert.equal(enabledSession.status,200);
+  assert.deepEqual(await enabledSession.json(),{role:'PlatformSuperAdmin',shopReservationEnabled:true});
+  assert.equal((await call(sessionPath,{method:'GET',cookie:browser,bindings})).status,401);
   assert.equal((await call(shopPath,{...shopRequest,bindings,requestOrigin:'https://other.example.test'})).status,403);
   assert.equal((await call(shopPath,{payload:shopPayload,cookie:browser,bindings})).status,401,
     'a Google challenge cookie does not grant platform write access');

@@ -48,6 +48,12 @@
 
     <section id="signed-in" hidden>
       <h1 tabindex="-1">Signed in as Platform Super Admin</h1>
+      <form id="business-form" hidden>
+        <label for="business-name">Business name</label>
+        <input id="business-name" type="text" required maxlength="120" autocomplete="off">
+        <button class="primary" type="submit">Create business</button>
+        <p id="business-receipt" role="status" hidden></p>
+      </form>
       <button id="sign-out" class="primary" type="button">Sign out</button>
     </section>
 
