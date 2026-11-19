@@ -25,9 +25,11 @@ Before opening the Owner flow, prove atomic invite acceptance and overlapping pr
 
 ## Local first Owner reservation and invite proof
 
-An isolated fixture reuses the real platform session schema and performs each authorization and write in one SQL statement. The unique shop and operation IDs prevent duplicate reservations. The first Owner membership is the durable invitation consumption record, so repeated or concurrent acceptance cannot add another Owner. Only the exact intended verified Google issuer and subject can accept an unexpired invitation for a ready shop.
+An isolated fixture reuses the real platform session schema and checks authorization inside the reservation and readiness writes. Unique shop and operation IDs prevent duplicate reservations. A trusted provisioner supplies a local Shop D1 binding. The readiness write compares the binding's singleton marker with the expected shop ID and marker reserved in Control D1, then checks the operation ID and current Super Admin session. A missing marker, swapped binding, or stale operation leaves the shop unready.
 
-The fixture supplies a verified identity directly and marks provisioning ready in test setup. Hosted Google verification, the readiness and database identity attestation, operator invite delivery and the production schema require separate implementation and review. This proof does not register a route or create a cloud database. A production design must retain consumption independently of any future membership removal.
+Only the exact intended verified Google issuer and subject can accept an unexpired invitation for a ready shop. The membership insert records invite consumption in an immutable table in the same D1 statement. Removing the membership does not reopen the invitation. The local fixture receives preverified claims. It does not register an endpoint or create a Cloudflare database.
+
+The shop lookup and Control D1 update are separate operations on two databases. This marker check cannot prove a hosted D1 UUID or protect a later rebind by itself. The release still needs operator-verified database UUID and migration evidence, a trusted binding map, and a marker check on actual shop requests. Hosted Google verification and invitation delivery also need their own implementation and review.
 
 ```sh
 node --test tests/integration/m03-owner-onboarding-workerd.spec.mjs
