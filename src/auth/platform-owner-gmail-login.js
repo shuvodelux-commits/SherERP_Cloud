@@ -1,3 +1,4 @@
+import {finishOwnerLogin} from './platform-owner-write-session.js';
 import {verifyGoogleLoginIdToken} from './google-id-token.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './session-token.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './platform-shop-binding.js';
@@ -63,5 +64,5 @@ export async function loginFirstOwnerWithGmail(env,{browserToken,credential}){
       .bind(config.shopId,tokenHash),
   ]);
   if(!results.every(result=>result.success===true))throw new Error('Owner sign-in unavailable');
-  return results.at(-1).results.length===1?token:null;
+  return results.at(-1).results.length===1?finishOwnerLogin(env,token):null;
 }

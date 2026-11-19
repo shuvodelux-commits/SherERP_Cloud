@@ -402,8 +402,26 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(await revokeOwnerSession(inviteBindings,firstOwnerSession),false);
   assert.equal(await revokeOwnerSession(inviteBindings,anotherOwnerSession),true);
   assert.equal(await validateOwnerSession(inviteBindings,anotherOwnerSession),null);
-  const remainingOwnerSession=await issueOwnerSession(inviteBindings,ownerIdentity);
-  await db.prepare('UPDATE platform_shop_owner_access SET enabled=0').run();
+  for(const [target,file] of [
+    [db,'platform-owner-write/0009_owner_session_generation.sql'],
+    [db,'platform-owner-write/0010_owner_grant_claim.sql'],
+    [pilotDb,'shop-owner-write/0002_shop_owner_write_grant.sql'],
+  ]){
+    const sql=await readFile(new URL('../../staging-migrations/'+file,import.meta.url),'utf8');
+    await target.batch(sql.trim().split('-- next statement').map(statement=>target.prepare(statement.trim())));
+  }
+  const writeEnv={...inviteBindings,OWNER_WRITE_GRANTS_ENABLED:'true'};
+  const remainingOwnerSession=await issueOwnerSession(writeEnv,ownerIdentity);
+  const disable=options=>call('/api/platform/shops/disable-owner',{
+    cookie:session,payload:{shopId:reservation.shopId},bindings:writeEnv,...options,
+  });
+  assert.equal((await disable({cookie:browser})).status,401);
+  assert.equal((await disable({bindings:inviteBindings})).status,404);
+  assert.equal((await disable({bindings:{...writeEnv,PLATFORM_PILOT_DB:otherDb}})).status,409);
+  assert.equal((await pilotDb.prepare('SELECT enabled FROM shop_owner_write_grant').first()).enabled,1);
+  assert.equal((await disable()).status,200);
+  assert.equal((await disable()).status,200);
+  assert.equal((await pilotDb.prepare('SELECT enabled FROM shop_owner_write_grant').first()).enabled,0);
   assert.equal(await validateOwnerSession(inviteBindings,remainingOwnerSession),null);
   assert.equal(await issueOwnerSession(inviteBindings,ownerIdentity),null);
   await db.prepare('UPDATE platform_shop_owner_access SET enabled=1').run();
@@ -488,7 +506,7 @@ test('approved Gmail signs in directly and claims only its intended shop once',a
   const ownerOrigin='https://owner.example.test';
   const bindings={...env,PLATFORM_PILOT_DB:gmailDb,PLATFORM_PILOT_SHOP_ID:shopId,PLATFORM_PILOT_D1_ID:gmailDbId,
     PLATFORM_PILOT_MARKER:marker,OWNER_AUTH_ORIGIN:ownerOrigin,PLATFORM_OWNER_CLIENT_ID:clientId,
-    OWNER_LOGIN_ENABLED:'true',OWNER_REDEMPTION_ENABLED:'true',OWNER_GMAIL_SIGNUP_ENABLED:'true',
+    OWNER_LOGIN_ENABLED:'true',OWNER_WRITE_GRANTS_ENABLED:'true',OWNER_REDEMPTION_ENABLED:'true',OWNER_GMAIL_SIGNUP_ENABLED:'true',
     OWNER_INGRESS:{limit:async()=>({success:true})}};
   const migrate=async(target,name)=>{
     const sql=await readFile(new URL('../../staging-migrations/'+name+'.sql',import.meta.url),'utf8');
@@ -496,6 +514,7 @@ test('approved Gmail signs in directly and claims only its intended shop once',a
   };
   await migrate(gmailDb,'shop-identity/0001_shop_identity');
   await gmailDb.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)').bind(shopId,gmailDbId,marker).run();
+  await migrate(gmailDb,'shop-owner-write/0002_shop_owner_write_grant');
   await db.batch([
     db.prepare('INSERT INTO platform_shop_reservations VALUES (?,?,?,?,?)').bind(shopId,randomUUID(),'Fixture Gmail shop',subject,now),
     db.prepare('INSERT INTO platform_shop_bindings VALUES (?,?,?,?,?)').bind(shopId,gmailDbId,marker,subject,now),
@@ -526,6 +545,7 @@ test('approved Gmail signs in directly and claims only its intended shop once',a
   assert.equal((await login(address)).status,401);
   const attempts=await Promise.all([login('updated@gmail.com'),login('updated@gmail.com')]);
   assert.deepEqual(attempts.map(result=>result.status).sort(),[200,401]);
+  assert.equal((await gmailDb.prepare('SELECT enabled FROM shop_owner_write_grant').first()).enabled,1);
   const ownerCookie=cookie(attempts.find(result=>result.status===200),'__Host-shererp-owner-session');
   assert.deepEqual(await (await request('/auth/session',{method:'GET',browserCookie:ownerCookie})).json(),{shopId,role:'Owner'});
   const dashboardConfig={...bindings,OWNER_DASHBOARD_BOOTSTRAP_ENABLED:'true'};
