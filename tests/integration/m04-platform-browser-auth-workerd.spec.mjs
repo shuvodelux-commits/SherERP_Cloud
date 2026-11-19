@@ -328,8 +328,36 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(await accept(credential(nonceForOwner)),null);
   assert.equal(await accept(credential(setupNonce,inviteRequest.payload.googleSubject)),null);
   assert.equal(await accept(ownerCredential,{...inviteBindings,PLATFORM_PILOT_DB:otherDb}),null);
-  const accepted=await Promise.all([accept(ownerCredential),accept(ownerCredential)]);
-  assert.deepEqual(accepted.filter(Boolean),[{shopId:reservation.shopId,role:'Owner'}]);
+  const {default:ownerWorker}=await import('../../src/m03-owner-redemption-worker.js');
+  const ownerOrigin='https://owner.example.test';
+  const ownerBindings={...inviteBindings,OWNER_REDEMPTION_ENABLED:'true',OWNER_AUTH_ORIGIN:ownerOrigin,
+    OWNER_INGRESS:{limit:async()=>({success:true})}};
+  const ownerCall=(path,data,{browserCookie,originHeader=ownerOrigin,bindings=ownerBindings}={})=>ownerWorker.fetch(
+    new Request(ownerOrigin+'/api/owner/setup'+path,{
+      method:'POST',headers:{Origin:originHeader,'Content-Type':'application/json',...(browserCookie?{Cookie:browserCookie}:{})},
+      body:JSON.stringify(data),
+    }),bindings);
+  assert.equal((await ownerCall('/challenge',{inviteCode},{bindings:inviteBindings})).status,404);
+  assert.equal((await ownerCall('/challenge',{inviteCode},{originHeader:origin})).status,403);
+  assert.equal((await ownerCall('/challenge',{inviteCode},{bindings:{...ownerBindings,OWNER_INGRESS:{limit:async()=>({success:false})}}})).status,429);
+  assert.equal((await ownerCall('/challenge',{inviteCode,shopId:reservation.shopId})).status,400);
+  assert.equal((await ownerCall('',{credential:ownerCredential})).status,401);
+  const ownerChallenge=await ownerCall('/challenge',{inviteCode});
+  assert.equal(ownerChallenge.status,200);
+  assert.equal(ownerChallenge.headers.get('Cache-Control'),'no-store');
+  assert.deepEqual(await ownerChallenge.json(),{clientId,nonce:nonceForOwner});
+  const ownerCookie=cookie(ownerChallenge,'__Host-shererp-owner-invite');
+  let redemptionPermits=0;
+  const redeem=()=>ownerCall('',{credential:ownerCredential},{browserCookie:ownerCookie,
+    bindings:{...ownerBindings,OWNER_INGRESS:{limit:async()=>{redemptionPermits++;return {success:true};}}}});
+
+  const accepted=await Promise.all([redeem(),redeem()]);
+  assert.deepEqual(accepted.map(result=>result.status).sort(),[201,401]);
+  assert.equal(redemptionPermits,2);
+  const acceptedResponse=accepted.find(result=>result.status===201);
+  assert.deepEqual(await acceptedResponse.json(),{shopId:reservation.shopId,role:'Owner'});
+  assert.equal(acceptedResponse.headers.getSetCookie().length,1);
+  assert.ok(acceptedResponse.headers.getSetCookie().every(value=>value.startsWith('__Host-shererp-owner-invite=')&&value.includes('Max-Age=0')));
   assert.equal(await readOwnerInviteChallenge(inviteBindings,inviteCode),null);
   assert.equal(await accept(ownerCredential),null);
   assert.equal((await invite()).status,409);
