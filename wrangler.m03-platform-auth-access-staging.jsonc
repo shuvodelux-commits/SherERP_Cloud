@@ -9,12 +9,13 @@
     "PLATFORM_AUTH_SCOPE": "private-platform-auth",
     "PLATFORM_AUTH_ORIGIN": "https://admin-hisabiq.agnishuvo.workers.dev"
   },
-  "assets": {
-    "directory": "frontend/platform-auth",
-    "binding": "ASSETS",
-    "run_worker_first": true,
-    "html_handling": "none"
-  },
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/platform-auth/index.html", "**/platform-auth/platform-auth.css", "**/platform-auth/platform-auth.js"],
+      "fallthrough": true
+    }
+  ],
   "d1_databases": [
     {
       "binding": "CONTROL_DB",

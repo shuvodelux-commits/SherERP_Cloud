@@ -3,12 +3,12 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import {createTestHarness} from 'wrangler';
 
-test('Worker-first assets cannot bypass the Access wrapper in local Workerd',async()=>{
+test('bundled assets and API fail closed without native Access in local Workerd',async()=>{
   const configPath='./wrangler.m03-platform-auth-access-staging.jsonc';
   const cfg=JSON.parse(await readFile(configPath,'utf8'));
   assert.equal(cfg.d1_databases.length,1);
   assert.equal(cfg.d1_databases[0].remote,false);
-  assert.equal(cfg.assets.run_worker_first,true);
+  assert.equal(cfg.assets,undefined);
   assert.equal(cfg.preview_urls,false);
   const harness=createTestHarness({workers:[{configPath,vars:{
     PLATFORM_ACCESS_AUDIENCE:'a'.repeat(64),PLATFORM_ACCESS_EMAIL:'operator@example.test',

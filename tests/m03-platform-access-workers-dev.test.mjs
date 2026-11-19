@@ -1,50 +1,34 @@
 import assert from 'node:assert/strict';
-import {generateKeyPairSync,sign} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {registerHooks} from 'node:module';
 import {test} from 'node:test';
-import worker from '../src/m03-access-platform-auth-worker.js';
 import publicWorker from '../src/index.js';
 
+// Mirror the staging Wrangler Text rules so Node can assert the original bytes.
+const files=new Map(['index.html','platform-auth.js','platform-auth.css'].map(name=>{
+  const url=new URL('../frontend/platform-auth/'+name,import.meta.url);
+  return [url.href,readFileSync(url,'utf8')];
+}));
+const hooks=registerHooks({load(url,context,next){
+  if(files.has(url))return {format:'module',source:'export default '+JSON.stringify(files.get(url)),shortCircuit:true};
+  return next(url,context);
+}});
+const {default:worker}=await import('../src/m03-access-platform-auth-worker.js');
+hooks.deregister();
+
 const origin='https://admin-hisabiq.agnishuvo.workers.dev';
-const issuer='https://agnishuvo.cloudflareaccess.com';
 const audience='a'.repeat(64);
 const email='operator@example.test';
-const keyId='access-fixture';
-const {publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
-const badKey=generateKeyPairSync('rsa',{modulusLength:2048}).privateKey;
-const jwk={...publicKey.export({format:'jwk'}),kid:keyId,alg:'RS256'};
-const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
-
-function assertion(overrides={},key=privateKey){
-  const now=Math.floor(Date.now()/1000);
-  const claims={iss:issuer,aud:[audience],email,sub:'access-fixture-user',type:'app',iat:now-1,exp:now+600,...overrides};
-  const input=encode({alg:'RS256',kid:keyId})+'.'+encode(claims);
-  return input+'.'+sign('RSA-SHA256',Buffer.from(input),key).toString('base64url');
-}
-
 const bindings={
   PLATFORM_AUTH_SCOPE:'private-platform-auth',PLATFORM_AUTH_ORIGIN:origin,
   PLATFORM_CLIENT_ID:'123-fixture.apps.googleusercontent.com',
   PLATFORM_ACCESS_AUDIENCE:audience,PLATFORM_ACCESS_EMAIL:email,
   CONTROL_DB:{prepare(){assert.fail('D1 was not expected');},batch(){assert.fail('D1 was not expected');}},
   PLATFORM_INGRESS:{limit(){assert.fail('Ingress was not expected');}},
-  ASSETS:{async fetch(){return new Response('Private fixture');}},
 };
-
-function request(path,{token,base=origin,method='GET',extra={}}={}){
-  const headers=new Headers(extra);
-  if(token)headers.set('Cf-Access-Jwt-Assertion',token);
-  if(method==='POST'&&!headers.has('Origin'))headers.set('Origin',base);
-  return new Request(base+path,{method,headers});
-}
-
-function trustFixtureKeys(t){
-  t.mock.method(globalThis,'fetch',async(url,options)=>{
-    assert.equal(url,issuer+'/cdn-cgi/access/certs');
-    assert.equal(options.redirect,'error');
-    return Response.json({keys:[jwk]});
-  });
-}
+const access={aud:audience,getIdentity:async()=>({email})};
+const request=(path='/',base=origin)=>new Request(base+path);
+const routes=[['/','index.html'],['/platform-auth.js','platform-auth.js'],['/platform-auth.css','platform-auth.css']];
 
 test('only the dedicated admin workers.dev hostname can use the isolated staging config',()=>{
   const cfg=JSON.parse(readFileSync(new URL('../wrangler.m03-platform-auth-access-staging.jsonc',import.meta.url)));
@@ -56,7 +40,8 @@ test('only the dedicated admin workers.dev hostname can use the isolated staging
   assert.equal(cfg.workers_dev,true);
   assert.equal(cfg.preview_urls,false);
   assert.equal(cfg.routes,undefined);
-  assert.equal(cfg.assets.run_worker_first,true);
+  assert.equal(cfg.assets,undefined);
+  assert.equal(cfg.rules[0].type,'Text');
   assert.equal(cfg.vars.PLATFORM_AUTH_ORIGIN,origin);
   for(const name of ['PLATFORM_ACCESS_AUDIENCE','PLATFORM_ACCESS_EMAIL','PLATFORM_CLIENT_ID','PLATFORM_TOTP_SECRET','PLATFORM_FACTOR_VERSION'])
     assert.equal(cfg.vars[name],undefined);
@@ -68,156 +53,49 @@ test('only the dedicated admin workers.dev hostname can use the isolated staging
   assert.equal(preview.d1_databases,undefined);
 });
 
-test('Access is required for HTML, assets and API even if the edge stops enforcing it',async t=>{
-  t.mock.method(console,'warn',()=>{});
-  const getKeys=t.mock.method(globalThis,'fetch',()=>assert.fail('early denials must not fetch signing keys'));
-  const guarded={...bindings,ASSETS:{fetch(){assert.fail('private assets must not be reached');}}};
-  for(const path of ['/','/platform-auth.js','/platform-auth.css','/api/platform/auth/challenge']){
-    const method=path.startsWith('/api/')?'POST':'GET';
-    assert.equal((await worker.fetch(request(path,{method}),guarded)).status,403);
-  }
-  assert.equal((await worker.fetch(request('/',{token:assertion(),base:'https://preview.example.test'}),guarded)).status,403);
-  assert.equal((await worker.fetch(request('/',{token:assertion()}),{...guarded,PLATFORM_ACCESS_AUDIENCE:undefined})).status,503);
-  assert.equal((await worker.fetch(request('/',{token:assertion()}),{...guarded,PLATFORM_ACCESS_EMAIL:undefined})).status,503);
-  assert.equal((await worker.fetch(request('/',{extra:{Cookie:'CF_Authorization=malformed'}}),guarded)).status,403);
-  assert.equal(getKeys.mock.callCount(),0);
-  assert.equal((await publicWorker.fetch(request('/api/platform/auth/session'),{})).status,404);
-});
 
-test('only a current signed Access application token for this audience and human operator is accepted',async t=>{
-  t.mock.method(console,'warn',()=>{});
-  trustFixtureKeys(t);
-  const denied=[assertion({},badKey),assertion({iss:'https://another.cloudflareaccess.com'}),
-    assertion({aud:['b'.repeat(64)]}),assertion({type:'org'}),assertion({email:'someone@example.test'}),
-    assertion({email:undefined}),assertion({exp:1}),assertion({exp:undefined}),
-    assertion({iat:Math.floor(Date.now()/1000)+3600}),assertion({sub:undefined})];
-  for(const token of denied){
-    const response=await worker.fetch(request('/',{token}),bindings);
-    assert.equal(response.status,403);
-    assert.equal(response.headers.get('Cache-Control'),'no-store');
-  }
-  const token=assertion();
-  const page=await worker.fetch(request('/',{token}),bindings);
-  assert.equal(page.status,200);
-  assert.equal(await page.text(),'Private fixture');
-  assert.equal((await worker.fetch(request('/api/platform/auth/session',{token}),bindings)).status,401);
-  const login=await worker.fetch(request('/api/platform/auth/login',{token,method:'POST'}),{
-    ...bindings,PLATFORM_INGRESS:{async limit(){return {success:true};}},
-  });
-  assert.equal(login.status,401);
-  assert.equal(login.headers.has('Set-Cookie'),false);
-});
-
-
-test('a signed browser Access cookie can supply a missing assertion header',async t=>{
-  trustFixtureKeys(t);
-  const token=assertion();
-  const cookies='unrelated=value; CF_Authorization='+token+'; trailing=value';
-  for(const path of ['/','/platform-auth.js','/platform-auth.css']){
-    const response=await worker.fetch(request(path,{extra:{Cookie:cookies}}),bindings);
-    assert.equal(response.status,200,path);
-    assert.equal(response.headers.get('Cache-Control'),'no-store');
-  }
-  const session=await worker.fetch(request('/api/platform/auth/session',{extra:{Cookie:cookies}}),bindings);
-  assert.equal(session.status,401,'Access admission cannot create a SherERP session');
-  assert.equal(session.headers.has('Set-Cookie'),false);
-  const badOrigin=await worker.fetch(request('/api/platform/auth/challenge',{
-    method:'POST',extra:{Cookie:cookies,Origin:'https://another.example.test'},
-  }),bindings);
-  assert.equal(badOrigin.status,403);
-});
-
-test('a signed browser Access cookie can supply proof when the assertion header is rejected',async t=>{
-  t.mock.method(console,'warn',()=>{});
-  trustFixtureKeys(t);
-  const cookie='CF_Authorization='+assertion();
-  const rejectedAssertions=[assertion({},badKey),assertion({aud:['b'.repeat(64)]}),
-    assertion({email:'someone-else@example.test'})];
-  for(const token of rejectedAssertions){
-    const response=await worker.fetch(request('/',{token,extra:{Cookie:cookie}}),bindings);
+test('native Access serves the original page assets without contacting signing keys',async t=>{
+  const network=t.mock.method(globalThis,'fetch',async()=>{throw new Error('signing keys unavailable');});
+  for(const [path,file] of routes){
+    const response=await worker.fetch(request(path),bindings,{access});
     assert.equal(response.status,200);
-    assert.equal(await response.text(),'Private fixture');
+    assert.equal(await response.text(),files.get(new URL('../frontend/platform-auth/'+file,import.meta.url).href));
+    assert.equal(response.headers.get('Cache-Control'),'no-store');
   }
-  const blankHeader=await worker.fetch(request('/',{
-    extra:{'Cf-Access-Jwt-Assertion':'',Cookie:cookie},
-  }),bindings);
-  assert.equal(blankHeader.status,200);
-  const rejectedCookies=[
-    'CF_Authorization='+assertion({aud:['b'.repeat(64)]}),
-    'CF_Authorization='+assertion({email:'someone-else@example.test'}),
-    cookie+'; '+cookie,
-  ];
-  for(const invalidCookie of rejectedCookies){
-    const response=await worker.fetch(request('/',{
-      token:assertion({},badKey),extra:{Cookie:invalidCookie},
-    }),bindings);
-    assert.equal(response.status,403);
+  assert.equal(network.mock.callCount(),0);
+});
+
+test('client-supplied Access headers and cookies cannot grant admission',async()=>{
+  for(const path of [...routes.map(([path])=>path),'/api/platform/auth/session']){
+    const req=new Request(origin+path,{headers:{
+      'Cf-Access-Jwt-Assertion':'forged',
+      'Cf-Access-Authenticated-User-Email':email,
+      Cookie:'CF_Authorization=forged',
+    }});
+    assert.equal((await worker.fetch(req,bindings,{})).status,403);
   }
 });
 
-test('rejected assertion and cookie proofs reuse one Access signing-key fetch',async t=>{
-  let fetches=0;
-  t.mock.method(globalThis,'fetch',async url=>{
-    assert.equal(url,issuer+'/cdn-cgi/access/certs');
-    fetches++;
-    return Response.json({keys:[jwk]});
-  });
-  const response=await worker.fetch(request('/',{
-    token:assertion({},badKey),extra:{Cookie:'CF_Authorization='+assertion()},
-  }),bindings);
-  assert.equal(response.status,200);
-  assert.equal(fetches,1);
-});
-
-test('invalid headers, forged cookies and duplicate cookie names fail closed',async t=>{
-  t.mock.method(console,'warn',()=>{});
-  trustFixtureKeys(t);
-  const valid='CF_Authorization='+assertion();
-  const cookieCases=[
-    request('/',{extra:{Cookie:valid+'; '+valid}}),
-    request('/',{extra:{Cookie:'CF_Authorization=; '+valid}}),
-    request('/',{extra:{Cookie:'CF_Authorization='+assertion({},badKey)}}),
-    request('/',{extra:{Cookie:'CF_Authorization='+assertion({aud:['b'.repeat(64)]})}}),
-    request('/',{extra:{Cookie:'CF_Authorization='+assertion({type:'org'})}}),
-    request('/',{extra:{Cookie:'CF_Authorization='+assertion({exp:1})}}),
+test('rejects wrong audience, missing identity, wrong operator and identity lookup failure',async()=>{
+  let called=false;
+  const cases=[
+    {aud:'b'.repeat(64),getIdentity:async()=>{called=true;return {email};}},
+    {aud:audience},
+    {aud:audience,getIdentity:async()=>undefined},
+    {aud:audience,getIdentity:async()=>({email:'other@example.test'})},
+    {aud:audience,getIdentity:async()=>{throw new Error('unavailable');}},
   ];
-  for(const req of cookieCases)assert.equal((await worker.fetch(req,bindings)).status,403);
+  for(const proof of cases)assert.equal((await worker.fetch(request(),bindings,{access:proof})).status,403);
+  assert.equal(called,false);
 });
 
-test('Access denial logs only proof presence and signing-key availability',async t=>{
-  const token=assertion();
-  let warning;
-  t.mock.method(console,'warn',(...args)=>{warning=args;});
-  t.mock.method(globalThis,'fetch',async()=>Response.json({error:'unavailable'},{status:503}));
-  const response=await worker.fetch(request('/',{
-    token,extra:{Cookie:'CF_Authorization='+token},
-  }),bindings);
-  assert.equal(response.status,403);
-  assert.deepEqual(warning,[
-    'platform_access_denied',
-    {assertionPresent:true,assertionAccepted:false,
-      authorizationCookiePresent:true,authorizationCookieAccepted:false,jwksAvailable:false},
-  ]);
-  assert.equal(JSON.stringify(warning).includes(token),false);
-  assert.deepEqual(await response.json(),{error:'Access required'});
+test('requires the exact origin and valid operator configuration',async()=>{
+  assert.equal((await worker.fetch(request('/','https://preview.example.test'),bindings,{access})).status,403);
+  for(const key of ['PLATFORM_ACCESS_AUDIENCE','PLATFORM_ACCESS_EMAIL'])
+    assert.equal((await worker.fetch(request(),{...bindings,[key]:undefined},{access})).status,503);
 });
 
-test('Access denial distinguishes rejected proofs from unavailable signing keys without logging credentials',async t=>{
-  trustFixtureKeys(t);
-  let warning;
-  t.mock.method(console,'warn',(...args)=>{warning=args;});
-  const assertionToken=assertion({},badKey);
-  const cookieToken=assertion({email:'someone-else@example.test'});
-  const response=await worker.fetch(request('/',{
-    token:assertionToken,extra:{Cookie:'CF_Authorization='+cookieToken},
-  }),bindings);
-  assert.equal(response.status,403);
-  assert.deepEqual(warning,[
-    'platform_access_denied',
-    {assertionPresent:true,assertionAccepted:false,
-      authorizationCookiePresent:true,authorizationCookieAccepted:false,jwksAvailable:true},
-  ]);
-  const serialized=JSON.stringify(warning);
-  assert.equal(serialized.includes(assertionToken),false);
-  assert.equal(serialized.includes(cookieToken),false);
+test('the public Worker health remains database-free',async()=>{
+  const response=await publicWorker.fetch(new Request('https://hisabiq.agnishuvo.workers.dev/api/health'),{});
+  assert.equal((await response.json()).database,'not-connected');
 });
