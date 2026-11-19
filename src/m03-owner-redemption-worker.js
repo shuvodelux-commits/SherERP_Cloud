@@ -26,7 +26,7 @@ function isHttpsOrigin(value){
 
 app.onError((_error,c)=>unavailable(c));
 
-const protect=flag=>async(c,next)=>{
+const protect=(flag,rateLimit=true)=>async(c,next)=>{
   c.header('Cache-Control','no-store');
   c.header('Content-Security-Policy',"default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
   c.header('Referrer-Policy','no-referrer');
@@ -42,7 +42,7 @@ const protect=flag=>async(c,next)=>{
   const requestOrigin=c.req.header('Origin');
   if(url.origin!==ownerOrigin||((c.req.method==='POST'||requestOrigin!==undefined)&&requestOrigin!==ownerOrigin))return c.json({error:'Origin forbidden'},403);
   if(url.search)return c.json({error:'Query parameters are unsupported'},400);
-  if((await limiter.limit({key:c.req.path}))?.success!==true)return c.json({error:'Try again later'},429);
+  if(rateLimit&&(await limiter.limit({key:c.req.path}))?.success!==true)return c.json({error:'Try again later'},429);
   await next();
 };
 
@@ -110,6 +110,34 @@ app.post('/api/owner/auth/logout',protectLogin,async c=>{
   setCookie(c,SESSION_COOKIE,'',{...COOKIE,maxAge:0});
   return c.json({signedOut:true});
 });
+
+const pageCsp=[
+  "default-src 'none'","base-uri 'none'","frame-ancestors 'none'","form-action 'none'",
+  "script-src 'self' https://accounts.google.com/gsi/client",
+  "style-src 'self' https://accounts.google.com/gsi/style",
+  "connect-src 'self' https://accounts.google.com/gsi/","frame-src https://accounts.google.com/gsi/",
+].join('; ');
+
+for(const [route,path,type] of [
+  ['/','/index.html','text/html; charset=utf-8'],
+  ['/owner-auth.css','/owner-auth.css','text/css; charset=utf-8'],
+  ['/owner-auth.js','/owner-auth.js','text/javascript; charset=utf-8'],
+]){
+  app.get(route,protect('OWNER_LOGIN_ENABLED',false),async c=>{
+    const assets=c.env.ASSETS;
+    if(typeof assets?.fetch!=='function')return unavailable(c);
+    const reply=await assets.fetch(new Request(new URL(path,c.req.url)));
+    if(reply.status!==200)return unavailable(c);
+    if(route!=='/')return c.body(reply.body,200,{'Content-Type':type});
+    c.header('Content-Security-Policy',pageCsp);
+    c.header('Cross-Origin-Opener-Policy','same-origin-allow-popups');
+    c.header('Referrer-Policy','strict-origin-when-cross-origin');
+    const html=await reply.text();
+    const content=c.env.OWNER_REDEMPTION_ENABLED==='true'
+      ?html.replace('<body>','<body data-redemption="enabled">'):html;
+    return c.body(content,200,{'Content-Type':type});
+  });
+}
 
 // This entry is separate from the deployed platform and public ERP Workers.
 export default app;
