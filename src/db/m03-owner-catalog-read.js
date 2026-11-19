@@ -1,9 +1,9 @@
 const MAX_PRODUCTS=1000;
 
 // Read the canonical display fields only. Stock, cost and audit data stay private.
-export async function readOwnerCatalog(shopDb){
+export async function readOwnerCatalog(DB){
   try{
-    const result=await shopDb.prepare(`SELECT product_id AS productId, product_name AS name,
+    const result=await DB.prepare(`SELECT product_id AS productId, product_name AS name,
       brand_text AS brand, category_text AS category, unit_text AS unit,
       selling_price_text AS listedPrice
       FROM legacy_product_snapshots
