@@ -28,7 +28,7 @@ async function seed(CONTROL_DB,DB,scope,subject,index){
   assert.equal(typeof token,'string');
   const migration=await readFile('staging-migrations/shop-owner-write/0002_shop_owner_write_grant.sql','utf8');
   await DB.batch(migration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
-  assert.equal(await publishFixtureOwnerGrant(DB,token,1),true);
+  assert.equal(await publishFixtureOwnerGrant(env,token,1),true);
   return {env,token};
 }
 

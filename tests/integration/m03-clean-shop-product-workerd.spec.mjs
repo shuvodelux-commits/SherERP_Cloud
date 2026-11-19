@@ -65,13 +65,13 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     assert.equal(typeof replacement,'string');
     assert.equal(await generation(ownerB),3);
     assert.equal(await generation(ownerA),1);
-    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,replacement,await generation(ownerB)),true);
-    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,ownerB.token,1),false);
+    assert.equal(await publishFixtureOwnerGrant(ownerB.env,replacement,await generation(ownerB)),true);
+    assert.equal(await publishFixtureOwnerGrant(ownerB.env,ownerB.token,1),false);
     const nextDraft={...draft,name:'Replacement session product',operationId:crypto.randomUUID()};
     assert.equal((await request('b',ownerB.token,nextDraft)).status,401);
     assert.equal((await request('b',replacement,nextDraft)).status,201);
     await SHOP_B_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
-    assert.equal(await publishFixtureOwnerGrant(SHOP_B_DB,replacement,await generation(ownerB)),false);
+    assert.equal(await publishFixtureOwnerGrant(ownerB.env,replacement,await generation(ownerB)),false);
     assert.equal((await request('b',replacement,{...nextDraft,name:'Late grant',operationId:crypto.randomUUID()})).status,409);
     await control.prepare('UPDATE platform_shop_owner_sessions SET issued_at_ms=issued_at_ms+1 WHERE shop_id=?')
       .bind(ownerB.env.PLATFORM_PILOT_SHOP_ID).run();
