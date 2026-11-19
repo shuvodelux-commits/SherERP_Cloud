@@ -2,9 +2,19 @@
 
 Start with [issue #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690) and the latest GitHub `main`. Related workstreams are #22 for D1 and #23 for authorization. Before editing, check the open PRs, current CI, `AGENTS.md`, and `docs/PARALLEL_EXECUTION.md`. Review status in GitHub takes precedence over this dated summary.
 
-## Progress as of 20 November 2026
+## Run 2 resume checkpoint
 
-GitHub `main` verified through `7ff6050` (#704). The [clean business milestone #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690) remains open.
+- PR #706 merged on GitHub main at `6325c83d0d1f088996e2ed0c107695e27a246efb`. It completed the private Owner grant lifecycle and left the flag disabled in checked-in deployment profiles.
+- Run 2 belongs to M03 with M01 browser verification under #690. The isolated branch is `integration/owner-first-product`, initially created in `/tmp/shererp-run2-product`. Check the branch and PR status on GitHub before resuming. If opening a new chat on the owner's machine through Remote Desktop Commander, use the worktree path only if it still exists. GitHub is the canonical branch and evidence.
+- RED evidence on the Run 2 branch. The private product POST returned 404 before route integration. The original Add Product button was still hidden in Chromium when the browser test first ran through the private Worker.
+- GREEN evidence. The private Owner Worker now creates a Standard product with zero opening stock and reads it from the operational catalog. The Shop D1 grant, product row, receipt, and source-format PRD sequence are checked or written in the same database transaction. The browser keeps the operation ID after a lost save response and reloads the committed row.
+- Local verification passed for the affected D1 and Chromium tests. Follow the Run 2 PR's Checks tab for results on the published commit. Merge only after review and full CI. No remote migration or deployment activation was performed.
+- Private staging prerequisite after separate approval. Apply the reviewed operational product and Owner grant migrations, then `staging-migrations/shop-owner-write/0003_owner_product_create_receipts.sql` on a verified empty Shop D1. Enable `OWNER_CLEAN_PRODUCTS_ENABLED` with the existing Owner catalog and grant flags only for that candidate. Confirm the browser flow before staging sign-off. To pause product creation, turn off the clean-products flag and retain the operational rows and receipts.
+- Next implementation gate is Run 3 under #690 and #456. Use the existing purchase Workerd proof to verify supplier obligations, lot and movement IDs, exact cost, authenticated receipts and reversal lineage on the reviewed schema. Ask for separate approval before any staging activation. If a fresh chat is opened through Remote Desktop Commander, paste this checkpoint and continue from the GitHub branch or merged SHA.
+
+## Earlier pilot evidence
+
+The table below records pilot evidence through `7ff6050` (#704). The [clean business milestone #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690) remains open.
 
 | Area | Status |
 | --- | --- |
@@ -15,7 +25,7 @@ GitHub `main` verified through `7ff6050` (#704). The [clean business milestone #
 
 ## Next visible milestone
 
-**An Owner signs in and saves the first real product for one empty staging shop.** Reuse the original form and operational `products` table. Start with a standard product and zero opening stock. The remaining work is:
+**An Owner signs in and saves the first real product for one empty staging shop.** Reuse the original form and operational `products` table. Start with a standard product and zero opening stock. The original sequence was:
 
 1. Connect live-candidate Owner sign-in, sign-out, and access removal to the Shop D1 grant. Keep the permission check inside the product mutation. Control D1 and Shop D1 do not share a transaction, so prove that interrupted or reordered grant updates cannot restore write access after revocation. See `M04_ATOMIC_AUTHORITY_BOUNDARY.md` and `M03_G1_INTEGRATION_HANDOFF.md`.
 2. Connect the form to a real Product ID and operation receipt. Verify one save on retry, changed-payload rejection, cross-shop denial, refusal after revocation, and no committed row on failure. Reuse the #692 browser flow against the actual release candidate.
