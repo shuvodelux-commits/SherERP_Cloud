@@ -1,6 +1,6 @@
-import {getCookie} from 'hono/cookie';
+import {getCookie,setCookie} from 'hono/cookie';
 import {Hono} from 'hono';
-import {validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
+import {signOutOwnerBrowser,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
 // Local test fixture only. Neither the route nor its synthetic shop selection
@@ -13,7 +13,7 @@ const OPERATIONS=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-
 const PRICE=/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/;
 const CAN_WRITE='EXISTS(SELECT 1 FROM fixture_owner_write_grants WHERE token_hash=? AND enabled=1)';
 
-app.use('/__clean_shop__/products',async(c,next)=>{
+app.use('/__clean_shop__/*',async(c,next)=>{
   if(c.env.CLEAN_SHOP_FIXTURE!=='true')return c.notFound();
   const origin=new URL(c.req.url).origin;
   const target=origin==='https://a.example.test'?'A':origin==='https://b.example.test'?'B':null;
@@ -22,15 +22,34 @@ app.use('/__clean_shop__/products',async(c,next)=>{
   const db=target==='A'?c.env.SHOP_A_DB:c.env.SHOP_B_DB;
   const {shopId,databaseId,marker}=JSON.parse(target==='A'?c.env.SHOP_A:c.env.SHOP_B);
   const token=getCookie(c,'__Host-shererp-owner-session');
-  const session=await validateOwnerSession({
+  const env={
     CONTROL_DB:c.env.CONTROL_DB,PLATFORM_PILOT_DB:db,PLATFORM_PILOT_SHOP_ID:shopId,
     PLATFORM_PILOT_D1_ID:databaseId,PLATFORM_PILOT_MARKER:marker,
-  },token);
+  };
+  const session=await validateOwnerSession(env,token);
   if(!session)return c.json({error:'Owner session required'},401);
   c.set('shopDb',db);
+  c.set('ownerEnv',env);
+  c.set('sessionToken',token);
   if(c.req.method==='POST')c.set('writeTokenHash',await hashOpaqueSessionToken(token));
   c.header('Cache-Control','no-store');
   await next();
+});
+
+app.post('/__clean_shop__/logout',async c=>{
+  try{
+    const result=await c.get('shopDb').prepare(
+      'UPDATE fixture_owner_write_grants SET enabled=0 WHERE token_hash=?',
+    ).bind(c.get('writeTokenHash')).run();
+    if(result.success!==true)return c.json({error:'Sign-out incomplete'},503);
+    if(!await signOutOwnerBrowser(c.get('ownerEnv'),{sessionToken:c.get('sessionToken')})){
+      return c.json({error:'Sign-out incomplete'},503);
+    }
+    setCookie(c,'__Host-shererp-owner-session','',{path:'/',secure:true,httpOnly:true,sameSite:'Strict',maxAge:0});
+    return c.json({signedOut:true});
+  }catch{
+    return c.json({error:'Sign-out incomplete'},503);
+  }
 });
 
 app.get('/__clean_shop__/products',async c=>{

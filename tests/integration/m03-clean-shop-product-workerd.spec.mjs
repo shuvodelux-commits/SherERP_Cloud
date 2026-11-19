@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {revokeOwnerSession,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
+import {validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {startCleanShopHarness} from '../fixtures/m03-clean-shop-harness.mjs';
 
 test('a new Owner creates a first zero-stock product in an empty shop without archive rows or cross-shop access',async()=>{
@@ -40,7 +40,24 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
     assert.equal((await request('a',ownerA.token,{...draft,name:'New after revoke',operationId:crypto.randomUUID()})).status,409);
     assert.equal((await request('a',ownerA.token,draft)).status,409);
-    assert.equal(await revokeOwnerSession(ownerA.env,ownerA.token),true);
+    // B still has an active Shop D1 grant. Fail the Control D1 step after
+    // logout has reached the Shop D1, then retry with the same cookie.
+    const control=ownerB.env.CONTROL_DB;
+    await control.prepare(`CREATE TRIGGER fixture_refuse_logout
+      BEFORE DELETE ON platform_shop_owner_sessions BEGIN SELECT RAISE(ABORT,'fixture'); END;`).run();
+    const logout=()=>worker.fetch('https://b.example.test/__clean_shop__/logout',{
+      method:'POST',headers:{Origin:'https://b.example.test',Cookie:`__Host-shererp-owner-session=${ownerB.token}`},
+    });
+    assert.equal((await logout()).status,503);
+    assert.equal((await validateOwnerSession(ownerB.env,ownerB.token)).role,'Owner');
+    assert.equal((await request('b',ownerB.token,{...draft,name:'Blocked',operationId:crypto.randomUUID()})).status,409);
+    await control.prepare('DROP TRIGGER fixture_refuse_logout').run();
+    assert.equal((await logout()).status,200);
+    assert.equal((await request('b',ownerB.token)).status,401);
+    const logoutA=await worker.fetch('https://a.example.test/__clean_shop__/logout',{
+      method:'POST',headers:{Origin:'https://a.example.test',Cookie:`__Host-shererp-owner-session=${ownerA.token}`},
+    });
+    assert.equal(logoutA.status,200);
     assert.equal((await request('a',ownerA.token,{...draft,operationId:crypto.randomUUID()})).status,401);
     assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM products').first()).n,1);
   }finally{
