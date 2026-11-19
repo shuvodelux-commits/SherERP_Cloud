@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {createTestHarness} from 'wrangler';
+import './m03-owner-onboarding-workerd.spec.mjs';
 
 const workerPath=fileURLToPath(new URL('../fixtures/m03-tenant-pilot/worker.js',import.meta.url));
 const fingerprint=token=>createHash('sha256').update(token).digest('hex');
