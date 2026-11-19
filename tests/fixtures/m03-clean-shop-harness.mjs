@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import {copyFile,mkdir,mkdtemp,rm,writeFile} from 'node:fs/promises';
+import {copyFile,mkdir,mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {basename,join,resolve} from 'node:path';
 import {createTestHarness} from 'wrangler';
 import {issueOwnerSession} from '../../src/auth/platform-owner-sessions.js';
-import {FIXTURE_OWNER_GRANT_SCHEMA,publishFixtureOwnerGrant} from './m03-clean-shop-owner-grant.mjs';
+import {publishFixtureOwnerGrant} from './m03-clean-shop-owner-grant.mjs';
 
 const tuple=(n)=>({shopId:`00000000-0000-4000-8000-00000000010${n}`,databaseId:`00000000-0000-4000-8000-00000000020${n}`,marker:`00000000-0000-4000-8000-00000000030${n}`});
 async function migrationQueue(dir,files){
@@ -26,7 +26,8 @@ async function seed(CONTROL_DB,DB,scope,subject,index){
   const env={CONTROL_DB,PLATFORM_PILOT_DB:DB,PLATFORM_PILOT_SHOP_ID:shopId,PLATFORM_PILOT_D1_ID:databaseId,PLATFORM_PILOT_MARKER:marker};
   const token=await issueOwnerSession(env,{issuer:'https://accounts.google.com',subject});
   assert.equal(typeof token,'string');
-  await DB.prepare(FIXTURE_OWNER_GRANT_SCHEMA).run();
+  const migration=await readFile('staging-migrations/shop-owner-write/0002_shop_owner_write_grant.sql','utf8');
+  await DB.batch(migration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
   assert.equal(await publishFixtureOwnerGrant(DB,token,1),true);
   return {env,token};
 }
