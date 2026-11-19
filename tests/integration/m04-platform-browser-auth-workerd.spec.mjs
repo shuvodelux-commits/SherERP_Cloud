@@ -363,6 +363,8 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal((await invite()).status,409);
   await assert.rejects(db.prepare('DELETE FROM platform_first_shop_owners').run(),/immutable/);
 
+  const ownerLoginMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0006_owner_login_challenges.sql',import.meta.url),'utf8');
+  await db.batch(ownerLoginMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
   const ownerIdentity={issuer,subject:inviteRequest.payload.googleSubject};
   assert.equal(await issueOwnerSession(inviteBindings,{issuer,subject}),null);
   const firstOwnerSession=await issueOwnerSession(inviteBindings,ownerIdentity);
@@ -384,6 +386,37 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(await issueOwnerSession(inviteBindings,ownerIdentity),null);
   await db.prepare('UPDATE platform_shop_owner_access SET enabled=1').run();
   assert.equal(await validateOwnerSession(inviteBindings,remainingOwnerSession),null);
+
+  const ownerAuth=(path,{data,browserCookie,method='POST',bindings={...ownerBindings,OWNER_LOGIN_ENABLED:'true'}}={})=>ownerWorker.fetch(
+    new Request(ownerOrigin+'/api/owner/auth/'+path,{
+      method,headers:{...(method==='POST'?{Origin:ownerOrigin}:{}),...(data?{'Content-Type':'application/json'}:{}),
+        ...(browserCookie?{Cookie:browserCookie}:{})},body:data?JSON.stringify(data):undefined,
+    }),bindings);
+  assert.equal((await ownerAuth('challenge',{bindings:ownerBindings})).status,404);
+  const freshChallenge=await ownerAuth('challenge');
+  assert.equal(freshChallenge.status,200);
+  const loginCookie=cookie(freshChallenge,'__Host-shererp-owner-login');
+  const {nonce:ownerLoginNonce}=await freshChallenge.json();
+  const loginData={credential:credential(ownerLoginNonce,ownerIdentity.subject)};
+  assert.equal((await ownerAuth('login',{data:loginData})).status,401);
+  const loginResults=await Promise.all([ownerAuth('login',{data:loginData,browserCookie:loginCookie}),
+    ownerAuth('login',{data:loginData,browserCookie:loginCookie})]);
+  assert.deepEqual(loginResults.map(response=>response.status).sort(),[200,401]);
+  const ownerSessionCookie=cookie(loginResults.find(response=>response.status===200),'__Host-shererp-owner-session');
+  assert.deepEqual(await (await ownerAuth('session',{method:'GET',browserCookie:ownerSessionCookie})).json(),ownerScope);
+  assert.equal((await ownerAuth('session',{method:'GET',browserCookie:session})).status,401);
+  const loginThrottled={...ownerBindings,OWNER_LOGIN_ENABLED:'true',OWNER_INGRESS:{
+    limit:async({key})=>({success:key!=='/api/owner/auth/challenge'}),
+  }};
+  assert.equal((await ownerAuth('challenge',{bindings:loginThrottled})).status,429);
+  assert.equal((await ownerAuth('logout',{browserCookie:ownerSessionCookie,bindings:loginThrottled})).status,200);
+  assert.equal((await ownerAuth('session',{method:'GET',browserCookie:ownerSessionCookie})).status,401);
+  const cancelled=await ownerAuth('challenge');
+  const cancelledCookie=cookie(cancelled,'__Host-shererp-owner-login');
+  const {nonce:cancelledNonce}=await cancelled.json();
+  assert.equal((await ownerAuth('logout',{browserCookie:cancelledCookie})).status,200);
+  assert.equal((await ownerAuth('login',{browserCookie:cancelledCookie,
+    data:{credential:credential(cancelledNonce,ownerIdentity.subject)}})).status,401);
 
   let signedOut=false;
   const reservationRaceDb={

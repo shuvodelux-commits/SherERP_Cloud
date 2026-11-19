@@ -74,6 +74,12 @@ The separate `src/m03-owner-redemption-worker.js` provides two POST routes. `/ap
 
 No release profile imports this worker. It exposes no Owner page or shop session cookie. Before activation, verify the client Google OAuth origin, connect browser redemption and sign-in with revocable shop sessions, and independently review token handling and isolation.
 
+## Owner session browser API candidate
+
+The isolated Owner Worker also accepts an explicit `OWNER_LOGIN_ENABLED=true`. Use `POST /api/owner/auth/challenge` to obtain a two-minute Google nonce and a host-only login cookie. `POST /api/owner/auth/login` verifies Google and consumes the nonce in the same statement that rotates the session. `GET /api/owner/auth/session` validates the session against the enabled Owner and current pilot D1. `POST /api/owner/auth/logout` clears the session and cancels the pending challenge together. The browser receives a persistent Secure HttpOnly SameSite=Strict cookie with a one-year retention setting. D1 does not expire the session by age.
+
+The sixth onboarding migration must be applied before activation. The separate client Worker still needs a browser page, a reviewed deploy profile, exact OAuth origin and hosted isolation checks. Keep Owner invitation issuance and login disabled in live staging pending that release.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.
