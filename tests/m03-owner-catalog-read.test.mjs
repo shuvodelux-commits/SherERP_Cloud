@@ -30,9 +30,17 @@ test('pilot catalog exposes only canonical, nondeleted product display fields',a
     insert.run('canonical',2,'P1','Fixture item','Maker','Hardware','Each','12.50','99','8','');
     insert.run('canonical',3,'P2','Deleted','','','','','','','TRUE');
     insert.run('supplementary',2,'P3','Other source','','','','','','','');
+    sqlite.prepare(`INSERT INTO legacy_product_snapshots
+      (source_profile,legacy_sheet_row,product_id,product_name,product_type_text,current_stock_text)
+      VALUES ('canonical',4,'P4','Fixture bundle','Bundle','9')`).run();
+    insert.run('canonical',5,'P5','Fixture adjustment','','','','','-1.25','bad','');
+    insert.run('canonical',6,'P6','Fixture zero','','','','','0','0','');
     const db={prepare(sql){return {async all(){return {success:true,results:sqlite.prepare(sql).all()};}};}};
     assert.deepEqual(await readOwnerCatalog(db),[
-      {productId:'P1',name:'Fixture item',brand:'Maker',category:'Hardware',unit:'Each',listedPrice:'12.50'},
+      {productId:'P1',name:'Fixture item',brand:'Maker',category:'Hardware',unit:'Each',listedPrice:'12.50',savedPurchasePrice:'8',stockAtBackup:'99'},
+      {productId:'P4',name:'Fixture bundle',brand:'',category:'',unit:'',listedPrice:'',savedPurchasePrice:null,stockAtBackup:null},
+      {productId:'P5',name:'Fixture adjustment',brand:'',category:'',unit:'',listedPrice:'',savedPurchasePrice:null,stockAtBackup:'-1.25'},
+      {productId:'P6',name:'Fixture zero',brand:'',category:'',unit:'',listedPrice:'',savedPurchasePrice:'0',stockAtBackup:'0'},
     ]);
   }finally{sqlite.close();}
 });
