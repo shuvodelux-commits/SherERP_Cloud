@@ -82,13 +82,25 @@ export function patchOwnerApp(html){
   const rpc=`  function serverCall(fnName) {
     var path, method = 'GET';
     if (fnName === 'getAppShellData') path = '/api/owner/app-shell';
+    else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
     else if (fnName === 'logout') { path = '/api/owner/auth/logout'; method = 'POST'; }
     else return Promise.reject(new Error('Shop business data is not connected yet.'));
     return fetch(path, {method:method,credentials:'same-origin',cache:'no-store'})
       .then(function (response) {
         return response.json().catch(function () { throw new Error('Owner request failed.'); })
           .then(function (result) {
-            if (!response.ok) throw new Error('Owner session is unavailable.');
+            if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' : 'Owner session is unavailable.');
+            if (fnName === 'getProductsBootstrap') {
+              var products = result.data.map(function (row) {
+                return {'Product ID':row.productId,'Product Name':row.name, 'Brand':row.brand,
+                  'Category':row.category,'Unit':row.unit,'Selling Price':row.listedPrice};
+              });
+              document.getElementById('owner-data-notice').textContent =
+                'Products are available for viewing. Stock, valuation, and saves are unavailable.';
+              return {products:products,units:[],categories:Array.from(new Set(products.map(function (row) {
+                return row.Category;
+              }).filter(Boolean))).map(function (name) { return {name:name}; })};
+            }
             return result && result.data !== undefined ? result.data : result;
           });
       });
@@ -96,7 +108,26 @@ export function patchOwnerApp(html){
 
 `;
   html=html.slice(0,e)+rpc+html.slice(f);
-  return html;
+  const catalogReplacements=[
+    ['id="prodAddBtn"', 'id="prodAddBtn" hidden style="display:none!important"'],
+    ['id="prodUnpricedLotsBtn"', 'id="prodUnpricedLotsBtn" hidden style="display:none!important"'],
+    ['No products yet. Click "Add Product" or load demo data from the Sheet menu.', 'No matching products.'],
+    ["(isBundle ? '—' : formatMoney(p['Purchase Price']))","'Unavailable'"],
+    ["formatMoney(p['Selling Price']) + '</span></td>'","escapeHtml(p['Selling Price'] || 'Unavailable') + '</span></td>'"],
+    ["escapeHtml(p['Product Name']) + '</div></td>'","escapeHtml(p['Product Name']) + '</div>' + escapeHtml(p['Unit'] || '') + '</td>'"],
+    ["+ stockCell + '</td>'","+ 'Unavailable' + '</td>'"],
+    ["(isBundle ? '—' : formatMoney(p['Stock Value']))","'Unavailable'"],
+  ];
+  for(const [original,replacement] of catalogReplacements){
+    if(html.split(original).length!==2)throw new Error('Owner catalog screen boundary changed: '+original);
+    html=html.replace(original,replacement);
+  }
+  const rowActionStart="        '<td>' + statusBadge + '</td>' +\n        '<td class=\"erp-sticky-action-col\">' +\n          rowActionTriggerHtml_(";
+  const rowActionEnd="\n      body.appendChild(tr);";
+  const rowStart=html.indexOf(rowActionStart,html.indexOf('  function prodRender() {'));
+  const rowEnd=html.indexOf(rowActionEnd,rowStart);
+  if(rowStart<0||rowEnd<0)throw new Error('Owner catalog action boundary changed');
+  return html.slice(0,rowStart)+"        '<td>—</td><td>—</td>';"+html.slice(rowEnd);
 }
 
 export async function buildOwnerFrontend({sourceDir='legacy/source',outputDir='dist-owner'}={}){
