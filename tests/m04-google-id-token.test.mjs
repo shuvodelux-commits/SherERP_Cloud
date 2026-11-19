@@ -24,7 +24,7 @@ const verify=(token,expectedNonce=nonce)=>verifyGoogleLoginIdToken({token,client
 function stubGoogleKeys(t){
   t.mock.method(globalThis,'fetch',async(url,options)=>{
     assert.equal(url,'https://www.googleapis.com/oauth2/v3/certs');
-    assert.equal(options.redirect,'error');
+    assert.equal(options.redirect,'manual');
     return Response.json({keys:[jwk]});
   });
 }
@@ -71,4 +71,19 @@ test('enrollment diagnostics distinguish rejection stages with fixed labels',asy
   keys.mock.mockImplementation(async()=>new Response(null,{status:503}));
   assert.equal(await check(makeToken()),null);
   assert.deepEqual(outputs,['nonce','audience','key_or_token','keys_unavailable']);
+});
+
+test('Google keys use the Worker redirect mode and reject redirected keys',async t=>{
+  let redirect=false;
+  const fetchKeys=t.mock.method(globalThis,'fetch',async(_url,options)=>{
+    // Workerd rejects redirect:error when constructing the request.
+    if(options.redirect==='error')throw new TypeError('Unsupported redirect mode');
+    if(redirect)return new Response(null,{status:302,headers:{Location:'https://other.example/keys'}});
+    return Response.json({keys:[jwk]});
+  });
+  assert.deepEqual(await verify(makeToken()),{issuer:'https://accounts.google.com',subject});
+  assert.equal(fetchKeys.mock.calls[0].arguments[1].redirect,'manual');
+  redirect=true;
+  assert.equal(await verify(makeToken()),null);
+  assert.equal(fetchKeys.mock.callCount(),2);
 });
