@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import {issueOwnerSession,validateOwnerSession,revokeOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {startCleanShopHarness} from '../fixtures/m03-clean-shop-harness.mjs';
@@ -139,5 +140,82 @@ test('withdrawal fences a reserved generation before its first Shop publication'
     assert.equal(await publishOwnerWriteGrant(SHOP_A_DB,pilotShopConfiguration(env),token,claim.generation),false);
     assert.deepEqual(await SHOP_A_DB.prepare('SELECT generation,enabled FROM shop_owner_write_grant').first(),
       {generation:claim.generation,enabled:0});
+  }finally{await close();}
+});
+
+test('private Owner candidate posts a source-ID product once and reads it from the operational catalog',async()=>{
+  const {ownerA,ownerB,SHOP_A_DB,SHOP_B_DB,close}=await startCleanShopHarness();
+  try{
+    const {default:app}=await import('../../src/m03-owner-redemption-worker.js');
+    const origin='https://owner.example.test';
+    const env={...ownerA.env,OWNER_CLEAN_PRODUCTS_ENABLED:'true',OWNER_CATALOG_ENABLED:'true',
+      OWNER_LOGIN_ENABLED:'true',OWNER_AUTH_ORIGIN:origin,PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
+      PLATFORM_OWNER_CLIENT_ID:'fixture.apps.googleusercontent.com',OWNER_INGRESS:{limit:async()=>({success:true})}};
+    const request=(body,{bindings=env,token=ownerA.token,requestOrigin=origin}={})=>app.request(
+      origin+'/api/owner/catalog',{
+        headers:{Cookie:'__Host-shererp-owner-session='+token,
+          ...(body?{Origin:requestOrigin,'Content-Type':'application/json'}:{})},
+        ...(body?{method:'POST',body:JSON.stringify(body)}:{}),
+      },bindings);
+    const draft={operationId:crypto.randomUUID(),name:'Fixture wrench',brand:'',category:'',unit:'pcs',
+      purchasePrice:'8.25',sellingPrice:'12.50',stock:'0',minStock:'0',barcode:'',productType:'Standard',components:[]};
+    assert.equal((await request(draft,{bindings:{...env,OWNER_CLEAN_PRODUCTS_ENABLED:'false'}})).status,404);
+    assert.equal((await request(draft,{token:ownerB.token})).status,401);
+    assert.equal((await request(draft,{bindings:{...env,PLATFORM_PILOT_DB:SHOP_B_DB}})).status,401);
+    assert.equal((await request(draft,{requestOrigin:'https://other.example.test'})).status,403);
+    assert.equal((await request({...draft,stock:'1'})).status,400);
+    const responses=await Promise.all([request(draft),request(draft)]);
+    assert.deepEqual(responses.map(r=>r.status).sort(),[200,201]);
+    for(const response of responses){
+      assert.deepEqual(await response.json(),{success:true,data:{id:'PRD-000001'}});
+    }
+    assert.equal((await request({...draft,name:'Changed'})).status,409);
+    assert.equal((await request({...draft,operationId:crypto.randomUUID(),name:'fixture WRENCH'})).status,409);
+    const catalog=await (await request()).json();
+    assert.equal(catalog.mode,'operational');
+    assert.deepEqual(catalog.data,[{productId:'PRD-000001',name:'Fixture wrench',brand:'',category:'Uncategorized',
+      unit:'pcs',listedPrice:'12.50',savedPurchasePrice:'8.25',stockAtBackup:null,stock:'0'}]);
+    assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM owner_product_create_receipts').first()).n,1);
+    assert.equal((await SHOP_B_DB.prepare('SELECT count(*) AS n FROM products').first()).n,0);
+
+    await SHOP_A_DB.prepare(`CREATE TRIGGER fixture_reject_product BEFORE INSERT ON products
+      BEGIN SELECT RAISE(ABORT,'fixture product write failed'); END;`).run();
+    const next={...draft,name:'Fixture hammer',operationId:crypto.randomUUID()};
+    assert.equal((await request(next)).status,503);
+    assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM owner_product_create_receipts').first()).n,1);
+    await SHOP_A_DB.prepare('DROP TRIGGER fixture_reject_product').run();
+    const saved=await request(next);
+    assert.equal(saved.status,201);
+    assert.equal((await saved.json()).data.id,'PRD-000002');
+    await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
+    assert.equal((await request(next)).status,403);
+    assert.equal((await request({...next,name:'Spanner',operationId:crypto.randomUUID()})).status,403);
+    assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM products').first()).n,2);
+    const currentToken=await issueOwnerSession(env,{issuer:'https://accounts.google.com',subject:'fixture-owner-a'});
+    const replay=await request(next,{token:currentToken});
+    assert.equal(replay.status,200);
+    assert.equal((await replay.json()).data.id,'PRD-000002');
+
+    // A late import makes this clean-only route refuse both reads and writes.
+    // Turning the candidate flag off still exposes the original backup path.
+    await SHOP_A_DB.prepare(`INSERT INTO legacy_product_snapshots
+      (source_profile,legacy_sheet_row,product_id,product_name) VALUES ('canonical',2,'PRD-009000','Archived product')`).run();
+    assert.equal((await request(undefined,{token:currentToken})).status,503);
+    assert.equal((await request({...draft,operationId:crypto.randomUUID()},{token:currentToken})).status,503);
+    const backup=await request(undefined,{token:currentToken,bindings:{...env,OWNER_CLEAN_PRODUCTS_ENABLED:'false'}});
+    assert.deepEqual((await backup.json()).data.map(row=>row.productId),['PRD-009000']);
+  }finally{await close();}
+});
+
+
+test('the clean-shop receipt migration rolls back when a historical catalog already exists',async()=>{
+  const {SHOP_A_DB,close}=await startCleanShopHarness({installProductReceipts:false});
+  try{
+    await SHOP_A_DB.prepare(`INSERT INTO legacy_product_snapshots
+      (source_profile,legacy_sheet_row,product_id,product_name) VALUES ('canonical',2,'PRD-001000','Archived product')`).run();
+    const migration=await readFile('staging-migrations/shop-owner-write/0003_owner_product_create_receipts.sql','utf8');
+    await assert.rejects(SHOP_A_DB.batch(migration.split('-- next statement').map(sql=>SHOP_A_DB.prepare(sql.trim()))),/CHECK/);
+    assert.equal(await SHOP_A_DB.prepare("SELECT name FROM sqlite_master WHERE name='owner_product_create_receipts'").first(),null);
+    assert.equal((await SHOP_A_DB.prepare('SELECT product_id FROM legacy_product_snapshots').first()).product_id,'PRD-001000');
   }finally{await close();}
 });

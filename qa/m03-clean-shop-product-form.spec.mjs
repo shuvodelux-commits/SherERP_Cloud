@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve,sep} from 'node:path';
 import {test} from 'node:test';
 import {chromium} from 'playwright';
 import {startCleanShopHarness} from '../tests/fixtures/m03-clean-shop-harness.mjs';
-import {validateOwnerSession} from '../src/auth/platform-owner-sessions.js';
-import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js';
-import {connectCleanShopFixtureForm} from './fixtures/clean-shop-product-form.mjs';
+import ownerWorker from '../src/m03-owner-redemption-worker.js';
 import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 
 const origin='https://a.example.test';
@@ -18,9 +16,19 @@ test('the existing Add Product form saves one product in an empty D1 shop even w
   let harness,browser;
   try{
     harness=await startCleanShopHarness();
-    const {worker,ownerA,SHOP_A_DB,SHOP_B_DB}=harness;
+    const {ownerA,SHOP_A_DB,SHOP_B_DB}=harness;
     const built=await buildOwnerFrontend({outputDir:dir});
-    const html=connectCleanShopFixtureForm(await readFile(built.indexPath,'utf8'));
+    const env={...ownerA.env,OWNER_CLEAN_PRODUCTS_ENABLED:'true',OWNER_CATALOG_ENABLED:'true',
+      OWNER_LOGIN_ENABLED:'true',OWNER_DASHBOARD_BOOTSTRAP_ENABLED:'true',
+      OWNER_AUTH_ORIGIN:origin,PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
+      PLATFORM_OWNER_CLIENT_ID:'fixture.apps.googleusercontent.com',OWNER_INGRESS:{limit:async()=>({success:true})},
+      ASSETS:{async fetch(request){
+        const path=resolve(dir,'.'+new URL(request.url).pathname);
+        if(!path.startsWith(dir+sep))return new Response(null,{status:404});
+        return readFile(path).then(bytes=>new Response(bytes),()=>new Response(null,{status:404}));
+      }},
+    };
+    assert.equal(built.outputDir,dir);
     browser=await chromium.launch();
     const context=await browser.newContext({viewport:{width:1280,height:900}});
     await context.addCookies([{name:cookieName,value:ownerA.token,url:origin,secure:true,httpOnly:true,sameSite:'Strict'}]);
@@ -32,25 +40,15 @@ test('the existing Add Product form saves one product in an empty D1 shop even w
       const url=new URL(request.url());
       if(url.origin!==origin)return route.abort();
       const headers=await request.allHeaders();
-      if(url.pathname==='/app')return route.fulfill({contentType:'text/html',body:html});
-      if(url.pathname==='/api/owner/auth/session'||url.pathname==='/api/owner/app-shell'){
-        const token=headers.cookie?.split('; ').find(part=>part.startsWith(cookieName+'='))?.slice(cookieName.length+1);
-        const session=await validateOwnerSession(ownerA.env,token,{dashboard:true});
-        if(!session)return route.fulfill({status:401,json:{error:'Owner session required'}});
-        const json=url.pathname.endsWith('/session')?session:buildSourceAppShellData({shopName:session.dashboard.displayName,currencySymbol:''});
-        return route.fulfill({status:200,json});
+      const body=request.postData();
+      const method=request.method();
+      const reply=await ownerWorker.fetch(new Request(request.url(),{method,headers,...(body?{body}:{})}),env);
+      if(method==='POST'&&url.pathname==='/api/owner/catalog'){
+        saves.push({request:JSON.parse(body),status:reply.status});
+        if(saves.length===1)return route.abort('failed');
       }
-      if(url.pathname==='/__clean_shop__/products'){
-        const body=request.postData();
-        const method=request.method();
-        const reply=await worker.fetch(request.url(),{method,headers,...(body?{body}:{})});
-        if(method==='POST'){
-          saves.push({request:JSON.parse(body),status:reply.status});
-          if(saves.length===1)return route.fulfill({status:503,json:{error:'Could not confirm save. Retry Save Product.'}});
-        }
-        return route.fulfill({status:reply.status,json:await reply.json()});
-      }
-      return route.fulfill({status:404,body:'Not found'});
+      return route.fulfill({status:reply.status,
+        headers:Object.fromEntries(reply.headers),body:Buffer.from(await reply.arrayBuffer())});
     });
     const products=page.locator('#navList .nav-item[aria-label="Products"]');
     const add=page.locator('#prodAddBtn');

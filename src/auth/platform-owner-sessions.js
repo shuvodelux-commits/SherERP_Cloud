@@ -44,17 +44,18 @@ async function readOwnerContext(env,token){
   const hash=await hashOpaqueSessionToken(token);
   const config=pilotShopConfiguration(env);
   if(!hash||!config||!await pilotShopIdentityMatches(config))return null;
-  return env.CONTROL_DB.prepare(`SELECT o.shop_id AS shopId,r.display_name AS displayName ${CURRENT_OWNER}
+  return env.CONTROL_DB.prepare(`SELECT o.shop_id AS shopId,r.display_name AS displayName,o.subject ${CURRENT_OWNER}
     JOIN platform_shop_owner_sessions s ON s.shop_id=o.shop_id
     JOIN platform_shop_reservations r ON r.shop_id=o.shop_id
     WHERE o.shop_id=? AND b.database_id=? AND b.database_marker=? AND s.token_hash=?`)
     .bind(...pilotTuple(config),hash).first();
 }
 
-export async function validateOwnerSession(env,token,{dashboard=false}={}){
+export async function validateOwnerSession(env,token,{dashboard=false,includeOwnerSubject=false}={}){
   const current=await readOwnerContext(env,token);
   if(!current)return null;
-  const session={shopId:current.shopId,role:'Owner'};
+  const session={shopId:current.shopId,role:'Owner',
+    ...(includeOwnerSubject?{ownerSubject:current.subject}:{})};
   if(!dashboard)return session;
   return {...session,dashboard:{displayName:current.displayName,dataAvailable:false}};
 }

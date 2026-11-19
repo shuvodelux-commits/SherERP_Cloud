@@ -1,3 +1,5 @@
+import {CLEAN_PRODUCT_SOURCE} from './m03-owner-product-create.js';
+
 const MAX_PRODUCTS=1000;
 
 function savedDecimal(value,{signed=false}={}){
@@ -28,4 +30,22 @@ export async function readOwnerCatalog(DB){
   }catch{
     throw new Error('Owner catalog unavailable');
   }
+}
+
+// The clean-shop UI lists the complete operational catalog. A D1 fetch
+// failure returns unavailable rather than a silently truncated list.
+export async function readCleanOwnerCatalog(DB){
+  const [scope,products,units,categories]=await DB.batch([
+    DB.prepare(`SELECT (${CLEAN_PRODUCT_SOURCE}) AS clean, EXISTS(SELECT 1 FROM owner_product_create_receipts) AS hasReceipts`),
+    DB.prepare(`SELECT product_id AS productId,product_name AS name,brand_text AS brand,
+      category_name AS category,base_unit_name AS unit,selling_price_text AS listedPrice,
+      purchase_price_text AS savedPurchasePrice,NULL AS stockAtBackup,opening_stock_text AS stock
+      FROM products WHERE is_deleted=0 ORDER BY product_name COLLATE NOCASE,product_id`),
+    DB.prepare("SELECT DISTINCT unit_name AS name FROM product_units WHERE status='Active' ORDER BY name"),
+    DB.prepare("SELECT DISTINCT category_name AS name FROM product_categories WHERE status='Active' ORDER BY name"),
+  ]);
+  if(![scope,products,units,categories].every(result=>result.success)||scope.results[0]?.clean!==1)
+    throw new Error('Operational catalog unavailable');
+  return {mode:'operational',data:products.results,units:units.results.length?units.results:[{name:'pcs'}],
+    categories:categories.results};
 }

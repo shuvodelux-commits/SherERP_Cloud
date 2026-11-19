@@ -13,7 +13,7 @@ async function migrationQueue(dir,files){
   return dir;
 }
 
-async function seed(CONTROL_DB,DB,scope,subject,index){
+async function seed(CONTROL_DB,DB,scope,subject,index,installProductReceipts){
   const {shopId,databaseId,marker}=scope;
   const now=Date.now();
   await DB.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)').bind(shopId,databaseId,marker).run();
@@ -28,11 +28,15 @@ async function seed(CONTROL_DB,DB,scope,subject,index){
   assert.equal(typeof token,'string');
   const migration=await readFile('staging-migrations/shop-owner-write/0002_shop_owner_write_grant.sql','utf8');
   await DB.batch(migration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
+  if(installProductReceipts){
+    const productMigration=await readFile('staging-migrations/shop-owner-write/0003_owner_product_create_receipts.sql','utf8');
+    await DB.batch(productMigration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
+  }
   assert.equal(await publishCurrentOwnerWriteSession(env,token),true);
   return {env:{...env,OWNER_WRITE_GRANTS_ENABLED:'true'},token};
 }
 
-export async function startCleanShopHarness(){
+export async function startCleanShopHarness({installProductReceipts=true}={}){
   const temp=await mkdtemp(join(tmpdir(),'shererp-clean-shop-'));
   let harness;
   const close=async()=>{try{await harness?.close();}finally{await rm(temp,{recursive:true,force:true});}};
@@ -65,8 +69,8 @@ export async function startCleanShopHarness(){
     for(const binding of ['CONTROL_DB','SHOP_A_DB','SHOP_B_DB']){
       await worker.applyD1Migrations(binding);
     }
-    const ownerA=await seed(CONTROL_DB,SHOP_A_DB,a,'fixture-owner-a',1);
-    const ownerB=await seed(CONTROL_DB,SHOP_B_DB,b,'fixture-owner-b',2);
+    const ownerA=await seed(CONTROL_DB,SHOP_A_DB,a,'fixture-owner-a',1,installProductReceipts);
+    const ownerB=await seed(CONTROL_DB,SHOP_B_DB,b,'fixture-owner-b',2,installProductReceipts);
     return {worker,ownerA,ownerB,SHOP_A_DB,SHOP_B_DB,close};
   }catch(error){
     await close();

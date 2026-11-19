@@ -4,7 +4,9 @@ import {bodyLimit} from 'hono/body-limit';
 import {getCookie,setCookie} from 'hono/cookie';
 import {acceptOwnerInvite,readOwnerInviteChallenge} from './auth/platform-owner-acceptance.js';
 import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
-import {readOwnerCatalog} from './db/m03-owner-catalog-read.js';
+import {readCleanOwnerCatalog,readOwnerCatalog} from './db/m03-owner-catalog-read.js';
+import {createOwnerProduct} from './db/m03-owner-product-create.js';
+import {pilotShopConfiguration} from './auth/platform-shop-binding.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 
@@ -86,16 +88,37 @@ app.post('/api/owner/setup',protect('OWNER_REDEMPTION_ENABLED'),limitBody,async 
 });
 
 const protectLogin=protect('OWNER_LOGIN_ENABLED');
+const cleanProductsEnabled=env=>env.OWNER_CLEAN_PRODUCTS_ENABLED==='true'&&env.OWNER_WRITE_GRANTS_ENABLED==='true';
 
 app.get('/api/owner/catalog',protectLogin,async c=>{
   if(c.env.OWNER_CATALOG_ENABLED!=='true')return c.notFound();
   const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE));
   if(!session)return denied(c);
   try{
-    return c.json({data:await readOwnerCatalog(c.env.PLATFORM_PILOT_DB)});
+    return c.json(cleanProductsEnabled(c.env)
+      ?await readCleanOwnerCatalog(c.env.PLATFORM_PILOT_DB)
+      :{data:await readOwnerCatalog(c.env.PLATFORM_PILOT_DB)});
   }catch{
     return c.json({error:'Owner catalog unavailable'},503);
   }
+});
+
+app.post('/api/owner/catalog',protectLogin,limitBody,async c=>{
+  if(c.env.OWNER_CATALOG_ENABLED!=='true'||!cleanProductsEnabled(c.env))return c.notFound();
+  const token=getCookie(c,SESSION_COOKIE);
+  const session=await validateOwnerSession(c.env,token,{includeOwnerSubject:true});
+  const scope=pilotShopConfiguration(c.env);
+  if(!session||!scope||session.shopId!==scope.shopId)return denied(c);
+  if(c.req.header('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json')
+    return c.json({success:false,message:'Expected a JSON product.'},400);
+  const input=await c.req.json().catch(()=>null);
+  const result=await createOwnerProduct(scope,{token,ownerSubject:session.ownerSubject,input});
+  if(result.status==='created'||result.status==='replayed')
+    return c.json({success:true,data:{id:result.id}},result.status==='created'?201:200);
+  if(result.status==='denied')return c.json({success:false,message:'Owner product access is unavailable.'},403);
+  if(result.status==='invalid')return c.json({success:false,message:'Enter a standard product with valid prices and zero opening stock.'},400);
+  if(result.status==='unavailable')return c.json({success:false,message:'Operational catalog is unavailable.'},503);
+  return c.json({success:false,message:'A product with this name already exists or the original save details changed.'},409);
 });
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{

@@ -79,7 +79,58 @@ export function patchOwnerApp(html){
   const rpcEnd='  // ---------------- 6. Shared across every page ----------------';
   const e=html.indexOf(rpcStart),f=html.indexOf(rpcEnd,e);
   if(e<0||f<0||html.indexOf(rpcStart,e+rpcStart.length)>=0)throw new Error('Original RPC wrapper changed');
-  const rpc=`  function serverCall(fnName) {
+  const rpc=`  var ownerProductsEnabled = false;
+  var ownerProductSaveInProgress = false;
+  var ownerProductPendingSave = null;
+
+  function saveOwnerProduct_(payload) {
+    if (!ownerProductsEnabled || prodState.addSource !== 'products') {
+      return Promise.reject(new Error('Product creation is available from the Products page.'));
+    }
+    if (ownerProductSaveInProgress) return Promise.reject(new Error('Product save is in progress.'));
+    var fingerprint = JSON.stringify(payload);
+    if (ownerProductPendingSave?.fingerprint !== fingerprint) {
+      ownerProductPendingSave = {fingerprint:fingerprint,body:JSON.stringify({
+        ...payload,operationId:crypto.randomUUID()
+      })};
+    }
+    ownerProductSaveInProgress = true;
+    var save = document.getElementById('prodSaveBtn');
+    save.disabled = true;
+    var uncertain = 'Could not confirm save. Retry Save Product.';
+    return fetch('/api/owner/catalog', {method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json'},body:ownerProductPendingSave.body
+    }).catch(function () { throw new Error(uncertain); }).then(async function (response) {
+      var result = await response.json().catch(function () { throw new Error(uncertain); });
+      if (response.status >= 500) throw new Error(uncertain);
+      if (!response.ok) throw new Error(result.message || 'Product save is unavailable.');
+      if (result.success !== true || typeof result.data?.id !== 'string') throw new Error(uncertain);
+      ownerProductPendingSave = null;
+      return result.data;
+    }).finally(function () {
+      ownerProductSaveInProgress = false;
+      save.disabled = false;
+    });
+  }
+
+  function setOwnerProductsMode_(operational) {
+    ownerProductsEnabled = operational;
+    var add = document.getElementById('prodAddBtn');
+    add.hidden = !operational;
+    if (operational) add.style.removeProperty('display');
+    else add.style.setProperty('display','none','important');
+    document.documentElement.toggleAttribute('data-owner-clean-products', operational);
+    document.querySelector('#prodTable [data-sort-key="purchasePrice"]').firstChild.textContent =
+      operational ? 'Purchase price ' : 'Saved purchase price ';
+    document.querySelector('#prodTable [data-sort-key="stockQty"]').firstChild.textContent =
+      operational ? 'Opening stock ' : 'Stock at backup ';
+    document.getElementById('owner-data-notice').textContent = operational
+      ? 'Standard products start with zero opening stock.'
+      : 'Purchase price and stock are from the backup. Stock value and saves are unavailable.';
+  }
+
+  function serverCall(fnName) {
+    if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
     var path, method = 'GET';
     if (fnName === 'getAppShellData') path = '/api/owner/app-shell';
     else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
@@ -91,13 +142,14 @@ export function patchOwnerApp(html){
           .then(function (result) {
             if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' : 'Owner session is unavailable.');
             if (fnName === 'getProductsBootstrap') {
+              var operational = result.mode === 'operational';
               var products = result.data.map(function (row) {
                 return {'Product ID':row.productId,'Product Name':row.name, 'Brand':row.brand,
                   'Category':row.category,'Unit':row.unit,'Selling Price':row.listedPrice,
-                  'Purchase Price':row.savedPurchasePrice,'Current Stock':row.stockAtBackup};
+                  'Purchase Price':row.savedPurchasePrice,'Current Stock':operational ? row.stock : row.stockAtBackup};
               });
-              document.getElementById('owner-data-notice').textContent =
-                'Purchase price and stock are from the backup. Stock value and saves are unavailable.';
+              setOwnerProductsMode_(operational);
+              if (operational) return {products:products,units:result.units,categories:result.categories};
               return {products:products,units:[],categories:Array.from(new Set(products.map(function (row) {
                 return row.Category;
               }).filter(Boolean))).map(function (name) { return {name:name}; })};
@@ -109,7 +161,16 @@ export function patchOwnerApp(html){
 
 `;
   html=html.slice(0,e)+rpc+html.slice(f);
+  html=html.replace('</head>', '<style>[data-owner-clean-products] #m01ProductUnitPanel {display:none!important}</style></head>');
   const catalogReplacements=[
+    ["    prodState.addSource = source || 'products';", `    prodState.addSource = source || 'products';
+    if (ownerProductsEnabled) {
+      ['prodType','prodManageCategoriesBtn','prodManageUnitsBtn'].forEach(function (id) {
+        document.getElementById(id).disabled = true;
+      });
+    }`],
+    ["    document.getElementById('prodStock').disabled = false;\n    document.getElementById('prodFormError').style.display = 'none';",
+      "    document.getElementById('prodStock').disabled = ownerProductsEnabled;\n    document.getElementById('prodFormError').style.display = 'none';"],
     ['id="prodAddBtn"', 'id="prodAddBtn" hidden style="display:none!important"'],
     ['id="prodUnpricedLotsBtn"', 'id="prodUnpricedLotsBtn" hidden style="display:none!important"'],
     ['No products yet. Click "Add Product" or load demo data from the Sheet menu.', 'No matching products.'],
