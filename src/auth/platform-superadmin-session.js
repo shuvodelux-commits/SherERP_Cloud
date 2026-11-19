@@ -68,13 +68,18 @@ export async function issuePlatformSuperAdminSession({
   return record?{token,expiresAtMs:record.expiresAtMs}:null;
 }
 
+// Used by both session reads and atomic platform admin writes. Bind the token
+// digest at the question mark and supply any result columns before the FROM.
+export const CURRENT_PLATFORM_ADMIN_FROM=`FROM platform_admin_sessions s
+  JOIN platform_first_superadmin f ON f.singleton=s.singleton
+  JOIN platform_admin_auth a ON a.singleton=s.singleton AND a.enabled=1 AND a.factor_version=s.factor_version
+  WHERE s.token_hash=? AND s.issued_at_ms<=${NOW} AND s.expires_at_ms>${NOW} AND s.revoked_at_ms IS NULL`;
+
 export async function validatePlatformSuperAdminSession(controlDb,token){
   const tokenHash=await hashOpaqueSessionToken(token);
   if(!tokenHash)return null;
   return controlDb.prepare(`SELECT f.issuer,f.subject,'PlatformSuperAdmin' AS role
-    FROM platform_admin_sessions s JOIN platform_first_superadmin f ON f.singleton=s.singleton
-    JOIN platform_admin_auth a ON a.singleton=s.singleton AND a.enabled=1 AND a.factor_version=s.factor_version
-    WHERE s.token_hash=? AND s.issued_at_ms<=${NOW} AND s.expires_at_ms>${NOW} AND s.revoked_at_ms IS NULL`)
+    ${CURRENT_PLATFORM_ADMIN_FROM}`)
     .bind(tokenHash).first();
 }
 

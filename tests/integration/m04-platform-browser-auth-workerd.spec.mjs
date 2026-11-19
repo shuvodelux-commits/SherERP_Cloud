@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {createHash,createHmac,generateKeyPairSync,randomBytes,sign} from 'node:crypto';
+import {createHash,createHmac,generateKeyPairSync,randomBytes,randomUUID,sign} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {after,before,test} from 'node:test';
 import {createTestHarness} from 'wrangler';
@@ -159,11 +159,54 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(restore.status,200);
   assert.deepEqual(await restore.json(),{role:'PlatformSuperAdmin'});
   assert.equal((await call(sessionPath,{method:'GET',cookie:browser})).status,401);
-  const logout=await call('/api/platform/auth/logout',{cookie:browser});
-  assert.equal(logout.status,200);
-  assert.ok(logout.headers.getSetCookie().some(value=>value.includes('Max-Age=0')));
+  const shopPath='/api/platform/shops';
+  const shopPayload={operationId:randomUUID(),displayName:'  আমার দোকান  '};
+  const shopRequest={payload:shopPayload,cookie:session};
+  assert.equal((await call(shopPath,shopRequest)).status,404,'disabled by default');
+  assert.equal((await publicWorker.fetch(new Request(origin+shopPath,{method:'POST'}),{})).status,404);
+  const bindings={...env,PLATFORM_SHOP_RESERVATION_ENABLED:'true'};
+  assert.equal((await call(shopPath,{...shopRequest,bindings,requestOrigin:'https://other.example.test'})).status,403);
+  assert.equal((await call(shopPath,{payload:shopPayload,cookie:browser,bindings})).status,401,
+    'a Google challenge cookie does not grant platform write access');
+
+  const reservationMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0001_shop_reservations.sql',import.meta.url),'utf8');
+  await db.batch(reservationMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
+  assert.equal((await call(shopPath,{...shopRequest,bindings,payload:{...shopPayload,owner:'forged'}})).status,400);
+  const [first,retry]=await Promise.all([call(shopPath,{...shopRequest,bindings}),call(shopPath,{...shopRequest,bindings})]);
+  assert.deepEqual([first.status,retry.status].sort(),[200,201]);
+  const reservation=await first.json();
+  assert.deepEqual(await retry.json(),reservation);
+  assert.match(reservation.shopId,/^[0-9a-f-]{36}$/);
+  assert.equal(reservation.displayName,'আমার দোকান');
+  assert.equal(reservation.status,'reserved');
+  assert.equal((await call(shopPath,{...shopRequest,bindings,payload:{...shopPayload,displayName:'Different business'}})).status,409);
+  assert.deepEqual(await db.prepare('SELECT count(*) AS n,min(created_by_subject) AS creator FROM platform_shop_reservations').first(),
+    {n:1,creator:subject});
+  await assert.rejects(db.prepare('UPDATE platform_shop_reservations SET display_name=?').bind('Altered').run(),/immutable/);
+  await assert.rejects(db.prepare('DELETE FROM platform_shop_reservations').run(),/immutable/);
+
+  await assert.rejects(db.prepare(`INSERT OR REPLACE INTO platform_shop_reservations
+    SELECT shop_id,operation_id,'Altered',created_by_subject,created_at_ms FROM platform_shop_reservations`).run(),/immutable/);
+  let signedOut=false;
+  const reservationRaceDb={
+    prepare:db.prepare.bind(db),
+    async batch(statements){
+      const logout=await call('/api/platform/auth/logout',{cookie:browser});
+      assert.equal(logout.status,200);
+      assert.ok(logout.headers.getSetCookie().some(value=>value.includes('Max-Age=0')));
+      signedOut=true;
+      return db.batch(statements);
+    },
+  };
+  const revokedWrite=await call(shopPath,{
+    ...shopRequest,payload:{...shopPayload,operationId:randomUUID()},bindings:{...bindings,CONTROL_DB:reservationRaceDb},
+  });
+  assert.equal(signedOut,true,'sign-out ran immediately before the reservation batch');
+  assert.equal(revokedWrite.status,401);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_reservations').first()).n,1);
   assert.equal((await call(sessionPath,{method:'GET',cookie:session})).status,401,
     'sign-out revokes a session issued before its cookie arrived');
+  assert.equal((await call(shopPath,{...shopRequest,bindings})).status,401);
   assert.equal((await call('/api/platform/auth/logout',{cookie:session})).status,200);
 });
 

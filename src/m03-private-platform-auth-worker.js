@@ -7,6 +7,7 @@ import {
   validatePlatformSuperAdminSession,
 } from './auth/platform-superadmin-session.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './auth/session-token.js';
+import {reservePlatformShop} from './auth/platform-shop-reservations.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
@@ -156,6 +157,21 @@ app.post('/api/platform/auth/logout',async c=>{
   setCookie(c,SESSION_COOKIE,'',{...COOKIE,maxAge:0});
   setCookie(c,CHALLENGE_COOKIE,'',{...COOKIE,maxAge:0});
   return c.json({signedOut:true});
+});
+
+app.post('/api/platform/shops',async(c,next)=>{
+  if(c.env.PLATFORM_SHOP_RESERVATION_ENABLED!=='true')return c.notFound();
+  await next();
+},limitIngress,limitBody,async c=>{
+  const body=await expectedJson(c,['operationId','displayName']);
+  if(!body)return c.json({error:'Invalid business reservation'},400);
+  const result=await reservePlatformShop(c.env.CONTROL_DB,{
+    ...body,sessionToken:getCookie(c,SESSION_COOKIE),
+  });
+  if(result.status==='invalid')return c.json({error:'Invalid business reservation'},400);
+  if(result.status==='denied')return denied(c);
+  if(result.status==='conflict')return c.json({error:'Reservation request conflicts'},409);
+  return c.json(result.reservation,result.status==='created'?201:200);
 });
 
 // Dedicated private entry point. The default public Worker does not import it.

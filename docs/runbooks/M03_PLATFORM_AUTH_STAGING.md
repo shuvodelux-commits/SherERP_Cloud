@@ -30,6 +30,16 @@ node --test qa/m01-platform-auth-page.spec.mjs
 npx wrangler deploy --dry-run --config wrangler.m03-platform-auth-local-test.jsonc
 ```
 
+## Private business reservation candidate
+
+The private Worker has a disabled-by-default `POST /api/platform/shops` candidate. The exact configured platform origin and a current Super Admin session are required. The JSON request has exactly `operationId` (UUID v4) and `displayName`. The successful response contains `shopId`, `displayName` and `status: "reserved"`. Retry the same operation ID and name to recover the same shop ID. A changed name with the same operation ID returns HTTP 409. A reservation allocates a business identity in Control D1. A later release handles actual database provisioning, binding verification and Owner invitation.
+
+The additive migration is isolated in `staging-migrations/platform-onboarding` and is outside the active authentication migration queue. It requires the platform authentication schema. The existing release configuration has no `PLATFORM_SHOP_RESERVATION_ENABLED` variable. Keep it disabled until the onboarding migration and activation get their own approval, verified Control D1 backup, recovery plan and hosted checks. To roll back an activation, disable the flag or restore the previous Worker version. Keep reservation records for audit and reconcile them before any database-level recovery.
+
+```sh
+node --test tests/integration/m04-platform-browser-auth-workerd.spec.mjs
+```
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.
