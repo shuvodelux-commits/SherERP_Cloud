@@ -102,6 +102,22 @@ With the separate `OWNER_DASHBOARD_BOOTSTRAP_ENABLED=true` gate, the existing se
 
 The pilot Shop D1 has only identity data. Before connecting the original ERP dashboard's business widgets, review the shop schema, run a private source import rehearsal with reconciliation, and wire only the explicitly reviewed read models. An absent import is not evidence of zero sales or balances. No business data or writes are exposed by this bootstrap.
 
+## Owner-authenticated ERP interface
+
+`scripts/build-owner-frontend.mjs` builds the preserved ERP UI into the ignored `dist-owner/` directory. The Owner candidate at `wrangler.m03-owner-auth-staging.jsonc` serves only that build; the platform/public Worker profiles remain separate. After Google sign-in or session restore, the Owner page opens `/app`. The route checks the host-only Owner session against Control D1 and the verified pilot Shop D1 identity before serving HTML. `/api/owner/app-shell` returns only the source-shaped navigation and the reserved business display name from the authenticated shop scope. Logout uses the existing D1 session revocation endpoint.
+
+This makes the existing ERP screens visible to the Owner; it does not connect business records or module APIs. The app displays that business data is disconnected, makes no business RPC request, and locally rejects every method other than the app-shell read and logout. No sales, finance, inventory, or other writes are enabled. The pilot Shop D1 remains identity-only. Before a later ERP-data release, complete the source import rehearsal, schema/Party reviews, module RPC allowlist, real D1 atomicity tests, and an independent release approval. Never treat an empty pilot database as zero business activity.
+
+Build and locally verify the Owner candidate with:
+
+```sh
+npm run build:owner-frontend
+node --test tests/integration/m03-owner-erp-frontend-workerd.spec.mjs
+node --test qa/m03-owner-erp-browser.spec.mjs
+```
+
+The separate Owner profile still has placeholder database IDs and `workers_dev:false`. These checks do not authorize a deployment, remote migration, or database import.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.
