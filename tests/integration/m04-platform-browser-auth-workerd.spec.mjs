@@ -298,6 +298,25 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   }finally{
     await db.prepare('UPDATE platform_admin_sessions SET factor_version=1').run();
   }
+  const approvePath='/api/platform/shops/approve-owner';
+  const approveBindings={...inviteBindings,PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED:'true'};
+  const approveEmail='Owner.Test@gmail.com';
+  const approve=(options={})=>call(approvePath,{cookie:session,payload:{email:approveEmail},bindings:approveBindings,...options});
+  assert.equal((await approve({bindings:inviteBindings})).status,404);
+  assert.equal((await approve({cookie:browser})).status,401);
+  assert.equal((await approve({payload:{email:'owner@example.test'}})).status,400);
+  assert.equal((await approve({bindings:{...approveBindings,PLATFORM_PILOT_DB:otherDb}})).status,409);
+  assert.equal((await invite({bindings:approveBindings})).status,404);
+  const approvalMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0007_owner_gmail_approvals.sql',import.meta.url),'utf8');
+  await db.batch(approvalMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
+  const approved=await approve();
+  assert.equal(approved.status,200);
+  assert.deepEqual(await approved.json(),{shopId:reservation.shopId,email:'owner.test@gmail.com'});
+  assert.equal((await approve({payload:{email:'updated@gmail.com'}})).status,200);
+  assert.deepEqual(await db.prepare('SELECT email,approved_by_subject FROM platform_owner_gmail_approvals').first(),
+    {email:'updated@gmail.com',approved_by_subject:subject});
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_owner_invitations').first()).n,0);
+
   const invitations=await Promise.all([invite(),invite()]);
   assert.deepEqual(invitations.map(response=>response.status).sort(),[201,409]);
   const winner=invitations.find(response=>response.status===201);
@@ -361,6 +380,7 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(await readOwnerInviteChallenge(inviteBindings,inviteCode),null);
   assert.equal(await accept(ownerCredential),null);
   assert.equal((await invite()).status,409);
+  assert.equal((await approve()).status,409);
   await assert.rejects(db.prepare('DELETE FROM platform_first_shop_owners').run(),/immutable/);
 
   const ownerLoginMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0006_owner_login_challenges.sql',import.meta.url),'utf8');

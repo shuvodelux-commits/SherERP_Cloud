@@ -26,6 +26,7 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
     let active=false;
     let reservationsEnabled=false;
     let reservationAttempts=0;
+    let gmailApproval=false;
     let delayedChallenge;
     const calls=[];
     await page.route('https://accounts.google.com/gsi/client',route=>route.fulfill({
@@ -53,7 +54,9 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
       calls.push({path,input});
       if(path==='/api/platform/auth/session')
         return route.fulfill({status:active?200:401,json:active?{
-          role:'PlatformSuperAdmin',...(reservationsEnabled?{shopReservationEnabled:true,ownerInvitationShopId:'11111111-1111-4111-8111-111111111111'}:{}),
+          role:'PlatformSuperAdmin',...(reservationsEnabled?{shopReservationEnabled:true}:{}),
+          ...(gmailApproval?{ownerGmailApprovalShopId:'11111111-1111-4111-8111-111111111111'}:
+            reservationsEnabled?{ownerInvitationShopId:'11111111-1111-4111-8111-111111111111'}:{}),
         }:{}});
       if(path==='/api/platform/shops'){
         if(++reservationAttempts===1)return route.fulfill({status:503,json:{}});
@@ -62,6 +65,8 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
           shopId:'11111111-1111-4111-8111-111111111111',displayName:input.displayName,status:'reserved',
         }});
       }
+      if(path==='/api/platform/shops/approve-owner')
+        return route.fulfill({json:{shopId:'11111111-1111-4111-8111-111111111111',email:input.email}});
       if(path==='/api/platform/shops/invite-owner')
         return route.fulfill({status:201,json:{inviteCode:'a'.repeat(64),expiresAtMs:Date.now()+600_000}});
       if(path.endsWith('/challenge')){
@@ -159,6 +164,13 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
     assert.deepEqual(calls.find(call=>call.path==='/api/platform/shops/invite-owner')?.input,
       {googleSubject:'123456789012345678901'});
     assert.equal(await page.evaluate(()=>sessionStorage.length),0);
+    gmailApproval=true;
+    await page.reload();
+    await page.getByRole('textbox',{name:'Owner Gmail address'}).fill('owner@gmail.com',{timeout:5000});
+    assert.equal(await page.getByRole('button',{name:'Invite Owner',exact:true}).isVisible(),false);
+    await page.getByRole('button',{name:'Approve Owner'}).click();
+    await page.getByText('Owner Gmail approved.').waitFor();
+    assert.deepEqual(calls.find(call=>call.path==='/api/platform/shops/approve-owner')?.input,{email:'owner@gmail.com'});
     await page.getByRole('button',{name:'Sign out'}).click();
     await page.getByRole('heading',{name:'Platform sign-in'}).waitFor();
     assert.equal(await page.locator('#owner-invitation-code').inputValue(),'');

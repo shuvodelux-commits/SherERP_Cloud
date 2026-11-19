@@ -11,6 +11,8 @@ import {reservePlatformShop} from './auth/platform-shop-reservations.js';
 import {pilotShopConfiguration,verifyPlatformShopBinding} from './auth/platform-shop-binding.js';
 import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js';
 
+import {approvePlatformOwnerGmail} from './auth/platform-owner-gmail-approvals.js';
+
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
 const SESSION_COOKIE='__Host-shererp-platform-session';
@@ -131,11 +133,14 @@ app.post('/api/platform/auth/challenge',limitIngress,async c=>{
 });
 
 function signedIn(c){
-  const invitationShop=c.env.PLATFORM_OWNER_INVITATION_ENABLED==='true'?pilotShopConfiguration(c.env):null;
+  const gmailMode=c.env.PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED==='true';
+  const gmailShop=gmailMode?pilotShopConfiguration(c.env):null;
+  const invitationShop=!gmailMode&&c.env.PLATFORM_OWNER_INVITATION_ENABLED==='true'?pilotShopConfiguration(c.env):null;
   return c.json({
     role:'PlatformSuperAdmin',
     ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'?{shopReservationEnabled:true}:{}),
     ...(invitationShop?{ownerInvitationShopId:invitationShop.shopId}:{}),
+    ...(gmailShop?{ownerGmailApprovalShopId:gmailShop.shopId}:{}),
   });
 }
 
@@ -202,7 +207,7 @@ app.post('/api/platform/shops/verify-binding',async(c,next)=>{
 });
 
 app.post('/api/platform/shops/invite-owner',async(c,next)=>{
-  if(c.env.PLATFORM_OWNER_INVITATION_ENABLED!=='true')return c.notFound();
+  if(c.env.PLATFORM_OWNER_INVITATION_ENABLED!=='true'||c.env.PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED==='true')return c.notFound();
   await next();
 },limitIngress,limitBody,async c=>{
   const body=await expectedJson(c,['googleSubject']);
@@ -213,6 +218,20 @@ app.post('/api/platform/shops/invite-owner',async(c,next)=>{
   if(result.status==='conflict')return c.json({error:'Owner invitation unavailable for this shop'},409);
   if(result.status!=='created')return unavailable(c);
   return c.json({inviteCode:result.inviteCode,expiresAtMs:result.expiresAtMs},201);
+});
+
+app.post('/api/platform/shops/approve-owner',async(c,next)=>{
+  if(c.env.PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED!=='true')return c.notFound();
+  await next();
+},limitIngress,limitBody,async c=>{
+  const body=await expectedJson(c,['email']);
+  if(!body)return c.json({error:'Enter a Gmail address'},400);
+  const result=await approvePlatformOwnerGmail(c.env,{email:body.email,sessionToken:getCookie(c,SESSION_COOKIE)});
+  if(result.status==='invalid')return c.json({error:'Enter a Gmail address'},400);
+  if(result.status==='denied')return denied(c);
+  if(result.status==='conflict')return c.json({error:'Owner approval unavailable for this shop'},409);
+  if(result.status!=='approved')return unavailable(c);
+  return c.json({shopId:result.shopId,email:result.email});
 });
 
 // Dedicated private entry point. The default public Worker does not import it.

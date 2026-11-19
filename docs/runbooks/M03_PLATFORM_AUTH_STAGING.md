@@ -90,7 +90,9 @@ A later approved staging release needs a distinct client hostname, its exact Goo
 
 The intended replacement for manual Owner codes is a private Super Admin approval for one Gmail address and one already verified shop. The Owner opens the existing client site and uses Google sign-in. During first sign-in, verify the Google token signature, client ID and fresh browser nonce, then compare its verified Gmail claim to the approved address. Save the stable Google issuer and subject atomically for future sign-ins. Compare Gmail addresses case-insensitively and preserve dots and plus tags. No code or Google account ID needs to be copied by the user.
 
-The verifier exposes this claim only in its explicit Gmail mode. The live pilot still needs a reviewed approval write and atomic first-login grant before switching to this flow. Preserve existing audit records and keep Super Admin MFA and shop session revocation.
+The verifier exposes this claim only in its explicit Gmail mode. The private `POST /api/platform/shops/approve-owner` candidate takes only `email` and derives the shop from trusted configuration. Control D1 rechecks the current Super Admin session and matching binding receipt when saving or correcting the pending address. It stops accepting corrections after the first Owner is recorded. Gmail mode replaces the old invite form and issuance route on the admin Worker.
+
+The isolated seventh migration creates the pending approval table. Keep `PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED` unset until the first-login grant is tested and a separate release disables the old code redemption route for the pilot. Preserve existing audit records and keep Super Admin MFA and shop session revocation.
 
 ## Release order
 
