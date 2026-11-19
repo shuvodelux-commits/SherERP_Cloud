@@ -241,7 +241,8 @@ function gross(due){
 }
 test('approved same-Party identity keeps Supplier payable, advance, customer AR and historical opening independent',()=>{
   const owing=gross('600.00');
-  assert.equal(owing.issues.length,0);
+  assert.equal(owing.readyForAccountDesignReview,true);
+  assert.deepEqual(owing.blockingIssues,[]);
   const payable=owing.currentCheckpoints.find(x=>x.kind==='SUPPLIER_PAYABLE');
   const customer=owing.currentCheckpoints.find(x=>x.kind==='CUSTOMER_RECEIVABLE');
   const opening=owing.openingCheckpoints.find(x=>x.kind==='SUPPLIER_ADVANCE');
