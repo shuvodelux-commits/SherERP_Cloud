@@ -1,3 +1,4 @@
+import {fenceOwnerSession,finishOwnerLogin} from './platform-owner-write-session.js';
 import {verifyGoogleLoginIdToken} from './google-id-token.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './session-token.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './platform-shop-binding.js';
@@ -15,6 +16,15 @@ export async function issueOwnerSession(env,verifiedIdentity,{challengeHash=null
   if(typeof verifiedIdentity?.issuer!=='string'||typeof verifiedIdentity.subject!=='string')return null;
   const config=pilotShopConfiguration(env);
   if(!config||!await pilotShopIdentityMatches(config))return null;
+  if(env.OWNER_WRITE_GRANTS_ENABLED==='true'){
+    const previous=await env.CONTROL_DB.prepare(`SELECT s.token_hash ${CURRENT_OWNER}
+      JOIN platform_shop_owner_sessions s ON s.shop_id=o.shop_id
+      WHERE o.shop_id=? AND b.database_id=? AND b.database_marker=? AND o.issuer=? AND o.subject=?
+      AND (? IS NULL OR EXISTS(SELECT 1 FROM platform_shop_owner_login_challenges c
+        WHERE c.shop_id=o.shop_id AND c.challenge_hash=? AND c.nonce=? AND c.expires_at_ms>${NOW}))`)
+      .bind(...pilotTuple(config),verifiedIdentity.issuer,verifiedIdentity.subject,challengeHash,challengeHash,nonce).first();
+    await fenceOwnerSession(env,previous?.token_hash);
+  }
   const token=createOpaqueSessionToken();
   const hash=await hashOpaqueSessionToken(token);
   const issued=await env.CONTROL_DB.prepare(`INSERT INTO platform_shop_owner_sessions
@@ -27,7 +37,7 @@ export async function issueOwnerSession(env,verifiedIdentity,{challengeHash=null
       issued_at_ms=excluded.issued_at_ms,challenge_hash=excluded.challenge_hash
     RETURNING shop_id`)
     .bind(hash,challengeHash,...pilotTuple(config),verifiedIdentity.issuer,verifiedIdentity.subject,challengeHash,challengeHash,nonce).first();
-  return issued?token:null;
+  return issued?finishOwnerLogin(env,token):null;
 }
 
 async function readOwnerContext(env,token){
@@ -53,12 +63,13 @@ export async function revokeOwnerSession(env,token){
   const hash=await hashOpaqueSessionToken(token);
   const config=pilotShopConfiguration(env);
   if(!hash||!config)return false;
+  await fenceOwnerSession(env,hash);
   const result=await env.CONTROL_DB.prepare(`DELETE FROM platform_shop_owner_sessions
     WHERE shop_id=? AND token_hash=? AND EXISTS(
       SELECT 1 FROM platform_shop_bindings b
       WHERE b.shop_id=platform_shop_owner_sessions.shop_id AND b.database_id=? AND b.database_marker=?
-    )`).bind(config.shopId,hash,config.databaseId,config.databaseMarker).run();
-  return result.success===true&&result.meta?.changes===1;
+    ) RETURNING shop_id`).bind(config.shopId,hash,config.databaseId,config.databaseMarker).first();
+  return result!==null;
 }
 
 
@@ -101,6 +112,13 @@ export async function signOutOwnerBrowser(env,{sessionToken,browserToken}){
   ]);
   if(!sessionHash&&!challengeHash)return true;
   const db=env.CONTROL_DB;
+  if(env.OWNER_WRITE_GRANTS_ENABLED==='true'){
+    const current=await db.prepare(`SELECT s.token_hash FROM platform_shop_owner_sessions s
+      JOIN platform_shop_bindings b ON b.shop_id=s.shop_id
+      WHERE s.shop_id=? AND b.database_id=? AND b.database_marker=? AND (s.token_hash=? OR s.challenge_hash=?)`)
+      .bind(...pilotTuple(config),sessionHash,challengeHash).first();
+    await fenceOwnerSession(env,current?.token_hash);
+  }
   const results=await db.batch([
     db.prepare(`DELETE FROM platform_shop_owner_login_challenges WHERE shop_id=? AND challenge_hash=?`)
       .bind(config.shopId,challengeHash),

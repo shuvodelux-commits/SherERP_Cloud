@@ -29,7 +29,7 @@ async function seed(CONTROL_DB,DB,scope,subject,index){
   const migration=await readFile('staging-migrations/shop-owner-write/0002_shop_owner_write_grant.sql','utf8');
   await DB.batch(migration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
   assert.equal(await publishCurrentOwnerWriteSession(env,token),true);
-  return {env,token};
+  return {env:{...env,OWNER_WRITE_GRANTS_ENABLED:'true'},token};
 }
 
 export async function startCleanShopHarness(){
@@ -43,6 +43,7 @@ export async function startCleanShopHarness(){
       '0004_first_shop_owner','0005_owner_sessions','0006_owner_login_challenges',
     ].map(name=>`staging-migrations/platform-onboarding/${name}.sql`).concat(
       'staging-migrations/platform-owner-write/0009_owner_session_generation.sql',
+      'staging-migrations/platform-owner-write/0010_owner_grant_claim.sql',
     ));
     const shopMigrations=await migrationQueue(join(temp,'shop'),[
       'staging-migrations/shop-identity/0001_shop_identity.sql','migrations/0001_core_catalog.sql',

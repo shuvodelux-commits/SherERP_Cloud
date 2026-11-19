@@ -11,8 +11,8 @@ export async function publishOwnerWriteGrant(DB,scope,token,generation){
   if(!digest||!Number.isSafeInteger(generation)||generation<1)throw new Error('Invalid Owner write grant');
   const row=await DB.prepare(`UPDATE shop_owner_write_grant
     SET token_hash=?,generation=?,enabled=1
-    WHERE singleton=1 AND generation<? AND ${SHOP_MATCH}
-    RETURNING generation`).bind(digest,generation,generation,...scopeValues(scope)).first();
+    WHERE singleton=1 AND (generation<? OR (generation=? AND token_hash=? AND enabled=1)) AND ${SHOP_MATCH}
+    RETURNING generation`).bind(digest,generation,generation,generation,digest,...scopeValues(scope)).first();
   return row!==null;
 }
 
@@ -23,4 +23,19 @@ export async function withdrawOwnerWriteGrant(DB,scope,token){
     WHERE singleton=1 AND token_hash=? AND ${SHOP_MATCH}
     RETURNING generation`).bind(digest,...scopeValues(scope)).first();
   return row!==null;
+}
+
+// Fence the claimed generation even if its first publication hasn't arrived.
+// A higher generation already excludes this session. Never lower it.
+export async function fenceOwnerWriteGrant(DB,scope,digest,generation){
+  if(!/^[a-f0-9]{64}$/.test(digest)||!Number.isSafeInteger(generation)||generation<1)return false;
+  const [write,read]=await DB.batch([
+    DB.prepare(`UPDATE shop_owner_write_grant SET generation=?,token_hash=?,enabled=0
+      WHERE singleton=1 AND (generation<? OR (generation=? AND token_hash=?)) AND ${SHOP_MATCH}`)
+      .bind(generation,digest,generation,generation,digest,...scopeValues(scope)),
+    DB.prepare(`SELECT 1 FROM shop_owner_write_grant
+      WHERE singleton=1 AND (generation>? OR (generation=? AND token_hash=? AND enabled=0)) AND ${SHOP_MATCH}`)
+      .bind(generation,generation,digest,...scopeValues(scope)),
+  ]);
+  return write.success&&read.success&&read.results.length===1;
 }

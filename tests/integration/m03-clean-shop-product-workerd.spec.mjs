@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {issueOwnerSession,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
+import {issueOwnerSession,validateOwnerSession,revokeOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {startCleanShopHarness} from '../fixtures/m03-clean-shop-harness.mjs';
 import {publishCurrentOwnerWriteSession} from '../../src/auth/platform-owner-write-session.js';
 
@@ -82,6 +82,9 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
     assert.equal(typeof rotated,'string');
     assert.equal(await generation(ownerB),4);
     assert.equal(await validateOwnerSession(ownerB.env,replacement),null);
+    await assert.rejects(control.prepare('UPDATE platform_shop_owner_access SET enabled=0 WHERE shop_id=?')
+      .bind(ownerB.env.PLATFORM_PILOT_SHOP_ID).run(),/Fence Owner/);
+    assert.equal(await revokeOwnerSession(ownerB.env,rotated),true);
     await control.prepare('UPDATE platform_shop_owner_access SET enabled=0 WHERE shop_id=?')
       .bind(ownerB.env.PLATFORM_PILOT_SHOP_ID).run();
     assert.equal(await generation(ownerB),5);
@@ -96,4 +99,45 @@ test('a new Owner creates a first zero-stock product in an empty shop without ar
   }finally{
     await close();
   }
+});
+
+test('Owner candidate logout closes the write generation before acknowledging sign-out',async()=>{
+  const {ownerA,SHOP_A_DB,SHOP_B_DB,close}=await startCleanShopHarness();
+  try{
+    const {default:app}=await import('../../src/m03-owner-redemption-worker.js');
+    const env={...ownerA.env,OWNER_WRITE_GRANTS_ENABLED:'true',OWNER_LOGIN_ENABLED:'true',
+      OWNER_AUTH_ORIGIN:'https://owner.example.test',PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
+      PLATFORM_OWNER_CLIENT_ID:'fixture.apps.googleusercontent.com',OWNER_INGRESS:{limit:async()=>({success:true})}};
+    const response=await app.request(env.OWNER_AUTH_ORIGIN+'/api/owner/auth/logout',{
+      method:'POST',headers:{Origin:env.OWNER_AUTH_ORIGIN,Cookie:'__Host-shererp-owner-session='+ownerA.token},
+    },env);
+    assert.equal(response.status,200);
+    assert.equal((await SHOP_A_DB.prepare('SELECT enabled FROM shop_owner_write_grant').first()).enabled,0);
+    assert.equal((await SHOP_B_DB.prepare('SELECT enabled FROM shop_owner_write_grant').first()).enabled,1);
+  }finally{await close();}
+});
+
+test('withdrawal fences a reserved generation before its first Shop publication',async()=>{
+  const {ownerA,SHOP_A_DB,close}=await startCleanShopHarness();
+  try{
+    const env=ownerA.env;
+    const {pilotShopConfiguration}=await import('../../src/auth/platform-shop-binding.js');
+    const {publishOwnerWriteGrant}=await import('../../src/db/shop-owner-write-grant.js');
+    await revokeOwnerSession(env,ownerA.token);
+    // Obtain a read-only session, then simulate a temporarily unavailable Shop
+    // during its upgrade. The durable Control claim must survive the failure.
+    const token=await issueOwnerSession({...env,OWNER_WRITE_GRANTS_ENABLED:'false'},
+      {issuer:'https://accounts.google.com',subject:'fixture-owner-a'});
+    await SHOP_A_DB.prepare(`CREATE TRIGGER fixture_pause_publish BEFORE UPDATE ON shop_owner_write_grant
+      WHEN NEW.enabled=1 BEGIN SELECT RAISE(ABORT,'publication pending'); END;`).run();
+    await assert.rejects(publishCurrentOwnerWriteSession(env,token),/publication pending/);
+    const claim=await env.CONTROL_DB.prepare('SELECT generation FROM platform_owner_grant_claim WHERE shop_id=?')
+      .bind(env.PLATFORM_PILOT_SHOP_ID).first();
+    await assert.rejects(revokeOwnerSession({...env,OWNER_WRITE_GRANTS_ENABLED:'false'},token),/Fence Owner/);
+    assert.equal(await revokeOwnerSession(env,token),true);
+    await SHOP_A_DB.prepare('DROP TRIGGER fixture_pause_publish').run();
+    assert.equal(await publishOwnerWriteGrant(SHOP_A_DB,pilotShopConfiguration(env),token,claim.generation),false);
+    assert.deepEqual(await SHOP_A_DB.prepare('SELECT generation,enabled FROM shop_owner_write_grant').first(),
+      {generation:claim.generation,enabled:0});
+  }finally{await close();}
 });

@@ -2,12 +2,10 @@ import {getCookie,setCookie} from 'hono/cookie';
 import {Hono} from 'hono';
 import {signOutOwnerBrowser,validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
-import {pilotShopConfiguration} from '../../src/auth/platform-shop-binding.js';
-import {withdrawOwnerWriteGrant} from '../../src/db/shop-owner-write-grant.js';
 
 // Local test fixture only. Neither the route nor its synthetic shop selection
 // is a deployed write authority. The local grant tests the SQL boundary.
-// It does not synchronize real Control D1 session issuance or revocation.
+// Logout uses the private candidate lifecycle against both local databases.
 const app=new Hono();
 const PRODUCT_FIELDS=`product_id AS id, product_name AS name, base_unit_name AS unit,
   purchase_price_text AS purchasePrice, selling_price_text AS sellingPrice, opening_stock_text AS stock`;
@@ -25,7 +23,7 @@ app.use('/__clean_shop__/*',async(c,next)=>{
   const {shopId,databaseId,marker}=JSON.parse(target==='A'?c.env.SHOP_A:c.env.SHOP_B);
   const token=getCookie(c,'__Host-shererp-owner-session');
   const env={
-    CONTROL_DB:c.env.CONTROL_DB,PLATFORM_PILOT_DB:db,PLATFORM_PILOT_SHOP_ID:shopId,
+    OWNER_WRITE_GRANTS_ENABLED:'true',CONTROL_DB:c.env.CONTROL_DB,PLATFORM_PILOT_DB:db,PLATFORM_PILOT_SHOP_ID:shopId,
     PLATFORM_PILOT_D1_ID:databaseId,PLATFORM_PILOT_MARKER:marker,
   };
   const session=await validateOwnerSession(env,token);
@@ -40,10 +38,6 @@ app.use('/__clean_shop__/*',async(c,next)=>{
 
 app.post('/__clean_shop__/logout',async c=>{
   try{
-    const scope=pilotShopConfiguration(c.get('ownerEnv'));
-    if(!scope||!await withdrawOwnerWriteGrant(scope.shopDb,scope,c.get('sessionToken'))){
-      return c.json({error:'Sign-out incomplete'},503);
-    }
     if(!await signOutOwnerBrowser(c.get('ownerEnv'),{sessionToken:c.get('sessionToken')})){
       return c.json({error:'Sign-out incomplete'},503);
     }

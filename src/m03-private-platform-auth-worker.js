@@ -1,3 +1,4 @@
+import {disablePlatformShopOwner} from './auth/platform-owner-write-session.js';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCookie,setCookie} from 'hono/cookie';
@@ -232,6 +233,18 @@ app.post('/api/platform/shops/approve-owner',async(c,next)=>{
   if(result.status==='conflict')return c.json({error:'Owner approval unavailable for this shop'},409);
   if(result.status!=='approved')return unavailable(c);
   return c.json({shopId:result.shopId,email:result.email});
+});
+
+app.post('/api/platform/shops/disable-owner',async(c,next)=>{
+  if(c.env.OWNER_WRITE_GRANTS_ENABLED!=='true')return c.notFound();
+  await next();
+},limitIngress,limitBody,async c=>{
+  const body=await expectedJson(c,['shopId']);
+  if(!body)return c.json({error:'Invalid business identity'},400);
+  const status=await disablePlatformShopOwner(c.env,body.shopId,getCookie(c,SESSION_COOKIE));
+  if(status==='denied')return denied(c);
+  if(status==='mismatch')return c.json({error:'Shop binding mismatch'},409);
+  return c.json({shopId:body.shopId,status});
 });
 
 // Dedicated private entry point. The default public Worker does not import it.
