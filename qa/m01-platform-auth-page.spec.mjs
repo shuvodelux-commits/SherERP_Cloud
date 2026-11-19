@@ -166,3 +166,60 @@ test('private platform page sets up the admin, signs in with MFA, restores and s
     await browser.close();
   }
 });
+
+test('Owner page redeems an invite, signs in, restores and signs out',async()=>{
+  const {default:ownerWorker}=await import('../src/m03-owner-redemption-worker.js');
+  const ownerOrigin='https://owner.example.test';
+  const assets=new URL('../frontend/owner-auth/',import.meta.url);
+  const browser=await chromium.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:320,height:640}});
+    let active=false;
+    const seen=[];
+    const shopId='11111111-1111-4111-8111-111111111111';
+    await page.route('https://accounts.google.com/gsi/client',route=>route.fulfill({
+      body:fakeGoogle,contentType:'text/javascript',
+    }));
+    await page.route(ownerOrigin+'/**',async route=>{
+      const request=route.request();
+      const path=new URL(request.url()).pathname;
+      if(!path.startsWith('/api/')){
+        const reply=await ownerWorker.fetch(new Request(request.url()),{
+          OWNER_AUTH_ORIGIN:ownerOrigin,PLATFORM_AUTH_ORIGIN:origin,PLATFORM_OWNER_CLIENT_ID:'654-example.apps.googleusercontent.com',
+          OWNER_LOGIN_ENABLED:'true',OWNER_REDEMPTION_ENABLED:'true',OWNER_INGRESS:{limit:async()=>({success:true})},
+          CONTROL_DB:{prepare(){}},
+          ASSETS:{async fetch(asset){return new Response(await readFile(new URL(new URL(asset.url).pathname.slice(1),assets)));}},
+        });
+        return route.fulfill({status:reply.status,headers:Object.fromEntries(reply.headers),body:Buffer.from(await reply.arrayBuffer())});
+      }
+      seen.push({path,data:request.postDataJSON()});
+      if(path.endsWith('/session'))return route.fulfill({status:active?200:401,json:active?{shopId,role:'Owner'}:{}});
+      if(path.endsWith('/challenge'))return route.fulfill({json:{clientId:'654-example.apps.googleusercontent.com',nonce:'a'.repeat(43)}});
+      if(path.endsWith('/setup'))return route.fulfill({status:201,json:{shopId,role:'Owner'}});
+      if(path.endsWith('/login')){active=true;return route.fulfill({json:{role:'Owner'}});}
+      if(path.endsWith('/logout')){active=false;return route.fulfill({json:{signedOut:true}});}
+      return route.fulfill({status:404});
+    });
+    await page.goto(ownerOrigin);
+    await page.getByRole('button',{name:'Accept invitation'}).click({timeout:5000});
+    await page.getByLabel('Owner invitation code').fill('b'.repeat(64));
+    await page.getByRole('button',{name:'Continue setup'}).click();
+    await page.getByRole('button',{name:'Sign in with Google'}).click();
+    await page.getByText('Invitation accepted. Sign in to continue.').waitFor();
+    assert.equal(await page.locator('#invite-code').inputValue(),'');
+    assert.deepEqual(seen.find(item=>item.path==='/api/owner/setup/challenge')?.data,{inviteCode:'b'.repeat(64)});
+    assert.deepEqual(seen.find(item=>item.path==='/api/owner/setup')?.data,{credential:'fixture-signed-assertion'});
+    await page.getByRole('button',{name:'Start sign-in'}).click();
+    await page.getByRole('button',{name:'Sign in with Google'}).click();
+    await page.getByRole('heading',{name:'Signed in as Shop Owner'}).waitFor();
+    await page.reload();
+    await page.getByRole('heading',{name:'Signed in as Shop Owner'}).waitFor();
+    await page.getByText(shopId,{exact:false}).waitFor();
+    assert.deepEqual(await page.evaluate(()=>[localStorage.length,sessionStorage.length,location.search]),[0,0,'']);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),320);
+    await page.getByRole('button',{name:'Sign out'}).click();
+    await page.getByRole('heading',{name:'Shop Owner sign-in'}).waitFor();
+  }finally{
+    await browser.close();
+  }
+});

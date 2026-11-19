@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SherERP Cloud · Shop Owner sign-in</title>
+  <link rel="stylesheet" href="/owner-auth.css">
+  <script src="/owner-auth.js" defer></script>
+</head>
+<body>
+  <main class="login-card">
+    <header class="login-brand">SherERP Cloud</header>
+    <p id="status" role="status" aria-live="polite">Checking session…</p>
+    <section id="login" hidden>
+      <h1 tabindex="-1">Shop Owner sign-in</h1>
+      <button id="start-login" class="primary" type="button">Start sign-in</button>
+      <button id="open-setup" class="secondary" type="button" hidden>Accept invitation</button>
+    </section>
+    <section id="setup" hidden>
+      <h1 tabindex="-1">Accept Owner invitation</h1>
+      <form id="invite-form">
+        <label for="invite-code">Owner invitation code</label>
+        <input id="invite-code" type="password" pattern="[a-f0-9]{64}" required maxlength="64" autocomplete="off" spellcheck="false">
+        <button class="primary" type="submit">Continue setup</button>
+      </form>
+      <button id="back-setup" class="secondary" type="button">Back to sign-in</button>
+    </section>
+    <section id="google" hidden>
+      <h1 tabindex="-1">Continue with Google</h1>
+      <div id="google-button"></div>
+      <button id="cancel-google" class="secondary" type="button">Cancel</button>
+    </section>
+    <section id="signed-in" hidden>
+      <h1 tabindex="-1">Signed in as Shop Owner</h1>
+      <p id="shop-reference"></p>
+      <button id="sign-out" class="primary" type="button">Sign out</button>
+    </section>
+    <noscript><p>Enable JavaScript to sign in.</p></noscript>
+  </main>
+</body>
+</html>

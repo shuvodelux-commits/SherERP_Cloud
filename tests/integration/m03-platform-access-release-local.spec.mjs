@@ -36,3 +36,36 @@ test('bundled assets and API fail closed without native Access in local Workerd'
     await harness.close();
   }
 });
+
+test('Owner release candidate gates all assets and rejects alternate origins in Workerd',async()=>{
+  const configPath='./wrangler.m03-owner-auth-staging.jsonc';
+  const cfg=JSON.parse(await readFile(configPath,'utf8'));
+  assert.equal(cfg.workers_dev,false);
+  assert.equal(cfg.preview_urls,false);
+  assert.equal(cfg.routes,undefined);
+  assert.equal(cfg.vars,undefined);
+  assert.equal(cfg.assets.run_worker_first,true);
+  assert.ok(cfg.d1_databases.every(binding=>binding.remote===false));
+  const origin='https://owner.example.test';
+  const vars={OWNER_AUTH_ORIGIN:origin,PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
+    PLATFORM_OWNER_CLIENT_ID:'654-example.apps.googleusercontent.com'};
+  for(const enabled of [false,true]){
+    const harness=createTestHarness({workers:[{configPath,vars:enabled?{...vars,OWNER_LOGIN_ENABLED:'true'}:vars}]});
+    try{
+      await harness.listen();
+      const worker=harness.getWorker(cfg.name);
+      for(const path of ['/','/owner-auth.js','/owner-auth.css']){
+        assert.equal((await worker.fetch(origin+path)).status,enabled?200:404,path);
+      }
+      assert.equal((await worker.fetch(origin+'/index.html')).status,404);
+      assert.equal((await worker.fetch('https://unexpected.example.test/')).status,enabled?403:404);
+      if(enabled){
+        const html=await (await worker.fetch(origin+'/')).text();
+        assert.doesNotMatch(html,/<body data-redemption="enabled">/);
+        assert.match(html,/Shop Owner sign-in/);
+      }
+    }finally{
+      await harness.close();
+    }
+  }
+});

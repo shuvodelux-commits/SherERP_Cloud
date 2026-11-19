@@ -80,6 +80,12 @@ The isolated Owner Worker also accepts an explicit `OWNER_LOGIN_ENABLED=true`. U
 
 The sixth onboarding migration must be applied before activation. The separate client Worker still needs a browser page, a reviewed deploy profile, exact OAuth origin and hosted isolation checks. Keep Owner invitation issuance and login disabled in live staging pending that release.
 
+## Owner sign-in page candidate
+
+The separate `wrangler.m03-owner-auth-staging.jsonc` bundles the Owner page and its two assets. The checked-in profile has local placeholder databases and no active routes or flags. Wrangler sends all assets through the Worker so an unexpected host or disabled profile cannot serve the page directly.
+
+A later approved staging release needs a distinct client hostname, its exact Google OAuth Authorized JavaScript origin, the verified Control and pilot Shop D1 bindings, and a dedicated ingress limiter. Use the separate Owner OAuth client ID. Set `OWNER_LOGIN_ENABLED` and `OWNER_REDEMPTION_ENABLED` only after reviewing the protected release config, backup, migration status, shop isolation and recovery. Verify the page with the actual Google account, including redemption, sign-in, refresh and logout. The signed-in card shows the shop scope. It does not serve the ERP data dashboard.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.
