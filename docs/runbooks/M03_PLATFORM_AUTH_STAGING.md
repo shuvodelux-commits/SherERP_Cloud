@@ -62,6 +62,12 @@ The fourth onboarding migration creates the immutable first-Owner record. The in
 
 The service provides no HTTP route, cookie or ERP access. Before activation, use a separately reviewed client origin and OAuth setup, implement browser redemption and revocable shop sessions, and verify routing and two-shop isolation. Existing invitation issuance must remain disabled until these controls and the reviewed migrations are in place.
 
+## Pilot Owner sessions
+
+The fifth onboarding migration adds an enabled access record and one current session per shop. First Owner acceptance creates the access record atomically. A session stores only a token digest and has no server-side timeout. A new login replaces the previous session. Sign-out removes that session, and disabling Owner access removes any active session. Re-enabling access requires a fresh sign-in. Session validation rechecks the current Shop D1 marker and matching Control D1 receipt.
+
+This service expects freshly verified Google credentials at its future transport boundary. It exposes no route and sets no cookie. Before enabling issuance or Owner sign-in, apply migrations in order during a separately approved release, verify the client origin and Google OAuth registration, and review the browser challenge, cookie and logout flows. This migration does not automatically enable access for prior first-Owner audit rows. The invitation still expires after ten minutes.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.
