@@ -206,7 +206,7 @@ test('Owner page redeems an invite, signs in, restores and signs out',async()=>{
         return route.fulfill({status:reply.status,headers:Object.fromEntries(reply.headers),body:Buffer.from(await reply.arrayBuffer())});
       }
       seen.push({path,data:request.postDataJSON()});
-      if(path.endsWith('/session'))return route.fulfill({status:active?200:401,json:active?{shopId,role:'Owner'}:{}});
+      if(path.endsWith('/session'))return route.fulfill({status:active?200:401,json:active?{shopId,role:'Owner',...(gmailMode?{dashboard:{displayName:'Pilot shop',dataAvailable:false}}:{})}:{}});
       if(path.endsWith('/challenge'))return route.fulfill({json:{clientId:'654-example.apps.googleusercontent.com',nonce:'a'.repeat(43)}});
       if(path.endsWith('/setup'))return route.fulfill({status:201,json:{shopId,role:'Owner'}});
       if(path.endsWith('/login')){active=true;return route.fulfill({json:{role:'Owner'}});}
@@ -240,6 +240,8 @@ test('Owner page redeems an invite, signs in, restores and signs out',async()=>{
     await page.getByRole('button',{name:'Sign in with Google'}).click();
     await page.getByRole('button',{name:'Sign in with Google'}).click();
     await page.getByRole('heading',{name:'Signed in as Shop Owner'}).waitFor();
+    await page.getByRole('heading',{name:'Pilot shop'}).waitFor({timeout:5000});
+    await page.getByText('Business data is not connected to this dashboard yet.').waitFor();
     assert.equal(seen.some(item=>item.path.startsWith('/api/owner/setup')),false);
   }finally{
     await browser.close();

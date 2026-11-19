@@ -96,6 +96,12 @@ The isolated seventh migration creates the pending approval table. Keep `PLATFOR
 
 The Owner Worker hides invitation UI and refuses code redemption when Gmail mode is active. The eighth onboarding migration adds the separate short-lived first-login challenges. The first sign-in verifies the current Gmail approval inside the D1 transaction that records the stable Google subject and creates the session. The existing immutable first-Owner foreign key points to an internal audit row without a redeemable code. Subsequent sign-ins use the linked Google subject and the existing session service. Apply migrations 0007–0008 to verified Control D1 after backup and approval before enabling either flag. Verify the signed-in shop and logout on the exact Google client origin. Preserve existing audit records and keep Super Admin MFA and shop session revocation.
 
+## Owner dashboard bootstrap candidate
+
+With the separate `OWNER_DASHBOARD_BOOTSTRAP_ENABLED=true` gate, the existing session response includes the reserved business name and `dataAvailable:false`. The same Control D1 read verifies the active Owner session and scopes the reservation to that shop after checking the pilot Shop D1 identity. The page displays setup status without inventing business metrics. The release configuration leaves the gate unset.
+
+The pilot Shop D1 has only identity data. Before connecting the original ERP dashboard's business widgets, review the shop schema, run a private source import rehearsal with reconciliation, and wire only the explicitly reviewed read models. An absent import is not evidence of zero sales or balances. No business data or writes are exposed by this bootstrap.
+
 ## Release order
 
 1. Approve the private HTTPS platform origin and admission control. That host must require private admission before traffic reaches the Worker. The Worker rate limit is a separate per-location protection and does not authenticate callers. Register the exact approved HTTPS origin on a Google OAuth Web client.

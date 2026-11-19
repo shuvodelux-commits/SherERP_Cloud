@@ -101,7 +101,9 @@ app.post('/api/owner/auth/login',protectLogin,limitBody,async c=>{
 });
 
 app.get('/api/owner/auth/session',protectLogin,async c=>{
-  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE));
+  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE),{
+    dashboard:c.env.OWNER_DASHBOARD_BOOTSTRAP_ENABLED==='true',
+  });
   return session?c.json(session):denied(c);
 });
 
