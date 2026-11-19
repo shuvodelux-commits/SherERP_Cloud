@@ -37,7 +37,7 @@ export async function verifyGoogleLoginIdToken({token,clientId,expectedNonce,onR
       jwks_uri:GOOGLE_KEYS,
       allowedAlgorithms:['RS256'],
       verification:{iss:GOOGLE_ISSUER,aud:clientId},
-    },{redirect:'error',signal:AbortSignal.timeout(3000)});
+    },{redirect:'manual',signal:AbortSignal.timeout(3000)});
   }catch(error){
     return reject(verificationReason(error));
   }
