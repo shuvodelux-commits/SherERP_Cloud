@@ -312,6 +312,9 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   await assert.rejects(db.prepare('DELETE FROM platform_owner_invitations').run(),/immutable/);
 
   const {readOwnerInviteChallenge,acceptOwnerInvite}=await import('../../src/auth/platform-owner-acceptance.js');
+  const {issueOwnerSession,validateOwnerSession,revokeOwnerSession}=await import('../../src/auth/platform-owner-sessions.js');
+  const ownerSessionMigration=await readFile(new URL('../../staging-migrations/platform-onboarding/0005_owner_sessions.sql',import.meta.url),'utf8');
+  await db.batch(ownerSessionMigration.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
   const expiredCode=randomBytes(32).toString('hex');
   await db.prepare(`INSERT INTO platform_owner_invitations
     (token_hash,shop_id,recipient_issuer,recipient_subject,issued_by_subject,issued_at_ms,expires_at_ms)
@@ -331,6 +334,28 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(await accept(ownerCredential),null);
   assert.equal((await invite()).status,409);
   await assert.rejects(db.prepare('DELETE FROM platform_first_shop_owners').run(),/immutable/);
+
+  const ownerIdentity={issuer,subject:inviteRequest.payload.googleSubject};
+  assert.equal(await issueOwnerSession(inviteBindings,{issuer,subject}),null);
+  const firstOwnerSession=await issueOwnerSession(inviteBindings,ownerIdentity);
+  assert.match(firstOwnerSession,/^[a-f0-9]{64}$/);
+  await db.prepare('UPDATE platform_shop_owner_sessions SET issued_at_ms=1').run();
+  const ownerScope={shopId:reservation.shopId,role:'Owner'};
+  assert.deepEqual(await validateOwnerSession(inviteBindings,firstOwnerSession),ownerScope);
+  assert.equal(await validateOwnerSession(swapped,firstOwnerSession),null);
+  assert.equal(await validateOwnerSession(inviteBindings,session.split('=')[1]),null);
+  const anotherOwnerSession=await issueOwnerSession(inviteBindings,ownerIdentity);
+  assert.equal(await validateOwnerSession(inviteBindings,firstOwnerSession),null);
+  assert.deepEqual(await validateOwnerSession(inviteBindings,anotherOwnerSession),ownerScope);
+  assert.equal(await revokeOwnerSession(inviteBindings,firstOwnerSession),false);
+  assert.equal(await revokeOwnerSession(inviteBindings,anotherOwnerSession),true);
+  assert.equal(await validateOwnerSession(inviteBindings,anotherOwnerSession),null);
+  const remainingOwnerSession=await issueOwnerSession(inviteBindings,ownerIdentity);
+  await db.prepare('UPDATE platform_shop_owner_access SET enabled=0').run();
+  assert.equal(await validateOwnerSession(inviteBindings,remainingOwnerSession),null);
+  assert.equal(await issueOwnerSession(inviteBindings,ownerIdentity),null);
+  await db.prepare('UPDATE platform_shop_owner_access SET enabled=1').run();
+  assert.equal(await validateOwnerSession(inviteBindings,remainingOwnerSession),null);
 
   let signedOut=false;
   const reservationRaceDb={
