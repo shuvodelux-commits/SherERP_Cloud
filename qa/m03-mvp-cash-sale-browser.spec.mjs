@@ -59,7 +59,7 @@ test('original POS checkout button and invoice renderer post ONE real saved D1 c
           unitPrice:'60.00',sellingPrice:'75.00'}],
         discount:'0',paidAmount:'0',paymentMethod:'Cash',bankAccountId:'',
         notes:'Original POS stock'},
-    }})).status,'created');
+    })).status,'created');
     await buildOwnerFrontend({outputDir:dir});
     const requests=[];
     const env={...ownerA.env,
