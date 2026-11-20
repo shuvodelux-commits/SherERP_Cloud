@@ -76,13 +76,36 @@ function trustedAccounts(accountRows){
   }
   return accountRows;
 }
-function sourceLine(items){
+/**
+ * The original POS default is auto price + 'negative' shortage even for a
+ * completely in-stock product. Never interpret that label as permission to
+ * oversell. A trusted tuple must come from CURRENT server-side Product/FIFO
+ * revision and owned-stock evidence, not from the client checkout payload.
+ * The final D1 posting write must recheck both stock and pricing atomically.
+ */
+function checkTrustedSaleLine(trustedProduct,line,unitPrice,subtotal){
+  plain(trustedProduct,['productId','effectiveUnitPrice','effectiveLineTotal','availableUnits']);
+  if(typeof trustedProduct.productId!=='string'||
+     trustedProduct.productId!==line.productId||
+     !Number.isSafeInteger(trustedProduct.availableUnits)||
+     trustedProduct.availableUnits<0||
+     trustedProduct.availableUnits<line.qty)
+    throw new TypeError('Trusted current product stock is unavailable or insufficient');
+  if(typeof trustedProduct.effectiveUnitPrice!=='string'||
+     typeof trustedProduct.effectiveLineTotal!=='string')
+    throw new TypeError('Trusted current product price and FIFO total required');
+  const serverPrice=money(trustedProduct.effectiveUnitPrice,'trusted price');
+  const serverTotal=money(trustedProduct.effectiveLineTotal,'trusted FIFO line total');
+  if(line.priceMode==='auto'&&(unitPrice!==serverPrice||subtotal!==serverTotal))
+    throw new TypeError('Trusted current FIFO price or line total mismatch');
+}
+function sourceLine(items,trustedProduct){
   if(!Array.isArray(items)||items.length!==1)
     throw new TypeError('Unsupported MVP sale: single standard product only');
   const line=items[0];
   plain(line,ITEM_FIELDS);
   if(line.productType!=='Standard'||line.bundleRevision!==0||
-     line.priceMode!=='manual'||
+     !['manual','auto'].includes(line.priceMode)||
      !['own','negative'].includes(line.shortageResolution))
     throw new TypeError('Unsupported product type, price mode or source shortage mode');
   if(typeof line.productId!=='string'||!ID.test(line.productId)||
@@ -93,6 +116,9 @@ function sourceLine(items){
   const subtotal=unitPrice*line.qty;
   if(!Number.isSafeInteger(subtotal)||subtotal>MAX_PAISA)
     throw new RangeError('MVP sale subtotal exceeds supported money limit');
+  if(line.priceMode==='auto'||line.shortageResolution==='negative'||
+     trustedProduct!==undefined)
+    checkTrustedSaleLine(trustedProduct,line,unitPrice,subtotal);
   return {sku:line.productId,units:line.qty,unitPrice,subtotal};
 }
 function checkSourceIdentity(payload){
@@ -149,7 +175,7 @@ function singleRows(payload,grand){
  * The existing M06 isolated posting proof also enforces live stock, bank,
  * customer due, Cash Session, replay/hash and child-transaction invariants.
  */
-export function normalizeMvpPosV2SaleIntent({context,payload,accountRows}={}){
+export function normalizeMvpPosV2SaleIntent({context,payload,accountRows,trustedProduct}={}){
   const scope=trustedContext(context);
   plain(payload,[...new Set([...SINGLE_FIELDS,...SPLIT_FIELDS,'operationId'])],
     {required:SOURCE_FIELDS});
@@ -159,7 +185,7 @@ export function normalizeMvpPosV2SaleIntent({context,payload,accountRows}={}){
     {required});
   if(Object.hasOwn(payload,'operationId')&&payload.operationId!==scope.operationId)
     throw new TypeError('Browser operation ID does not match trusted context');
-  const {sku,units,unitPrice,subtotal}=sourceLine(payload.items);
+  const {sku,units,unitPrice,subtotal}=sourceLine(payload.items,trustedProduct);
   const discount=money(payload.discount,'discount');
   if(discount>subtotal)throw new TypeError('Discount exceeds original sale subtotal');
   const grand=subtotal-discount;
