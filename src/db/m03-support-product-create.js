@@ -46,7 +46,8 @@ export async function createSupportProduct(env,{grantId,sessionToken,input}={}){
   try{
     const scope=pilotShopConfiguration(env);
     if(!scope||!await pilotShopIdentityMatches(scope))return denied();
-    const admin=await validatePlatformSuperAdminSession(env.CONTROL_DB,sessionToken);
+    const DB=env.CONTROL_DB;
+    const admin=await validatePlatformSuperAdminSession(DB,sessionToken);
     if(!admin?.subject||!/^[-A-Za-z0-9_.:]{1,108}$/.test(admin.subject))
       return denied();
     const actorId='support:'+admin.subject;
@@ -61,7 +62,7 @@ export async function createSupportProduct(env,{grantId,sessionToken,input}={}){
     if(!['authorized-intent','replayed'].includes(intent.status))return denied();
 
     const sessionHash=await hashOpaqueSessionToken(sessionToken);
-    const g=await env.CONTROL_DB.prepare(`SELECT
+    const g=await DB.prepare(`SELECT
       g.operation_id AS grantId,g.actor_subject AS actorSubject,
       g.shop_id AS shopId,g.database_id AS databaseId,
       g.database_marker AS databaseMarker,g.expires_at_ms AS expiresAtMs
@@ -144,7 +145,7 @@ export async function createSupportProduct(env,{grantId,sessionToken,input}={}){
     // Report only after a verified Shop receipt. If Control D1 logging
     // cannot complete, return needs-review; NEVER invent a second sale/ID.
     const eventId=opId+':RESULT';
-    const audit=await env.CONTROL_DB.prepare(`INSERT INTO m03_support_write_events
+    const audit=await DB.prepare(`INSERT INTO m03_support_write_events
       (event_id,write_grant_operation_id,shop_id,actor_subject,
        event_type,intent_id,event_at_ms)
       SELECT ?,g.operation_id,g.shop_id,g.actor_subject,
