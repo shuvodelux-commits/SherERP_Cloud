@@ -53,7 +53,7 @@ test('pinned 49-group synthetic purchase chain passes as an offline candidate, n
  assert.equal(r.formatVersion,1);
  assert.equal(r.sourceCommit,pin);
  assert.equal(r.sourceGroups,49);
- assert.deepEqual(r.totals,{purchases:1,purchaseItems:2,suppliers:1,products:1,purchaseReturns:0,purchaseReturnItems:0,stockLots:1});
+ assert.deepEqual(r.totals,{purchases:1,purchaseItems:2,suppliers:1,products:1,purchaseReturns:0,purchaseReturnItems:0,stockLots:1,stockMovements:0});
  assert.equal(r.candidateReady,true);
  assert.deepEqual(r.issues,[]);
  for(const flag of ['independentSourceExportVerified','d1ReadbackVerified',
@@ -347,5 +347,150 @@ test('lineage errors fail CLI with a generic redacted report and do not approve 
   assert.doesNotMatch(result.stdout+result.stderr,/PRIVATE|01722222222|private-sensitive-source/);
   for(const flag of ['d1ReadbackVerified','sourceToD1Reconciled','postingAuthorized','productionReady'])
    assert.equal(JSON.parse(result.stdout)[flag],false);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+
+function withPurchaseStockMovements(){
+ const data=withReturn();
+ appendRow(data,'STOCK_MOVEMENT',{
+  'Movement ID':'MOVE-PUR-001','Type':'Purchase','Reference':'PUR-001',
+  'Product ID':'000P-001','Lot ID':'LOT-001',
+  'Quantity In':'3.00','Quantity Out':''
+ },2);
+ appendRow(data,'STOCK_MOVEMENT',{
+  'Movement ID':'MOVE-RET-001','Type':'Purchase Return','Reference':'RET-001',
+  'Product ID':'000P-001','Lot ID':'LOT-001',
+  'Quantity In':'','Quantity Out':'1.00'
+ },3);
+ return data;
+}
+
+test('source Purchase and Purchase Return Stock Movements join their original headers, lines and lots',()=>{
+ const data=withPurchaseStockMovements();
+ const r=review(data);
+ assert.equal(r.candidateReady,true);
+ assert.deepEqual(r.issues,[]);
+ assert.equal(r.totals.stockMovements,2);
+});
+
+test('a historic source with no Stock Movements retains an empty valid candidate',()=>{
+ const data=exportFixture();
+ assert.equal(review(data).candidateReady,true);
+ assert.equal(review(data).totals.stockMovements,0);
+});
+
+test('a Purchase Movement must use the exact original Purchase ID, not name or row position',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_MOVEMENT','Reference','PUR-LOST',0);
+ assert.equal(count(review(data),'MOVEMENT_PURCHASE_REF_NOT_FOUND'),1);
+ setCell(data,'STOCK_MOVEMENT','Reference','',0);
+ assert.equal(count(review(data),'MOVEMENT_PURCHASE_REF_BLANK'),1);
+});
+
+test('a Purchase Return Movement must use the exact original Return ID',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_MOVEMENT','Reference','RET-LOST',1);
+ assert.equal(count(review(data),'MOVEMENT_RETURN_REF_NOT_FOUND'),1);
+ setCell(data,'STOCK_MOVEMENT','Reference','',1);
+ assert.equal(count(review(data),'MOVEMENT_RETURN_REF_BLANK'),1);
+});
+
+test('Purchase Movement Product must actually be in its Purchase Items',()=>{
+ const data=withPurchaseStockMovements();
+ appendRow(data,'PRODUCTS',{'Product ID':'OTHER-PRODUCT'},18);
+ setCell(data,'STOCK_MOVEMENT','Product ID','OTHER-PRODUCT',0);
+ assert.equal(count(review(data),'MOVEMENT_PURCHASE_PRODUCT_NOT_IN_ITEMS'),1);
+});
+
+test('Purchase Return Movement Product must actually be in its Return Items',()=>{
+ const data=withPurchaseStockMovements();
+ appendRow(data,'PRODUCTS',{'Product ID':'OTHER-PRODUCT'},18);
+ setCell(data,'STOCK_MOVEMENT','Product ID','OTHER-PRODUCT',1);
+ assert.equal(count(review(data),'MOVEMENT_RETURN_PRODUCT_NOT_IN_ITEMS'),1);
+});
+
+test('source Movement Product IDs remain exact and must resolve in the Product catalog',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_MOVEMENT','Product ID','',0);
+ assert.equal(count(review(data),'MOVEMENT_PRODUCT_ID_BLANK'),1);
+ setCell(data,'STOCK_MOVEMENT','Product ID','CATALOG-LOST',0);
+ assert.equal(count(review(data),'MOVEMENT_PRODUCT_NOT_FOUND'),1);
+});
+
+test('source Movement Lot ID must exist and refer to the same Product',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_MOVEMENT','Lot ID','',0);
+ assert.equal(count(review(data),'MOVEMENT_LOT_ID_BLANK'),1);
+ setCell(data,'STOCK_MOVEMENT','Lot ID','LOT-LOST',0);
+ assert.equal(count(review(data),'MOVEMENT_LOT_NOT_FOUND'),1);
+ appendRow(data,'PRODUCTS',{'Product ID':'OTHER-PRODUCT'},18);
+ appendRow(data,'STOCK_LOTS',{'Lot ID':'LOT-OTHER','Product ID':'OTHER-PRODUCT',
+  'Purchase ID':'OPENING'},13);
+ setCell(data,'STOCK_MOVEMENT','Lot ID','LOT-OTHER',0);
+ assert.equal(count(review(data),'MOVEMENT_LOT_PRODUCT_MISMATCH'),1);
+});
+
+test('Purchase Movement lot origin is exactly its Purchase, never another purchase',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_LOTS','Purchase ID','ADJUSTMENT');
+ assert.equal(count(review(data),'MOVEMENT_PURCHASE_LOT_ORIGIN_MISMATCH'),1);
+});
+
+test('Return movement may use an older lot from a different Purchase under original FIFO fallback',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_LOTS','Purchase ID','OPENING');
+ assert.equal(review(data).candidateReady,false,
+  'Purchase movement still needs purchase-origin lot');
+ data.groups.STOCK_MOVEMENT.rows.shift();
+ assert.equal(review(data).candidateReady,true,
+  'Return movement may have used a legacy fallback lot');
+});
+
+test('unrelated stock movement Types are not incorrectly treated as Purchases',()=>{
+ const data=exportFixture();
+ for(const [i,type] of ['Sale','Opening Stock','Stock Adjustment',
+  'Vendor Issue','Vendor Return','Sales Return','Sales Return Edit Reversal']
+  .entries()){
+  appendRow(data,'STOCK_MOVEMENT',{'Movement ID':'MOVE-'+i,'Type':type,
+   'Reference':'ANOTHER-SOURCE','Product ID':'UNKNOWN-SOURCE-PRODUCT',
+   'Lot ID':'UNKNOWN-LOT'},i+2);
+ }
+ assert.equal(review(data).candidateReady,true);
+ assert.equal(review(data).totals.stockMovements,7);
+});
+
+test('Stock Movement evidence and redacted issue order are invariant to physical-row transport order',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_MOVEMENT','Reference','PUR-LOST',0);
+ const before=structuredClone(data);
+ const r=review(data);
+ data.groups.STOCK_MOVEMENT.rows.reverse();
+ assert.deepEqual(review(data),r);
+ assert.deepEqual(before.groups.PURCHASES,data.groups.PURCHASES);
+});
+
+test('source Movement errors and injected identifiers never print source IDs, amounts or local paths',()=>{
+ const data=withPurchaseStockMovements();
+ setCell(data,'STOCK_MOVEMENT','Reference','PRIVATE-01722222222',0);
+ const result=JSON.stringify(review(data));
+ assert.equal(count(review(data),'MOVEMENT_PURCHASE_REF_NOT_FOUND'),1);
+ assert.doesNotMatch(result,/PRIVATE|01722222222|MOVE-PUR|PUR-001|LOT-001|000P-001|3\.00|sheetRow/);
+});
+
+test('Stock Movement orphan errors use existing local no-follow CLI and keep all NO-GO flags false',()=>{
+ const data=withPurchaseStockMovements();
+ const dir=mkdtempSync(join(tmpdir(),'m02-stock-movement-'));
+ try{
+  setCell(data,'STOCK_MOVEMENT','Lot ID','SECRET-LOT-01722222222',1);
+  const file=join(dir,'private-stock-movement.json');
+  writeFileSync(file,JSON.stringify(data));
+  const result=run(file);
+  assert.equal(result.status,2);
+  const report=JSON.parse(result.stdout);
+  assert.equal(count(report,'MOVEMENT_LOT_NOT_FOUND'),1);
+  assert.doesNotMatch(result.stdout+result.stderr,/SECRET|01722222222|private-stock-movement/);
+  for(const flag of ['d1ReadbackVerified','sourceToD1Reconciled','postingAuthorized','productionReady'])
+   assert.equal(report[flag],false);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
