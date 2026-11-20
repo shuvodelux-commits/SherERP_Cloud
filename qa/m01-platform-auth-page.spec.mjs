@@ -247,3 +247,48 @@ test('Owner page redeems an invite, signs in, restores and signs out',async()=>{
     await browser.close();
   }
 });
+
+test('fresh Admin opens browser setup, pairs MFA and reaches the dashboard',async()=>{
+  const browser=await chromium.launch();
+  try{
+    const page=await browser.newPage();
+    const requests=[];
+    await page.route('https://accounts.google.com/gsi/client',route=>route.fulfill({
+      body:fakeGoogle,contentType:'text/javascript',
+    }));
+    await page.route(origin+'/**',async route=>{
+      const request=route.request();
+      const path=new URL(request.url()).pathname;
+      if(!path.startsWith('/api/')){
+        const file=path==='/'?'index.html':path.slice(1);
+        return route.fulfill({body:await readFile(new URL(file,pageRoot)),
+          contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html'});
+      }
+      requests.push([path,request.postDataJSON()]);
+      const responses={
+        '/api/platform/wizard':{setup:true},
+        '/api/platform/wizard/start':{clientId:'fixture',nonce:'fixture'},
+        '/api/platform/wizard/google':{manualKey:'FIXTUREAUTHENTICATORKEY',
+          qr:'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4='},
+        '/api/platform/wizard/finish':{role:'PlatformSuperAdmin'},
+      };
+      const json=responses[path];
+      return route.fulfill({status:json?200:401,json:json??{}});
+    });
+    await page.goto(origin);
+    await page.getByRole('heading',{name:'Set up Super Admin'}).waitFor();
+    await page.getByLabel('Admin Gmail address').fill('admin@gmail.com');
+    await page.getByLabel('One-time setup code').fill('a'.repeat(64));
+    await page.getByRole('button',{name:'Connect with Google'}).click();
+    await page.getByRole('button',{name:'Sign in with Google'}).click();
+    await page.getByRole('img',{name:'Authenticator setup QR code'}).waitFor();
+    await page.getByText('FIXTUREAUTHENTICATORKEY').waitFor();
+    await page.getByLabel('Six-digit verification code').fill('123456');
+    await page.getByRole('button',{name:'Activate Super Admin'}).click();
+    await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();
+    assert.deepEqual(requests.find(([path])=>path.endsWith('/finish'))?.[1],{code:'123456'});
+    assert.equal(await page.locator('#wizard-key').textContent(),'');
+  }finally{
+    await browser.close();
+  }
+});
