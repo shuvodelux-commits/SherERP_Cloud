@@ -251,6 +251,14 @@ test('M04 SQL-time Cash Session gate: tenant, actor, role, open session, replay 
     {operationId:'CASH-01',actorId:'USER-A',amountMinor:125});
   assert.equal(await count(actions),1);
   assert.equal(await count(book),1);
+  // A replay cannot disclose a prior actor's receipt, even in one tenant.
+  const otherToken=sha('m04-independent-synthetic-cash-actor');
+  await DB.prepare("INSERT INTO synthetic_auth_users VALUES ('TENANT-A','USER-A2','ROLE-A','Active',1)").run();
+  await DB.prepare("INSERT INTO synthetic_auth_sessions VALUES (?,'TENANT-A','USER-A2','ROLE-A',1,1,2000,NULL)").bind(otherToken).run();
+  await deny(request({tokenHash:otherToken}));
+  await deny(request({operationId:'CASH-EXPIRED',now:2000}));
+  assert.equal(await count(actions),1);
+  assert.equal(await count(book),1);
   await deny(request({amountMinor:126}));
   await deny(request({operationId:'CASH-MISS',cashSessionId:null}));
   await deny(request({operationId:'CASH-TENANT',tenantId:'TENANT-B',cashSessionId:'CS-B'}));
