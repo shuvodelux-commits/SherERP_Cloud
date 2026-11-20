@@ -172,6 +172,32 @@ test('five bad Google verification attempts permanently deny even a later valid 
   });
 });
 
+test('revocation and reissue cannot reset the five-attempt budget for one setup ticket',async t=>{
+  mockGoogleKeys(t);
+  await withD1(async db=>{
+    const {setupToken}=await enroll(db);
+    const first=await issue(db,setupToken);
+    for(let i=0;i<4;i++){
+      assert.equal(await verify(db,setupToken,first,{
+        credential:googleCredential(first.nonce,{sub:anotherSubject}),
+      }),false);
+    }
+    assert.equal(await revokeFirstPlatformActivationChallenge({
+      controlDb:db,setupToken,challengeToken:first.challengeToken,
+    }),true);
+    const second=await issue(db,setupToken);
+    assert.ok(second,'one attempt should remain after first challenge is revoked');
+    assert.equal(await verify(db,setupToken,second,{
+      credential:googleCredential(second.nonce,{sub:anotherSubject}),
+    }),false);
+    assert.equal(await verify(db,setupToken,second),false,'sixth attempt across ticket is refused');
+    assert.equal(await revokeFirstPlatformActivationChallenge({
+      controlDb:db,setupToken,challengeToken:second.challengeToken,
+    }),true);
+    assert.equal(await issue(db,setupToken),null,'no new challenge after ticket budget exhausted');
+  });
+});
+
 test('parallel correct Google proofs consume challenge exactly once without granting MFA or session',async t=>{
   mockGoogleKeys(t);
   await withD1(async db=>{
