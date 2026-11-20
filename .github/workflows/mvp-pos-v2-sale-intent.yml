@@ -1,0 +1,32 @@
+name: MVP M06 POS V2 source intent contract (no deployment)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pos-v2-intent:
+    name: Original POS V2 single-SKU request source parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/mvp-pos-v2-sale-intent.test.mjs
+      - name: Install pinned Wrangler for disposable Workerd D1
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Original POS payload through one atomic synthetic D1 sale
+        run: node --test tests/integration/mvp-pos-v2-source-to-d1-workerd.spec.mjs
+      - name: Original M06 split-payments and exact money regression
+        run: |
+          node --test tests/m06-sale-payments.test.mjs
