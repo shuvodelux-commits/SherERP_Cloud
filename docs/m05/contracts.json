@@ -1,0 +1,241 @@
+{
+  "schemaVersion": "m05-internal-handoff-v1",
+  "workstream": "M05",
+  "moduleIssue": 314,
+  "coordinationIssue": 456,
+  "sourceAuthority": {
+    "canonicalRepository": "shuvodelux-commits/Mohim_ERP",
+    "canonicalSha": "29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2",
+    "supplementaryRepository": "shuvodelux-commits/sherERP_Mohim",
+    "supplementarySha": "590adfad128fe7155bfb7b608a2ed5665b202a9c",
+    "historicalBackfillAllowed": false
+  },
+  "documentation": "docs/m05/INTEGRATION_HANDOFF.md",
+  "existingSourceContract": "docs/m05/G1_SOURCE_CONTRACT_CANDIDATE.md",
+  "m03IntegrationContract": "docs/M03_G1_INTEGRATION_HANDOFF.md",
+  "integratorIssue": 22,
+  "readiness": {
+    "parallelPreparationReady": true,
+    "productionIntegrationReady": false,
+    "publicRpcEnabled": false,
+    "livePurchasePostingVerified": false,
+    "realSourceReconciled": false,
+    "immutableHistoricalReceiptCustodyVerified": false,
+    "m02SupplierPartyMappingApproved": false,
+    "m03SharedPostingKernelFrozen": false,
+    "m04SqlTimeAuthorityIntegrated": false,
+    "m08ExactMoneySignedOff": false,
+    "m07ReversalIntegrated": false,
+    "m10ArchiveReconciled": false,
+    "m11ProductionCutoverApproved": false
+  },
+  "surfaces": [
+    {
+      "id": "mixed-purchase-payment",
+      "path": "src/modules/m05-multi-unit-purchase-payment.js",
+      "exportName": "prepareMultiUnitPurchasePaymentPreflight",
+      "test": "tests/m05-multi-unit-purchase-payment.test.mjs",
+      "sourceOracle": "Purchase.gs + ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "mixed-purchase-preflight",
+      "path": "src/modules/m05-multi-unit-purchase-preflight.js",
+      "exportName": "prepareMultiUnitPurchasePreflight",
+      "test": "tests/m05-multi-unit-purchase-preflight.test.mjs",
+      "sourceOracle": "Purchase.gs + ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "unit-snapshot-conservation",
+      "path": "src/modules/m05-purchase-unit-snapshot-conservation.js",
+      "exportName": "auditMultiUnitPurchaseSnapshot",
+      "test": "tests/m05-purchase-unit-snapshot-conservation.test.mjs",
+      "sourceOracle": "ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "historical-unit-lot-handoff",
+      "path": "src/modules/m05-historical-unit-lot-handoff.js",
+      "exportName": "auditHistoricalUnitLotHandoff",
+      "test": "tests/m05-historical-unit-lot-handoff.test.mjs",
+      "sourceOracle": "Purchase.gs + StockLots.gs + ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "purchase-lot-lineage",
+      "path": "src/modules/m05-purchase-lot-lineage.js",
+      "exportName": "auditPurchaseLotLineage",
+      "test": "tests/m05-purchase-lot-lineage.test.mjs",
+      "sourceOracle": "Purchase.gs + StockLots.gs + DeleteEngine.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "purchase-stock-movement-provenance",
+      "path": "src/modules/m05-purchase-stock-movement-provenance.js",
+      "exportName": "auditPurchaseStockMovementProvenance",
+      "test": "tests/m05-purchase-stock-movement-provenance.test.mjs",
+      "sourceOracle": "Purchase.gs + StockLots.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "original-stock-lot-balance",
+      "path": "src/modules/m05-source-lot-reconciliation.js",
+      "exportName": "auditSourceStockLotBalances",
+      "test": "tests/m05-source-lot-reconciliation.test.mjs",
+      "sourceOracle": "Products.gs + StockLots.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "tenant-fifo-evidence",
+      "path": "src/modules/m05-tenant-fifo-provenance-audit.js",
+      "exportName": "auditTenantPurchaseFifoEvidence",
+      "test": "tests/m05-tenant-fifo-provenance-audit.test.mjs",
+      "sourceOracle": "StockLots.gs + Purchase.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "fifo-eligibility",
+      "path": "src/modules/m05-fifo-eligibility-gate.js",
+      "exportName": "planConsistentStockPreview",
+      "test": "tests/m05-fifo-eligibility-gate.test.mjs",
+      "sourceOracle": "StockLots.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "purchase-invoice-conservation",
+      "path": "src/modules/m05-purchase-invoice-conservation.js",
+      "exportName": "auditPurchaseInvoiceConservation",
+      "test": "tests/m05-purchase-invoice-conservation.test.mjs",
+      "sourceOracle": "Purchase.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "tile-stock-view",
+      "path": "src/modules/m05-tile-stock-view.js",
+      "exportName": "projectTileStockView",
+      "test": "tests/m05-tile-stock-view.test.mjs",
+      "sourceOracle": "Products.gs + ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "tile-lot-revision-audit",
+      "path": "src/modules/m05-tile-lot-revision-reconciliation.js",
+      "exportName": "auditTileLotStock",
+      "test": "tests/m05-tile-lot-revision-reconciliation.test.mjs",
+      "sourceOracle": "StockLots.gs + ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "tile-purchase-line-d1-preview",
+      "path": "src/modules/m05-tile-purchase-line-preview.js",
+      "exportName": "previewTilePurchaseLineCandidateD1",
+      "test": "tests/m05-tile-purchase-line-preview.test.mjs",
+      "sourceOracle": "Purchase.gs + ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    },
+    {
+      "id": "tile-purchase-basket-d1-preview",
+      "path": "src/modules/m05-tile-purchase-basket-preview.js",
+      "exportName": "previewTilePurchaseBasketD1",
+      "test": "tests/m05-tile-purchase-basket-preview.test.mjs",
+      "sourceOracle": "Purchase.gs + ProductUnitConversions.gs",
+      "scope": "READ_ONLY_OR_PREVIEW",
+      "productionWriter": false,
+      "publicRpc": false
+    }
+  ],
+  "workerd": [
+    {
+      "path": "tests/integration/m05-purchase-multiline-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m05-purchase-posting-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m05-tile-atomic-receiving-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    },
+    {
+      "path": "tests/integration/m05-tile-purchase-line-workerd.spec.mjs",
+      "evidenceLevel": "ISOLATED_LOCAL_WORKERD_D1",
+      "productionPostingProof": false
+    }
+  ],
+  "dependencies": [
+    {
+      "workstream": "M02",
+      "issue": 24,
+      "accepted": false,
+      "requiredEvidence": "Reviewed original Product/Supplier IDs, independent Unified Party Supplier payable/advance identity links and full source group/row reconciliation"
+    },
+    {
+      "workstream": "M03",
+      "issue": 22,
+      "accepted": false,
+      "requiredEvidence": "One approved Shop SQL schema and atomic authenticated purchase+stock+Supplier Ledger+Cash/Bank receipt with CAS, replay, conflict and rollback under real local Workerd/D1"
+    },
+    {
+      "workstream": "M04",
+      "issue": 23,
+      "accepted": false,
+      "requiredEvidence": "Current trusted actor and Shop D1 session, purchase:add grant and active Cash Session state enforced inside the SAME atomic SQL purchase mutation"
+    },
+    {
+      "workstream": "M07",
+      "issue": 314,
+      "accepted": false,
+      "requiredEvidence": "Reviewed source Original Lot ID, historical return/edit/delete and exactly-once receipt/reversal of consumed/returned quantities and financial effects"
+    },
+    {
+      "workstream": "M08",
+      "issue": 66,
+      "accepted": false,
+      "requiredEvidence": "Signed source Supplier Ledger debit/credit, separate Supplier AP/advance, exact integer paisa allocations and gross source-to-target account reconciliation"
+    },
+    {
+      "workstream": "M10",
+      "issue": 312,
+      "accepted": false,
+      "requiredEvidence": "Verified independent historical receipt custody, original group/physical-row provenance, approved genuine source rehearsal and backup/restore integrity"
+    },
+    {
+      "workstream": "M11",
+      "issue": 306,
+      "accepted": false,
+      "requiredEvidence": "Separate owner-approved release with verified nonpublic staging, rollback, monitoring, Cloudflare bindings and cutover controls"
+    }
+  ],
+  "releaseEffect": "DOCUMENTATION_AND_TEST_ONLY"
+}
