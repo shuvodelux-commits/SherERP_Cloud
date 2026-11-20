@@ -6,6 +6,7 @@ on:
       - "tests/integration/mvp-first-shop-http-lifecycle-workerd.spec.mjs"
       - "tests/fixtures/m03-clean-shop-harness.mjs"
       - "src/m03-owner-redemption-worker.js"
+      - "src/db/m03-owner-pilot-ledger-read.js"
       - ".github/workflows/m03-first-shop-http-lifecycle.yml"
 
 permissions:
