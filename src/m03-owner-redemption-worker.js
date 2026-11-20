@@ -16,6 +16,8 @@ import {readOwnerPosBootstrap,postOwnerCashSale,readOwnerCashSaleInvoice}
   from './db/m03-owner-mvp-cash-sale.js';
 import {postOwnerCashReturn,readOwnerInvoiceForReturn,searchOwnerInvoicesForReturn}
   from './db/m03-owner-mvp-cash-return.js';
+import {readOwnerPilotCashBook,readOwnerPilotSupplierPurchaseLedger}
+  from './db/m03-owner-pilot-ledger-read.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
@@ -187,6 +189,30 @@ app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
 const ownerPurchaseEnabled=env=>cleanProductsEnabled(env)&&env.OWNER_MVP_PURCHASE_ENABLED==='true';
 const ownerCashPosEnabled=env=>ownerPurchaseEnabled(env)&&env.OWNER_MVP_POS_CASH_ENABLED==='true';
 const ownerCashReturnEnabled=env=>ownerCashPosEnabled(env)&&env.OWNER_MVP_CASH_RETURN_ENABLED==='true';
+
+// M08: narrow, read-only first-Shop financial views. Neither endpoint
+// activates financial posting or claims coverage of Bank, Expense,
+// Customer Due, Supplier payments or historical opening balances.
+app.get('/api/owner/suppliers/:supplierId/ledger',protectLogin,async c=>{
+  if(!ownerPurchaseEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{
+    const result=await readOwnerPilotSupplierPurchaseLedger(
+      ctx.scope.shopDb,c.req.param('supplierId'));
+    return result?c.json({success:true,data:result}):c.notFound();
+  }catch{return c.json({success:false,message:'Supplier purchase ledger unavailable'},503);}
+});
+
+app.get('/api/owner/cash-book',protectLogin,async c=>{
+  if(!ownerCashReturnEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{
+    const data=await readOwnerPilotCashBook(ctx.scope.shopDb);
+    return c.json({success:true,data});
+  }catch{return c.json({success:false,message:'Cash Book unavailable'},503);}
+});
 
 async function verifiedOwnerPurchaseContext(c,subject=false,dashboard=false){
   const token=getCookie(c,SESSION_COOKIE);
