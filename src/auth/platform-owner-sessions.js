@@ -40,15 +40,22 @@ export async function issueOwnerSession(env,verifiedIdentity,{challengeHash=null
   return issued?finishOwnerLogin(env,token):null;
 }
 
+// Shared server-side lookup for a hash derived from an opaque Owner session.
+export function prepareCurrentOwnerPlacement(control, tokenHash) {
+  return control.prepare(`SELECT o.shop_id AS shopId,r.display_name AS displayName,o.subject,
+    b.database_id AS databaseId,b.database_marker AS databaseMarker ${CURRENT_OWNER}
+    JOIN platform_shop_owner_sessions s ON s.shop_id=o.shop_id
+    JOIN platform_shop_reservations r ON r.shop_id=o.shop_id
+    WHERE s.token_hash=?`).bind(tokenHash);
+}
+
 async function readOwnerContext(env,token){
   const hash=await hashOpaqueSessionToken(token);
   const config=pilotShopConfiguration(env);
   if(!hash||!config||!await pilotShopIdentityMatches(config))return null;
-  return env.CONTROL_DB.prepare(`SELECT o.shop_id AS shopId,r.display_name AS displayName,o.subject ${CURRENT_OWNER}
-    JOIN platform_shop_owner_sessions s ON s.shop_id=o.shop_id
-    JOIN platform_shop_reservations r ON r.shop_id=o.shop_id
-    WHERE o.shop_id=? AND b.database_id=? AND b.database_marker=? AND s.token_hash=?`)
-    .bind(...pilotTuple(config),hash).first();
+  const current=await prepareCurrentOwnerPlacement(env.CONTROL_DB,hash).first();
+  return current?.shopId===config.shopId&&current.databaseId===config.databaseId&&
+    current.databaseMarker===config.databaseMarker?current:null;
 }
 
 export async function validateOwnerSession(env,token,{dashboard=false,includeOwnerSubject=false}={}){
