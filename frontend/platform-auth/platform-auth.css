@@ -89,3 +89,22 @@ button:disabled { opacity: .68; cursor: wait; }
   #business-roster-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
   #business-roster-list button { width: auto; min-width: 128px; margin-top: 0; }
 }
+
+/* Minimal read-only Admin Support Mode — existing login card theme. */
+.support-mode {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin: 12px 0 18px;
+  padding: 16px 0;
+}
+.support-mode h2 { margin: 0 0 8px; font-size: 17px; }
+.support-mode p { overflow-wrap: anywhere; }
+#support-status { margin: 12px 0; font-size: 13px; }
+#support-diagnostics {
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+#support-diagnostics p { margin: 0 0 4px; }
+#support-diagnostics p:last-child { margin-bottom: 0; }
