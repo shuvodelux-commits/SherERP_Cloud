@@ -334,7 +334,7 @@ function renderBusinessRoster(){
       button.setAttribute('aria-label','Resume setup for '+shop.displayName);
       button.addEventListener('click',()=>resumeRosterShop(shop,button));
       row.append(button);
-    else if(supportEnabled){
+    }else if(supportEnabled){
       const button=document.createElement('button');
       button.type='button';
       button.className='secondary';
