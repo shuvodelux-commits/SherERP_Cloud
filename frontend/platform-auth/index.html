@@ -84,6 +84,24 @@
         <ul id="business-roster-list"></ul>
         <p class="business-support-note">ERP Support Access is not enabled yet. Setup ready does not mean the shop ERP is operational.</p>
       </details>
+      <section id="support-mode" class="support-mode" aria-labelledby="support-title" hidden>
+        <h2 id="support-title" tabindex="-1">Read-only Support Mode</h2>
+        <p id="support-selected"></p>
+        <p>Setup diagnostics only. This does not open the operational ERP or permit financial changes.</p>
+        <form id="support-form">
+          <label for="support-reason">Reason for read-only support</label>
+          <input id="support-reason" type="text" autocomplete="off" spellcheck="false"
+            required minlength="12" maxlength="180" placeholder="What are you investigating?">
+          <button id="support-start" class="primary" type="submit">Start read-only support</button>
+        </form>
+        <p id="support-status" role="status" aria-live="polite"></p>
+        <div id="support-diagnostics" hidden>
+          <p id="support-categories"></p>
+          <p id="support-units"></p>
+        </div>
+        <button id="support-end" class="secondary" type="button" hidden>End support</button>
+        <button id="support-close" class="secondary" type="button">Close panel</button>
+      </section>
       <form id="owner-invitation-form" hidden>
         <h2>Invite the first Owner</h2>
         <p id="owner-invitation-shop"></p>
