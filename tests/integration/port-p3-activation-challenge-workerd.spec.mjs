@@ -72,7 +72,8 @@ const verify=(db,setupToken,challenge,settings={})=>
     clientId,credential:googleCredential(challenge.nonce),...settings,
   });
 
-test('issues an independent nonce and digest-only short-lived single active challenge after enrollment',async()=>{
+test('issues an independent nonce and digest-only short-lived single active challenge after enrollment',async t=>{
+  mockGoogleKeys(t);
   await withD1(async db=>{
     const {setupToken,setupNonce}=await enroll(db);
     const first=await issue(db,setupToken);
@@ -107,7 +108,8 @@ test('issues an independent nonce and digest-only short-lived single active chal
   });
 });
 
-test('invalid bearer inputs, unenrolled admin and active MFA cannot create an activation challenge',async()=>{
+test('invalid bearer inputs, unenrolled admin and active MFA cannot create an activation challenge',async t=>{
+  mockGoogleKeys(t);
   let calls=0;
   const controlDb={prepare(){calls++;throw Error('DATABASE_SHOULD_NOT_BE_QUERIED');}};
   assert.equal(await issueFirstPlatformActivationChallenge({controlDb,setupToken:'bad'}),null);
@@ -244,17 +246,23 @@ test('expiry or revocation of original setup ticket or challenge fails closed',a
 
 test('D1 final consumption rechecks expiry even if ticket changes during Google JWKS verification',async t=>{
   const original=globalThis.fetch;
+  let expiredDb=null;
+  let expiredChallenge=null;
   let triggered=false;
+  t.mock.method(globalThis,'fetch',async(url,opts)=>{
+    if(url!=='https://www.googleapis.com/oauth2/v3/certs')return original(url,opts);
+    if(expiredDb){
+      triggered=true;
+      await expiredDb.prepare('UPDATE port_p3_activation_challenges SET expires_at_ms=issued_at_ms+1 WHERE challenge_hash=?')
+        .bind(expiredChallenge).run();
+    }
+    return Response.json({keys:[jwk]});
+  });
   await withD1(async db=>{
     const {setupToken}=await enroll(db);
     const challenge=await issue(db,setupToken);
-    t.mock.method(globalThis,'fetch',async(url,opts)=>{
-      if(url!=='https://www.googleapis.com/oauth2/v3/certs')return original(url,opts);
-      triggered=true;
-      await db.prepare('UPDATE port_p3_activation_challenges SET expires_at_ms=issued_at_ms+1 WHERE challenge_hash=?')
-        .bind(hash(challenge.challengeToken)).run();
-      return Response.json({keys:[jwk]});
-    });
+    expiredDb=db;
+    expiredChallenge=hash(challenge.challengeToken);
     assert.equal(await verify(db,setupToken,challenge),false);
     assert.equal(triggered,true);
     assert.equal((await challengeRow(db,challenge.challengeToken)).consumed_at_ms,null);
