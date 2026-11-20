@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {summarizeAllSessionCash} from '../src/modules/m08-cash-session-all-movements.js';
+import {loadPinnedGASFunctions} from './fixtures/m08-legacy-source-runner.mjs';
 
 const row=(id,type,{inward='',outward='',method='Cash',reference='',deleted=false,date='2026-11-20'}={})=>({
   'Entry ID':id,'Type':type,'Reference':reference,'Credit':inward,
@@ -180,4 +181,49 @@ test('source evidence pins the single real Cash Book writer and excludes opening
     assert.ok(finance.includes(type),type);
   for(const type of ['Opening Owner Capital','Opening Loan','Opening Borrower Loan'])
     assert.ok(finance.includes(type),type);
+});
+
+
+test('all cash-source directions match frozen original CashSession.gs on real Cash Book rows',()=>{
+  const legacy=loadPinnedGASFunctions({
+    'Utils.gs':['roundMoney_'],
+    'CashBook.gs':['getCashBalance_'],
+    'CashSession.gs':['getCashMismatch_','cashSessionExplanationIds_',
+      'cashSessionLinkedReconciliationEntryIds_','cashSessionSummaryFromRows_']
+  });
+  const current={
+    'Session ID':'CASH-001','Status':'Open','Opening Cash':100,
+    'Opened At':'2026-11-20T10:00:00+06:00','Notes':'source parity'
+  };
+  const rows=[
+    row('prior','Sale',{inward:300}),
+    marker('CASH-001'),
+    row('sale','Sale',{inward:'17.35'}),
+    row('collection','Customer Payment',{inward:'250.50'}),
+    row('owner','Owner Investment',{inward:'60.00'}),
+    row('borrower','Borrower Repayment',{inward:'12.00'}),
+    row('expense','Expense',{outward:'20.30'}),
+    row('supplier','Supplier Payment',{outward:'14.15'}),
+    row('loan','Loan Repayment',{outward:'75.00'}),
+    row('historical','Historical Opening',{inward:'9000.00',date:'2025-03-01'})
+  ];
+  const source=legacy.cashSessionSummaryFromRows_(current,[current],rows);
+  const actual=report(rows,{countedCash:null});
+  assert.equal(actual.cashInPaisa,Math.round(source.cashIn*100));
+  assert.equal(actual.cashOutPaisa,Math.round(source.cashOut*100));
+  assert.equal(actual.expectedPaisa,Math.round(source.expectedCash*100));
+  assert.equal(actual.excludedHistoricalEntries,1);
+  assert.equal(actual.actualCashEntries,7);
+});
+
+test('same invoices may have multiple distinct cash legs, but exact amounts never drift',()=>{
+  const rows=[marker('CASH-001'),
+    row('leg1','Sale',{inward:'0.10',reference:'INV-001'}),
+    row('leg2','Sale',{inward:'0.20',reference:'INV-001'}),
+    row('reversal','Sales Return',{outward:'0.05',reference:'SRT-001'})];
+  const r=report(rows,{openingCash:'0.00',countedCash:'0.25'});
+  assert.equal(r.cashInPaisa,30);
+  assert.equal(r.cashOutPaisa,5);
+  assert.equal(r.expectedPaisa,25);
+  assert.equal(r.variancePaisa,0);
 });
