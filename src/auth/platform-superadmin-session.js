@@ -15,7 +15,7 @@ const CHALLENGE=`FROM platform_login_challenges c
 
 const UNUSED='AND NOT EXISTS(SELECT 1 FROM platform_login_attempts used WHERE used.binding_hash=c.binding_hash)';
 
-async function matchingStep(totpSecret,code,step){
+export async function matchingStep(totpSecret,code,step){
   const raw=Uint8Array.from(totpSecret.match(/../g),byte=>Number.parseInt(byte,16));
   const key=await crypto.subtle.importKey('raw',raw,{name:'HMAC',hash:'SHA-1'},false,['sign']);
   for(const candidate of [step,step-1]){

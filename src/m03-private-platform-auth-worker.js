@@ -1,3 +1,6 @@
+import qr from 'qrcode/lib/browser.js';
+import {beginBrowserSetup,browserSetupConfigured,finishBrowserSetup,
+  readBrowserAdminFactor,verifyBrowserSetupGoogle} from './auth/browser-first-admin-setup.js';
 import {disablePlatformShopOwner} from './auth/platform-owner-write-session.js';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
@@ -55,7 +58,7 @@ const pageCsp=[
   "script-src 'self' https://accounts.google.com/gsi/client",
   "style-src 'self' https://accounts.google.com/gsi/style",
   "connect-src 'self' https://accounts.google.com/gsi/",
-  "frame-src https://accounts.google.com/gsi/",
+  "frame-src https://accounts.google.com/gsi/","img-src data:",
 ].join('; ');
 
 for(const [route,asset,type] of [
@@ -96,6 +99,42 @@ async function expectedJson(c,fields){
      !fields.every(field=>typeof body[field]==='string'))return null;
   return body;
 }
+
+const WIZARD_COOKIE='__Host-shererp-platform-wizard';
+const wizardEnabled=env=>env.PLATFORM_BROWSER_SETUP==='true';
+
+app.get('/api/platform/wizard',limitIngress,async c=>{
+  if(!wizardEnabled(c.env)||!browserSetupConfigured(c.env))return c.notFound();
+  const enrolled=await c.env.CONTROL_DB.prepare('SELECT 1 FROM platform_first_superadmin').first();
+  return c.json({setup:!enrolled});
+});
+app.post('/api/platform/wizard/start',limitIngress,limitBody,async c=>{
+  if(!wizardEnabled(c.env))return c.notFound();
+  const body=await expectedJson(c,['email','setupCode']);
+  const started=body&&await beginBrowserSetup(c.env,{...body,previousToken:getCookie(c,WIZARD_COOKIE)});
+  if(!started)return denied(c);
+  setCookie(c,WIZARD_COOKIE,started.token,{...COOKIE,maxAge:600});
+  return c.json({clientId:c.env.PLATFORM_CLIENT_ID,nonce:started.nonce});
+});
+app.post('/api/platform/wizard/google',limitIngress,limitBody,async c=>{
+  if(!wizardEnabled(c.env))return c.notFound();
+  const body=await expectedJson(c,['credential']);
+  const verified=body&&await verifyBrowserSetupGoogle(c.env,getCookie(c,WIZARD_COOKIE),body.credential);
+  if(!verified)return denied(c);
+  const label=encodeURIComponent('SherERP:'+verified.email);
+  const uri=`otpauth://totp/${label}?secret=${verified.manualKey}&issuer=SherERP&algorithm=SHA1&digits=6&period=30`;
+  const svg=await qr.toString(uri,{width:240,margin:4});
+  return c.json({manualKey:verified.manualKey,qr:'data:image/svg+xml;base64,'+btoa(svg)});
+});
+app.post('/api/platform/wizard/finish',limitIngress,limitBody,async c=>{
+  if(!wizardEnabled(c.env))return c.notFound();
+  const body=await expectedJson(c,['code']);
+  const token=body&&await finishBrowserSetup(c.env,getCookie(c,WIZARD_COOKIE),body.code);
+  if(!token)return denied(c);
+  setCookie(c,WIZARD_COOKIE,'',{...COOKIE,maxAge:0});
+  setCookie(c,SESSION_COOKIE,token,{...COOKIE,maxAge:900});
+  return signedIn(c);
+});
 
 app.post('/api/platform/setup/challenge',limitIngress,limitBody,async c=>{
   const body=await expectedJson(c,['setupToken']);
@@ -201,8 +240,9 @@ app.post('/api/platform/auth/login',limitIngress,limitBody,async c=>{
   if(!body)return denied(c);
   const {CONTROL_DB:db,PLATFORM_CLIENT_ID:clientId,PLATFORM_TOTP_SECRET:totpSecret,
     PLATFORM_FACTOR_VERSION:rawVersion}=c.env;
+  const browserFactor=wizardEnabled(c.env)?await readBrowserAdminFactor(c.env):null;
   const session=await issuePlatformSuperAdminSession({
-    controlDb:db,clientId,totpSecret,factorVersion:Number(rawVersion),
+    controlDb:db,clientId,totpSecret:wizardEnabled(c.env)?browserFactor:totpSecret,factorVersion:browserFactor?1:Number(rawVersion),
     browserToken:getCookie(c,CHALLENGE_COOKIE),credential:body.credential,code:body.code,
   });
   setCookie(c,CHALLENGE_COOKIE,'',{...COOKIE,maxAge:0});

@@ -29,6 +29,31 @@
       <button id="back-setup" class="secondary" type="button">Back to sign-in</button>
     </section>
 
+    <section id="wizard" hidden>
+      <h1 tabindex="-1">Set up Super Admin</h1>
+      <form id="wizard-form">
+        <label for="wizard-email">Admin Gmail address</label>
+        <input id="wizard-email" type="email" required autocomplete="email">
+        <label for="wizard-code">One-time setup code</label>
+        <input id="wizard-code" type="password" required minlength="64" maxlength="64" autocomplete="off">
+        <button class="primary" type="submit">Connect with Google</button>
+      </form>
+    </section>
+
+    <section id="wizard-mfa" hidden>
+      <h1 tabindex="-1">Add your authenticator</h1>
+      <p>Scan this QR code in your authenticator or enter the setup key manually.</p>
+      <img id="wizard-qr" width="240" height="240" alt="Authenticator setup QR code">
+      <p><code id="wizard-key"></code></p>
+      <form id="wizard-mfa-form">
+        <label for="wizard-otp">Six-digit verification code</label>
+        <input id="wizard-otp" required inputmode="numeric" autocomplete="one-time-code"
+          pattern="[0-9]{6}" maxlength="6">
+        <button class="primary" type="submit">Activate Super Admin</button>
+      </form>
+      <button id="wizard-restart" class="secondary" type="button">Restart setup</button>
+    </section>
+
     <section id="google" hidden>
       <h1 tabindex="-1">Continue with Google</h1>
       <div id="google-button"></div>

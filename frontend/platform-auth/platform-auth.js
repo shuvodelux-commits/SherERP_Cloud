@@ -96,6 +96,10 @@ function clearBusinessDirectory(){
 }
 
 function show(view,message=''){
+  if(view!=='wizard-mfa'){
+    byId('wizard-key').textContent='';
+    byId('wizard-qr').removeAttribute('src');
+  }
   generation++;
   credential=undefined;
   ticket.value='';
@@ -612,8 +616,8 @@ async function startGoogle(mode,setupToken){
   const current=show('google','Preparing Google Sign-In…');
   cancelGoogle.disabled=true;
   try{
-    const path=mode==='setup'?'/setup/challenge':'/auth/challenge';
-    const {clientId,nonce}=await api(path,'POST',setupToken?{setupToken}:undefined);
+    const path=mode==='wizard'?'/wizard/start':mode==='setup'?'/setup/challenge':'/auth/challenge';
+    const {clientId,nonce}=await api(path,'POST',mode==='wizard'?setupToken:setupToken?{setupToken}:undefined);
     cancelGoogle.disabled=false;
     const google=await googleSdk();
     if(current!==generation)return;
@@ -633,11 +637,18 @@ async function startGoogle(mode,setupToken){
         mount.replaceChildren();
         status.textContent='Verifying setup…';
         try{
+          if(mode==='wizard'){
+            const response=await api('/wizard/google','POST',{credential:result.credential});
+            show('wizard-mfa');
+            byId('wizard-key').textContent=response.manualKey;
+            byId('wizard-qr').src=response.qr;
+            return;
+          }
           const response=await api('/setup','POST',{credential:result.credential});
           if(response.enrolled!==true)throw new Error('Enrollment missing');
           show('login','Setup complete. Sign in to continue.');
         }catch{
-          show('setup','Could not complete setup. Check your ticket and Google account.');
+          show(mode,'Could not verify setup. Check your setup code and Google account.');
         }
       },
     });
@@ -660,6 +671,36 @@ for(const id of ['back-setup','back-google','back-mfa'])byId(id).addEventListene
 byId('setup-form').addEventListener('submit',event=>{
   event.preventDefault();
   startGoogle('setup',ticket.value);
+});
+
+byId('wizard-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  const setupCode=byId('wizard-code');
+  const input={email:byId('wizard-email').value.trim(),setupCode:setupCode.value.trim()};
+  setupCode.value='';
+  startGoogle('wizard',input);
+});
+byId('wizard-restart').addEventListener('click',()=>{
+  byId('wizard-key').textContent='';
+  show('wizard');
+});
+byId('wizard-mfa-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const submit=event.currentTarget.querySelector('button');
+  const otp=byId('wizard-otp');
+  const code=otp.value;
+  otp.value='';
+  submit.disabled=byId('wizard-restart').disabled=true;
+  try{
+    const session=await api('/wizard/finish','POST',{code});
+    if(session.role!=='PlatformSuperAdmin')throw new Error('Role missing');
+    byId('wizard-key').textContent='';
+    showSignedIn(session);
+  }catch{
+    status.textContent='Code not accepted. Try a current code or restart setup if it expired.';
+  }finally{
+    submit.disabled=byId('wizard-restart').disabled=false;
+  }
 });
 
 byId('mfa-form').addEventListener('submit',async event=>{
@@ -710,5 +751,15 @@ byId('sign-out').addEventListener('click',async event=>{
 
 api('/auth/session','GET').then(
   session=>session.role==='PlatformSuperAdmin'?showSignedIn(session):show('login'),
-  error=>show('login',error.message==='401'?'':'Could not restore your session.'),
+  async error=>{
+    try{
+      const wizard=await api('/wizard','GET');
+      byId('open-setup').hidden=true;
+      if(wizard.setup===true){
+        show('wizard');
+        return;
+      }
+    }catch{}
+    show('login',['401','403'].includes(error.message)?'':'Could not restore your session.');
+  },
 );

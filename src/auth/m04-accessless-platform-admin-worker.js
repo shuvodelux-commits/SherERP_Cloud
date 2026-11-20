@@ -1,3 +1,4 @@
+import {browserSetupConfigured} from './browser-first-admin-setup.js';
 import platformAuth from '../m03-private-platform-auth-worker.js';
 import {hashOpaqueSessionToken} from './session-token.js';
 import html from '../../frontend/platform-auth/index.html';
@@ -32,9 +33,9 @@ function configured(env){
     env.PLATFORM_AUTH_SCOPE==='private-platform-auth' &&
     WORKERS_ORIGIN.test(env.PLATFORM_AUTH_ORIGIN) &&
     CLIENT.test(env.PLATFORM_CLIENT_ID) &&
-    SUBJECT.test(env.PLATFORM_OPERATOR_GOOGLE_SUBJECT) &&
-    SECRET.test(env.PLATFORM_TOTP_SECRET) &&
-    FACTOR.test(env.PLATFORM_FACTOR_VERSION) &&
+    (env.PLATFORM_BROWSER_SETUP==='true'?browserSetupConfigured(env):
+      SUBJECT.test(env.PLATFORM_OPERATOR_GOOGLE_SUBJECT) &&
+      SECRET.test(env.PLATFORM_TOTP_SECRET) && FACTOR.test(env.PLATFORM_FACTOR_VERSION)) &&
     typeof env.CONTROL_DB?.prepare==='function' &&
     typeof env.CONTROL_DB?.batch==='function' &&
     typeof env.PLATFORM_INGRESS?.limit==='function';
@@ -77,7 +78,12 @@ export default {
       const admin=await env.CONTROL_DB.prepare(
         'SELECT issuer,subject FROM platform_first_superadmin WHERE singleton=1'
       ).first();
-      if(admin){
+      if(env.PLATFORM_BROWSER_SETUP==='true'){
+        if(SETUP_PATHS.has(url.pathname))return deny();
+        if(!admin && !STATIC_PATHS.has(url.pathname) &&
+          !['/api/platform/wizard','/api/platform/wizard/start','/api/platform/wizard/google',
+            '/api/platform/wizard/finish'].includes(url.pathname))return deny();
+      }else if(admin){
         if(admin.issuer!==ISSUER || admin.subject!==env.PLATFORM_OPERATOR_GOOGLE_SUBJECT)return deny();
       }else if(SETUP_PATHS.has(url.pathname) && request.method==='POST'){
         if(!await hasExactlyOneApprovedTicket(env.CONTROL_DB,
