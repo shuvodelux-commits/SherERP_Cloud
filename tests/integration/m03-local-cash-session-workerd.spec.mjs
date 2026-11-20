@@ -1,6 +1,8 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestHarness} from 'wrangler';
+import {createM03LocalCashSession} from '../../src/modules/m03-local-cash-session-lifecycle.js';
+import {createLocalD1Interleaver} from '../fixtures/m03-local-cash-interleaving-driver.mjs';
 import {createOfflinePasswordCredential} from '../../src/auth/d1-auth-core.js';
 
 const harness=createTestHarness({workers:[{
@@ -201,4 +203,168 @@ test('role revocation, role restoration and logout block new SQL-authorized Cash
   assert.equal((await rpc('cash-intent',{
     token:renewed.body.token,operationId:'CASH-CREDENTIAL',sessionId:'CS-OPEN-2',amountMinor:20
   })).status,403);
+});
+
+
+test('M03 two competing Start/Close IDs cannot duplicate one unfinished cash session or zero marker',async()=>{
+  const admin=await rpc('login',{phoneKey:'01710000023',password:PASS});
+  assert.equal(admin.body.authenticated,true);
+  const token=admin.body.token;
+  const lifecycle=createM03LocalCashSession(DB,{serverNowMs:()=>NOW});
+  // Previous local tests intentionally left one Open Cash Session; a
+  // different confirmed operation is permitted to Close that session.
+  assert.equal((await DB.prepare(
+    "SELECT status FROM m03_local_cash_sessions WHERE session_id='CS-OPEN-2'"
+  ).first()).status,'Open');
+  const lastClose=await lifecycle.close_({
+    token,sessionId:'CS-OPEN-2',operationId:'CLOSE-R6-OLD',countedMinor:2400
+  });
+  assert.equal(lastClose.status,'Closed');
+
+  const beforeSessions=await count('m03_local_cash_sessions');
+  const beforeMarks=await count('m03_local_cash_marks');
+  const openIds=['OPEN-R6-A','OPEN-R6-B'];
+  const opened=await Promise.allSettled(openIds.map(operationId=>
+    lifecycle.start_({token,operationId,openingMinor:1000})));
+  const accepted=opened.filter(x=>x.status==='fulfilled');
+  const rejected=opened.filter(x=>x.status==='rejected');
+  assert.equal(accepted.length,1,'one and only one competing Start wins');
+  assert.equal(rejected.length,1);
+  assert.match(rejected[0].reason.message,/Denied/);
+  const sessionId=accepted[0].value.sessionId;
+  assert.equal(accepted[0].value.status,'Open');
+  assert.equal(await count('m03_local_cash_sessions'),beforeSessions+1);
+  assert.equal(await count('m03_local_cash_marks'),beforeMarks+1);
+
+  const closing=await Promise.allSettled(['CLOSE-R6-A','CLOSE-R6-B'].map(operationId=>
+    lifecycle.close_({token,sessionId,operationId,countedMinor:990})));
+  const closed=closing.filter(x=>x.status==='fulfilled');
+  assert.equal(closed.length,1,'one and only one competing Close wins');
+  assert.equal(closing.filter(x=>x.status==='rejected').length,1);
+  assert.equal(closed[0].value.status,'Closed');
+  assert.equal(await count('m03_local_cash_marks'),beforeMarks+2);
+  const actual=await DB.prepare(
+    "SELECT kind,minor FROM m03_local_cash_marks WHERE session_id=? ORDER BY kind"
+  ).bind(sessionId).all();
+  assert.deepEqual(actual.results.map(x=>x.kind),['Session Close','Session Open']);
+  assert.ok(actual.results.every(x=>x.minor===0));
+  assert.deepEqual(await DB.prepare(
+    "SELECT reference,amount_minor FROM m03_local_historical_opening WHERE reference='HIST-1'"
+  ).first(),{reference:'HIST-1',amount_minor:4200});
+});
+
+test('M03 real D1 rejects permission, Cash Session status and policy drift between preflight and INSERT',async()=>{
+  const staff=await rpc('login',{phoneKey:'01710000021',password:PASS});
+  const admin=await rpc('login',{phoneKey:'01710000023',password:PASS});
+  assert.equal(staff.body.authenticated,true);
+  assert.equal(admin.body.authenticated,true);
+  const token=staff.body.token;
+  const live=createM03LocalCashSession(DB,{serverNowMs:()=>NOW});
+  const started=await live.start_({
+    token,operationId:'OPEN-R6-AUTH',openingMinor:1000
+  });
+  assert.equal(started.status,'Open');
+  const sessionId=started.sessionId;
+  const baseIntents=await count('m03_local_cash_intents');
+  const baseJournal=await count('m03_local_cash_journal');
+  const posView=JSON.stringify({pos:{view:true,add:false,edit:false,delete:'disabled'}});
+  const posAdd=JSON.stringify({pos:{view:false,add:true,edit:false,delete:'disabled'}});
+
+  // This delegate uses the ACTUAL Workerd D1 API, but inserts a real
+  // revocation after the module preflight and before SQLite INSERT.
+  const revocation=createLocalD1Interleaver(DB,{
+    statementPrefix:'INSERT INTO m03_local_cash_intents',
+    beforeExecute:async()=>DB.prepare(
+      "UPDATE auth_roles SET permissions_json=?,allowed_modules='pos' WHERE role_name='LocalPosAdd'"
+    ).bind(posView).run()
+  });
+  const revokeGate=createM03LocalCashSession(revocation.db,{serverNowMs:()=>NOW});
+  await assert.rejects(revokeGate.cashIntent_({
+    token,operationId:'CASH-R6-REVOKED',sessionId,amountMinor:19
+  }),/Denied/);
+  assert.equal(revocation.calls(),1,'interposed write ran after the actual preflight');
+  assert.equal(await count('m03_local_cash_intents'),baseIntents);
+  assert.equal(await count('m03_local_cash_journal'),baseJournal);
+
+  await DB.prepare(
+    "UPDATE auth_roles SET permissions_json=?,allowed_modules='' WHERE role_name='LocalPosAdd'"
+  ).bind(posAdd).run();
+  const relogin=await rpc('login',{phoneKey:'01710000021',password:PASS});
+  assert.equal(relogin.body.authenticated,true);
+  const fresh=relogin.body.token;
+
+  // Closing between preflight and SQLite insert is a real D1 operation,
+  // not a mocked status returned by a fake DB client.
+  const closeRace=createLocalD1Interleaver(DB,{
+    statementPrefix:'INSERT INTO m03_local_cash_intents',
+    beforeExecute:()=>live.close_({
+      token:admin.body.token,sessionId,operationId:'CLOSE-R6-INTERLEAVED',
+      countedMinor:997
+    })
+  });
+  await assert.rejects(createM03LocalCashSession(closeRace.db,{
+    serverNowMs:()=>NOW
+  }).cashIntent_({
+    token:fresh,operationId:'CASH-R6-CLOSING-RACE',sessionId,amountMinor:23
+  }),/Denied/);
+  assert.equal(closeRace.calls(),1);
+  assert.equal((await DB.prepare(
+    'SELECT status FROM m03_local_cash_sessions WHERE session_id=?'
+  ).bind(sessionId).first()).status,'Closed');
+  assert.equal(await count('m03_local_cash_intents'),baseIntents);
+
+  const next=await live.start_({
+    token:fresh,operationId:'OPEN-R6-POLICY',openingMinor:1000
+  });
+  assert.equal(next.status,'Open');
+
+  // Policy switching ON just before a no-session operation fails closed.
+  await DB.prepare('UPDATE m03_local_cash_policy SET session_required=0 WHERE id=1').run();
+  const enable=createLocalD1Interleaver(DB,{
+    statementPrefix:'INSERT INTO m03_local_cash_intents',
+    beforeExecute:()=>DB.prepare(
+      'UPDATE m03_local_cash_policy SET session_required=1 WHERE id=1'
+    ).run()
+  });
+  await assert.rejects(createM03LocalCashSession(enable.db,{
+    serverNowMs:()=>NOW
+  }).cashIntent_({
+    token:fresh,operationId:'CASH-R6-ENABLE-RACE',sessionId:null,amountMinor:17
+  }),/Denied/);
+  assert.equal(enable.calls(),1);
+
+  // Switching OFF just before a session-bound write also fails closed.
+  const disable=createLocalD1Interleaver(DB,{
+    statementPrefix:'INSERT INTO m03_local_cash_intents',
+    beforeExecute:()=>DB.prepare(
+      'UPDATE m03_local_cash_policy SET session_required=0 WHERE id=1'
+    ).run()
+  });
+  await assert.rejects(createM03LocalCashSession(disable.db,{
+    serverNowMs:()=>NOW
+  }).cashIntent_({
+    token:fresh,operationId:'CASH-R6-DISABLE-RACE',
+    sessionId:next.sessionId,amountMinor:17
+  }),/Denied/);
+  assert.equal(disable.calls(),1);
+  assert.equal(await count('m03_local_cash_intents'),baseIntents);
+  assert.equal(await count('m03_local_cash_journal'),baseJournal);
+
+  await DB.prepare('UPDATE m03_local_cash_policy SET session_required=1 WHERE id=1').run();
+  const intended={token:fresh,operationId:'CASH-R6-REPEAT',
+    sessionId:next.sessionId,amountMinor:31};
+  const repeated=await Promise.allSettled([
+    live.cashIntent_(intended),live.cashIntent_(intended)
+  ]);
+  assert.equal(repeated.filter(x=>x.status==='fulfilled').length,2,
+    'same-actor same-intent replay can return same immutable receipt');
+  assert.deepEqual(repeated[0].value,repeated[1].value);
+  assert.equal(await count('m03_local_cash_intents'),baseIntents+1);
+  assert.equal(await count('m03_local_cash_journal'),baseJournal+1);
+  await assert.rejects(live.cashIntent_({
+    ...intended,token:admin.body.token
+  }),/Denied/);
+  await assert.rejects(live.cashIntent_({
+    ...intended,amountMinor:32
+  }),/Denied/);
 });
