@@ -221,3 +221,82 @@ test('Worker and public RPC are entirely absent from this test-only schema',asyn
   const own=await worker.fetch('http://m03-local.invalid/__m03_first_purchase__');
   assert.equal(own.status,404);
 });
+
+test('authorization revoked after preflight but BEFORE SQL batch blocks all posting',async()=>{
+  const ctx=await shop();
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>submitLocalFirstPurchase(DB,intent(ctx),{
+    now:NOW,beforeBatch:async db=>{
+      await db.prepare('UPDATE auth_roles SET auth_version=auth_version+1 WHERE role_name=?')
+        .bind(ctx.userRole).run();
+    }
+  }),/denied|refused/i);
+  assert.deepEqual(await snapshot(ctx),before);
+});
+
+test('Cash Session closure after preflight but BEFORE SQL batch denies atomic posting',async()=>{
+  const ctx=await shop();
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>submitLocalFirstPurchase(DB,intent(ctx),{
+    now:NOW,beforeBatch:async db=>{
+      await db.prepare("UPDATE m03_fp_cash_session SET status='Closed' WHERE shop_id=?")
+        .bind(ctx.shopId).run();
+    }
+  }),/denied|refused/i);
+  const after=await snapshot(ctx);
+  assert.deepEqual(after,before);
+});
+
+test('expired current auth token refuses first purchase with no side effects',async()=>{
+  const ctx=await shop();
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>submitLocalFirstPurchase(DB,intent(ctx),{
+    now:NOW+3600001
+  }),/denied|refused/i);
+  assert.deepEqual(await snapshot(ctx),before);
+});
+
+test('inactive receiving Bank account denies one atomic Cash/Bank purchase',async()=>{
+  const ctx=await shop();
+  await DB.prepare("UPDATE m03_fp_bank SET status='Inactive' WHERE shop_id=?")
+    .bind(ctx.shopId).run();
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>post(ctx),/denied|refused/i);
+  assert.deepEqual(await snapshot(ctx),before);
+});
+
+test('sealed receipt and journal rows cannot be directly edited or appended',async()=>{
+  const ctx=await shop();
+  await post(ctx);
+  const before=await snapshot(ctx);
+  const attacks=[
+    "UPDATE m03_fp_purchase SET grand_paisa=68",
+    "DELETE FROM m03_fp_purchase",
+    "UPDATE m03_fp_line SET allocated_paisa=35",
+    "DELETE FROM m03_fp_lot",
+    "UPDATE m03_fp_payment SET applied_paisa=1",
+    "DELETE FROM m03_fp_money_book",
+    "UPDATE m03_fp_supplier_ledger SET debit_paisa=68",
+    "DELETE FROM m03_fp_seal",
+    "INSERT INTO m03_fp_line VALUES ('"+ctx.shopId+"','PUR-000001','EXTRA','A',1,'0.335','REV-1',1)"
+  ];
+  for(const sql of attacks){
+    await assert.rejects(()=>DB.prepare(sql).run(),
+      /IMMUTABLE|ALREADY_SEALED|constraint|FOREIGN KEY/i);
+  }
+  assert.deepEqual(await snapshot(ctx),before);
+});
+
+test('JSON object field order does not create a false changed-intent conflict',async()=>{
+  const ctx=await shop();
+  await post(ctx);
+  const before=await snapshot(ctx);
+  const inputs=intent(ctx);
+  inputs.lines=inputs.lines.map(x=>({
+    unitRevision:x.unitRevision,unitPrice:x.unitPrice,
+    id:x.id,quantity:x.quantity
+  }));
+  inputs.payments=inputs.payments.map(x=>Object.fromEntries(Object.entries(x).reverse()));
+  assert.equal((await submitLocalFirstPurchase(DB,inputs,{now:NOW})).state,'replay');
+  assert.deepEqual(await snapshot(ctx),before);
+});
