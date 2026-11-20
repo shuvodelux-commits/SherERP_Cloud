@@ -1,0 +1,35 @@
+name: PORT-P3 first-factor activation local Workerd D1 (no deploy)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  first-factor-activation:
+    name: Verify first Super Admin Google-TOTP activation against disposable Control D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler only on disposable test runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Execute first factor activation on real local Workerd D1
+        run: node --test tests/integration/port-p3-first-factor-activation-workerd.spec.mjs
+      - name: Recheck existing platform Google/TOTP and ticket lifecycle
+        run: |
+          node --test \
+            tests/integration/port-p3-first-admin-ticket-workerd.spec.mjs \
+            tests/integration/m04-platform-superadmin-bootstrap-workerd.spec.mjs \
+            tests/integration/m04-platform-superadmin-session-workerd.spec.mjs
