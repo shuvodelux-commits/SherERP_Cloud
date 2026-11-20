@@ -171,3 +171,53 @@ test('source-authenticated runtime integration remains intentionally unavailable
   const snapshot=await receiptSnapshot(DB,'SHOP-A','INV-1');
   assert.equal(snapshot.header.grand_paisa,67);
 });
+
+test('sealed receipt and returned amount are immutable even through direct local D1 SQL',async()=>{
+  await booked();
+  await returned();
+  const baseline=await receiptSnapshot(DB,'SHOP-A','INV-1');
+  const mutations=[
+    "UPDATE m08_r5_headers SET grand_paisa=68 WHERE shop_id='SHOP-A'",
+    "DELETE FROM m08_r5_headers WHERE shop_id='SHOP-A'",
+    "UPDATE m08_r5_lines SET net_paisa=35 WHERE shop_id='SHOP-A' AND line_id='A'",
+    "DELETE FROM m08_r5_lines WHERE shop_id='SHOP-A' AND line_id='A'",
+    "UPDATE m08_r5_payments SET applied_paisa=26 WHERE shop_id='SHOP-A' AND leg_id='BANK-1'",
+    "DELETE FROM m08_r5_payments WHERE shop_id='SHOP-A' AND leg_id='BANK-1'",
+    "UPDATE m08_r5_returns SET cash_refund_paisa=33 WHERE shop_id='SHOP-A'",
+    "DELETE FROM m08_r5_returns WHERE shop_id='SHOP-A'",
+    "DELETE FROM m08_r5_seals WHERE shop_id='SHOP-A'",
+    "INSERT INTO m08_r5_lines VALUES('SHOP-A','INV-1','NEW','1','1',1)",
+    "INSERT INTO m08_r5_payments VALUES('SHOP-A','INV-1','EXTRA','Cash',1,0)"
+  ];
+  for(const sql of mutations){
+    await assert.rejects(()=>DB.prepare(sql).run(),/M08_R5_IMMUTABLE|M08_R5_SEALED|constraint/i);
+  }
+  assert.deepEqual(await receiptSnapshot(DB,'SHOP-A','INV-1'),baseline);
+});
+
+test('two identical concurrent operations commit at most one sealed receipt',async()=>{
+  const results=await Promise.allSettled([booked(),booked()]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,2);
+  assert.deepEqual(results.map(x=>x.value.state).sort(),['inserted','replay']);
+  const s=await receiptSnapshot(DB,'SHOP-A','INV-1');
+  assert.equal(s.lines.length,2);
+  assert.equal(s.seal.line_count,2);
+  assert.equal(s.payments.length,2);
+});
+
+test('concurrent Cash returns cannot spend the same verified money backing twice',async()=>{
+  await booked({payments:[
+    {id:'BANK-1',method:'Bank',amount:'0.25',accountId:'BANK-A'}
+  ]});
+  const attempts=[
+    returned({returnId:'RETURN-A',lineId:'A',returnedPaisa:'20',cashRefundPaisa:'20'}),
+    returned({returnId:'RETURN-B',lineId:'B',returnedPaisa:'20',cashRefundPaisa:'20'})
+  ];
+  const outcomes=await Promise.allSettled(attempts);
+  assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(outcomes.filter(x=>x.status==='rejected').length,1);
+  const s=await receiptSnapshot(DB,'SHOP-A','INV-1');
+  assert.equal(s.returns.length,1);
+  assert.equal(s.returns[0].cash_refund_paisa,20);
+  assert.equal(s.header.due_paisa,42);
+});
