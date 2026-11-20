@@ -85,7 +85,7 @@ test('readback issues exactly one bounded prepared SELECT batch and no D1 writes
   assert.equal(batches,1);
   assert.equal(sql.length,3);
   assert.ok(sql.every(q=>/^SELECT\s/i.test(q.trim())));
-  assert.ok(sql.every(q=>!/INSERT|UPDATE|DELETE|DROP|JOIN|PRAGMA|ATTACH|DETACH|CREATE/i.test(q)));
+  assert.ok(sql.every(q=>!/\b(?:INSERT|UPDATE|DELETE|DROP|JOIN|PRAGMA|ATTACH|DETACH|CREATE)\b/i.test(q)));
   assert.ok(sql.every(q=>/\bLIMIT\s+\?/i.test(q)));
 });
 
