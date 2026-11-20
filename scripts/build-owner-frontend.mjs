@@ -259,6 +259,42 @@ export function patchOwnerApp(html){
       });
   }
 
+  // One read-only, Owner-authorized physical cash carry suggestion.
+  // Never assume a previous drawer was emptied without a cash movement.
+  function ownerNextOpeningCash_() {
+    return fetch('/api/owner/cash-session/next-opening',{
+      method:'GET',credentials:'same-origin',cache:'no-store'
+    }).then(function(response) {
+      return response.json().then(function(body){
+        if(!response.ok || body.success!==true ||
+            !Number.isFinite(Number(body.data?.openingCash)) ||
+            Number(body.data.openingCash)<0)
+          throw new Error('Cannot verify the previous counted cash. Reload Cash Session.');
+        return Number(body.data.openingCash);
+      });
+    });
+  }
+
+  // The original Cash Session topbar opens a dialog without a new RPC
+  // method. Add one private, read-only count suggestion on that same click,
+  // instead of depending on a separate asynchronous summary response path.
+  // This preserves the legacy event handlers and never overwrites edits.
+  document.addEventListener('DOMContentLoaded',function(){
+    var toggle=document.getElementById('cashSessionToggleBtn');
+    if(!toggle)return;
+    toggle.addEventListener('click',function(){
+      if(typeof posState==='undefined'||posState.activeSession)return;
+      var field=document.getElementById('posOpeningCash');
+      if(!field)return;
+      var before=field.value;
+      ownerNextOpeningCash_().then(function(opening){
+        if(field.value===before)field.value=opening.toFixed(2);
+      }).catch(function(error){
+        showToast(error.message||'Unable to verify previous drawer cash.','error');
+      });
+    });
+  });
+
   function ownerCashAction_(type,amount,notes) {
     var path=type==='startCashSession'?'/api/owner/cash-session/start':'/api/owner/cash-session/close';
     var intent={operationId:crypto.randomUUID(),notes:notes||''};
@@ -290,8 +326,9 @@ export function patchOwnerApp(html){
       start.textContent='Start Day (0 opening cash)';
       start.addEventListener('click',function(){
         start.disabled=true;
-        ownerCashAction_('startCashSession','0','MVP credit purchases')
-          .then(function(r){ownerPurchaseDayBar_({sessionId:r.sessionId,status:'Open'});})
+        ownerNextOpeningCash_().then(function(openingCash){
+          return ownerCashAction_('startCashSession',openingCash,'MVP shop daily opening');
+        }).then(function(r){ownerPurchaseDayBar_({sessionId:r.sessionId,status:'Open'});})
           .catch(function(e){showToast(e.message,'error');})
           .finally(function(){start.disabled=false;});
       });
@@ -300,9 +337,19 @@ export function patchOwnerApp(html){
     }
     var active=session?.status==='Open';
     document.getElementById('owner-purchase-day-state').textContent=active
-      ?'Day Open · Unpaid purchases in one stock unit only.'
+      ?'Day Open · Original Cash Session records Sale, Return and counted daily cash.'
       :'Start Day before purchasing. Unpaid purchases only; payments, returns and Tiles are not connected.';
     document.getElementById('owner-purchase-start-day').hidden=active;
+    if(!active){
+      // Suggest a verified opening before posting, but re-read on click.
+      ownerNextOpeningCash_().then(function(value){
+        var b=document.getElementById('owner-purchase-start-day');
+        if(b&&!b.hidden)b.textContent='Start Day (opening '+value.toFixed(2)+')';
+      }).catch(function(){
+        var b=document.getElementById('owner-purchase-start-day');
+        if(b&&!b.hidden)b.textContent='Start Day (verify previous counted cash)';
+      });
+    }
     document.getElementById('owner-data-notice').textContent=
       'Shop D1 supports credit Purchase, one-product Cash POS and opt-in original Cash Returns. Split payments, Customer Due, Store Credit and full ledgers are not connected.';
   }

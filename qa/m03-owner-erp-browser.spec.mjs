@@ -9,7 +9,7 @@ import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js
 import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 
 let outputDir,server,browser,url,logoutCount=0,rpcCount=0,supplierCreates=0;
-let cashOpen=false,ownerPurchaseSaves=0;
+let cashOpen=false,ownerPurchaseSaves=0,nextOpeningReads=0;
 const ownerPurchaseHistory=[];
 const supplierRows=[];
 const shopId='22222222-2222-4222-8222-222222222222';
@@ -72,11 +72,19 @@ before(async()=>{
         response.end(JSON.stringify({success:true,data}));
         return;
       }
+      if(path==='/api/owner/cash-session/next-opening'&&request.method==='GET'){
+        // The new private read-only physical cash count contract is required
+        // before Start Day. This synthetic Owner fixture has never closed a day.
+        nextOpeningReads++;
+        response.writeHead(200,{'Content-Type':'application/json'});
+        response.end(JSON.stringify({success:true,data:{openingCash:0}}));
+        return;
+      }
       if(path==='/api/owner/cash-session/start'&&request.method==='POST'){
         const chunks=[];
         for await(const part of request)chunks.push(part);
         const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        assert.equal(input.openingCash,'0');
+        assert.equal(Number(input.openingCash),0);
         assert.match(input.operationId,/^[a-f0-9-]{36}$/);
         cashOpen=true;
         response.writeHead(201,{'Content-Type':'application/json'});
@@ -179,6 +187,7 @@ test('Original Purchases page offers Start Day and sends one real Owner Purchase
     assert.match(await page.locator('#owner-purchase-day-state').textContent(),/Start Day/);
     await page.locator('#owner-purchase-start-day').click();
     await page.waitForFunction(()=>document.getElementById('owner-purchase-day-state')?.textContent?.includes('Day Open'));
+    assert.ok(nextOpeningReads>=1,'read-only next opening must be verified before Start Day');
     const saved=await page.evaluate(async()=>{
       return serverCall('createPurchase','',{
         supplierId:'SUP-000001',items:[{productId:'PRD-000001',name:'MVP Drill',

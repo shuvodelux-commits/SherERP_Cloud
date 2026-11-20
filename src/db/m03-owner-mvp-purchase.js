@@ -95,24 +95,48 @@ function asActor(subject){return 'google:'+subject;}
 
 export async function openOwnerCashSession(scope,{token,ownerSubject,operationId,openingCash,notes}={}){
   if(!OP.test(operationId||'')||typeof notes!=='string'||notes.length>250)return {status:'invalid'};
-  if(!zero(openingCash))return {status:'unsupported'};
+  const opening=minor(openingCash);
+  if(opening===null)return {status:'invalid'};
   if(!owner(scope,token,ownerSubject))return {status:'denied'};
   const auth=await authority(scope,token);
   if(!auth)return {status:'denied'};
   const actorId=asActor(ownerSubject),DB=scope.shopDb;
-  const rows=await DB.batch([
-    DB.prepare(`INSERT INTO owner_mvp_cash_sessions
-      (operation_id,actor_id,status,opening_paisa,started_at_ms)
-      SELECT ?,?,'Open',0,CAST(unixepoch('subsec')*1000 AS INTEGER)
-      WHERE ${AUTH} AND (${CLEAN})
-      AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE status='Open')
-      AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE operation_id=?)
-      RETURNING sequence`).bind(operationId,actorId,...auth,operationId),
-    DB.prepare(`SELECT ${AUTH} AS allowed,
-      (SELECT sequence FROM owner_mvp_cash_sessions WHERE status='Open') AS openSequence,
-      (SELECT sequence FROM owner_mvp_cash_sessions WHERE operation_id=? AND actor_id=?) AS sameSequence
-    `).bind(...auth,operationId,actorId),
-  ]);
+  // The reviewed 0006 cash identity column is CHECK(opening_paisa=0).
+  // From 0009 onward preserve it and carry the prior physical count in an
+  // additive column; this avoids rebuilding an FK-backed financial parent.
+  const carry=await DB.prepare(`SELECT 1 AS present FROM pragma_table_info('owner_mvp_cash_sessions')
+    WHERE name='carried_opening_paisa'`).first();
+  if(!carry&&opening!==0n)return {status:'unsupported'};
+  const openSql=carry?`INSERT INTO owner_mvp_cash_sessions
+        (operation_id,actor_id,status,opening_paisa,carried_opening_paisa,started_at_ms)
+        SELECT ?,?,'Open',0,?,CAST(unixepoch('subsec')*1000 AS INTEGER)
+        WHERE ${AUTH} AND (${CLEAN})
+        AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE status='Open')
+        AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE operation_id=?)
+        RETURNING sequence`:
+    `INSERT INTO owner_mvp_cash_sessions
+        (operation_id,actor_id,status,opening_paisa,started_at_ms)
+        SELECT ?,?,'Open',0,CAST(unixepoch('subsec')*1000 AS INTEGER)
+        WHERE ${AUTH} AND (${CLEAN})
+        AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE status='Open')
+        AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE operation_id=?)
+        RETURNING sequence`;
+  const openArgs=carry?[operationId,actorId,Number(opening),...auth,operationId]:
+    [operationId,actorId,...auth,operationId];
+  let rows;
+  try{
+    rows=await DB.batch([
+      DB.prepare(openSql).bind(...openArgs),
+      DB.prepare(`SELECT ${AUTH} AS allowed,
+        (SELECT sequence FROM owner_mvp_cash_sessions WHERE status='Open') AS openSequence,
+        (SELECT sequence FROM owner_mvp_cash_sessions WHERE operation_id=? AND actor_id=?) AS sameSequence
+      `).bind(...auth,operationId,actorId),
+    ]);
+  }catch(error){
+    if(/MVP_OPEN_CASH_MISMATCH|CHECK constraint failed/i.test(String(error?.message||'')))
+      return {status:'opening-mismatch'};
+    throw error;
+  }
   checkResult(rows);
   const row=rows[1].results?.[0];
   if(row?.allowed!==1)return {status:'denied'};
@@ -125,62 +149,165 @@ export async function openOwnerCashSession(scope,{token,ownerSubject,operationId
   return {status:'unavailable'};
 }
 
+/** Source Close Day: counted−persisted expected is an audit variance, never a fake Cash Book entry.
+ * For 0006/0007 pilot Shops without reviewed 0009, retain zero-only Close behavior.
+ * Under 0009, one SQL UPDATE atomically freezes closing counts against cash postings.
+ */
 export async function closeOwnerCashSession(scope,{token,ownerSubject,operationId,countedCash,notes}={}){
-  if(!OP.test(operationId||'')||typeof notes!=='string'||notes.length>250)return {status:'invalid'};
-  if(!zero(countedCash))return {status:'unsupported'};
+  if(!OP.test(operationId||'')||typeof notes!=='string'||notes.length>250||
+      /[\u0000-\u001f\u007f]/.test(notes))return {status:'invalid'};
+  const counted=minor(countedCash);
+  if(counted===null)return {status:'invalid'};
   if(!owner(scope,token,ownerSubject))return {status:'denied'};
   const auth=await authority(scope,token);
   if(!auth)return {status:'denied'};
   const DB=scope.shopDb,actorId=asActor(ownerSubject);
+  const upgraded=await DB.prepare(`SELECT 1 AS present FROM pragma_table_info('owner_mvp_cash_sessions')
+    WHERE name='close_intent_hash'`).first();
+  if(!upgraded){
+    // Pre-migration 0007 must continue refusing to close a posted Sale.
+    if(counted!==0n)return {status:'unsupported'};
+    let written,read;
+    try{
+      [written,read]=await DB.batch([
+        DB.prepare(`UPDATE owner_mvp_cash_sessions SET status='Closed',
+          closed_operation_id=?,closed_at_ms=CAST(unixepoch('subsec')*1000 AS INTEGER)
+          WHERE status='Open' AND ${AUTH}
+          RETURNING sequence`).bind(operationId,...auth),
+        DB.prepare(`SELECT ${AUTH} AS allowed,
+          (SELECT sequence FROM owner_mvp_cash_sessions
+            WHERE closed_operation_id=?) AS closedSequence`).bind(...auth,operationId),
+      ]);
+    }catch(error){
+      if(/MVP_CASH_RECONCILIATION_REQUIRED/.test(String(error?.message||'')))
+        return {status:'reconciliation-required'};
+      throw error;
+    }
+    checkResult([written,read]);
+    if(read.results?.[0]?.allowed!==1)return {status:'denied'};
+    const seq=written.results?.[0]?.sequence||read.results?.[0]?.closedSequence;
+    if(!Number.isSafeInteger(seq))return {status:'session-required'};
+    return {status:written.results.length?'closed':'replayed',
+      sessionId:sourceId('CASH_SESSIONS',seq),variance:0};
+  }
+
+  // A completed close can be retried, but only by a still-authorized current
+  // Owner with the same actor and canonical original count/note.
+  const allowed=await DB.prepare(`SELECT ${AUTH} AS allowed`).bind(...auth).first();
+  if(allowed?.allowed!==1)return {status:'denied'};
+  const intent=await hashCanonicalOperationIntent({
+    tenantId:scope.shopId,actorId,operationType:'cash.session.close.v1',
+    payload:{countedPaisa:Number(counted),notes:notes.trim()}
+  });
+  const replay=await DB.prepare(`SELECT sequence,close_actor_id,close_intent_hash,
+    expected_paisa,counted_paisa,variance_paisa
+    FROM owner_mvp_cash_sessions WHERE closed_operation_id=?`).bind(operationId).first();
+  function closeResult(row,status){
+    return {status,sessionId:sourceId('CASH_SESSIONS',row.sequence),
+      expected:moneyValue(row.expected_paisa),
+      counted:moneyValue(row.counted_paisa),
+      variance:moneyValue(row.variance_paisa)};
+  }
+  if(replay){
+    if(replay.close_actor_id!==actorId||replay.close_intent_hash!==intent)
+      return {status:'conflict'};
+    return closeResult(replay,'replayed');
+  }
+  const expected=`(opening_paisa + carried_opening_paisa +
+    COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
+      WHERE b.cash_sequence=owner_mvp_cash_sessions.sequence),0) -
+    COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
+      WHERE r.cash_sequence=owner_mvp_cash_sessions.sequence),0))`;
   let written,read;
   try{
     [written,read]=await DB.batch([
-      DB.prepare(`UPDATE owner_mvp_cash_sessions SET status='Closed',
-        closed_operation_id=?,closed_at_ms=CAST(unixepoch('subsec')*1000 AS INTEGER)
-        WHERE status='Open' AND ${AUTH}
-        RETURNING sequence`).bind(operationId,...auth),
+      DB.prepare(`UPDATE owner_mvp_cash_sessions SET
+        expected_paisa=${expected}, counted_paisa=?,
+        variance_paisa=?-${expected}, close_intent_hash=?,close_actor_id=?,
+        close_notes=?,closed_operation_id=?,
+        closed_at_ms=CAST(unixepoch('subsec')*1000 AS INTEGER),
+        status='Closed'
+        WHERE status='Open' AND ${AUTH} AND (${CLEAN})
+          AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions
+            WHERE closed_operation_id=?)
+        RETURNING sequence,expected_paisa,counted_paisa,variance_paisa`).bind(
+          Number(counted),Number(counted),intent,actorId,notes.trim(),operationId,
+          ...auth,operationId),
       DB.prepare(`SELECT ${AUTH} AS allowed,
-        (SELECT sequence FROM owner_mvp_cash_sessions
-          WHERE closed_operation_id=?) AS closedSequence`).bind(...auth,operationId),
+        (SELECT sequence FROM owner_mvp_cash_sessions WHERE status='Open') AS openSequence,
+        s.sequence,s.close_actor_id,s.close_intent_hash,
+        s.expected_paisa,s.counted_paisa,s.variance_paisa
+        FROM (SELECT 1) x
+        LEFT JOIN owner_mvp_cash_sessions s ON s.closed_operation_id=?`)
+        .bind(...auth,operationId),
     ]);
   }catch(error){
-    if(/MVP_CASH_RECONCILIATION_REQUIRED/.test(String(error?.message||'')))
+    if(/MVP_CLOSE_|CHECK constraint failed|FOREIGN KEY constraint failed/i.test(String(error?.message||'')))
       return {status:'reconciliation-required'};
     throw error;
   }
   checkResult([written,read]);
-  if(read.results?.[0]?.allowed!==1)return {status:'denied'};
-  const seq=written.results?.[0]?.sequence||read.results?.[0]?.closedSequence;
-  if(!Number.isSafeInteger(seq))return {status:'session-required'};
-  return {status:written.results.length?'closed':'replayed',
-    sessionId:sourceId('CASH_SESSIONS',seq),variance:0};
+  const row=read.results?.[0];
+  if(row?.allowed!==1)return {status:'denied'};
+  if(row.close_actor_id!==null&&row.close_actor_id!==undefined&&
+     (row.close_actor_id!==actorId||row.close_intent_hash!==intent))
+    return {status:'conflict'};
+  if(!Number.isSafeInteger(row.sequence)){
+    return {status:row.openSequence?'reconciliation-required':'session-required'};
+  }
+  if(row.close_intent_hash!==intent)return {status:'conflict'};
+  return closeResult(row,written.results.length===1?'closed':'replayed');
 }
 
+/** Existing source-shaped Cash Session summary: opening+current session cash in−out. */
 export async function readOwnerCashSession(DB){
-  // Shops previously initialized to 0006 do not yet have a Cash Book table.
-  // Never report a false zero after real Sale cash postings: when 0007 is
-  // present, summarize persisted cash entries for this exact open session.
+  // 0006 Shops may lack Sale Cash Book; 0007 Shops may lack Return Book.
   const hasCash=await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
     WHERE type='table' AND name='owner_mvp_sale_cash_book'`).first();
   const hasRefund=hasCash && await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
     WHERE type='table' AND name='owner_mvp_return_cash_book'`).first();
-  const row=hasRefund?await DB.prepare(`SELECT s.sequence,s.status,
+  const hasCarry=await DB.prepare(`SELECT 1 AS present FROM pragma_table_info('owner_mvp_cash_sessions')
+    WHERE name='carried_opening_paisa'`).first();
+  const carryColumn=hasCarry?'s.carried_opening_paisa':'0';
+  const row=hasRefund?await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
+    s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
     COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
-      WHERE b.cash_sequence=s.sequence),0) -
+      WHERE b.cash_sequence=s.sequence),0) AS inPaisa,
     COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
-      WHERE r.cash_sequence=s.sequence),0) AS cashPaisa
+      WHERE r.cash_sequence=s.sequence),0) AS outPaisa
     FROM owner_mvp_cash_sessions s WHERE s.status='Open'
     ORDER BY s.sequence DESC LIMIT 1`).first():
-    hasCash?await DB.prepare(`SELECT s.sequence,s.status,
+    hasCash?await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
+    s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
     COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
-      WHERE b.cash_sequence=s.sequence),0) AS cashPaisa
+      WHERE b.cash_sequence=s.sequence),0) AS inPaisa,
+    0 AS outPaisa
     FROM owner_mvp_cash_sessions s WHERE s.status='Open'
     ORDER BY s.sequence DESC LIMIT 1`).first():
-    await DB.prepare(`SELECT sequence,status,0 AS cashPaisa
-      FROM owner_mvp_cash_sessions WHERE status='Open'
+    await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
+      s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
+      0 AS inPaisa,0 AS outPaisa
+      FROM owner_mvp_cash_sessions s WHERE s.status='Open'
       ORDER BY sequence DESC LIMIT 1`).first();
-  return row?{sessionId:sourceId('CASH_SESSIONS',row.sequence),
-    status:row.status,openingCash:0,expectedCash:row.cashPaisa/100,variance:0}:null;
+  return row?{
+    sessionId:sourceId('CASH_SESSIONS',row.sequence),status:row.status,
+    openedAt:new Date(row.startedMs).toISOString(),
+    openingCash:moneyValue(row.openingPaisa+row.carriedPaisa),
+    cashIn:moneyValue(row.inPaisa),cashOut:moneyValue(row.outPaisa),
+    expectedCash:moneyValue(row.openingPaisa+row.carriedPaisa+row.inPaisa-row.outPaisa),
+    countedCash:'',variance:0,notes:'',cashMismatch:null
+  }:null;
+}
+
+/** Previous physical count for the next Start Day; does not start or alter a Session. */
+export async function readOwnerCashOpeningSuggestion(DB){
+  const supported=await DB.prepare(`SELECT 1 AS present FROM pragma_table_info('owner_mvp_cash_sessions')
+    WHERE name='counted_paisa'`).first();
+  if(!supported)return {openingCash:0};
+  const last=await DB.prepare(`SELECT counted_paisa AS countedPaisa
+    FROM owner_mvp_cash_sessions WHERE status='Closed'
+    ORDER BY sequence DESC LIMIT 1`).first();
+  return {openingCash:moneyValue(last?.countedPaisa??0)};
 }
 
 export async function postOwnerCreditPurchase(scope,{token,ownerSubject,operationId,payload}={}){

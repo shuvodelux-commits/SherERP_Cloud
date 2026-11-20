@@ -8,7 +8,7 @@ import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
 import {readCleanOwnerCatalog,readOwnerCatalog} from './db/m03-owner-catalog-read.js';
 import {createOwnerProduct} from './db/m03-owner-product-create.js';
 import {createOwnerSupplier,readOwnerSupplierBootstrap} from './db/m03-owner-supplier-create.js';
-import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,
+import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,readOwnerCashOpeningSuggestion,
   postOwnerCreditPurchase,readOwnerPurchaseBootstrap,readOwnerPurchaseHistory,
   readOwnerPurchaseDetail} from './db/m03-owner-mvp-purchase.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './auth/platform-shop-binding.js';
@@ -200,6 +200,12 @@ function purchaseError(c,status){
   if(status==='denied')return c.json({success:false,message:'Purchase Owner access denied.'},403);
   if(status==='session-required')return c.json({success:false,
     message:'Start Day before recording a purchase. The Cash Session must be Open.'},409);
+  if(status==='opening-mismatch')return c.json({success:false,
+    message:'Opening cash must match the previous counted Close Day amount. Refresh Cash Session before starting.'},409);
+  if(status==='reconciliation-required')return c.json({success:false,
+    message:'Cash Session reconciliation changed or is unavailable. Refresh and review the recorded Cash Book before retrying.'},409);
+  if(status==='conflict')return c.json({success:false,
+    message:'The original Close Day amount or notes changed. Retry unchanged or review the saved close.'},409);
   if(status==='unsupported')return c.json({success:false,
     message:'For now only same-day, unpaid, zero-discount purchases in one base unit are supported. Cash, Bank, Tiles and mixed-unit posting are not connected yet.'},422);
   if(status==='invalid')return c.json({success:false,message:'Invalid purchase or Cash Session input.'},400);
@@ -269,6 +275,16 @@ app.get('/api/owner/cash-session',protectLogin,async c=>{
   catch{return c.json({success:false,message:'Cash Session unavailable'},503);}
 });
 
+// Only the currently authenticated Owner learns the last physical drawer count.
+// This does NOT mutate the cash ledger, start a new Session or bypass a grant.
+app.get('/api/owner/cash-session/next-opening',protectLogin,async c=>{
+  if(!ownerPurchaseEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{return c.json({success:true,data:await readOwnerCashOpeningSuggestion(ctx.scope.shopDb)});}
+  catch{return c.json({success:false,message:'Next opening amount unavailable'},503);}
+});
+
 for(const [path,operation] of [
   ['/api/owner/cash-session/start',openOwnerCashSession],
   ['/api/owner/cash-session/close',closeOwnerCashSession],
@@ -290,6 +306,8 @@ for(const [path,operation] of [
     });
     if(['started','closed','replayed','already-open'].includes(result.status)){
       return c.json({success:true,data:{sessionId:result.sessionId,
+        ...(result.expected!==undefined?{expected:result.expected}:{}),
+        ...(result.counted!==undefined?{counted:result.counted}:{}),
         ...(result.variance!==undefined?{variance:result.variance}:{}),
         status:result.status}},result.status==='started'?201:200);
     }
