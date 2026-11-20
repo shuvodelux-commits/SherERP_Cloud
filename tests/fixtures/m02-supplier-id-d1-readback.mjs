@@ -40,6 +40,8 @@ const RECEIPTS=`SELECT r.tenant_id,r.id_key,r.operation_id,r.intent_hash,
  JOIN synthetic_m03_id_counters c
  ON c.tenant_id=r.tenant_id AND c.id_key=r.id_key
  ORDER BY r.tenant_id,r.id_key,r.operation_id`;
+const COUNTERS=`SELECT tenant_id FROM synthetic_m03_id_counters ORDER BY tenant_id`;
+const PARTIES=`SELECT tenant_id FROM m02_test_supplier_parties ORDER BY tenant_id`;
 const LINKS=`SELECT tenant_id,source_group,source_id,party_id,role,status,link_basis
  FROM m02_test_supplier_links
  ORDER BY tenant_id,source_group,source_id`;
@@ -57,9 +59,15 @@ export async function auditLocalSupplierD1({shops}={}){
   let foreign=0;
   const snapshot=[];
   for(const {shopId,DB} of shops){
+    // A counter or Party row in the wrong Shop is a leak even before
+    // a Supplier receipt or link exists. Read all test-owned identities.
+    const counters=await select(DB,COUNTERS);
+    const parties=await select(DB,PARTIES);
     const receipts=await select(DB,RECEIPTS);
     const links=await select(DB,LINKS);
-    foreign+=receipts.filter(r=>r.tenant_id!==shopId).length+
+    foreign+=counters.filter(r=>r.tenant_id!==shopId).length+
+      parties.filter(r=>r.tenant_id!==shopId).length+
+      receipts.filter(r=>r.tenant_id!==shopId).length+
       links.filter(r=>r.tenant_id!==shopId).length;
     snapshot.push({
       shopId,
