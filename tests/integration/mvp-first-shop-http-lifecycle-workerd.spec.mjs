@@ -150,7 +150,7 @@ test('isolated first-Shop Owner HTTP lifecycle: product → supplier → purchas
     assert.equal(cashBook.data.entries.length,2);
     assert.deepEqual(
       cashBook.data.entries.map(row=>[row.kind,row.reference,row.receivedPaisa,row.paidPaisa]).sort((a,b)=>a[0].localeCompare(b[0])),
-      [['Cash Sale','INV-000001',15000,0],['Cash Return','SRT-000001',0,7500]]
+      [['Cash Return','SRT-000001',0,7500],['Cash Sale','INV-000001',15000,0]]
     );
     assert.equal(cashBook.data.hasMore,false);
     const ledger=await expectJson(ownerA,'/api/owner/suppliers/SUP-000001/ledger',200);
