@@ -51,11 +51,23 @@ test('cold real migrated D1 rejects fabricated source as missing, never false pa
   assert.equal(r.productionReady,false);
 });
 
+test('interrupted two-group import cannot masquerade as complete three-group D1 parity',async()=>{
+  const original=fixture(),before=structuredClone(original);
+  await importSourceProductCategoriesWithD1({DB,sourceRows:original.PRODUCT_CATEGORIES});
+  await importSourceProductUnitsWithD1({DB,sourceRows:original.PRODUCT_UNITS});
+  const r=await audit(original);
+  assert.equal(r.candidateLocalReadbackParity,false);
+  assert.equal(r.expectedRows,6);
+  assert.equal(r.observedRows,4);
+  assert.equal(reason(r,'MISSING_ROW'),2);
+  assert.equal(r.authorizesCutover,false);
+  assert.deepEqual(original,before);
+  assert.deepEqual([await n('product_categories'),await n('product_units'),await n('expense_categories')],[2,2,0]);
+});
+
 test('existing M02 importers persist three exact original-ID/position groups on Workerd D1',async()=>{
   const source=fixture(),frozen=structuredClone(source);
-  assert.deepEqual([await n('product_categories'),await n('product_units'),await n('expense_categories')],[0,0,0]);
-  await importSourceProductCategoriesWithD1({DB,sourceRows:source.PRODUCT_CATEGORIES});
-  await importSourceProductUnitsWithD1({DB,sourceRows:source.PRODUCT_UNITS});
+  assert.deepEqual([await n('product_categories'),await n('product_units'),await n('expense_categories')],[2,2,0]);
   await importSourceExpenseCategoriesWithD1({DB,sourceRows:source.EXPENSE_CATEGORIES});
   assert.deepEqual(source,frozen);
   assert.deepEqual([await n('product_categories'),await n('product_units'),await n('expense_categories')],[2,2,2]);
