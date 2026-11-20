@@ -10,6 +10,7 @@ import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js
 
 let browser,server,url,outputDir;
 const audit={posts:0,supplierReads:0,partyReads:0};
+let genericMode='source-only';
 const shopId='22222222-2222-4222-8222-222222222222';
 const session={role:'Owner',shopId,dashboard:{displayName:'HisabIQ Fixture Shop',dataAvailable:false}};
 const shell=buildSourceAppShellData({shopName:'HisabIQ Fixture Shop',currencySymbol:''}).data;
@@ -31,7 +32,24 @@ before(async()=>{
       if(req.method==='POST') {audit.posts++;send(res,403,{error:'No Party writes'});return;}
       if(path==='/api/owner/auth/session'){send(res,200,session);return;}
       if(path==='/api/owner/app-shell'){send(res,200,{success:true,data:shell});return;}
-      if(path==='/api/owner/parties'){audit.partyReads++;send(res,404,{error:'Not yet connected'});return;}
+      if(path==='/api/owner/parties'){
+        audit.partyReads++;
+        if(genericMode==='denied'){send(res,401,{error:'Owner session denied'});return;}
+        if(genericMode==='unified'){
+          send(res,200,{success:true,data:{parties:[{
+            partyId:'PTY-000007',displayName:'Hossain Electric',nameBn:'হোসেন ইলেকট্রিক',
+            phone:'01912000000',address:'Dhaka',
+            roles:['Customer','Supplier','Lender'],
+            sourceIds:{Supplier:'SUP-000007'},
+            roleBalances:[
+              {role:'Customer',receivablePaisa:500000,payablePaisa:0},
+              {role:'Supplier',receivablePaisa:0,payablePaisa:120055},
+              {role:'Lender',receivablePaisa:0,payablePaisa:2000000}
+            ]
+          }]}});return;
+        }
+        send(res,404,{error:'Not yet connected'});return;
+      }
       if(path==='/api/owner/suppliers'){audit.supplierReads++;send(res,200,{suppliers:[supplier],bankAccounts:[],currencySymbol:''});return;}
       if(path==='/api/owner/suppliers/SUP-000007/ledger'){
         send(res,200,{success:true,data:{
@@ -141,6 +159,43 @@ test('dark system theme and reduced motion keep role selection and source truth'
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#hparty-picker').getAttribute('data-open'),'false');
   }finally{await page.close();}
+});
+
+
+test('synthetic unified Party response renders one identity with independent Customer/Supplier/Lender accounts',async()=>{
+  genericMode='unified';
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try {
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
+    await page.locator('#navList [data-page="hisabiqParties"]').click();
+    await page.locator('#hparty-source-mode').getByText('Unified Party identities').waitFor();
+    assert.equal(await page.locator('#hparty-list [role="option"]').count(),1);
+    assert.match(await page.locator('#hparty-list').innerText(),/Multiple ledgers/);
+    assert.match(await page.locator('.hparty-balance-card[data-kind="Receivable"]').innerText(),/5,000\.00/);
+    assert.equal(await page.locator('#hparty-detail .hparty-badge').count(),3);
+    await page.locator('#hparty-detail select').selectOption('Supplier');
+    await page.locator('#hparty-tab-content').getByText('PUR-000007').waitFor();
+    assert.match(await page.locator('.hparty-balance-card[data-kind="Payable"]').innerText(),/1,200\.55/);
+    await page.locator('#hparty-detail select').selectOption('Lender');
+    assert.match(await page.locator('.hparty-balance-card[data-kind="Payable"]').innerText(),/20,000\.00/);
+    assert.match(await page.locator('#hparty-tab-content').innerText(),/relationship ledger is not connected/);
+    assert.equal(await page.locator('.hparty-balance-card[data-kind="Receivable"]').innerText().then(s=>s.includes('5,000')),false);
+  }finally{genericMode='source-only';await page.close();}
+});
+
+test('401 on unified Party endpoint fails closed instead of silently showing unrelated Supplier',async()=>{
+  genericMode='denied';
+  const readsBefore=audit.supplierReads;
+  const page=await browser.newPage({viewport:{width:1024,height:900}});
+  try{
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
+    await page.locator('#navList [data-page="hisabiqParties"]').click();
+    await page.locator('#hparty-source-mode').getByText('Shop session denied').waitFor();
+    assert.equal(await page.locator('#hparty-list [role="option"]').count(),0);
+    assert.equal(audit.supplierReads,readsBefore);
+  }finally{genericMode='source-only';await page.close();}
 });
 
 test('read-only Party never triggers a new financial POST or clones missing Customer dues',()=>{
