@@ -84,7 +84,7 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
       }}
     };
     browser=await chromium.launch();
-    const context=await browser.newContext({viewport:{width:1280,height:900}});
+    const context=await browser.newContext({viewport:{width:1280,height:900},timezoneId:'Asia/Dhaka'});
     await context.addCookies([{name:cookie,value:ownerA.token,url:origin,
       secure:true,httpOnly:true,sameSite:'Strict'}]);
     const page=await context.newPage();
