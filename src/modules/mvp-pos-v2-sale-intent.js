@@ -84,6 +84,8 @@ function trustedAccounts(accountRows){
  * The final D1 posting write must recheck both stock and pricing atomically.
  */
 function checkTrustedSaleLine(trustedProduct,line,unitPrice,subtotal){
+  if(trustedProduct===undefined||trustedProduct===null)
+    throw new TypeError('Trusted current product price/stock required');
   plain(trustedProduct,['productId','effectiveUnitPrice','effectiveLineTotal','availableUnits']);
   if(typeof trustedProduct.productId!=='string'||
      trustedProduct.productId!==line.productId||
