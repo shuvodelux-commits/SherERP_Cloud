@@ -226,3 +226,39 @@ recovery and independent accounting/security acceptance remain separate.
 Cloudflare documents `WORKERS_CI_COMMIT_SHA` as the current build SHA;
 the release script relies on that protected commit pin and refuses an
 unreviewed later `main` build.
+
+### Live first-Shop Control D1 grant prerequisite — applied and verified
+
+The hosted Control D1 installed the baseline authentication and Owner session
+tables but **not** the two additive grant-fencing schemas required by
+`OWNER_WRITE_GRANTS_ENABLED=true`. On 2026-11-21, before any Worker flag
+flip, these already-reviewed source migrations were applied in order to
+the **existing** `shererp-admin-control-v2` (not the Shop D1):
+
+1. `staging-migrations/platform-owner-write/0009_owner_session_generation.sql`
+   — SHA-256 starts `fcb3e1d0`.
+2. `staging-migrations/platform-owner-write/0010_owner_grant_claim.sql`
+   — SHA-256 starts `a8e86383`.
+
+Operator evidence: fresh pre-write Control and Shop exports, isolated
+SQLite restore with `PRAGMA integrity_check=ok`, exact source hashes,
+absence of both grant tables before migration, offline rehearsal on that
+Control export including a generated session generation and a blocked
+revocation with pending grant claim. Real Cloudflare D1 then accepted both
+migrations, and independent D1 readback found the two tables and all six
+triggers. The existing one first Owner, one session and one Shop binding
+remained; there are zero grants/claims until a fresh Owner login. The
+post-migration Control export restored into isolated SQLite and passed
+integrity, with 2 grant tables, 6 triggers and the original Owner session.
+
+Private exports live only on the authorized CachyOS device at
+`/home/shoaib/shererp-private-backups/2026-11-21-core-activation/` with
+restricted permissions. Cloudflare D1 rejects remote `PRAGMA integrity_check`
+(`SQLITE_AUTH`); the verified post-migration export's SQLite restore
+provides the integrity evidence instead. No Customer/Shop D1 SQL write,
+Owner grant mutation, test sale or Worker deployment occurred as part of
+this Control grant-schema step.
+
+**Do not rerun 0009 or 0010** against this Control D1: they are installed.
+These are *Control D1* migrations, **not** the separate M08 *Shop D1*
+Supplier Cash Pay 0010/0011 schema; Shop payment extension remains pending.
