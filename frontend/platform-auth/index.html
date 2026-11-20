@@ -16,6 +16,7 @@
       <h1 tabindex="-1">Platform sign-in</h1>
       <p>New device: sign in with your Google account and authenticator. This browser stays signed in for up to 15 days unless you sign out or revoke access.</p>
       <button id="start-login" class="primary" type="button">Start sign-in</button>
+      <button id="start-recovery" class="secondary" type="button" hidden>Lost authenticator? Use a recovery code</button>
       <button id="open-setup" class="secondary" type="button">Set up administrator</button>
     </section>
 
@@ -68,7 +69,35 @@
           pattern="[0-9]{6}" maxlength="6" required>
         <button class="primary" type="submit">Verify and sign in</button>
       </form>
+      <button id="open-recovery" class="secondary" type="button" hidden>Use a saved recovery code instead</button>
       <button id="back-mfa" class="secondary" type="button">Cancel</button>
+    </section>
+
+    <section id="recovery-code" hidden>
+      <h1 tabindex="-1">Recover Super Admin access</h1>
+      <p>Use the approved Google account and one unused backup code saved before losing your authenticator. A code is consumed when replacement enrollment begins.</p>
+      <form id="recovery-code-form">
+        <label for="recovery-code-input">Saved recovery code</label>
+        <input id="recovery-code-input" type="text" required autocomplete="off"
+          spellcheck="false" maxlength="35" minlength="35"
+          placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx">
+        <button class="primary" type="submit">Set up replacement authenticator</button>
+      </form>
+      <button id="back-recovery-code" class="secondary" type="button">Cancel</button>
+    </section>
+
+    <section id="recovery-enroll" hidden>
+      <h1 tabindex="-1">Confirm your new authenticator</h1>
+      <p>Scan the replacement QR code. Finish verification before leaving this page.</p>
+      <img id="recovery-qr" width="240" height="240" alt="Replacement authenticator QR code">
+      <p><code id="recovery-key"></code></p>
+      <form id="recovery-confirm-form">
+        <label for="recovery-otp">Six-digit code from your new authenticator</label>
+        <input id="recovery-otp" required inputmode="numeric" autocomplete="one-time-code"
+          pattern="[0-9]{6}" maxlength="6">
+        <button class="primary" type="submit">Replace authenticator and sign in</button>
+      </form>
+      <p>After confirmation, save the newly generated backup codes. Older sessions and codes will be revoked.</p>
     </section>
 
     <section id="signed-in" hidden>
@@ -89,6 +118,23 @@
         </div>
         <p id="admin-setup-status" class="admin-setup-status" role="status">Checking business setup…</p>
       </section>
+      <details id="admin-recovery-settings" hidden>
+        <summary>Authenticator recovery and backup codes</summary>
+        <p>Create backup codes now, while you still have your authenticator. Save them offline, away from your phone. Generating new codes disables the previous set.</p>
+        <form id="admin-recovery-generate-form">
+          <label for="admin-recovery-otp">Current six-digit MFA code</label>
+          <input id="admin-recovery-otp" inputmode="numeric" autocomplete="one-time-code"
+            pattern="[0-9]{6}" maxlength="6" required>
+          <button class="secondary" type="submit">Generate 8 backup codes</button>
+        </form>
+        <section id="admin-recovery-codes" hidden>
+          <p>These codes are displayed only once. Store them securely; each code can be used only once.</p>
+          <label for="admin-recovery-codes-text">Your one-time recovery codes</label>
+          <textarea id="admin-recovery-codes-text" rows="9" readonly spellcheck="false"></textarea>
+          <button id="admin-recovery-copy" type="button" class="secondary">Copy backup codes</button>
+          <button id="admin-recovery-hide" type="button" class="secondary">I've saved these codes</button>
+        </section>
+      </details>
       <form id="business-form" hidden>
         <label for="business-name">Business name</label>
         <input id="business-name" type="text" required maxlength="120" autocomplete="off">

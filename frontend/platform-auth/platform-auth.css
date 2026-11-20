@@ -120,3 +120,16 @@ button:disabled { opacity: .68; cursor: wait; }
 }
 #support-diagnostics p { margin: 0 0 4px; }
 #support-diagnostics p:last-child { margin-bottom: 0; }
+
+/* Single-use Admin recovery; codes are ephemeral DOM-only text, never cached. */
+#admin-recovery-settings {margin:12px 0 18px;padding:12px;border:1px solid var(--border);
+  border-radius:var(--control-radius);}
+#admin-recovery-settings summary {cursor:pointer;font-weight:600;}
+#admin-recovery-settings p {margin-top:12px;font-size:13px;}
+#admin-recovery-codes {margin-top:12px;}
+#admin-recovery-codes-text {display:block;width:100%;min-height:182px;padding:12px;
+  margin-bottom:12px;resize:vertical;background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--control-radius);
+  font:14px/1.65 system-ui,sans-serif;overflow-wrap:anywhere;}
+#recovery-qr,#wizard-qr {display:block;max-width:100%;height:auto;margin:12px auto;}
+#recovery-key,#wizard-key {overflow-wrap:anywhere;user-select:all;}
