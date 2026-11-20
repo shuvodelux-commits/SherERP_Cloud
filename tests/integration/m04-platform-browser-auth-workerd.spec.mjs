@@ -391,9 +391,12 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   assert.equal(await issueOwnerSession(inviteBindings,{issuer,subject}),null);
   const firstOwnerSession=await issueOwnerSession(inviteBindings,ownerIdentity);
   assert.match(firstOwnerSession,/^[a-f0-9]{64}$/);
+  // Session issuance at epoch 1 was previously accepted; a server-side
+  // deadline must now reject it even if the Owner remains enabled.
   await db.prepare('UPDATE platform_shop_owner_sessions SET issued_at_ms=1').run();
   const ownerScope={shopId:reservation.shopId,role:'Owner'};
-  assert.deepEqual(await validateOwnerSession(inviteBindings,firstOwnerSession),ownerScope);
+  assert.equal(await validateOwnerSession(inviteBindings,firstOwnerSession),null,
+    'stale but otherwise valid Owner tokens must expire server-side');
   assert.equal(await validateOwnerSession(swapped,firstOwnerSession),null);
   assert.equal(await validateOwnerSession(inviteBindings,session.split('=')[1]),null);
   const anotherOwnerSession=await issueOwnerSession(inviteBindings,ownerIdentity);
@@ -442,7 +445,11 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
   const loginResults=await Promise.all([ownerAuth('login',{data:loginData,browserCookie:loginCookie}),
     ownerAuth('login',{data:loginData,browserCookie:loginCookie})]);
   assert.deepEqual(loginResults.map(response=>response.status).sort(),[200,401]);
-  const ownerSessionCookie=cookie(loginResults.find(response=>response.status===200),'__Host-shererp-owner-session');
+  const ownerLoginSuccess=loginResults.find(response=>response.status===200);
+  assert.ok(ownerLoginSuccess.headers.getSetCookie().some(value=>
+    value.startsWith('__Host-shererp-owner-session=')&&value.includes('Max-Age=43200')),
+  'private Owner cookie must not outlive the 12-hour server deadline');
+  const ownerSessionCookie=cookie(ownerLoginSuccess,'__Host-shererp-owner-session');
   assert.deepEqual(await (await ownerAuth('session',{method:'GET',browserCookie:ownerSessionCookie})).json(),ownerScope);
   assert.equal((await ownerAuth('session',{method:'GET',browserCookie:session})).status,401);
   const loginThrottled={...ownerBindings,OWNER_LOGIN_ENABLED:'true',OWNER_INGRESS:{
