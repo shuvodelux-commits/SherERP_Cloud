@@ -41,6 +41,16 @@ test('issues a 10-minute single-use ticket whose digest, never plaintext, is sto
   assert.equal(await revokeFirstPlatformSetupTicket({controlDb:db,setupToken:issued.setupToken}),true);
 });
 
+test('accepts opaque Google subject values permitted by the existing verified identity contract',async()=>{
+  const subject='opaque-google-sub_A9';
+  const issued=await issue(subject);
+  assert.ok(issued,'a Google subject accepted by the verifier must be issuable');
+  const row=await db.prepare('SELECT subject FROM platform_setup_tickets WHERE token_hash=?')
+    .bind(hash(issued.setupToken)).first();
+  assert.equal(row.subject,subject);
+  assert.equal(await revokeFirstPlatformSetupTicket({controlDb:db,setupToken:issued.setupToken}),true);
+});
+
 test('rejects unapproved identity shapes before any database query or token issuance',async()=>{
   let queries=0;
   const controlDb={prepare(){queries++;throw Error('SENSITIVE_VALUE');}};
