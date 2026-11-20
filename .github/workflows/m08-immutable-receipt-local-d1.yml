@@ -1,0 +1,33 @@
+name: M08 immutable receipt proof real local Workerd D1 (test-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  m08-immutable-receipt:
+    name: M08 sealed quote and refund replay (local Workerd/D1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned local-only Wrangler
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify frozen source integrity
+        run: npm run verify:source
+      - name: Execute immutable receipt and baseline exact-money Workerd D1
+        run: node --test --test-concurrency=1 tests/integration/m08-immutable-receipt-workerd.spec.mjs tests/integration/m08-exact-decimal-workerd.spec.mjs
+      - name: Ensure public preview has no sensitive database binding
+        run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
