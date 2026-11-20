@@ -89,6 +89,16 @@ test('real local Workerd/D1 current auth controls interrupted Start, Open-only c
   };
 
   await denied('start',start(view));
+  // Late failure of the zero-value Open marker MUST abort the entire
+  // attempted session INSERT; no orphan Starting row or marker survives.
+  await DB.prepare(`CREATE TRIGGER m03_local_cash_open_abort
+    AFTER INSERT ON m03_local_cash_sessions WHEN NEW.open_op='OPEN-FAIL'
+    BEGIN SELECT RAISE(ABORT,'injected marker failure'); END`).run();
+  await denied('start',start(add,{operationId:'OPEN-FAIL'}));
+  assert.equal(await count('m03_local_cash_sessions'),0);
+  assert.equal(await count('m03_local_cash_marks'),0);
+  await DB.prepare('DROP TRIGGER m03_local_cash_open_abort').run();
+
   const interrupted=await rpc('start',start(add,{testInterruptAfterClaim:true}));
   assert.equal(interrupted.status,202);
   assert.deepEqual(interrupted.body,{sessionId:'CS-OPEN-1',status:'Starting',needsResume:true});
@@ -127,6 +137,20 @@ test('real local Workerd/D1 current auth controls interrupted Start, Open-only c
   await denied('start',start(add,{operationId:'OPEN-2'}));
   assert.deepEqual((await rpc('summary',{token:view})).body,
     {sessionId:'CS-OPEN-1',status:'Closing',openingMinor:2500});
+
+  // Closing is durable across statements. A failed final Close marker
+  // rolls back just the final transition, leaving the same close receipt
+  // for explicit retry; it never fabricates a book movement.
+  await DB.prepare(`CREATE TRIGGER m03_local_cash_close_abort
+    BEFORE UPDATE OF status ON m03_local_cash_sessions
+    WHEN NEW.status='Closed' AND NEW.close_op='CLOSE-1'
+    BEGIN SELECT RAISE(ABORT,'injected close marker failure'); END`).run();
+  await denied('close',close());
+  assert.equal((await DB.prepare(
+    "SELECT status FROM m03_local_cash_sessions WHERE session_id='CS-OPEN-1'"
+  ).first()).status,'Closing');
+  assert.equal(await count('m03_local_cash_marks'),1);
+  await DB.prepare('DROP TRIGGER m03_local_cash_close_abort').run();
 
   const closed=await rpc('close',close());
   assert.equal(closed.status,200);
