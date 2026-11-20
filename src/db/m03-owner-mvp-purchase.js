@@ -85,8 +85,7 @@ function cleanInput(payload){
     supplierId:payload.supplierId,subtotal:Number(subtotal)};
 }
 function isPostingDenial(error){
-  return /MVP_PURCHASE_LINE_INVALID|MVP_SUPPLIER_NOT_ACTIVE|MVP_NO_OPEN_CASH_SESSION|
-    FOREIGN KEY constraint failed|CHECK constraint failed|UNIQUE constraint failed/x.test(String(error?.message||''));
+  return /MVP_PURCHASE_LINE_INVALID|MVP_SUPPLIER_NOT_ACTIVE|MVP_NO_OPEN_CASH_SESSION|FOREIGN KEY constraint failed|CHECK constraint failed|UNIQUE constraint failed/i.test(String(error?.message||''));
 }
 function checkResult(results){
   if(!Array.isArray(results)||results.some(r=>r?.success!==true))
