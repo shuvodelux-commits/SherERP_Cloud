@@ -151,7 +151,7 @@ test('default deployed-style Worker leaves private Support Mode completely unava
   const page=await x.pageFor(x.baseEnv);
   await page.locator('#business-roster-list li').first().waitFor();
   assert.equal(await page.locator('#support-mode').isVisible(),false);
-  assert.equal(await page.getByRole('button',{name:/Inspect setup for/}).count(),0);
+  assert.equal(await page.getByRole('button',{name:/Visit .* for read-only support/}).count(),0);
   assert.deepEqual(await x.audit(),[]);
 });
 
@@ -162,10 +162,10 @@ test('trusted local Worker exposes read-only Support Mode, two-Shop denial and r
   const page=await x.pageFor(x.enabledEnv);
   const ready=page.locator('#business-roster-list li').filter({hasText:x.shops[0].name});
   const pending=page.locator('#business-roster-list li').filter({hasText:x.shops[1].name});
-  await ready.getByRole('button',{name:'Inspect setup for '+x.shops[0].name}).waitFor();
-  assert.equal(await pending.getByRole('button',{name:/Inspect setup/}).count(),0);
-  await ready.getByRole('button',{name:'Inspect setup for '+x.shops[0].name}).click();
-  await page.getByRole('heading',{name:'Read-only Support Mode'}).waitFor();
+  await ready.getByRole('button',{name:'Visit '+x.shops[0].name+' for read-only support'}).waitFor();
+  assert.equal(await pending.getByRole('button',{name:/Visit .* for read-only support/}).count(),0);
+  await ready.getByRole('button',{name:'Visit '+x.shops[0].name+' for read-only support'}).click();
+  await page.getByRole('heading',{name:'Visit Shop for Support'}).waitFor();
   await page.getByLabel('Reason for read-only support').fill(reason);
   await page.getByRole('button',{name:'Start read-only support'}).click();
   await page.getByText('Categories: 1').waitFor();
@@ -194,7 +194,7 @@ test('session revocation fences local support route and UI never pretends suppor
   const x=await fixture(t);
   const page=await x.pageFor(x.enabledEnv);
   const ready=page.locator('#business-roster-list li').filter({hasText:x.shops[0].name});
-  await ready.getByRole('button',{name:'Inspect setup for '+x.shops[0].name}).click();
+  await ready.getByRole('button',{name:'Visit '+x.shops[0].name+' for read-only support'}).click();
   await x.db.prepare('UPDATE platform_admin_sessions SET revoked_at_ms=? WHERE revoked_at_ms IS NULL')
     .bind(Date.now()).run();
   await page.getByLabel('Reason for read-only support').fill(reason);

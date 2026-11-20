@@ -54,10 +54,14 @@ export async function attachHostedPilot(env){
     },
   };
   // Reuse existing Create/Resume/list/Owner approval, with ONE exact physical
-  // D1 binding. The test-only Support Mode still requires its own
-  // non-serializable local gate and remains unavailable in hosted Workers.
+  // D1 binding. The separate hosted Support Mode adapter additionally
+  // requires an explicit opt-in and a current audited Admin session.
+  // The legacy local-test gate remains unchanged and nondeployable.
   return {
-    ...env,[BINDING]:pilot.shopDb,PLATFORM_LOCAL_PROVISIONING_ENABLED:'true',
+    ...env,[BINDING]:pilot.shopDb,
+    ...(env.PLATFORM_HOSTED_SUPPORT_ENABLED==='true'
+      ?{PLATFORM_HOSTED_SUPPORT_READY:'true'}:{}),
+    PLATFORM_LOCAL_PROVISIONING_ENABLED:'true',
     PLATFORM_LOCAL_OWNER_READY_ENABLED:'true',
     PLATFORM_LOCAL_SHOP_INVENTORY:inventory,
     PLATFORM_LOCAL_SHOP_MIGRATIONS:OWNER_READY_SHOP_MIGRATION_PLAN,

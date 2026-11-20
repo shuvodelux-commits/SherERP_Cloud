@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {mkdtemp,readFile,rm,writeFile,mkdir} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {test} from 'node:test';
-import {createTestHarness} from 'wrangler';
+import {createTestHarness,unstable_splitSqlQuery} from 'wrangler';
 import {generateHostedPilotMigrations,composeHostedShopMigrations,
   HOSTED_CONTROL_MIGRATIONS} from '../../scripts/m03-hosted-pilot-migrations.mjs';
 import {verifiedPreboundPilot} from '../../src/auth/m03-hosted-prebound-pilot.js';
@@ -45,6 +45,7 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
       PLATFORM_FACTOR_VERSION:'1',
       PLATFORM_SHOP_RESERVATION_ENABLED:'true',
       PLATFORM_HOSTED_PILOT_ENABLED:'true',
+      PLATFORM_HOSTED_SUPPORT_ENABLED:'true',
       PLATFORM_SHOP_DIRECTORY_ENABLED:'false',
       PLATFORM_PILOT_SHOP_ID:pilot.shopId,
       PLATFORM_PILOT_D1_ID:pilot.databaseId,
@@ -142,4 +143,46 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
     PLATFORM_OWNER_CLIENT_ID:conf.vars.PLATFORM_CLIENT_ID
   });
   assert.match(firstOwnerChallenge?.nonce??'',/^[A-Za-z0-9_-]{43}$/);
+
+  // Hosted Support Mode reuses the existing 5-minute audited grant and
+  // performs only read-only diagnostics. It never borrows an Owner session.
+  const supportSql=await readFile('staging-migrations/platform-support/0001_support_grants_and_events.sql','utf8');
+  await db.batch(unstable_splitSqlQuery(supportSql).map(sql=>db.prepare(sql)));
+  const supportSession=await get('/auth/session');
+  assert.equal((await supportSession.json()).supportDiagnosticsEnabled,true,
+    'verified hosted single-Shop Admin should advertise Support Mode');
+  const supportOperation=uuid();
+  const supportPayload={shopId:pilot.shopId,operationId:supportOperation,
+    reason:'Investigating catalog setup for the shop owner'};
+  assert.equal((await post('/support/start',{...supportPayload,shopId:uuid()})).status,403);
+  assert.equal((await post('/support/start',supportPayload,'f'.repeat(64))).status,403);
+  assert.equal((await post('/support/start',{...supportPayload,extra:'database-id'})).status,400);
+  assert.equal((await post('/support/start',{...supportPayload,reason:'no'})).status,400);
+  const started=await post('/support/start',supportPayload);
+  assert.equal(started.status,201);
+  const grant=await started.json();
+  assert.equal(grant.status,'created');
+  assert.match(grant.supportToken,/^[0-9a-f]{64}$/);
+  assert.ok(grant.expiresAtMs>Date.now());
+  assert.equal((await post('/support/start',supportPayload)).status,200,
+    'replayed operation does not return a second support bearer');
+  const diagnostics={shopId:pilot.shopId,eventId:uuid(),supportToken:grant.supportToken};
+  assert.equal((await post('/support/diagnostics',{...diagnostics,shopId:uuid()})).status,403);
+  const readResponse=await post('/support/diagnostics',diagnostics);
+  assert.equal(readResponse.status,200);
+  const inspected=await readResponse.json();
+  assert.equal(inspected.shopId,pilot.shopId);
+  assert.equal(inspected.status,'ok');
+  assert.equal(inspected.catalog.status,'available');
+  assert.equal(JSON.stringify(inspected).includes(grant.supportToken),false);
+  assert.equal((await post('/support/diagnostics',diagnostics)).status,403,
+    'audited read event cannot be replayed');
+  assert.equal((await post('/support/end',{
+    shopId:pilot.shopId,operationId:supportOperation})).status,200);
+  assert.equal((await post('/support/diagnostics',{
+    ...diagnostics,eventId:uuid()})).status,403,
+    'ended support session cannot read again');
+  const events=(await db.prepare(
+    'SELECT event_type FROM m03_local_support_events ORDER BY rowid').all()).results;
+  assert.deepEqual(events.map(e=>e.event_type),['START','READ','END']);
 });
