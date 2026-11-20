@@ -175,3 +175,29 @@ test('a Cash Session with supplier payout cannot be falsely closed by the older 
     assert.equal((await first(a,"SELECT status FROM owner_mvp_cash_sessions")).status,'Open');
   }finally{await close();}
 });
+
+test('direct D1 spoofed grant cannot bypass SQL-time Owner validation; posted legs stay immutable',async()=>{
+  const {ownerA,SHOP_A_DB:a,close}=await startCleanShopHarness();
+  try{
+    await migrate(a);await init(ownerA);await purchase(ownerA);
+    await assert.rejects(()=>a.prepare(`INSERT INTO owner_mvp_supplier_cash_payment_receipts(
+      operation_id,actor_id,intent_hash,shop_id,database_id,database_marker,
+      token_hash,supplier_id,cash_sequence,paid_paisa,note_text,paid_date,created_at_ms)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        crypto.randomUUID(),'google:forged','f'.repeat(64),
+        ownerA.env.PLATFORM_PILOT_SHOP_ID,ownerA.env.PLATFORM_PILOT_D1_ID,
+        ownerA.env.PLATFORM_PILOT_MARKER,'0'.repeat(64),'SUP-000001',
+        1,100,'forged',nowDay(),Date.now()).run(),/MVP_SUPPLIER_CASH_OWNER_REQUIRED/);
+    assert.equal((await first(a,'SELECT current_due_paisa AS due FROM owner_supplier_master')).due,60000);
+    assert.equal((await first(a,'SELECT count(*) AS n FROM owner_mvp_supplier_cash_payment_receipts')).n,0);
+    assert.equal((await post(ownerA)).status,'created');
+    await assert.rejects(()=>a.prepare(
+      "UPDATE owner_mvp_supplier_payment_ledger SET credit_paisa=1 WHERE payment_sequence=1"
+    ).run(),/MVP_SUPPLIER_CASH_LEDGER_IMMUTABLE/);
+    await assert.rejects(()=>a.prepare(
+      "DELETE FROM owner_mvp_supplier_payment_cash_book WHERE payment_sequence=1"
+    ).run(),/MVP_SUPPLIER_CASH_BOOK_IMMUTABLE/);
+    assert.equal((await first(a,'SELECT current_due_paisa AS due FROM owner_supplier_master')).due,49975);
+    assert.equal((await first(a,'SELECT paid_paisa FROM owner_mvp_supplier_payment_cash_book')).paid_paisa,10025);
+  }finally{await close();}
+});
