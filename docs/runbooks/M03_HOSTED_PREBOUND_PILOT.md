@@ -98,3 +98,48 @@ ERP Owner frontend. No new Shop D1 is created by an HTTP request, and
 - Production go-live still requires M10/M11 backup/recovery and financial
   acceptance. Do not enable POS, returns, ledger, purchases or public RPC
   merely because authentication is working.
+
+## Option A phase 0 — private deployment ownership preflight (2026-11-21)
+
+The existing `shererp` Workers Builds setup still generates a **one-Shop-only**
+`wrangler.shop-user.jsonc` and may promote it on a GitHub merge. This
+cannot safely coexist with automatic D1 binding publication. Before any new
+Shop D1 becomes active, a **single private deployment publisher** must own
+the `shererp` Worker version and preserve every existing D1 binding.
+
+The new **pure, nonpublishing** preflight is
+`assertPrivateOwnerDeployOwnership` in
+`scripts/m03-private-deploy-owner-guard.mjs`. It refuses an unknown
+Cloudflare account, Worker name, release SHA, wrong branch, missing Control
+D1, changed or deleted Shop D1, duplicated Shop binding/ID, and any
+Cloudflare Builds command other than an exact nonpromoting
+`npx wrangler@4.161.0 versions upload --config wrangler.shop-user.jsonc`.
+It requires the reviewed code SHA and the existing full Shop binding
+roster; it **does not** claim to read Cloudflare state or deploy a Worker.
+
+**One-time account handoff, only after the trusted publisher is ready:**
+
+1. Back up and verify the current `shererp` release version, exact D1
+   bindings, Control/Shop identities, approved Owner login and the complete
+   existing tenant roster. Confirm `admin` Google+MFA and Owner ERP login
+   remain working.
+2. In Cloudflare **Workers & Pages → shererp → Settings → Builds**,
+   use a **nonpromoting** deploy command
+   `npx wrangler@4.161.0 versions upload --config wrangler.shop-user.jsonc`
+   instead of `wrangler deploy` or `wrangler versions deploy`.
+   Do not change account secrets or existing D1 bindings.
+3. Set protected Builds variable
+   `SHERERP_DEPLOYMENT_OWNER=PRIVATE_PROVISIONER` **after** the private
+   publisher has been reviewed and a compatible candidate verified.
+   This makes the legacy one-Shop generator refuse to regenerate and
+   promote an incomplete roster; from that point Builds should use
+   a new publication-owned *immutable full-binding release profile*.
+4. All Worker version promotions must go through that single publisher
+   with **readback** verification, safe retries and rollback. No new Shop
+   may be marked Ready until the active Worker itself proves its binding.
+
+Until the publisher and Task 4 roster implementation are present, **do
+not enable that protected variable on the currently working Owner Worker**.
+The Phase 0 tests establish the safety contract, not the real-world Builds
+configuration. A green PR and a Cloudflare version upload are not approval
+to activate new Shop databases or financial write endpoints.
