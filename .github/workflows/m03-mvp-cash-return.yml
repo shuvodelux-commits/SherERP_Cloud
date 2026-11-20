@@ -24,6 +24,10 @@ jobs:
       - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
       - name: Original Purchase, POS Sale and Cash Return — real two-Shop local Workerd D1
         run: node --test tests/integration/m03-mvp-cash-return-workerd.spec.mjs
+      - name: Install Chromium for preserved original Returns UI
+        run: npx playwright install --with-deps chromium
+      - name: Original Returns browser -> authenticated real Shop D1 Cash refund
+        run: node --test qa/m03-mvp-cash-return-browser.spec.mjs
       - name: Existing operational FIFO Cash Sale regression
         run: node --test tests/integration/m03-mvp-cash-sale-workerd.spec.mjs
       - name: Owner source frontend integration compiler
