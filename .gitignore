@@ -12,3 +12,6 @@ source-audit.json
 
 # M01 Playwright QA artifacts
 test-results/
+
+# Generated private Cloudflare shop-user production profile; never commit account/Shop IDs
+/wrangler.shop-user.jsonc

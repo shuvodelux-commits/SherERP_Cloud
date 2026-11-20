@@ -1,0 +1,126 @@
+#!/usr/bin/env node
+/**
+ * M03 Shop-user Cloudflare Builds release profile.
+ * Constructs the existing authenticated Owner Worker at the EXISTING
+ * shererp.hisab.workers.dev URL. All account/Shop values come from approved
+ * Workers Builds variables, not repository fixtures or GitHub secrets.
+ *
+ * No network requests, remote D1 queries, SQL migrations or deployments.
+ * Fail closed unless the production branch and explicit Owner-login-only
+ * release gate are both selected. This does not prove hosted readiness.
+ */
+import {readFile,writeFile,lstat,stat} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {buildShopUserCandidate} from './port-p5-shop-user-login.mjs';
+import {validateCloudflarePreviewConfig} from './check-cloudflare-preview.mjs';
+
+const ROOT=fileURLToPath(new URL('../',import.meta.url));
+const ADMIN_ORIGIN='https://admin.hisab.workers.dev';
+const SHOP_ORIGIN='https://shererp.hisab.workers.dev';
+const TARGET='wrangler.shop-user.jsonc';
+const invalid=()=>{throw new TypeError('Shop-user deployment configuration unavailable (values withheld)');};
+
+export function buildShopUserDeployment(env){
+  if(!env||env.WORKERS_CI!=='1'||env.WORKERS_CI_BRANCH!=='main'||
+     env.SHERERP_OWNER_LOGIN_RELEASE!=='OWNER_LOGIN_ONLY_APPROVED')invalid();
+  if(typeof env.CLOUDFLARE_ACCOUNT_ID==='string'&&env.CLOUDFLARE_ACCOUNT_ID.length>0&&
+     env.CLOUDFLARE_ACCOUNT_ID!==env.SHERERP_ACCOUNT_ID)invalid();
+
+  // The portable instance validator provides strict shape, UUID, origin,
+  // account, Google-client and namespace checks; no new auth mechanism.
+  const manifest={
+    formatVersion:1,
+    accountId:env.SHERERP_ACCOUNT_ID,
+    workersSubdomain:'hisab',
+    workers:{admin:'admin',owner:'shererp'},
+    origins:{admin:ADMIN_ORIGIN,owner:SHOP_ORIGIN},
+    googleClientId:env.SHERERP_OWNER_GOOGLE_CLIENT_ID,
+    d1:{
+      control:{name:env.SHERERP_CONTROL_DB_NAME,id:env.SHERERP_CONTROL_DB_ID},
+      pilot:{
+        name:env.SHERERP_SHOP_DB_NAME,
+        id:env.SHERERP_SHOP_DB_ID,
+        shopId:env.SHERERP_SHOP_ID,
+        marker:env.SHERERP_SHOP_MARKER
+      }
+    },
+    rateLimits:{
+      // Separate reserved namespace for Admin, never bound in this profile.
+      adminNamespaceId:env.SHERERP_OWNER_RATE_LIMIT_NAMESPACE==='1'?'2':'1',
+      ownerNamespaceId:env.SHERERP_OWNER_RATE_LIMIT_NAMESPACE
+    }
+  };
+  let candidate;
+  try{candidate=buildShopUserCandidate(manifest,SHOP_ORIGIN);}
+  catch{invalid();}
+
+  // The P5 draft lives under .wrangler/portable-instance; the generated
+  // production profile is at repo root. Convert ONLY known relative paths.
+  const rootPath=path=>{
+    if(typeof path!=='string'||!path.startsWith('../../')||
+      path.includes('..',6))invalid();
+    return path.slice(6);
+  };
+  const config={
+    ...candidate,
+    main:rootPath(candidate.main),
+    assets:{...candidate.assets,directory:rootPath(candidate.assets.directory)},
+    d1_databases:candidate.d1_databases.map(db=>({
+      ...db,migrations_dir:rootPath(db.migrations_dir)
+    }))
+  };
+  if(config.name!=='shererp'||
+    config.main!=='src/m03-owner-redemption-worker.js'||
+    config.assets.directory!=='dist-owner'||
+    config.vars.OWNER_LOGIN_ENABLED!=='true'||
+    config.vars.OWNER_GMAIL_SIGNUP_ENABLED!=='true'||
+    config.vars.OWNER_DASHBOARD_BOOTSTRAP_ENABLED!=='true'||
+    config.d1_databases.length!==2||
+    config.d1_databases[0].binding!=='CONTROL_DB'||
+    config.d1_databases[1].binding!=='PLATFORM_PILOT_DB'||
+    config.ratelimits.length!==1||
+    config.ratelimits[0].name!=='OWNER_INGRESS')invalid();
+  return config;
+}
+
+/** Create the ignored root config without ever replacing a different file. */
+export async function writeShopUserDeployment(env,root=ROOT){
+  const config=buildShopUserDeployment(env);
+  const path=join(resolve(root),TARGET);
+  const contents=JSON.stringify(config,null,2)+'\n';
+  try{
+    const st=await lstat(path);
+    if(!st.isFile()||st.isSymbolicLink()||await readFile(path,'utf8')!==contents)
+      throw new Error('Refusing to overwrite existing shop-user configuration');
+    return path;
+  }catch(error){if(error.code!=='ENOENT')throw error;}
+  try{
+    await writeFile(path,contents,{flag:'wx',mode:0o600});
+  }catch(error){
+    if(error.code!=='EEXIST' || await readFile(path,'utf8')!==contents)
+      throw new Error('Refusing to overwrite existing shop-user configuration');
+  }
+  return path;
+}
+
+async function main(){
+  if(process.argv.length!==3||process.argv[2]!=='--generate')invalid();
+  // A build-only profile cannot silently turn the public PR Preview into a
+  // financial Worker even if a shared build script changes later.
+  const preview=JSON.parse(await readFile(join(ROOT,'wrangler.preview.jsonc'),'utf8'));
+  validateCloudflarePreviewConfig(preview);
+  // Require the unchanged Owner frontend build BEFORE preparing a deploy.
+  for(const name of ['index.html','owner-erp.html']){
+    if(!(await stat(join(ROOT,'dist-owner',name))).isFile())invalid();
+  }
+  await writeShopUserDeployment(process.env);
+  process.stdout.write('Shop-user deployment profile prepared; hosted Cloudflare/Owner identity verification is still required\n');
+}
+
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+  main().catch(()=>{
+    process.stderr.write('Shop-user deployment blocked: check approved Workers Builds variables, branch, and Owner assets (identities withheld)\n');
+    process.exitCode=1;
+  });
+}
