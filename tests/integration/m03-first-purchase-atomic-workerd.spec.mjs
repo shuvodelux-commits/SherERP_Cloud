@@ -51,7 +51,9 @@ before(async()=>{
   ({DB}=await worker.getEnv());
   await DB.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
     VALUES ('CashierAdd','Active','{"pos":{"add":true}}',''),
-           ('CashierNoAdd','Active','{"pos":{"add":false}}','')`).run();
+           ('CashierNoAdd','Active','{"pos":{"add":false}}',''),
+           ('M03PosOnly','Active','{"pos":{"add":true},"purchase":{"add":false}}',''),
+           ('M03PurchaseOnly','Active','{"pos":{"add":false},"purchase":{"add":true}}','')`).run();
 });
 after(async()=>harness.close());
 beforeEach(async()=>createPurchaseTestSchema(DB));
@@ -299,4 +301,30 @@ test('JSON object field order does not create a false changed-intent conflict',a
   inputs.payments=inputs.payments.map(x=>Object.fromEntries(Object.entries(x).reverse()));
   assert.equal((await submitLocalFirstPurchase(DB,inputs,{now:NOW})).state,'replay');
   assert.deepEqual(await snapshot(ctx),before);
+});
+
+test('POS-only staff cannot create a source purchase even though pos.add is allowed',async()=>{
+  const ctx=await shop({userRole:'M03PosOnly'});
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>post(ctx,{lines:[baseLines()[0]],payments:[]}),
+    /denied|purchase|permission|refused/i);
+  assert.deepEqual(await snapshot(ctx),before,
+    'POS-only must not create any purchase, lot, supplier obligation or money');
+});
+
+test('Purchase-only staff can create an unpaid 34-paisa purchase without POS sales permission',async()=>{
+  const ctx=await shop({userRole:'M03PurchaseOnly'});
+  const result=await post(ctx,{lines:[baseLines()[0]],payments:[]});
+  assert.deepEqual(result,{
+    state:'inserted',purchaseId:'PUR-000001',
+    grandPaisa:'34',paidPaisa:'0',duePaisa:'34'
+  });
+  const rows=await snapshot(ctx);
+  assert.deepEqual(rows.stock.map(x=>[x.product_id,x.quantity]),[['A',11],['B',10]]);
+  assert.deepEqual(rows.lots.map(x=>[x.product_id,x.quantity,x.allocated_cost_paisa]),
+    [['A',1,34]]);
+  assert.deepEqual(rows.supplierLedger.map(x=>[x.entry_type,x.debit_paisa,x.credit_paisa]),
+    [['Purchase',34,0]]);
+  assert.deepEqual(rows.moneyBook,[],'no cashier/bank movement for an unpaid purchase');
+  assert.equal(rows.seal.length,1);
 });
