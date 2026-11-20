@@ -67,7 +67,7 @@ test('offline hosted plan is deterministic, ten-step and never authorizes a remo
   assert.deepEqual(plan,planHostedControlCenterDryRun(fixture()));
   assert.equal(plan.mode,'offline-dry-run');
   assert.equal(plan.remoteQueries,0);
-  assert.equal(plan.ownerReadyMigrationCount,10);
+  assert.equal(plan.ownerReadyMigrationCount,11);
   assert.equal(plan.migrationFilesVerified,false);
   for(const flag of ['allowCreateDatabase','allowRemoteWrites','allowRemoteMigrations','allowDeploy','allowOwnerActivation'])
     assert.equal(plan[flag],false,flag);
@@ -80,8 +80,8 @@ test('offline hosted plan is deterministic, ten-step and never authorizes a remo
     fixture().origins.owner,fixture().googleClientId,secret])assert.ok(!message.includes(privateValue));
 });
 
-test('Owner-ready source preflight verifies exactly ten reviewed SQL files before HTTP',async()=>{
-  assert.deepEqual(await verifyOwnerReadyMigrationFiles(),{verified:true,migrationCount:10});
+test('Owner-ready source preflight verifies exactly eleven reviewed SQL files before HTTP',async()=>{
+  assert.deepEqual(await verifyOwnerReadyMigrationFiles(),{verified:true,migrationCount:11});
   const changed=async(file)=> {
     const bytes=await readFile(file);
     return String(file).includes('0013_product_catalog_revisions.sql')
@@ -96,7 +96,7 @@ test('hosted preflight makes six Cloudflare GETs, proves exact Worker D1 binding
   const output=await verifyHostedControlCenterReadOnly(fixture(),{token:secret,fetchFn});
   assert.equal(output.mode,'cloudflare-read-only');
   assert.equal(output.remoteQueries,6);
-  assert.equal(output.ownerReadyMigrationCount,10);
+  assert.equal(output.ownerReadyMigrationCount,11);
   assert.equal(output.migrationFilesVerified,true);
   assert.deepEqual(output.verified,[
     'cloudflare-account','workers-subdomain','control-d1','pilot-d1',
