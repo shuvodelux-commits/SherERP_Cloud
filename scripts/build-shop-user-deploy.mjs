@@ -13,6 +13,7 @@ import {readFile,writeFile,lstat,stat} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {buildShopUserCandidate} from './port-p5-shop-user-login.mjs';
+import {buildFirstShopCoreCandidate} from './m03-first-shop-core-activation.mjs';
 import {validateCloudflarePreviewConfig} from './check-cloudflare-preview.mjs';
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url));
@@ -85,7 +86,26 @@ export function buildShopUserDeployment(env){
     config.d1_databases[1].binding!=='PLATFORM_PILOT_DB'||
     config.ratelimits.length!==1||
     config.ratelimits[0].name!=='OWNER_INGRESS')invalid();
-  return config;
+
+  // Workers Builds is still the ONLY deploy owner for the one-Shop pilot.
+  // An approved core test is pinned to a single main commit and the reviewed
+  // read-only LIVE D1 readiness evidence. A later merge cannot silently
+  // redeploy login-only or enable a new unreviewed financial feature.
+  if(env.SHERERP_FIRST_SHOP_CORE_RELEASE===undefined)return config;
+  const sha=/^[a-f0-9]{40}$/;
+  if(env.SHERERP_FIRST_SHOP_CORE_RELEASE!=='FIRST_SHOP_CORE_MVP_TEST_ONLY'||
+     !sha.test(env.WORKERS_CI_COMMIT_SHA)||
+     !sha.test(env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT)||
+     env.WORKERS_CI_COMMIT_SHA!==env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT||
+     typeof env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON!=='string'||
+     env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON.length>4000)invalid();
+  let evidence;
+  try{evidence=JSON.parse(env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON);}
+  catch{invalid();}
+  try{
+    return buildFirstShopCoreCandidate(config,evidence,
+      env.SHERERP_FIRST_SHOP_CORE_RELEASE);
+  }catch{invalid();}
 }
 
 /** Create the ignored root config without ever replacing a different file. */
