@@ -1,0 +1,47 @@
+name: M03 Shop-user production bundle (synthetic dry-run only)
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build-shop-user-deploy.mjs"
+      - "scripts/port-p5-shop-user-login.mjs"
+      - "src/m03-owner-redemption-worker.js"
+      - "scripts/build-owner-frontend.mjs"
+      - "tests/contract/shop-user-cloudflare-build.test.mjs"
+      - ".github/workflows/m03-shop-user-cloudflare-bundle.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  shop-user-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WORKERS_CI: "1"
+      WORKERS_CI_BRANCH: main
+      SHERERP_OWNER_LOGIN_RELEASE: OWNER_LOGIN_ONLY_APPROVED
+      SHERERP_ACCOUNT_ID: 0123456789abcdef0123456789abcdef
+      SHERERP_CONTROL_DB_NAME: control-fixture
+      SHERERP_CONTROL_DB_ID: 11111111-1111-4111-8111-111111111111
+      SHERERP_SHOP_DB_NAME: shop-fixture
+      SHERERP_SHOP_DB_ID: 22222222-2222-4222-8222-222222222222
+      SHERERP_SHOP_ID: 33333333-3333-4333-8333-333333333333
+      SHERERP_SHOP_MARKER: 44444444-4444-4444-8444-444444444444
+      SHERERP_OWNER_GOOGLE_CLIENT_ID: 123-fixture.apps.googleusercontent.com
+      SHERERP_OWNER_RATE_LIMIT_NAMESPACE: "654322"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify shop-user profile and rejection tests
+        run: node --test tests/contract/shop-user-cloudflare-build.test.mjs tests/contract/port-p5-shop-user-login.test.mjs
+      - name: Build preserved Owner login and app assets
+        run: npm run build:owner-frontend
+      - name: Generate synthetic deploy-time profile
+        run: node scripts/build-shop-user-deploy.mjs --generate
+      - name: Bundle ONLY: never deploy, never connect any live D1
+        run: npx --yes wrangler@4.161.0 deploy --dry-run --config wrangler.shop-user.jsonc
