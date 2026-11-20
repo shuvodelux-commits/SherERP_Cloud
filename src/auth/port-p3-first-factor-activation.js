@@ -16,7 +16,12 @@ const CURRENT_STEP=`CAST(${NOW}/30000 AS INTEGER)`;
 const HEX_SECRET=/^[0-9a-f]{40}$/;
 const SIX_DIGITS=/^[0-9]{6}$/;
 
-async function proveTotpStep(secret,code,step){
+export function validFirstFactorTotp(secret,code){
+  return typeof secret==='string' && HEX_SECRET.test(secret) &&
+    typeof code==='string' && SIX_DIGITS.test(code);
+}
+
+export async function proveTotpStep(secret,code,step){
   const bytes=Uint8Array.from(secret.match(/../g),pair=>Number.parseInt(pair,16));
   const key=await crypto.subtle.importKey('raw',bytes,{name:'HMAC',hash:'SHA-1'},false,['sign']);
   for(const candidate of [step,step-1]){
@@ -44,9 +49,7 @@ async function proveTotpStep(secret,code,step){
 export async function activateFirstPlatformFactor({
   controlDb,setupToken,clientId,credential,totpSecret,code,
 }={}){
-  if(typeof controlDb?.prepare!=='function' ||
-     typeof totpSecret!=='string' || !HEX_SECRET.test(totpSecret) ||
-     typeof code!=='string' || !SIX_DIGITS.test(code))return false;
+  if(typeof controlDb?.prepare!=='function' || !validFirstFactorTotp(totpSecret,code))return false;
 
   try{
     const ticketHash=await hashOpaqueSessionToken(setupToken);
