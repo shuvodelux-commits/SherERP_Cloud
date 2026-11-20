@@ -345,12 +345,12 @@ function renderBusinessRoster(){
       button.setAttribute('aria-label','Resume setup for '+shop.displayName);
       button.addEventListener('click',()=>resumeRosterShop(shop,button));
       row.append(button);
-    }else if(supportEnabled){
+    }else if(supportEnabled&&shop.status==='ready'){
       const button=document.createElement('button');
       button.type='button';
       button.className='secondary';
-      button.textContent='Inspect setup';
-      button.setAttribute('aria-label','Inspect setup for '+shop.displayName);
+      button.textContent='Visit for Support';
+      button.setAttribute('aria-label','Visit '+shop.displayName+' for read-only support');
       button.addEventListener('click',()=>void selectSupportShop(shop));
       row.append(button);
     }
@@ -405,6 +405,9 @@ function showSignedIn(session){
   localProvisioning=session.localProvisioningEnabled===true;
   directoryEnabled=localProvisioning||session.shopDirectoryEnabled===true;
   supportEnabled=session.supportDiagnosticsEnabled===true;
+  byId('business-support-note').textContent=supportEnabled
+    ?'Ready businesses can be inspected through audited, read-only Support Mode (five-minute access). No Owner impersonation or financial edits.'
+    :'Support access is disabled. Setup ready does not mean financial ERP operations are enabled.';
   businessRoster.hidden=!directoryEnabled;
   adminDirectoryCount.textContent=directoryEnabled?'Loading…':'—';
   adminDirectoryStatus.textContent=directoryEnabled

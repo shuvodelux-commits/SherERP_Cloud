@@ -18,6 +18,7 @@ import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js
 import {listLocalProvisioning,readLocalProvisioning,resumeLocalProvisioning,startLocalProvisioning} from './auth/port-p4-local-provisioning.js';
 import {approvePlatformOwnerGmail} from './auth/platform-owner-gmail-approvals.js';
 import {handleLocalSupportHttpRequest} from './modules/m03-local-support-http-contract.js';
+import {hostedSupportRequest} from './auth/m03-hosted-support.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
@@ -229,7 +230,8 @@ function signedIn(c){
       ?{localProvisioningEnabled:true}:{}),
     ...(localProvisioningEnabled(c.env)||hostedDirectoryEnabled(c.env)
       ?{shopDirectoryEnabled:true}:{}),
-    ...(localSupportEnvironment(c.env)?{supportDiagnosticsEnabled:true}:{}),
+    ...(localSupportEnvironment(c.env)||c.env.PLATFORM_HOSTED_SUPPORT_READY==='true'
+      ?{supportDiagnosticsEnabled:true}:{}),
     ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'&&
        (c.env.PLATFORM_HOSTED_PILOT_ENABLED!=='true'||localProvisioningEnabled(c.env))
        ?{shopReservationEnabled:true}:{}),
@@ -383,17 +385,31 @@ app.post('/api/platform/shops/disable-owner',async(c,next)=>{
 });
 
 /**
- * Local Workerd/D1 proof only. A real Cloudflare account cannot turn these
- * paths on through text environment variables; without a function-bearing
- * in-process fixture, the endpoint and UI capability are both absent.
+ * Hosted Support Mode uses an independently verified, prebound Shop D1 and
+ * a 5-minute audited read grant. The separate local-test route remains
+ * inaccessible without its original nonserializable fixture gate.
  */
 app.post('/api/platform/support/:action',async(c,next)=>{
-  if(!localSupportEnvironment(c.env))return c.notFound();
+  if(!localSupportEnvironment(c.env)&&c.env.PLATFORM_HOSTED_SUPPORT_READY!=='true')
+    return c.notFound();
   await next();
 },limitIngress,limitBody,async c=>{
-  const env=localSupportEnvironment(c.env);
   const action=c.req.param('action');
-  if(!env||!['start','diagnostics','end'].includes(action))return c.notFound();
+  if(!['start','diagnostics','end'].includes(action))return c.notFound();
+  if(c.env.PLATFORM_HOSTED_SUPPORT_READY==='true'){
+    const fields={
+      start:['shopId','operationId','reason'],
+      diagnostics:['shopId','eventId','supportToken'],
+      end:['shopId','operationId'],
+    }[action];
+    const body=await expectedJson(c,fields);
+    if(!body)return c.json({error:'Invalid support request'},400);
+    const reply=await hostedSupportRequest(
+      c.env,action,body,getCookie(c,SESSION_COOKIE));
+    return c.json(reply.body,reply.status);
+  }
+  const env=localSupportEnvironment(c.env);
+  if(!env)return c.notFound();
   let body;
   try{body=await c.req.raw.clone().json();}catch{return c.json({error:'Invalid request'},400);}
   if(!body||typeof body.shopId!=='string')return c.json({error:'Invalid request'},400);

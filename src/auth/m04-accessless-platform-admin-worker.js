@@ -105,7 +105,7 @@ export default {
     }
     // Existing private Hono app owns nonce-bound Google verification, TOTP,
     // D1-backed sessions, throttling, CSRF/origin checks and all privilege gates.
-    const needsPilot=/^\/api\/platform\/(?:shops(?:\/|$)|auth\/(?:session|login)$)/.test(url.pathname);
+    const needsPilot=/^\/api\/platform\/(?:shops(?:\/|$)|support(?:\/|$)|auth\/(?:session|login)$)/.test(url.pathname);
     const platformEnv=needsPilot?await attachHostedPilot(env):env;
     return platformAuth.fetch(request,{...platformEnv,platformPageFiles:files},ctx);
   },
