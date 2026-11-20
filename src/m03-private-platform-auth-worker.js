@@ -175,7 +175,8 @@ app.post('/api/platform/auth/challenge',limitIngress,async c=>{
 });
 
 function hostedDirectoryEnabled(env){
-  return env.PLATFORM_SHOP_DIRECTORY_ENABLED==='true';
+  return env.PLATFORM_SHOP_DIRECTORY_ENABLED==='true'&&
+    (env.PLATFORM_HOSTED_PILOT_ENABLED!=='true'||localProvisioningEnabled(env));
 }
 
 function localProvisioningEnabled(env){
@@ -229,7 +230,9 @@ function signedIn(c){
     ...(localProvisioningEnabled(c.env)||hostedDirectoryEnabled(c.env)
       ?{shopDirectoryEnabled:true}:{}),
     ...(localSupportEnvironment(c.env)?{supportDiagnosticsEnabled:true}:{}),
-    ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'?{shopReservationEnabled:true}:{}),
+    ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'&&
+       (c.env.PLATFORM_HOSTED_PILOT_ENABLED!=='true'||localProvisioningEnabled(c.env))
+       ?{shopReservationEnabled:true}:{}),
     ...(invitationShop?{ownerInvitationShopId:invitationShop.shopId}:{}),
     ...(gmailShop?{ownerGmailApprovalShopId:gmailShop.shopId}:{}),
   });
@@ -271,10 +274,15 @@ app.post('/api/platform/shops',async(c,next)=>{
   if(c.env.PLATFORM_SHOP_RESERVATION_ENABLED!=='true')return c.notFound();
   await next();
 },limitIngress,limitBody,async c=>{
+  if(c.env.PLATFORM_HOSTED_PILOT_ENABLED==='true'&&!localProvisioningEnabled(c.env))
+    return unavailable(c);
   if(localProvisioningEnabled(c.env)){
     const body=await expectedJson(c,['operationId','displayName','ownerEmail']);
     if(!body)return c.json({error:'Enter a business name and Owner Gmail'},400);
-    return localProvisioningResponse(c,await startLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),body));
+    const prebound=c.env.PLATFORM_HOSTED_PILOT_ENABLED==='true'
+      ?pilotShopConfiguration(c.env):null;
+    return localProvisioningResponse(c,await startLocalProvisioning(
+      c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),body,prebound));
   }
   const body=await expectedJson(c,['operationId','displayName']);
   if(!body)return c.json({error:'Invalid business reservation'},400);

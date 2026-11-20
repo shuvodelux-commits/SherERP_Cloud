@@ -28,7 +28,7 @@ function receipt(row) {
   return { code: 200, body };
 }
 
-export async function startLocalProvisioning(db, token, { operationId, displayName, ownerEmail }) {
+export async function startLocalProvisioning(db, token, { operationId, displayName, ownerEmail }, prebound=null) {
   const name = displayName.trim();
   const email = normalizeGoogleGmail(ownerEmail.trim());
   if (!uuid.test(operationId) || !name || name.length > 120 || /\p{Cc}/u.test(name) || !email) {
@@ -36,16 +36,22 @@ export async function startLocalProvisioning(db, token, { operationId, displayNa
   }
   const hash = await hashOpaqueSessionToken(token);
   if (!hash) return { code: 401 };
-  const shopId = crypto.randomUUID();
+  if(prebound && (!uuid.test(prebound.shopId)||!uuid.test(prebound.databaseMarker)))
+    return {code:400};
+  const shopId = prebound?.shopId ?? crypto.randomUUID();
+  const marker = prebound?.databaseMarker ?? crypto.randomUUID();
   const [created,, setup] = await db.batch([
     db.prepare(`INSERT INTO platform_shop_reservations
       (shop_id,operation_id,display_name,created_by_subject,created_at_ms)
       SELECT ?,?,?,f.subject,${now} ${CURRENT_PLATFORM_ADMIN_FROM}
-      AND NOT EXISTS(SELECT 1 FROM platform_shop_reservations WHERE operation_id=?)`)
-      .bind(shopId, operationId, name, hash, operationId),
+      AND NOT EXISTS(SELECT 1 FROM platform_shop_reservations WHERE operation_id=? OR shop_id=?)`)
+      .bind(shopId, operationId, name, hash, operationId, shopId),
     db.prepare(`INSERT INTO platform_shop_provisioning (shop_id,owner_email,database_marker,stage)
-      SELECT ?,?,?,'reserved' WHERE EXISTS(SELECT 1 FROM platform_shop_reservations WHERE shop_id=?)`)
-      .bind(shopId, email, crypto.randomUUID(), shopId),
+      SELECT ?,?,?,'reserved' WHERE EXISTS(
+        SELECT 1 FROM platform_shop_reservations r
+        WHERE r.shop_id=? AND r.created_by_subject=(SELECT f.subject ${CURRENT_PLATFORM_ADMIN_FROM})
+      ) AND NOT EXISTS(SELECT 1 FROM platform_shop_provisioning WHERE shop_id=?)`)
+      .bind(shopId, email, marker, shopId, hash, shopId),
     currentSetup(db, hash, operationId)
   ]);
   const row = setup.results[0];
