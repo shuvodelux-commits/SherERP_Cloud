@@ -461,13 +461,14 @@ export function patchOwnerApp(html){
               ownerPurchaseDayBar_(result.data.cashSession);
             }
             if(fnName === 'getCashSessionSummary' && result?.data==null){
-              // Original topbar has an editable opening field. Suggest only
-              // while its dialog is open; never overwrite a user's typing.
+              // Suggest the persisted physical closing count even if the
+              // Start Day input has focus. Never clobber any later typing.
               var panel=document.getElementById('posSessionModal');
-              if(panel && !panel.hidden){
+              var fld=document.getElementById('posOpeningCash');
+              if(panel && !panel.hidden && fld){
+                var before=fld.value;
                 ownerNextOpeningCash_().then(function(value){
-                  var fld=document.getElementById('posOpeningCash');
-                  if(fld && document.activeElement!==fld)fld.value=value.toFixed(2);
+                  if(fld.value===before)fld.value=value.toFixed(2);
                 }).catch(function(){});
               }
             }
