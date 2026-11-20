@@ -8,7 +8,7 @@ import owner from '../../src/m03-owner-redemption-worker.js';
 import {beginFirstOwnerGmailLogin,loginFirstOwnerWithGmail} from '../../src/auth/platform-owner-gmail-login.js';
 import {validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
-import {applyLocalShopMigrations,shopMigrationPlan} from '../fixtures/port-p2-local-shop-migrations.mjs';
+import {applyLocalShopMigrations,ownerReadyShopMigrationPlan} from '../fixtures/port-p2-local-shop-migrations.mjs';
 import {makeSignedGmailOwnerToken,ownerJwk} from '../fixtures/m03-clean-shop-owner-jwt.mjs';
 
 const adminOrigin='https://platform.example.test';
@@ -39,7 +39,8 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
   const harness=createTestHarness({workers:[{
     config:{...config,vars:{...config.vars,
       PLATFORM_SHOP_RESERVATION_ENABLED:'true',
-      PLATFORM_LOCAL_PROVISIONING_ENABLED:'true',PLATFORM_LOCAL_SHOP_INVENTORY:inventory,
+      PLATFORM_LOCAL_PROVISIONING_ENABLED:'true',PLATFORM_LOCAL_OWNER_READY_ENABLED:'true',
+      PLATFORM_LOCAL_SHOP_INVENTORY:inventory,
     }}
   }]});
   t.after(()=>harness.close());
@@ -78,12 +79,12 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
     async verifyTarget(scope,dbHandle){
       return inventory.some(item=>scope.binding===item.binding&&scope.databaseId===item.id&&dbHandle===env[item.binding]);
     },
-    async prepareShop(scope){await applyLocalShopMigrations(env[scope.binding],scope);}
+    async prepareShop(scope){await applyLocalShopMigrations(env[scope.binding],scope,{plan:ownerReadyShopMigrationPlan});}
   };
   const platformEnv={...env,PLATFORM_LOCAL_SHOP_INVENTORY:inventory,
-    PLATFORM_LOCAL_SHOP_PROVIDER:provider,PLATFORM_LOCAL_SHOP_MIGRATIONS:shopMigrationPlan,
+    PLATFORM_LOCAL_SHOP_PROVIDER:provider,PLATFORM_LOCAL_SHOP_MIGRATIONS:ownerReadyShopMigrationPlan,
     PLATFORM_SHOP_RESERVATION_ENABLED:'true',PLATFORM_LOCAL_PROVISIONING_ENABLED:'true',
-    PLATFORM_AUTH_SCOPE:'private-platform-auth',PLATFORM_AUTH_ORIGIN:adminOrigin,
+    PLATFORM_LOCAL_OWNER_READY_ENABLED:'true',PLATFORM_AUTH_SCOPE:'private-platform-auth',PLATFORM_AUTH_ORIGIN:adminOrigin,
     PLATFORM_CLIENT_ID:clientId,PLATFORM_INGRESS:{limit:async()=>({success:true})}};
   const adminRequest=(path,body)=>platform.request(adminOrigin+'/api/platform'+path,{
     method:'POST',headers:{origin:adminOrigin,'Content-Type':'application/json',
@@ -109,15 +110,18 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
   assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_first_shop_owners').first()).n,0,
     'business Ready means approved Gmail but NOT automatically authenticated Owner');
 
-  // Product/Owner-write migrations are release-candidate fixtures, never
-  // part of the private provisioning deployment flags.
+  // The existing local provider, not this test, must have fully installed
+  // and sealed all six migration receipts before declaring either Shop ready.
   for(const item of inventory){
     const shopDb=env[item.binding];
-    for(const path of [
-      'migrations/0013_product_catalog_revisions.sql',
-      'staging-migrations/shop-owner-write/0002_shop_owner_write_grant.sql',
-      'staging-migrations/shop-owner-write/0003_owner_product_create_receipts.sql'
-    ])await migrate(shopDb,path);
+    const {results}=await shopDb.prepare('SELECT position,name,checksum FROM port_p2_shop_migrations ORDER BY position').all();
+    assert.deepEqual(results,ownerReadyShopMigrationPlan.map((step,i)=>({
+      position:i+1,name:step.name,checksum:step.checksum
+    })));
+    assert.equal((await shopDb.prepare('SELECT enabled FROM shop_owner_write_grant WHERE singleton=1').first()).enabled,0,
+      'Owner write permission cannot become active before signed Google Owner claim');
+    assert.equal((await shopDb.prepare('SELECT count(*) AS n FROM products').first()).n,0);
+    assert.equal((await shopDb.prepare('SELECT count(*) AS n FROM owner_product_create_receipts').first()).n,0);
   }
   t.mock.method(globalThis,'fetch',async(url,options)=>{
     assert.equal(url,'https://www.googleapis.com/oauth2/v3/certs');
