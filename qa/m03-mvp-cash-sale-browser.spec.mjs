@@ -99,7 +99,10 @@ test('original POS checkout button and invoice renderer post ONE real saved D1 c
         headers:Object.fromEntries(res.headers),body:Buffer.from(await res.arrayBuffer())});
     });
     await page.goto(origin+'/app',{waitUntil:'domcontentloaded'});
-    await page.evaluate(()=>goToPage('posv2'));
+    // Wait for the authenticated app shell's actual POS navigation. A
+    // premature goToPage() races its asynchronous dashboard bootstrap.
+    await page.locator('#navList .nav-item[aria-label="POS"]').click();
+    await page.locator('#page-pos').waitFor({state:'visible'});
     await page.waitForFunction(()=>typeof posState!=='undefined'&&
       posState.products?.some(p=>p.name==='MVP Copper Cable'));
     await page.evaluate(()=>{
