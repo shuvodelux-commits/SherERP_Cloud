@@ -1,4 +1,5 @@
 import {publishOwnerWriteGrant,fenceOwnerWriteGrant} from '../db/shop-owner-write-grant.js';
+import {OWNER_SESSION_FRESH_SQL} from './platform-owner-session-deadline.js';
 import {CURRENT_PLATFORM_ADMIN_FROM} from './platform-superadmin-session.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './platform-shop-binding.js';
 import {hashOpaqueSessionToken} from './session-token.js';
@@ -16,6 +17,7 @@ export async function publishCurrentOwnerWriteSession(env,token){
     JOIN platform_shop_owner_access a ON a.shop_id=s.shop_id AND a.enabled=1
     JOIN platform_shop_bindings b ON b.shop_id=s.shop_id
     WHERE s.shop_id=? AND s.token_hash=? AND b.database_id=? AND b.database_marker=?
+      AND ${OWNER_SESSION_FRESH_SQL}
     ON CONFLICT(shop_id) DO UPDATE SET token_hash=excluded.token_hash
     WHERE platform_owner_grant_claim.token_hash=excluded.token_hash
       AND platform_owner_grant_claim.generation=excluded.generation

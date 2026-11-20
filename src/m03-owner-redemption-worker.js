@@ -1,4 +1,5 @@
 import {beginFirstOwnerGmailLogin,loginFirstOwnerWithGmail} from './auth/platform-owner-gmail-login.js';
+import {OWNER_SESSION_MAX_AGE_SECONDS} from './auth/platform-owner-session-deadline.js';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCookie,setCookie} from 'hono/cookie';
@@ -137,7 +138,7 @@ app.post('/api/owner/auth/login',protectLogin,limitBody,async c=>{
     (c.env.OWNER_GMAIL_SIGNUP_ENABLED==='true'?await loginFirstOwnerWithGmail(c.env,input):null);
   if(!token)return denied(c);
   setCookie(c,LOGIN_COOKIE,'',{...COOKIE,maxAge:0});
-  setCookie(c,SESSION_COOKIE,token,{...COOKIE,maxAge:31_536_000});
+  setCookie(c,SESSION_COOKIE,token,{...COOKIE,maxAge:OWNER_SESSION_MAX_AGE_SECONDS});
   return c.json({role:'Owner'});
 });
 
