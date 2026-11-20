@@ -8,7 +8,7 @@
 - Generates two separate Wrangler **local drafts** in the existing Git-ignored `.wrangler/portable-instance/` directory: `admin.generated.jsonc` and `owner.generated.jsonc`. It does not change checked-in Wrangler profiles, migrations or frontend code.
 - Uses the existing private Hono/Owner runtime and one reviewed, static `PLATFORM_PILOT_DB` binding only. Automatic provisioning of multiple shops, Worker-binding publication, and safe retries still belong to P4/#690. Do **not** interpret a pilot draft as a dynamic multi-tenant solution.
 - All generated Workers have `workers_dev:false` and `preview_urls:false`; source activation switches are **off**, and D1 bindings have `remote:false`. These files are **not deployment-ready** and deliberately do not include Access audience/operator, session/MFA, API credentials or other protected configuration.
-- The private Administrator Worker now accepts only the **exact trusted configured workers.dev origin** and still requires Cloudflare native Access identity, approved audience/operator and internal Google/MFA. Changing a request header or arriving through another host cannot bypass this gate. Custom domains are a later reviewed extension.
+- Set the optional top-level `"adminAuthMode": "google-totp-without-access"` to select the reviewed Google/TOTP Admin Worker from [PR #806](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/806). It requires an exact trusted Admin origin, a preapproved Google subject, a one-time Control D1 setup ticket and TOTP. Configure the subject, TOTP key and factor version separately through approved Worker configuration. If you omit the field or set it to `"cloudflare-access"`, the installer selects the existing Access profile.
 
 ## Local instructions — no cloud changes
 
@@ -31,7 +31,7 @@
    Repeat with the same values to confirm idempotency. A changed manifest does **not** silently replace previously generated profiles; review and explicitly archive the old ignored drafts before generating an updated instance.
 6. Inspect the generated **local** profiles for the intended account, Worker names and bindings. **Do not run `wrangler deploy`, `wrangler d1 migrations apply --remote`, or activate private release flags from these drafts.**
 
-If the new Cloudflare account has no Control D1, Shop D1 or namespace IDs yet, stop at the example/planning stage. **P2** is responsible for explicit, safe resource creation, ownership verification, Access/Google configuration, versioned migrations, backup, and deployment authorization. P1 intentionally cannot prove that typed IDs belong to the configured Cloudflare account.
+Use [P2 read-only preflight](PORT_P2_READONLY_PREFLIGHT.md) to confirm the Control and Shop D1 identities against the intended account before preparing release configuration. Google OAuth, the selected Admin authentication setup, migrations, backup and deployment each have separate release gates.
 
 ## Review/test evidence
 

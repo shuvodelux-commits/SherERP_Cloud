@@ -27,10 +27,10 @@ Every stage shows one of three labels:
 | 3. Cloudflare account | Account ID and `workers.dev` namespace | **SAFE NOW** |
 | 4. Empty D1 databases | Control D1 ID and one disposable Shop D1 ID | **CONTROLLED CLOUD SETUP** |
 | 5. Google | OAuth Web client ID; authorized Admin and Owner origins | **SAFE NOW** |
-| 6. Access | Super Admin Worker-wide Access restriction | **SAFE NOW** (verify before publishing) |
+| 6. Admin authentication | Select Google/TOTP or the existing Access profile | **SAFE NOW** (verify before publishing) |
 | 7. Instance configuration | Validated ignored JSON and disabled Worker drafts | **SAFE NOW** |
 | 8. Platform schema / first administrator | Versioned migrations, single-use setup ticket, MFA | **STOP / RELEASE GATE** |
-| 9. Deploy private Admin Worker | Accessible only behind verified Access | **STOP / RELEASE GATE** |
+| 9. Deploy private Admin Worker | Authenticated Control Center | **STOP / RELEASE GATE** |
 | 10. Deploy Owner frontend/Worker | Owner Gmail sign-in and correctly scoped shop | **STOP / RELEASE GATE** |
 | 11. Add business | Real provisioned Shop D1, Owner, tested ERP | **STOP / RELEASE GATE** |
 | 12. Go live | Exact accounting + restore + security signoff | **STOP / RELEASE GATE** |
@@ -86,7 +86,7 @@ node scripts/port-p0-inventory.mjs --check
 3. Open **Workers & Pages** (Cloudflare menu labels can change). Find the account's default **Workers.dev subdomain** under Worker settings/subdomain management.
 4. Record the new Cloudflare **Account ID**. It is normally a 32-character hex string; copy it from the account dashboard, **not from the old project's Wrangler files**.
 5. Select two distinct Worker names, for example `admin-shererp` and `owner-shererp`. Check that they are available in this account.
-6. Decide now that **the Admin Worker is private** and must be protected by Cloudflare Access before the public hostname serves login pages or APIs.
+6. Record the intended Admin authentication mode in Step 7.
 
 Your example addresses will look like:
 
@@ -162,9 +162,9 @@ The current SherERP private pages use **Google Identity Services ID-token sign-i
 
 **If Google says origin not allowed:** verify the Worker name, Workers.dev subdomain, HTTPS scheme, client ID, consent/testing-user configuration and browser popup settings. Official reference: [Google Identity Services Web client setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid).
 
-### Step 7 — Configure Cloudflare Access for Super Admin (SAFE NOW, before any live publish)
+### Step 7 — Select Super Admin authentication (SAFE NOW, before any live publish)
 
-**Cloudflare Access is separate from Google Sign-In inside SherERP. Both layers are required by the private Admin Worker.**
+For Google/TOTP without Zero Trust, set `"adminAuthMode": "google-totp-without-access"` in the ignored instance manifest in Step 8. Continue with the Google origins from Step 6 and the [Google/TOTP prerequisites](PORT_P1_LOCAL_CONFIGURATION.md) for the approved-operator subject, setup ticket and factor initialization. Use the following Access steps only if you choose the Access profile.
 
 1. In the correct Cloudflare account, open **Zero Trust → Access controls → Applications** (menu names may vary).
 2. Create a **Self-hosted** application protecting the intended **entire Admin Worker**, preferably by **Worker destination/name** if that is the supported account UI. Do not protect only the root page and accidentally leave `/api/platform/*` or `/platform-auth.js` public.
@@ -228,7 +228,7 @@ node scripts/port-p1-instance.mjs --generate .wrangler/instance.json
 Expected message(s) include:
 
 ```text
-P1 local manifest valid; deploy/Access/Cloudflare account verification NOT performed
+P1 local manifest valid; deployment, authentication and Cloudflare account verification pending
 P1 ignored local config drafts generated; no deploy or resource changes
 ```
 
@@ -322,17 +322,17 @@ Cloudflare's generic syntax is `wrangler d1 migrations apply <DATABASE> --remote
 1. Identify the exact first Super Admin Google account and verified **Google stable subject**, not an unverified browser-supplied email.
 2. Use a **reviewed private setup-ticket issuer** to insert a cryptographically hashed, unique **64-character token** with nonce, verified Google issuer/subject, issue time and expiry **no more than 10 minutes** into the **correct Control D1**. Do not hand-write SQL that bypasses those checks.
 3. Securely provision `PLATFORM_TOTP_SECRET` (the existing verifier expects **40 lowercase hex characters**, representing a 20-byte TOTP key), enroll the same secret in the intended authenticator app, and configure a positive `PLATFORM_FACTOR_VERSION` matching the persisted platform auth factor version.
-4. Finish the reviewed first-admin auth initialization (including the `platform_admin_auth` state). A ticket alone does not create MFA state or a working login.
-5. Store the TOTP key in **Cloudflare Worker secrets or another approved protected store**, not `vars` in a public repo. Record secure recovery custody outside GitHub.
-6. Confirm Access audience + operator email, HTTPS origin and Google client ID agree with Steps 6–7.
-7. Open the protected Admin hostname → **Set up administrator** → enter one-time ticket → choose the approved Google account → finish enrollment. Then use **Start sign-in** and enter the authenticator code.
-8. Test rejected wrong Google identity, wrong/expired/replayed ticket, wrong TOTP, expired session, logout and wrong Access user.
+4. Store the TOTP key in **Cloudflare Worker secrets or another approved protected store**. Record secure recovery custody outside GitHub.
+5. Confirm the exact HTTPS origin and Google client ID. For Google/TOTP without Access, configure `PLATFORM_OPERATOR_GOOGLE_SUBJECT` to match the verified operator subject. For Access, confirm the audience and operator email.
+6. Open the protected Admin hostname → **Set up administrator** → enter one-time ticket → choose the approved Google account → finish enrollment.
+7. While the setup ticket is valid, use the approved private factor activation procedure to initialize `platform_admin_auth`. Then use **Start sign-in** and enter the authenticator code.
+8. Test rejection of the wrong Google identity, wrong/expired/replayed tickets, wrong TOTP and expired sessions. Verify logout revocation and, for the Access profile, rejection of the wrong Access user.
 
 **Current blocker:** no verified, complete, account-independent **ticket issuer + MFA enrolment/operator script + first-hosted-deployment procedure** is available in this release. **Do not issue arbitrary remote SQL or seed a default Super Admin** to imitate it.
 
 ### Step 13 — Release the private Super Admin Worker (STOP / RELEASE GATE)
 
-The implementation is:
+The Access profile uses the entry point below. Google/TOTP without Access uses `src/auth/m04-accessless-platform-admin-worker.js` and delegates to the same private platform app.
 
 ```text
 src/m03-access-platform-auth-worker.js
@@ -349,8 +349,8 @@ src/m03-access-platform-auth-worker.js
 | `PLATFORM_AUTH_SCOPE` | Exactly `private-platform-auth` |
 | `PLATFORM_AUTH_ORIGIN` | Exact private Admin `https://...workers.dev` origin |
 | `PLATFORM_CLIENT_ID` | Google Web client ID |
-| `PLATFORM_ACCESS_AUDIENCE` | Verified Cloudflare Access AUD |
-| `PLATFORM_ACCESS_EMAIL` | Approved operator email |
+| `PLATFORM_ACCESS_AUDIENCE`, `PLATFORM_ACCESS_EMAIL` | Verified audience and approved operator email for Access mode |
+| `PLATFORM_AUTH_MODE`, `PLATFORM_OPERATOR_GOOGLE_SUBJECT` | `google-totp-without-access` and the independently verified operator subject for Google/TOTP mode |
 | `PLATFORM_TOTP_SECRET` | Protected TOTP seed, never committed |
 | `PLATFORM_FACTOR_VERSION` | Valid positive MFA version consistent with Control D1 |
 | `PLATFORM_SHOP_RESERVATION_ENABLED` | Remain `false` until Shop setup is approved |
@@ -359,11 +359,11 @@ src/m03-access-platform-auth-worker.js
 **Required release order:**
 
 1. M03/M04/M11 independently approve the private Admin deployment profile, exact new-account IDs, no-preview policy and recovery plan.
-2. Verify Worker-wide Access will protect **every** Admin URL before exposure.
+2. Verify the selected boundary before exposure. For Access, confirm coverage of every Admin URL. For Google/TOTP, confirm the exact origin, approved-subject bootstrap, ingress rate limit and session-gated APIs.
 3. Generate a reviewed **release profile**, rather than deploying `.wrangler/portable-instance/admin.generated.jsonc` unchanged. The generated draft intentionally has `workers_dev:false`, no public route and missing protected settings; the current hardcoded old-account staging profile is also **not portable**.
 4. Perform local and Wrangler **dry-run** checks with that reviewed release profile, check that the sole D1 binding is the correct Control D1.
 5. Under explicit release authorization, deploy/activate the approved private Admin Worker. Retain the previous Worker version for rollback and confirm audit/logging excludes tokens and cookies.
-6. From a different browser/not logged into Access, verify HTML/CSS/JS/API all reject. From the allowed operator identity, verify the additional Google + MFA sign-in.
+6. From a fresh browser, verify the unauthenticated responses for the selected mode. Access blocks HTML/CSS/JS and APIs. Google/TOTP serves the login page and restricts protected APIs. Verify Google and MFA sign-in as the approved operator.
 
 **Never** copy old-account values from `wrangler.m03-platform-auth-access-staging.jsonc` into a new account. It embeds the existing account, hostname, Control D1 and rate-limit namespace. Do not publish the private Worker simply to see “Hello world”.
 
@@ -418,7 +418,7 @@ When an approved build release exists:
    - Build: `npm run build:frontend`
    - Deploy: `npx wrangler@4.161.0 deploy --config wrangler.preview.jsonc`
    - Preview: `npx wrangler@4.161.0 preview --config wrangler.preview.jsonc`
-4. **Do not reuse that public deploy command for Admin/Owner**. Each private Worker needs its own approved config, Access, secrets, D1 bindings and release ownership. Connecting the same repo twice can trigger multiple builds per commit; design this only when the private release is approved.
+4. **Do not reuse that public deploy command for Admin/Owner**. Each private Worker needs its own approved config, authentication, secrets, D1 bindings and release ownership. Multiple GitHub connections can trigger multiple builds per commit, so review build ownership before approving the private release.
 5. GitHub Actions `.github/workflows/cloudflare-preview.yml` is **test-only**. Do not add an additional GitHub Actions push-to-deploy to the same Worker.
 6. Keep public PR previews free of D1, Owner, cash, bank, secrets and mutable customer data.
 
@@ -430,7 +430,7 @@ When an approved build release exists:
 
 **Required final workflow:**
 
-1. Sign in to the **private Admin Worker** using Cloudflare Access → Google account → TOTP.
+1. Sign in to the **private Admin Worker** using Google and TOTP. Complete the Access prompt first if you chose the Access profile.
 2. Open the **Control Center**.
 3. Click **+ Business** and enter **Business name** + **Owner Gmail**.
 4. Submit **one operation**. If the network fails, use **Resume setup**, not a second untracked create.
@@ -471,7 +471,7 @@ Do not mark “setup complete” until someone else can repeat these steps with:
 
 - [ ] A second Cloudflare account with different account/Worker/D1 UUIDs and different Workers.dev hosts.
 - [ ] The **same exact reviewed application source SHA**, with **configuration changes only**.
-- [ ] A working protected Admin host, exact Access identity and Google + TOTP login.
+- [ ] A working protected Admin host, verified Google/TOTP login and the exact Access identity if using Access.
 - [ ] Independently verifiable Control D1 and Shop D1 schema versions/bindings.
 - [ ] A usable new shop created from the UI, with a real Owner sign-in.
 - [ ] Two shops with demonstrated SQL/backend tenant isolation.
@@ -531,6 +531,6 @@ No GitHub file, local P1 manifest, or Cloudflare Worker deploy command automatic
 - [Cloudflare GitHub deployment ownership](../CLOUDFLARE_GITHUB_SETUP.md)
 - [Full portability roadmap](PORTABILITY_ROADMAP.md)
 
-**Exact next engineering gates before this can become a fully executable installer:** (1) reviewed new-account private Admin/Owner release config, Access and secrets; (2) versioned Control/Shop migrations with a restorable operator workflow; (3) secure first-admin ticket + MFA setup tool; (4) Cloudflare-hosted Shop D1/binding provisioning and Owner handoff; (5) original ERP real-transaction integration and financial acceptance; (6) two-tenant new-account acceptance and M10/M11 GO.
+The executable installer still needs reviewed Admin/Owner release configuration, approved authentication settings and secrets, restorable Control/Shop migrations, an operator ticket and MFA tool, hosted shop provisioning and Owner handoff, financial acceptance in the original ERP, and two-tenant M10/M11 signoff.
 
 **Documentation maintenance:** after each milestone, update this **same file**, replacing `STOP / RELEASE GATE` with actual reviewed operator commands and acceptance evidence. Do not write another overlapping “complete installation guide.” Keep this tutorial practical for one operator, while preserving **all** financial safety and tenant-isolation gates.
