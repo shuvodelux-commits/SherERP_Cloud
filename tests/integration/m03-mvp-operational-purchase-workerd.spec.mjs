@@ -68,9 +68,10 @@ test('MVP operational credit purchase atomically posts Supplier payable, lot, st
     const before=await readOwnerPurchaseBootstrap(a);
     assert.equal(before.products[0].stock,0);
     assert.deepEqual(before.suppliers.map(s=>s.id),['SUP-000001']);
-    const session=await open(ownerA);
+    const cashOpenOp=crypto.randomUUID();
+    const session=await open(ownerA,cashOpenOp);
     assert.deepEqual(session,{status:'started',sessionId:'CS-000001'});
-    assert.deepEqual(await open(ownerA,session.operationId),{status:'already-open',sessionId:'CS-000001'});
+    assert.deepEqual(await open(ownerA,cashOpenOp),{status:'replayed',sessionId:'CS-000001'});
     const op=crypto.randomUUID(),input=purchase();
     const r=await post(ownerA,input,op);
     assert.deepEqual(r,{status:'created',purchaseId:'PUR-000001',grandTotal:600,dueAmount:600});
@@ -103,8 +104,8 @@ test('MVP first Purchase fails closed: no cash session, wrong Shop, replay confl
     assert.deepEqual(await post(ownerA,purchase({discount:'1'})),{status:'unsupported'});
     assert.deepEqual(await post(ownerA,purchase({date:'2020-01-01',backdatedReason:'History'})),{status:'unsupported'});
     assert.deepEqual(await post(ownerA,purchase({items:[{...purchase().items[0],unitBreakdown:[{unit:'Box',qty:'1'}]}]})),{status:'unsupported'});
-    assert.deepEqual(await post(ownerA,purchase({supplierId:'SUP-000999'})),{status:'denied'});
     await open(ownerA);
+    assert.deepEqual(await post(ownerA,purchase({supplierId:'SUP-000999'})),{status:'denied'});
     const before=(await a.prepare('SELECT COUNT(*) AS n FROM owner_mvp_purchase_receipts').first()).n;
     assert.deepEqual(await post(ownerA,purchase({items:[{...purchase().items[0],productId:'PRD-999999'}]})),{status:'denied'});
     const otherScope=scope(ownerB);
