@@ -1,0 +1,29 @@
+name: M03 local audited Shop support diagnostics Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  support-diagnostics:
+    name: M03 two-Shop read-only support diagnostics and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install disposable local Workerd
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Test authorized local Support Mode diagnostics
+        run: node --test tests/integration/m03-local-support-shop-diagnostics-workerd.spec.mjs
