@@ -73,8 +73,14 @@ after(async()=>{
 });
 async function openParty(page){
   await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
-  await page.locator('#navList [data-page="hisabiqParties"]').waitFor({state:'visible'});
-  await page.locator('#navList [data-page="hisabiqParties"]').click();
+  if(page.viewportSize().width<768){
+    await page.locator('#mobileBottomNav [data-mobile-page="more"]').click();
+    await page.locator('#mobileMoreList [data-mobile-target="hisabiqParties"]').waitFor({state:'visible'});
+    await page.locator('#mobileMoreList [data-mobile-target="hisabiqParties"]').click();
+  }else{
+    await page.locator('#navList [data-page="hisabiqParties"]').waitFor({state:'visible'});
+    await page.locator('#navList [data-page="hisabiqParties"]').click();
+  }
   await page.locator('#hparty-source-mode').getByText('Supplier-only D1 source view').waitFor({state:'visible'});
   await page.locator('#hparty-detail h2').getByText('Hossain Electric').waitFor({state:'visible'});
   await page.locator('#hparty-tab-content').getByText('PUR-000007').waitFor({state:'visible'});
