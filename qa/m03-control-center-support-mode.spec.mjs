@@ -105,7 +105,10 @@ async function fixture(t){
         cookie:cookieName+'='+(opts.token||adminToken)},
       ...(method==='POST'?{body:JSON.stringify(body)}:{}),
     },chosen);
-    return {status:res.status,body:await res.json()};
+    const responseText=await res.text();
+    let responseBody;
+    try{responseBody=JSON.parse(responseText);}catch{responseBody={error:'Not found'};}
+    return {status:res.status,body:responseBody};
   }
   browser=await chromium.launch({headless:true});
   async function pageFor(chosen=enabledEnv){
