@@ -130,3 +130,27 @@ For the separately approved Owner staging release, build `dist-owner/` from the 
 6. If needed, detach the private route and revoke its sessions. Engage recovery review before restoring any database. A backup or restoration step must never point at the operational or historical ERP D1.
 
 This candidate does not include a remote admission policy, live account provisioning, an Owner invitation endpoint, or a deployed login. Keep the public preview and ordinary ERP login on their existing separate configuration.
+
+
+## Hosted Control Center business directory (read-only)
+
+The existing private Admin page can list business setup receipts from its **own Control D1** when
+`PLATFORM_SHOP_DIRECTORY_ENABLED=true`. This is deliberately independent of
+`PLATFORM_LOCAL_PROVISIONING_ENABLED`, which requires in-process test fixtures and must not be
+used on hosted Workers. The list API validates the current SQL-backed Super Admin session and
+returns up to 50 current-admin businesses without Shop D1 secrets or binding identifiers.
+Hosted mode never enables create/resume database provisioning, migration, Owner impersonation,
+or support access through this flag.
+
+Do **not** enable this flag until the correct new-account Admin Worker is deployed, the approved
+Control D1 identity is verified, and reviewed onboarding migrations
+`0001_shop_reservations`, `0002_shop_bindings`, `0003_owner_invitations`,
+`0004_first_shop_owner`, `0007_owner_gmail_approvals` and
+`0011_control_center_provisioning` are present and verified after an approved backup.
+An auth-only Control D1 (migrations 0001–0003 under `platform-auth`) does not meet this gate.
+Enable only on the private Admin worker after Google/TOTP MFA activation has succeeded.
+To roll back the directory, remove the flag; do not drop the onboarding tables.
+
+Local acceptance is `node --test tests/integration/m03-hosted-control-directory-readonly-workerd.spec.mjs`
+and `node --test qa/m03-hosted-control-directory-readonly-page.spec.mjs`.
+These are disposable local Workerd/D1 and browser tests, **not** a hosted login or D1 migration signoff.

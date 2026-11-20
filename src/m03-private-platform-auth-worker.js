@@ -135,6 +135,10 @@ app.post('/api/platform/auth/challenge',limitIngress,async c=>{
   return c.json({clientId:c.env.PLATFORM_CLIENT_ID,nonce});
 });
 
+function hostedDirectoryEnabled(env){
+  return env.PLATFORM_SHOP_DIRECTORY_ENABLED==='true';
+}
+
 function localProvisioningEnabled(env){
   return env.PLATFORM_SHOP_RESERVATION_ENABLED==='true' &&
     env.PLATFORM_LOCAL_PROVISIONING_ENABLED==='true' &&
@@ -183,6 +187,8 @@ function signedIn(c){
     role:'PlatformSuperAdmin',
     ...(localProvisioningEnabled(c.env)
       ?{localProvisioningEnabled:true}:{}),
+    ...(localProvisioningEnabled(c.env)||hostedDirectoryEnabled(c.env)
+      ?{shopDirectoryEnabled:true}:{}),
     ...(localSupportEnvironment(c.env)?{supportDiagnosticsEnabled:true}:{}),
     ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'?{shopReservationEnabled:true}:{}),
     ...(invitationShop?{ownerInvitationShopId:invitationShop.shopId}:{}),
@@ -256,7 +262,12 @@ async function localProvisioningGate(c,next){
   await next();
 }
 
-app.get('/api/platform/shops/list',localProvisioningGate,async c=>
+async function directoryGate(c,next){
+  if(!localProvisioningEnabled(c.env)&&!hostedDirectoryEnabled(c.env))return c.notFound();
+  await next();
+}
+
+app.get('/api/platform/shops/list',directoryGate,async c=>
   localProvisioningResponse(c,await listLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE))));
 app.get('/api/platform/shops/setup/:operationId',localProvisioningGate,async c=>
   localProvisioningResponse(c,await readLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),

@@ -47,6 +47,7 @@ const setupFailures={
   'owner-readiness':'Owner readiness',
 };
 let localProvisioning=false;
+let directoryEnabled=false;
 let supportEnabled=false;
 let supportSelection=null;
 let supportGrant=null;
@@ -326,7 +327,7 @@ function renderBusinessRoster(){
       (shop.failedStage?' — '+setupFailures[shop.failedStage]:'');
     info.append(name,details);
     row.append(info);
-    if(shop.status!=='ready'){
+    if(localProvisioning&&shop.status!=='ready'){
       const button=document.createElement('button');
       button.type='button';
       button.className='secondary';
@@ -354,8 +355,8 @@ businessSearch.addEventListener('input',renderBusinessRoster);
 businessStatusFilter.addEventListener('change',renderBusinessRoster);
 
 async function loadBusinessRoster(view){
-  if(!localProvisioning||businessRoster.hidden)return;
-  businessRosterStatus.textContent='Checking local businesses…';
+  if(!directoryEnabled||businessRoster.hidden)return;
+  businessRosterStatus.textContent=localProvisioning?'Checking local businesses…':'Checking businesses…';
   try{
     const result=await api('/shops/list','GET');
     if(view!==generation)return;
@@ -365,7 +366,7 @@ async function loadBusinessRoster(view){
     }
     businessShops=result.shops;
     renderBusinessRoster();
-    businessRosterStatus.textContent=result.shops.length?'':'No local businesses yet.';
+    businessRosterStatus.textContent=result.shops.length?'':(localProvisioning?'No local businesses yet.':'No businesses yet.');
   }catch(error){
     if(view!==generation)return;
     businessShops=[];
@@ -392,9 +393,10 @@ async function restoreLocalSetup(draft,view){
 function showSignedIn(session){
   const view=show('signed-in');
   localProvisioning=session.localProvisioningEnabled===true;
+  directoryEnabled=localProvisioning||session.shopDirectoryEnabled===true;
   supportEnabled=session.supportDiagnosticsEnabled===true;
-  businessRoster.hidden=!localProvisioning;
-  if(localProvisioning)void loadBusinessRoster(view);
+  businessRoster.hidden=!directoryEnabled;
+  if(directoryEnabled)void loadBusinessRoster(view);
   businessForm.hidden=session.shopReservationEnabled!==true;
   businessOwnerEmail.hidden=businessOwnerEmailLabel.hidden=!localProvisioning;
   businessOwnerEmail.required=localProvisioning;
