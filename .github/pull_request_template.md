@@ -24,6 +24,7 @@ Relevant financial/account, auth, Cash Session, replay and rollback invariants:
 - [ ] Current-head full CI green; all required reviewers and conflicts resolved
 - [ ] No remote D1/private data write or public financial RPC without owner authorization
 - [ ] Source references and release effect documented
+- [ ] If this PR materially changes MVP/release progress, dependencies or next tasks, update `PROJECT.md` (otherwise explain why no handoff change is needed)
 Merge sequence / parent integration PR:
 Rollback/roll-forward plan (financial/schema changes):
 Post-merge main SHA and required file presence:
