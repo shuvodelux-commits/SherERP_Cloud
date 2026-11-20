@@ -406,7 +406,10 @@ async function restoreLocalSetup(draft,view){
 
 function showSignedIn(session){
   const view=show('signed-in');
-  localProvisioning=session.localProvisioningEnabled===true;
+  // Reuse the original Create/Resume form for either local rehearsal or the
+  // strictly service-bound hosted provisioner. No second UI is necessary.
+  localProvisioning=session.localProvisioningEnabled===true||
+    session.hostedProvisioningEnabled===true;
   directoryEnabled=localProvisioning||session.shopDirectoryEnabled===true;
   supportEnabled=session.supportDiagnosticsEnabled===true;
   byId('business-support-note').textContent=supportEnabled
