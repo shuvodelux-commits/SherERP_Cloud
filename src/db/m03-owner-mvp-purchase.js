@@ -139,7 +139,7 @@ export async function openOwnerCashSession(scope,{token,ownerSubject,operationId
  */
 export async function closeOwnerCashSession(scope,{token,ownerSubject,operationId,countedCash,notes}={}){
   if(!OP.test(operationId||'')||typeof notes!=='string'||notes.length>250||
-      /[\\u0000-\\u001f\\u007f]/.test(notes))return {status:'invalid'};
+      /[\u0000-\u001f\u007f]/.test(notes))return {status:'invalid'};
   const counted=minor(countedCash);
   if(counted===null)return {status:'invalid'};
   if(!owner(scope,token,ownerSubject))return {status:'denied'};
