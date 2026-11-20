@@ -86,3 +86,23 @@ source behavior for review.
    and exactly-once reversal against the original purchase and lot. Keep the
    [posting gate](2026-11-20-m03-purchase-posting-gate.md) and separate remote
    migration and activation approvals in force.
+
+## Reproduce the baseline evidence
+
+Use the source and Workerd/D1 commands in the
+[purchase posting gate](2026-11-20-m03-purchase-posting-gate.md#reproduce-locally)
+and run the source financial contract, gross checkpoint and checkpoint source
+contract suites. On the pinned base, 42 targeted Node tests and 107 synthetic
+local Workerd/D1 tests passed.
+
+The preview checks can be repeated without publishing a Worker.
+
+```sh
+npm run build:frontend
+node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
+node scripts/check-staging-d1.mjs wrangler.staging.jsonc wrangler.preview.jsonc
+npx --yes wrangler@4.161.0 deploy --dry-run --config wrangler.preview.jsonc
+```
+
+The dry-run bundle exposes only the static assets binding. Native Cloudflare
+build status is reported separately on the PR.
