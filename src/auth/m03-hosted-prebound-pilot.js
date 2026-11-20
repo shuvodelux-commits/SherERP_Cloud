@@ -5,6 +5,7 @@
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './platform-shop-binding.js';
 import {OWNER_READY_SHOP_MIGRATION_PLAN} from '../db/m03-owner-ready-shop-migrations.js';
 import {readPortP2ShopCheckpoint,matchesPortP2MigrationPrefix} from '../db/port-p2-shop-schema.js';
+import {matchesApprovedSupplierCashSchemaOverlay} from '../db/m03-approved-supplier-overlay.js';
 
 const BINDING='SHOP_PILOT_DB';
 const HOSTED_BINDING='PLATFORM_PILOT_DB';
@@ -17,8 +18,12 @@ export async function verifiedPreboundPilot(env){
   try{
     const {receipts,schema}=await readPortP2ShopCheckpoint(pilot.shopDb);
     if(receipts.length!==OWNER_READY_SHOP_MIGRATION_PLAN.length||
-      !matchesPortP2MigrationPrefix(receipts,OWNER_READY_SHOP_MIGRATION_PLAN)||
-      receipts.at(-1).schema!==schema)return null;
+      !matchesPortP2MigrationPrefix(receipts,OWNER_READY_SHOP_MIGRATION_PLAN))return null;
+    // The original 13 receipts are unchanged. Only the exact reviewed
+    // 0010+0011 additive financial schema may extend this first-Shop pilot.
+    if(receipts.at(-1).schema!==schema &&
+       !await matchesApprovedSupplierCashSchemaOverlay(receipts.at(-1).schema,schema))
+      return null;
   }catch{return null;}
   return pilot;
 }
@@ -66,5 +71,14 @@ export async function attachHostedPilot(env){
     PLATFORM_LOCAL_SHOP_INVENTORY:inventory,
     PLATFORM_LOCAL_SHOP_MIGRATIONS:OWNER_READY_SHOP_MIGRATION_PLAN,
     PLATFORM_LOCAL_SHOP_PROVIDER:provider,
+    // Only this verified, immutable first-Shop pilot may extend the exact
+    // 13-step schema seal with M08's reviewed 0010+0011 SQL objects. The
+    // generic local and future Option A provisioning paths stay unchanged.
+    PLATFORM_LOCAL_SHOP_SCHEMA_OVERLAY_VERIFIER:async(scope,{receipts,schema})=>
+      scope.shopId===pilot.shopId&&scope.databaseId===pilot.databaseId&&
+      scope.databaseMarker===pilot.databaseMarker&&scope.binding===BINDING&&
+      receipts.length===OWNER_READY_SHOP_MIGRATION_PLAN.length&&
+      matchesPortP2MigrationPrefix(receipts,OWNER_READY_SHOP_MIGRATION_PLAN)&&
+      await matchesApprovedSupplierCashSchemaOverlay(receipts.at(-1).schema,schema),
   };
 }

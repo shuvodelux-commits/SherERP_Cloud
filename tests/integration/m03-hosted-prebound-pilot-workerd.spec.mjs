@@ -7,6 +7,8 @@ import {createTestHarness,unstable_splitSqlQuery} from 'wrangler';
 import {generateHostedPilotMigrations,composeHostedShopMigrations,
   HOSTED_CONTROL_MIGRATIONS} from '../../scripts/m03-hosted-pilot-migrations.mjs';
 import {verifiedPreboundPilot} from '../../src/auth/m03-hosted-prebound-pilot.js';
+import {readPortP2ShopCheckpoint} from '../../src/db/port-p2-shop-schema.js';
+import {matchesApprovedSupplierCashSchemaOverlay} from '../../src/db/m03-approved-supplier-overlay.js';
 import {beginFirstOwnerGmailLogin} from '../../src/auth/platform-owner-gmail-login.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
@@ -74,6 +76,32 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
   assert.equal(await shopDb.prepare('SELECT shop_id FROM shop_identity').first('shop_id'),pilot.shopId);
   assert.ok(await verifiedPreboundPilot({...env,...conf.vars}));
   assert.equal(await verifiedPreboundPilot({...env,...conf.vars,PLATFORM_PILOT_MARKER:uuid()}),null);
+
+  // Production currently has precisely 13 pinned receipts. A reviewed
+  // Supplier Pay migration is allowed only as the complete 0010+0011
+  // SQL schema delta; half-upgraded or unreviewed DDL must fail closed.
+  const m10=await readFile('staging-migrations/shop-owner-write/0010_owner_supplier_cash_pay.sql','utf8');
+  const m11=await readFile('staging-migrations/shop-owner-write/0011_owner_supplier_cash_reconciliation.sql','utf8');
+  await shopDb.batch(unstable_splitSqlQuery(m10).map(sql=>shopDb.prepare(sql)));
+  assert.equal(await verifiedPreboundPilot({...env,...conf.vars}),null,
+    '0010 alone may not bypass the baseline schema seal');
+  await shopDb.batch(unstable_splitSqlQuery(m11).map(sql=>shopDb.prepare(sql)));
+  assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
+    'Only the exact reviewed 0010+0011 extension should preserve existing Shop readiness');
+  const {receipts:sealedReceipts,schema:sealedSchema}=await readPortP2ShopCheckpoint(shopDb);
+  const alteredSql=JSON.parse(sealedSchema);
+  const paymentLedger=alteredSql.find(row=>row[1]==='owner_mvp_supplier_payment_ledger');
+  assert.match(paymentLedger[3],/'Supplier Payment'/);
+  paymentLedger[3]=paymentLedger[3].replaceAll("'Supplier Payment'","'Supplier  Payment'");
+  assert.equal(await matchesApprovedSupplierCashSchemaOverlay(
+    sealedReceipts.at(-1).schema,JSON.stringify(alteredSql)),false,
+    'changing SQL literal whitespace changes the payment kind and must invalidate its seal');
+  await shopDb.prepare('CREATE TABLE m03_unreviewed_table (id TEXT)').run();
+  assert.equal(await verifiedPreboundPilot({...env,...conf.vars}),null,
+    'extra SQL schema invalidates the approved extension');
+  await shopDb.prepare('DROP TABLE m03_unreviewed_table').run();
+  assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
+    'recovering to the exact approved schema can restore readiness');
 
   // Synthetically enroll an Admin only in isolated Workerd D1. The hosted
   // installation uses the REAL reviewed Google+TOTP wizard, not these rows.
@@ -185,4 +213,13 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
   const events=(await db.prepare(
     'SELECT event_type FROM m03_local_support_events ORDER BY rowid').all()).results;
   assert.deepEqual(events.map(e=>e.event_type),['START','READ','END']);
+
+  // Replacing a named financial guard with permissive SQL must fail the
+  // approved-object digest even if all expected tables still exist.
+  await shopDb.prepare('DROP TRIGGER owner_mvp_cash_close_guard').run();
+  await shopDb.prepare(`CREATE TRIGGER owner_mvp_cash_close_guard
+    BEFORE UPDATE OF status ON owner_mvp_cash_sessions
+    BEGIN SELECT 1; END`).run();
+  assert.equal(await verifiedPreboundPilot({...env,...conf.vars}),null,
+    'a forged cash-close guard may never preserve Shop Ready');
 });
