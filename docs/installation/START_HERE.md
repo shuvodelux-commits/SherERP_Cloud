@@ -311,6 +311,15 @@ Cloudflare's generic syntax is `wrangler d1 migrations apply <DATABASE> --remote
 
 ### Step 12 — Configure secure Super Admin enrollment and MFA (STOP / RELEASE GATE)
 
+**Browser setup for a fresh Control D1 (Google/TOTP without Access):**
+
+1. Use the reviewed Admin Worker profile and its Control D1 migration directory. Include `0004_platform_browser_first_factor.sql` in the fresh installation migration bundle. Keep the Admin URL registered as an authorized JavaScript origin on the Google OAuth web client.
+2. Set the Admin Worker variable `PLATFORM_BROWSER_SETUP=true`. Configure two independent Worker secrets, `PLATFORM_BOOTSTRAP_CODE` and `PLATFORM_FACTOR_ENCRYPTION_KEY`, each 32 cryptographically random bytes encoded as 64 lowercase hex characters. Give the bootstrap code only to the intended Admin. Back up the encryption key securely alongside the Control D1 recovery materials. The browser profile generates its authenticator seed during enrollment.
+3. Open the Admin URL, enter the Admin Gmail address and bootstrap code, and complete Google sign-in. Scan the QR code or enter the manual key, then enter the current six-digit code. The dashboard opens after activation. Subsequent logins require Google and the authenticator.
+4. Confirm setup is closed after activation and verify sign-in and logout. If setup expires before activation, return to the Admin URL and start again. An existing first-Admin record, including an interrupted legacy enrollment, requires the established recovery procedure.
+
+**Existing ticket-based installation:**
+
 **What exists in code:**
 
 - `src/auth/platform-superadmin-bootstrap.js` consumes a **single-use, short-lived, Google-subject-bound** setup ticket from Control D1.
