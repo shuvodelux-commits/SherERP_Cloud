@@ -26,11 +26,14 @@ const requiredTrue=Object.freeze([
   'OWNER_LOGIN_ENABLED','OWNER_GMAIL_SIGNUP_ENABLED',
   'OWNER_DASHBOARD_BOOTSTRAP_ENABLED'
 ]);
-const requiredBlockers=Object.freeze([
+const coreBlockers=Object.freeze([
   ...requiredFalse.map(name=>name+'_DISABLED'),
-  'SUPPLIER_CASH_MIGRATION_0010_MISSING',
-  'SUPPLIER_CASH_RECONCILIATION_0011_MISSING',
   'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED_DISABLED'
+]);
+const originalSchemaBlockers=Object.freeze([
+  ...coreBlockers,
+  'SUPPLIER_CASH_MIGRATION_0010_MISSING',
+  'SUPPLIER_CASH_RECONCILIATION_0011_MISSING'
 ]);
 const invalid=()=>{throw new Error('First-Shop core-only candidate refused: deployment evidence or policy mismatch');};
 const uuid=x=>typeof x==='string'&&UUID.test(x);
@@ -72,13 +75,18 @@ function validateBase(base){
 }
 
 function validateEvidence(e){
+  // The immutable 13 receipts permit only the pinned 0010+0011 overlay.
+  // Neither release profile enables Cash Returns or Supplier Cash Pay.
+  const overlay=e?.approvedSupplierOverlayVerified;
+  if(overlay!==undefined&&typeof overlay!=='boolean')invalid();
+  const expected=overlay===true?coreBlockers:originalSchemaBlockers;
   if(!e||e.status!=='BLOCKED'||e.productionReady!==false||
      e.authConfigured!==true||e.shopIdentityVerified!==true||
      e.baseline13Verified!==true||e.coreReadConfigured!==false||
      e.coreWriteConfigured!==false||e.supplierCashConfigured!==false||
-     !Array.isArray(e.blockers)||e.blockers.length!==requiredBlockers.length||
-     new Set(e.blockers).size!==requiredBlockers.length||
-     requiredBlockers.some(code=>!e.blockers.includes(code)))invalid();
+     !Array.isArray(e.blockers)||e.blockers.length!==expected.length||
+     new Set(e.blockers).size!==expected.length||
+     expected.some(code=>!e.blockers.includes(code)))invalid();
 }
 
 /** Pure: no network, no Cloudflare credentials, no D1 write, no IO. */
@@ -87,8 +95,8 @@ export function buildFirstShopCoreCandidate(base,evidence,approval){
   validateBase(base);
   validateEvidence(evidence);
   const candidate=structuredClone(base);
-  // Enable only already real-D1-tested core. Cash Return and Supplier Cash
-  // Pay stay OFF until migrations 0010/0011 and reconciliation are approved.
+  // Enable only reviewed core. Cash Return and Supplier Cash Pay stay OFF
+  // even when the independently verified 0010+0011 schema overlay is present.
   for(const name of requiredFalse.slice(0,5))candidate.vars[name]='true';
   candidate.vars.OWNER_MVP_CASH_RETURN_ENABLED='false';
   candidate.vars.OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED='false';
