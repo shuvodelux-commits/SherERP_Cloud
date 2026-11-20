@@ -22,6 +22,10 @@ const TARGET='wrangler.shop-user.jsonc';
 const invalid=()=>{throw new TypeError('Shop-user deployment configuration unavailable (values withheld)');};
 
 export function buildShopUserDeployment(env){
+  // Once the private multi-Shop publisher owns the Worker, the legacy
+  // single-Shop Builds generator must never upload a stale binding roster.
+  // This flag is a one-time operator setting, not browser-controlled.
+  if(env?.SHERERP_DEPLOYMENT_OWNER==='PRIVATE_PROVISIONER')invalid();
   if(!env||env.WORKERS_CI!=='1'||env.WORKERS_CI_BRANCH!=='main'||
      env.SHERERP_OWNER_LOGIN_RELEASE!=='OWNER_LOGIN_ONLY_APPROVED')invalid();
   if(typeof env.CLOUDFLARE_ACCOUNT_ID==='string'&&env.CLOUDFLARE_ACCOUNT_ID.length>0&&
