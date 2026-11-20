@@ -120,7 +120,19 @@ test('0011 reconciles Supplier Cash Out in Cash Session, Cash Book and counted C
     assert.equal(next.cashIn,0);
     assert.equal(next.cashOut,0);
     assert.equal(next.expectedCash,49.75);
-    assert.equal((await a.prepare('SELECT count(*) AS n FROM owner_mvp_supplier_payment_cash_book').first()).n,1);
+    // Carried physical count funds the next day's payout. It is not a
+    // fabricated Cash In transaction, nor a new historical opening loan.
+    assert.equal((await pay(ownerA,'25.00')).status,'created');
+    const afterCarry=await readOwnerCashSession(a);
+    assert.equal(afterCarry.openingCash,49.75);
+    assert.equal(afterCarry.cashIn,0);
+    assert.equal(afterCarry.cashOut,25);
+    assert.equal(afterCarry.expectedCash,24.75);
+    assert.equal((await closeCash(ownerA,'24.75')).status,'closed');
+    const fullBook=await readOwnerPilotCashBook(a);
+    assert.deepEqual([fullBook.receivedPaisa,fullBook.paidPaisa,fullBook.netPaisa],
+      [15000,12525,2475]);
+    assert.equal((await a.prepare('SELECT count(*) AS n FROM owner_mvp_supplier_payment_cash_book').first()).n,2);
     assert.equal((await b.prepare('SELECT count(*) AS n FROM owner_mvp_supplier_payment_cash_book').first()).n,0);
     assert.deepEqual((await readOwnerPilotCashBook(b)).entries,[]);
   }finally{await close();}
@@ -188,5 +200,44 @@ test('migration 0009 pre-Supplier Pay remains source compatible for Sale and Ret
     assert.equal(session.cashOut,0);
     assert.equal(session.expectedCash,150);
     assert.equal((await closeCash(ownerA,'150.00')).status,'closed');
+  }finally{await close();}
+});
+
+test('Sale Return first, then Supplier cash pay over remaining drawer is rejected at SQL time without changing supplier due',async()=>{
+  const {ownerA,SHOP_A_DB:a,close}=await startCleanShopHarness();
+  try{
+    await migrate(a);
+    const invoice=await setup(ownerA);
+    const returned=await postOwnerCashReturn(scope(ownerA),{...auth(ownerA),
+      operationId:crypto.randomUUID(),
+      payload:{invoiceId:invoice.invoiceId,
+        items:[{productId:'PRD-000001',name:'Cash Close Pipe',qty:1,price:75}],
+        refundMethod:'Cash',reason:'Refund before payment',
+        notes:'',date:date(),backdatedReason:''}
+    });
+    assert.equal(returned.status,'created');
+    assert.equal((await pay(ownerA)).status,'insufficient-cash');
+    assert.equal((await a.prepare('SELECT current_due_paisa AS due FROM owner_supplier_master').first()).due,60000);
+    assert.equal((await a.prepare('SELECT count(*) AS n FROM owner_mvp_supplier_payment_cash_book').first()).n,0);
+    const session=await readOwnerCashSession(a);
+    assert.equal(session.cashIn,150);
+    assert.equal(session.cashOut,75);
+    assert.equal(session.expectedCash,75);
+    assert.equal((await closeCash(ownerA,'75.00')).status,'closed');
+  }finally{await close();}
+});
+
+test('direct SQL cannot close Supplier Pay session with a forged expected total',async()=>{
+  const {ownerA,SHOP_A_DB:a,close}=await startCleanShopHarness();
+  try{
+    await migrate(a);await setup(ownerA);await pay(ownerA);
+    await assert.rejects(()=>a.prepare(`UPDATE owner_mvp_cash_sessions SET
+      expected_paisa=15000,counted_paisa=15000,variance_paisa=0,
+      close_intent_hash=?,close_actor_id=?,closed_operation_id=?,
+      closed_at_ms=?,status='Closed'
+      WHERE sequence=1`).bind('a'.repeat(64),'google:forged',
+      crypto.randomUUID(),Date.now()).run(),/MVP_CLOSE_EXPECTED_CASH_CHANGED/);
+    assert.equal((await a.prepare('SELECT status FROM owner_mvp_cash_sessions WHERE sequence=1').first()).status,'Open');
+    assert.equal((await closeCash(ownerA,'49.75')).status,'closed');
   }finally{await close();}
 });
