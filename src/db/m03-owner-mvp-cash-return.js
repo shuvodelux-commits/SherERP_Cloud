@@ -69,7 +69,8 @@ async function actorAuthority(scope,token){
   const digest=await hashOpaqueSessionToken(token);
   if(!digest)return null;
   const parameters=[scope.shopId,scope.databaseId,scope.databaseMarker,digest];
-  const row=await scope.shopDb.prepare(`SELECT ${AUTH} AS allowed`).bind(...parameters).first();
+  const DB=scope.shopDb;
+  const row=await DB.prepare(`SELECT ${AUTH} AS allowed`).bind(...parameters).first();
   return row?.allowed===1?parameters:null;
 }
 function postedReturn(row){
