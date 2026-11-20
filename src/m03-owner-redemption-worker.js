@@ -14,6 +14,8 @@ import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './auth/platform-shop-binding.js';
 import {readOwnerPosBootstrap,postOwnerCashSale,readOwnerCashSaleInvoice}
   from './db/m03-owner-mvp-cash-sale.js';
+import {postOwnerCashReturn,readOwnerInvoiceForReturn,searchOwnerInvoicesForReturn}
+  from './db/m03-owner-mvp-cash-return.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
@@ -184,6 +186,7 @@ app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
 // never included in public Worker RPC or DB-free PR previews.
 const ownerPurchaseEnabled=env=>cleanProductsEnabled(env)&&env.OWNER_MVP_PURCHASE_ENABLED==='true';
 const ownerCashPosEnabled=env=>ownerPurchaseEnabled(env)&&env.OWNER_MVP_POS_CASH_ENABLED==='true';
+const ownerCashReturnEnabled=env=>ownerCashPosEnabled(env)&&env.OWNER_MVP_CASH_RETURN_ENABLED==='true';
 
 async function verifiedOwnerPurchaseContext(c,subject=false,dashboard=false){
   const token=getCookie(c,SESSION_COOKIE);
@@ -354,6 +357,55 @@ app.post('/api/owner/pos/sales',protectLogin,limitBody,async c=>{
   if(result.status==='conflict')
     return c.json({success:false,message:'Checkout changed after saving. Review the original invoice before retry.'},409);
   return c.json({success:false,message:'POS transaction unavailable. Retry unchanged checkout.'},503);
+});
+
+// M03/M07 real original Cash Return. Same current Owner/Shop and original
+// #801 Sales receipt; no arbitrary refund or public financial RPC.
+app.get('/api/owner/returns/search/:query',protectLogin,async c=>{
+  if(!ownerCashReturnEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{return c.json({success:true,data:await searchOwnerInvoicesForReturn(
+    ctx.scope.shopDb,c.req.param('query'))});}
+  catch{return c.json({success:false,message:'Return invoice search unavailable'},503);}
+});
+
+app.get('/api/owner/returns/invoices/:invoiceId',protectLogin,async c=>{
+  if(!ownerCashReturnEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{
+    const data=await readOwnerInvoiceForReturn(ctx.scope.shopDb,c.req.param('invoiceId'));
+    return data?c.json({success:true,data}):c.notFound();
+  }catch{return c.json({success:false,message:'Return invoice unavailable'},503);}
+});
+
+app.post('/api/owner/returns',protectLogin,limitBody,async c=>{
+  if(!ownerCashReturnEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c,true);
+  if(!ctx)return denied(c);
+  const input=await ownerPurchaseJson(c);
+  if(!input||Object.keys(input).length!==2||
+     !Object.hasOwn(input,'operationId')||!Object.hasOwn(input,'payload'))
+    return c.json({success:false,message:'Invalid Sales Return request'},400);
+  const result=await postOwnerCashReturn(ctx.scope,{
+    token:ctx.token,ownerSubject:ctx.ownerSubject,
+    operationId:input.operationId,payload:input.payload
+  });
+  if(result.status==='created'||result.status==='replayed'){
+    const {status,...receipt}=result;
+    return c.json({success:true,data:receipt},status==='created'?201:200);
+  }
+  if(result.status==='denied')return c.json({success:false,message:'Owner Return access denied'},403);
+  if(result.status==='session-required')
+    return c.json({success:false,message:'Start Day before recording a Return'},409);
+  if(result.status==='unsupported')
+    return c.json({success:false,message:'Only a whole-unit, original-price Cash refund for one verified FIFO invoice line is connected. Store Credit, batch and edits are not available yet.'},422);
+  if(result.status==='declined'||result.status==='conflict')
+    return c.json({success:false,message:'Original invoice, return quantity or refund changed. Reload the original invoice before retrying.'},409);
+  if(result.status==='invalid')
+    return c.json({success:false,message:'Invalid Return details'},400);
+  return c.json({success:false,message:'Return unavailable; retry unchanged request'},503);
 });
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{
