@@ -162,3 +162,23 @@ test('RED: future main builds and unverifiable first-Shop release fail instead o
    ...buildEnv(),SHERERP_FIRST_SHOP_CORE_RELEASE:'FIRST_SHOP_CORE_MVP_TEST_ONLY'
  }),/Shop-user deployment/);
 });
+
+test('GitHub-to-Cloudflare release accepts the fully pinned reviewed Supplier overlay but never enables Supplier Pay',()=>{
+ const r=approvedReadiness();
+ const patched={...r,approvedSupplierOverlayVerified:true,
+  blockers:r.blockers.filter(code=>![
+   'SUPPLIER_CASH_MIGRATION_0010_MISSING',
+   'SUPPLIER_CASH_RECONCILIATION_0011_MISSING'
+  ].includes(code))};
+ const env={...coreApprovedEnv(),SHERERP_FIRST_SHOP_CORE_READINESS_JSON:JSON.stringify(patched)};
+ const c=buildShopUserDeployment(env);
+ assert.equal(c.vars.OWNER_MVP_PURCHASE_ENABLED,'true');
+ assert.equal(c.vars.OWNER_MVP_CASH_RETURN_ENABLED,'false');
+ assert.equal(c.vars.OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED,'false');
+ for(const bad of [false,null,undefined]){
+  const candidate={...patched,approvedSupplierOverlayVerified:bad};
+  assert.throws(()=>buildShopUserDeployment({
+   ...env,SHERERP_FIRST_SHOP_CORE_READINESS_JSON:JSON.stringify(candidate)
+  }),/Shop-user deployment/);
+ }
+});

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {buildFirstShopCoreCandidate,prepareFirstShopCoreCandidate} from '../../scripts/m03-first-shop-core-activation.mjs';
@@ -163,4 +165,28 @@ test('RED: private config nested under .wrangler uses correct Worker and asset p
  assert.deepEqual(config.d1_databases.map(x=>x.binding),['CONTROL_DB','PLATFORM_PILOT_DB']);
  await assert.rejects(prepareFirstShopCoreCandidate(current(),evidence(),approval,root),
    /EEXIST/,'immutable candidate cannot be silently replaced');
+});
+
+test('real CLI verifies approved migrated Worker version without an import cycle or D1 writes',async t=>{
+ const tmp=await mkdtemp(join(tmpdir(),'m03-live-cli-check-'));
+ t.after(()=>rm(tmp,{recursive:true,force:true}));
+ const base=current();
+ const bindings=[
+  {name:'ASSETS',type:'assets'},
+  ...base.d1_databases.map(x=>({name:x.binding,type:'d1',database_id:x.database_id})),
+  ...base.ratelimits.map(x=>({...x,type:'ratelimit'})),
+  ...Object.entries(base.vars).map(([name,text])=>({name,type:'plain_text',text}))
+ ];
+ const ver=join(tmp,'live-version.json'),report=join(tmp,'readiness.json');
+ await writeFile(ver,JSON.stringify({resources:{bindings}}));
+ await writeFile(report,JSON.stringify(migratedEvidence()));
+ const cli=fileURLToPath(new URL('../../scripts/m03-first-shop-core-activation.mjs',import.meta.url));
+ const command=()=>spawnSync(process.execPath,[cli,'--check-from-version',ver,report],{
+  timeout:6500,encoding:'utf8',
+  env:{...process.env,SHERERP_ACCOUNT_ID:'0123456789abcdef0123456789abcdef',
+    SHERERP_FIRST_SHOP_CORE_APPROVAL:approval}
+ });
+ const result=command();
+ assert.equal(result.status,0,'CLI did not complete: '+(result.stderr||'').slice(0,250));
+ assert.match(result.stdout,/verified/i);
 });
