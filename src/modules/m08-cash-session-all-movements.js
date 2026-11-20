@@ -119,7 +119,8 @@ export function summarizeAllSessionCash({
     openingPaisa,cashInPaisa,cashOutPaisa,expectedPaisa,
     countedPaisa,variancePaisa,
     actualCashEntries,excludedHistoricalEntries,excludedSyntheticEntries,
-    closeReady:true,
+    arithmeticValidated:true,
+    closeReady:false,
     // Read model only: all future source-module writers remain separate.
     productionReady:false,authorizesPosting:false,
     authorizesRemoteD1Write:false,authorizesCashClose:false
