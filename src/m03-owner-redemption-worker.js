@@ -10,6 +10,7 @@ import {createOwnerProduct} from './db/m03-owner-product-create.js';
 import {pilotShopConfiguration} from './auth/platform-shop-binding.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
+import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
 
 const app=new Hono();
 const INVITE_COOKIE='__Host-shererp-owner-invite';
@@ -90,6 +91,21 @@ app.post('/api/owner/setup',protect('OWNER_REDEMPTION_ENABLED'),limitBody,async 
 
 const protectLogin=protect('OWNER_LOGIN_ENABLED');
 const cleanProductsEnabled=env=>env.OWNER_CLEAN_PRODUCTS_ENABLED==='true'&&env.OWNER_WRITE_GRANTS_ENABLED==='true';
+
+/**
+ * Explicitly disabled by default. No hosted profile enables this route,
+ * and production Control D1 has no approved support-audit migration yet.
+ * One current Owner can read only their own Shop's sanitized support events.
+ */
+app.get('/api/owner/support/audit',protectLogin,async c=>{
+  if(c.env.OWNER_SUPPORT_AUDIT_ENABLED!=='true')return c.notFound();
+  const result=await readOwnerSupportAudit(c.env,getCookie(c,SESSION_COOKIE));
+  if(result.status==='denied')return denied(c);
+  if(result.status==='unavailable')return c.json({error:'Support audit unavailable'},503);
+  return c.json({events:result.events});
+});
+
+
 
 app.get('/api/owner/catalog',protectLogin,async c=>{
   if(c.env.OWNER_CATALOG_ENABLED!=='true')return c.notFound();
