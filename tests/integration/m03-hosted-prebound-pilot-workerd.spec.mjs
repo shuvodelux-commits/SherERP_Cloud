@@ -17,6 +17,7 @@ const uuid=()=>crypto.randomUUID();
 const sha=value=>createHash('sha256').update(value).digest('hex');
 
 test('hosted prebound Shop reuses Control Center Create, Resume, list and verified Owner Gmail approval',async t=>{
+  await mkdir(join(root,'.wrangler'),{recursive:true});
   const directory=await mkdtemp(join(root,'.wrangler','m03-prebound-test-'));
   t.after(()=>rm(directory,{recursive:true,force:true}));
   const pilot={shopId:uuid(),databaseId:uuid(),databaseMarker:uuid()};
