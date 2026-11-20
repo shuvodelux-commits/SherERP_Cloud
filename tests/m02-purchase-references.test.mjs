@@ -65,12 +65,12 @@ test('purchase header refers to exact Supplier ID, not matching name or phone',(
  assert.equal(count(review(data),'PURCHASE_SUPPLIER_ID_BLANK'),1);
 });
 
-test('purchase items preserve distinct original rows and require real purchase and product IDs',()=>{
+test('purchase items preserve two distinct original physical rows without automatic deduplication',()=>{
  const data=exportFixture();
  assert.equal(data.groups.PURCHASE_ITEMS.rows.length,2);
+ assert.deepEqual(data.groups.PURCHASE_ITEMS.rows.map(x=>x.sheetRow),[2,3]);
  assert.equal(review(data).candidateReady,true,'two distinct historical item rows must not be deduplicated');
- setCell(data,'PURCHASE_ITEMS','Purchase ID','PUR-NOT-FOUND');
- setCell(data,'PURCHASE_ITEMS','Product ID','PRODUCT-NOT-FOUND','1');
+ assert.equal(review(data).totals.purchaseItems,2);
 });
 
 test('orphan item references are counted, not repaired by row order',()=>{
