@@ -1,4 +1,5 @@
 import {fenceOwnerSession,finishOwnerLogin} from './platform-owner-write-session.js';
+import {OWNER_SESSION_FRESH_SQL} from './platform-owner-session-deadline.js';
 import {verifyGoogleLoginIdToken} from './google-id-token.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './session-token.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './platform-shop-binding.js';
@@ -46,7 +47,7 @@ export function prepareCurrentOwnerPlacement(control, tokenHash) {
     b.database_id AS databaseId,b.database_marker AS databaseMarker ${CURRENT_OWNER}
     JOIN platform_shop_owner_sessions s ON s.shop_id=o.shop_id
     JOIN platform_shop_reservations r ON r.shop_id=o.shop_id
-    WHERE s.token_hash=?`).bind(tokenHash);
+    WHERE s.token_hash=? AND ${OWNER_SESSION_FRESH_SQL}`).bind(tokenHash);
 }
 
 async function readOwnerContext(env,token){
