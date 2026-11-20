@@ -1,6 +1,7 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {createM04RealAuthCashProbe} from '../fixtures/m04-real-auth-cash-probe.mjs';
 import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential,loginWithD1,validateSessionWithD1} from '../../src/auth/d1-auth-core.js';
 import {authorizeStaffReadWithD1} from '../../src/auth/d1-staff-read-gate.js';
@@ -430,4 +431,107 @@ test('synthetic LegacyPending staff cannot validate a pre-upgrade session or adv
   ).bind(digest).first();
   assert.equal(persisted.last_activity_at_ms,now,
     'a pending-credential account must not receive a session heartbeat');
+});
+
+
+test('M04 real D1 staff session SQL-time Cash Session guard, replay, invalidation and rollback',async()=>{
+  // Local-only synthetic cash operations use the real M04 auth schema.
+  const ddl=[
+    "CREATE TABLE m04_cash_probe_policy (id INTEGER PRIMARY KEY CHECK(id=1), session_required INTEGER NOT NULL DEFAULT 1 CHECK(session_required IN (0,1))) STRICT",
+    "CREATE TABLE m04_cash_probe_sessions (session_id TEXT PRIMARY KEY, status TEXT NOT NULL CHECK(status IN ('Open','Closed'))) STRICT",
+    "CREATE TABLE m04_cash_probe_grants (role_name TEXT PRIMARY KEY, can_record INTEGER NOT NULL CHECK(can_record IN (0,1))) STRICT",
+    "CREATE TABLE m04_cash_probe_intents (operation_id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, cash_session_id TEXT, amount_minor INTEGER NOT NULL CHECK(amount_minor>0)) STRICT",
+    "CREATE TABLE m04_cash_probe_journal (operation_id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, amount_minor INTEGER NOT NULL CHECK(amount_minor>0)) STRICT",
+    "CREATE TRIGGER m04_cash_probe_append AFTER INSERT ON m04_cash_probe_intents BEGIN INSERT INTO m04_cash_probe_journal VALUES(NEW.operation_id,NEW.actor_id,NEW.amount_minor); SELECT CASE WHEN NEW.amount_minor=999 THEN RAISE(ABORT,'synthetic late abort') ELSE 1 END; END"
+  ];
+  for(const sql of ddl) await DB.prepare(sql).run();
+  await DB.prepare("INSERT INTO m04_cash_probe_policy(id) VALUES (1)").run();
+  await DB.prepare("INSERT INTO m04_cash_probe_sessions VALUES ('CS-CASH-PROOF','Open')").run();
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json) VALUES ('M04CashProof','Active','{}')").run();
+  await seed('USR-M04-CASH-PROOF','01710000016','M04CashProof');
+  await DB.prepare("INSERT INTO m04_cash_probe_grants VALUES ('M04CashProof',1)").run();
+  let serverTime=BASE+3_000_000;
+  const gate=createM04RealAuthCashProbe(DB,{serverNowMs:()=>serverTime});
+  const login=await rpc('login',{phoneKey:'01710000016',password:PASSWORD,nowMs:serverTime});
+  assert.equal(login.body.authenticated,true);
+  const token=login.body.token;
+  const request=(more={})=>({
+    token,operationId:'M04CASH-A',cashSessionId:'CS-CASH-PROOF',
+    amountMinor:125,...more
+  });
+  const deny=async x=>assert.rejects(()=>gate.record_(x),/Denied|Invalid/i);
+  const count=async table=>(await DB.prepare('SELECT COUNT(*) AS n FROM '+table).first()).n;
+  const intent='m04_cash_probe_intents',journal='m04_cash_probe_journal';
+
+  assert.deepEqual(await gate.record_(request()),
+    {operationId:'M04CASH-A',actorId:'USR-M04-CASH-PROOF',amountMinor:125});
+  assert.deepEqual(await gate.record_(request()),
+    {operationId:'M04CASH-A',actorId:'USR-M04-CASH-PROOF',amountMinor:125});
+  assert.equal(await count(intent),1);
+  assert.equal(await count(journal),1);
+  await deny(request({amountMinor:126}));
+  await deny(request({operationId:'M04CASH-MISSING',cashSessionId:null}));
+  await deny(request({operationId:'M04CASH-CLAIM',actorId:'USR-ADMIN'}));
+  await deny(request({operationId:'M04CASH-CLOCK',nowMs:serverTime-1000}));
+  await deny(request({operationId:'M04CASH-SHOP',businessId:'OTHER'}));
+
+  // Another logged-in actor cannot read or replay this immutable receipt.
+  const other=await rpc('login',{
+    phoneKey:'01710000001',password:PASSWORD,nowMs:serverTime
+  });
+  assert.equal(other.body.authenticated,true);
+  await deny(request({token:other.body.token}));
+  assert.equal(await count(intent),1);
+
+  await DB.prepare("UPDATE m04_cash_probe_sessions SET status='Closed'").run();
+  await deny(request({operationId:'M04CASH-CLOSED'}));
+  await DB.prepare("UPDATE m04_cash_probe_sessions SET status='Open'").run();
+  await deny(request({operationId:'M04CASH-ROLLBACK',amountMinor:999}));
+  assert.equal(await count(intent),1,'late failure rolls back operation ID');
+  assert.equal(await count(journal),1,'late failure rolls back journal entry');
+
+  // Optional session feature OFF must never disable staff authorization.
+  await DB.prepare("UPDATE m04_cash_probe_policy SET session_required=0 WHERE id=1").run();
+  assert.deepEqual(await gate.record_(request({
+    operationId:'M04CASH-OFF',cashSessionId:null,amountMinor:200
+  })),{operationId:'M04CASH-OFF',actorId:'USR-M04-CASH-PROOF',amountMinor:200});
+  await DB.prepare("UPDATE m04_cash_probe_grants SET can_record=0").run();
+  await deny(request({operationId:'M04CASH-NOGRANT',cashSessionId:null}));
+  await DB.prepare("UPDATE m04_cash_probe_grants SET can_record=1").run();
+
+  // Role reactivation cannot reuse an old token after the SQL epoch changes.
+  await DB.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='M04CashProof'").run();
+  await deny(request({operationId:'M04CASH-ROLE-DISABLED',cashSessionId:null}));
+  await DB.prepare("UPDATE auth_roles SET status='Active' WHERE role_name='M04CashProof'").run();
+  await deny(request({operationId:'M04CASH-ROLE-RESTORED',cashSessionId:null}));
+  const fresh=await rpc('login',{
+    phoneKey:'01710000016',password:PASSWORD,nowMs:serverTime+1000
+  });
+  assert.equal(fresh.body.authenticated,true);
+  await DB.prepare("UPDATE auth_users SET credential_version=credential_version+1 WHERE user_id='USR-M04-CASH-PROOF'").run();
+  await deny(request({token:fresh.body.token,operationId:'M04CASH-CREDENTIAL',cashSessionId:null}));
+
+  // Revocation and both precise lifetime boundaries are SQL-enforced.
+  const renewed=await rpc('login',{
+    phoneKey:'01710000016',password:PASSWORD,nowMs:serverTime+2000
+  });
+  assert.equal(renewed.body.authenticated,true);
+  const issuedAt=serverTime+2000;
+  await rpc('logout',{token:renewed.body.token,nowMs:issuedAt+1000});
+  serverTime=issuedAt+1000;
+  await deny(request({token:renewed.body.token,operationId:'M04CASH-REVOKED',cashSessionId:null}));
+  const idle=await rpc('login',{
+    phoneKey:'01710000016',password:PASSWORD,nowMs:serverTime
+  });
+  assert.equal(idle.body.authenticated,true);
+  serverTime+=30*60*1000;
+  await deny(request({token:idle.body.token,operationId:'M04CASH-IDLE',cashSessionId:null}));
+  const expiry=await rpc('login',{
+    phoneKey:'01710000016',password:PASSWORD,nowMs:serverTime
+  });
+  assert.equal(expiry.body.authenticated,true);
+  serverTime+=12*60*60*1000;
+  await deny(request({token:expiry.body.token,operationId:'M04CASH-EXPIRED',cashSessionId:null}));
+  assert.equal(await count(intent),2);
+  assert.equal(await count(journal),2);
 });
