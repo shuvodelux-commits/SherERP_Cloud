@@ -1301,3 +1301,203 @@ test('M01 original POS V2 FIFO lot sum survives manual price override, Qty and r
     });
   }
 });
+
+test('M01 original POS V2 discount and cash tender preview keeps due and change accurate',async t=>{
+  // #768: actual compiled source DOM handlers, browser-only synthetic cart.
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-390x844',width:390,height:844,phone:true},
+    {name:'tablet-768x1024',width:768,height:1024,phone:false},
+    {name:'desktop-1280x800',width:1280,height:800,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:phone,hasTouch:phone
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const login=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await login).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        if(phone){
+          await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+        }else{
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' &&
+          document.body.classList.contains('pos-v2-active'));
+        assert.equal(await page.locator('#page-pos').isVisible(),true);
+
+        await page.evaluate(()=>{
+          // Inert public Worker has no POS bootstrap. Test only original
+          // calculation/rendering against deterministic in-page records.
+          const product={
+            id:'M01-TENDER-SYNTH',name:'M01 Synthetic Tender Item',
+            productType:'Standard',unit:'Pcs',category:'Tools',
+            brand:'M01',sellingPrice:49.99,fallbackSellPrice:49.99,
+            stock:200,lotPricing:[]
+          };
+          posState.products=[product];
+          posState.productStockById={[product.id]:200};
+          posState.multiPaymentEnabled=false;
+          smartIndexProducts_(posState.products);
+          const line=posCreateCartLine_(product);
+          line.qty=2;
+          posState.cart=[line];
+          posState.cartEntryIndex=null;
+          posState.cartEditIndex=null;
+          document.getElementById('posDiscount').value='';
+          document.getElementById('posAmountReceived').value='';
+          posRenderCart_();
+        });
+        const paymentTab=page.locator('#page-pos [data-pos-v2-tab="payment"]');
+        // The original workflow tabs are phone-only. Tablet and desktop
+        // expose the checkout summary without a tab switch.
+        if(phone){
+          await paymentTab.waitFor({state:'visible'});
+          await paymentTab.click();
+          assert.equal(await paymentTab.getAttribute('aria-selected'),'true');
+        }else{
+          assert.equal(await paymentTab.isVisible(),false,
+            'source tablet/desktop layout intentionally hides phone workflow tabs');
+        }
+        const discount=page.locator('#posDiscount');
+        const received=page.locator('#posAmountReceived');
+        await discount.waitFor({state:'visible'});
+        await received.waitFor({state:'visible'});
+
+        // Read only source-rendered DOM; cents are semantic, not a
+        // requirement that the source formatter always pad ".00".
+        const read=()=>page.evaluate(()=>{
+          const cents=id=>{
+            const txt=document.getElementById(id)?.textContent||'';
+            return Number((Number(txt.replace(/[^0-9.-]/g,''))*100).toFixed(0));
+          };
+          const grand=cents('posGrandTotal');
+          const terms=posDeriveSaleTerms_(grand/100);
+          return {
+            subtotal:cents('posSubtotal'),
+            grand,discount:document.getElementById('posDiscount').value,
+            received:document.getElementById('posAmountReceived').value,
+            dueVisible:document.getElementById('posDueRow').style.display!=='none',
+            changeVisible:document.getElementById('posChangeRow').style.display!=='none',
+            due:cents('posDueAmountDisplay'),
+            change:cents('posChangeDue'),
+            terms:{
+              paymentType:terms.paymentType,
+              paid:Math.round(terms.paidAmount*100),
+              due:Math.round(terms.dueAmount*100),
+              change:Math.round(terms.change*100)
+            },
+            cartCount:posState.cart.length,
+            cartQty:posState.cart[0]?.qty,
+            cartLine:Math.round((posState.cart[0]?.lineTotal||0)*100)
+          };
+        });
+
+        const initial=await read();
+        assert.deepEqual([initial.subtotal,initial.grand,initial.cartCount,initial.cartQty,initial.cartLine],[
+          9998,9998,1,2,9998
+        ]);
+        assert.deepEqual(initial.terms,{paymentType:'Due',paid:0,due:9998,change:0});
+        assert.equal(initial.dueVisible,true);
+        assert.equal(initial.due,9998);
+        assert.equal(initial.changeVisible,false);
+
+        await discount.fill('0.03');
+        const noCash=await read();
+        assert.deepEqual([noCash.subtotal,noCash.grand,noCash.terms.due,noCash.due],[
+          9998,9995,9995,9995
+        ]);
+        assert.equal(noCash.dueVisible,true);
+        assert.equal(noCash.changeVisible,false);
+
+        await received.fill('40');
+        const partial=await read();
+        assert.deepEqual(partial.terms,{
+          paymentType:'Partial',paid:4000,due:5995,change:0
+        });
+        assert.equal(partial.grand,9995);
+        assert.equal(partial.dueVisible,true);
+        assert.equal(partial.due,5995);
+        assert.equal(partial.changeVisible,false);
+        const partialEvidence=await captureM01NavEvidence(page,'posv2-tender-partial-due-'+name);
+        assert.ok(partialEvidence.screenshotBytes>1500);
+
+        await received.fill('99.95');
+        const exact=await read();
+        assert.deepEqual(exact.terms,{
+          paymentType:'Cash',paid:9995,due:0,change:0
+        });
+        assert.equal(exact.dueVisible,false,'exact paid amount cannot show Due');
+        assert.equal(exact.changeVisible,false,'exact paid amount cannot show Change');
+
+        await received.fill('120');
+        const overpaid=await read();
+        assert.deepEqual(overpaid.terms,{
+          paymentType:'Cash',paid:9995,due:0,change:2005
+        });
+        assert.equal(overpaid.dueVisible,false);
+        assert.equal(overpaid.changeVisible,true);
+        assert.equal(overpaid.change,2005);
+
+        await discount.fill('10.05');
+        const changedDiscount=await read();
+        assert.deepEqual([changedDiscount.subtotal,changedDiscount.grand,changedDiscount.change],[
+          9998,8993,3007
+        ]);
+        assert.deepEqual(changedDiscount.terms,{
+          paymentType:'Cash',paid:8993,due:0,change:3007
+        });
+        assert.equal(changedDiscount.changeVisible,true);
+        assert.equal(changedDiscount.dueVisible,false);
+        const changeEvidence=await captureM01NavEvidence(page,'posv2-tender-change-'+name);
+        assert.ok(changeEvidence.screenshotBytes>1500);
+
+        // A discount larger than the basket must never create a
+        // negative amount due or a negative sale in the source preview.
+        await discount.fill('150');
+        const clamped=await read();
+        assert.deepEqual([clamped.subtotal,clamped.grand,clamped.terms.due],[
+          9998,0,0
+        ]);
+        assert.equal(clamped.changeVisible,true);
+        assert.equal(clamped.change,12000);
+        assert.equal(clamped.dueVisible,false);
+        await received.fill('');
+        const zero=await read();
+        assert.equal(zero.grand,0);
+        assert.equal(zero.terms.due,0);
+        assert.equal(zero.dueVisible,false);
+        assert.equal(zero.changeVisible,false);
+        assert.deepEqual([zero.cartCount,zero.cartQty,zero.cartLine],[1,2,9998]);
+        assert.equal(calls.filter(x=>x.fnName==='login').length,1);
+        assert.equal(calls.some(x=>
+          /^(?:saveSalesDraft|deleteSalesDraft|saveSale|createSale|completeSale|postSale|submitSale|saveSalePayment|postLedger|createPayment|postCash)$/i
+            .test(x.fnName||'')),false,
+          'UI tender previews must never write D1 sale, cash or ledger');
+      }finally{
+        await page.close();
+      }
+    });
+  }
+});
