@@ -75,6 +75,24 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
   assert.ok(await verifiedPreboundPilot({...env,...conf.vars}));
   assert.equal(await verifiedPreboundPilot({...env,...conf.vars,PLATFORM_PILOT_MARKER:uuid()}),null);
 
+  // Production currently has precisely 13 pinned receipts. A reviewed
+  // Supplier Pay migration is allowed only as the complete 0010+0011
+  // SQL schema delta; half-upgraded or unreviewed DDL must fail closed.
+  const m10=await readFile('staging-migrations/shop-owner-write/0010_owner_supplier_cash_pay.sql','utf8');
+  const m11=await readFile('staging-migrations/shop-owner-write/0011_owner_supplier_cash_reconciliation.sql','utf8');
+  await shopDb.batch(unstable_splitSqlQuery(m10).map(sql=>shopDb.prepare(sql)));
+  assert.equal(await verifiedPreboundPilot({...env,...conf.vars}),null,
+    '0010 alone may not bypass the baseline schema seal');
+  await shopDb.batch(unstable_splitSqlQuery(m11).map(sql=>shopDb.prepare(sql)));
+  assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
+    'Only the exact reviewed 0010+0011 extension should preserve existing Shop readiness');
+  await shopDb.prepare('CREATE TABLE m03_unreviewed_table (id TEXT)').run();
+  assert.equal(await verifiedPreboundPilot({...env,...conf.vars}),null,
+    'extra SQL schema invalidates the approved extension');
+  await shopDb.prepare('DROP TABLE m03_unreviewed_table').run();
+  assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
+    'recovering to the exact approved schema can restore readiness');
+
   // Synthetically enroll an Admin only in isolated Workerd D1. The hosted
   // installation uses the REAL reviewed Google+TOTP wizard, not these rows.
   const session='1'.repeat(64);
