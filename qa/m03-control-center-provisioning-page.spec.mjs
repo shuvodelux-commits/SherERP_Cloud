@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {mkdir,readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import {chromium} from 'playwright';
 import {createTestHarness, unstable_splitSqlQuery} from 'wrangler';
@@ -87,7 +87,7 @@ test('Control Center browser resumes the same lost-response operation against di
   }]);
   await page.route(origin+'/**',async route=>{
     const request=route.request(),method=request.method(),headers={...request.headers()};
-    if(method==='POST')headers.Origin=origin;
+    if(method==='POST')headers.origin=origin;
     const body=method==='POST'?request.postData():undefined;
     if(request.url().endsWith('/api/platform/shops') && body)inputs.push(JSON.parse(body));
     const response=await platform.request(request.url(),{method,headers,body},browserEnv);
@@ -99,10 +99,27 @@ test('Control Center browser resumes the same lost-response operation against di
   await page.goto(origin);
   await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();
   const owner=page.getByRole('textbox',{name:'Owner Gmail'});
-  await owner.fill('fixture.owner@gmail.com');
+  const layout=await page.evaluate(()=>{
+    const name=document.getElementById('business-name').getBoundingClientRect();
+    const gmail=document.getElementById('business-owner-email').getBoundingClientRect();
+    const submit=document.querySelector('#business-form button[type="submit"]').getBoundingClientRect();
+    return {ordered:name.bottom<=gmail.top&&gmail.bottom<=submit.top,
+      heights:[name.height,gmail.height,submit.height],
+      widths:[name.width,gmail.width,submit.width]};
+  });
+  assert.equal(layout.ordered,true,'mobile fields and primary action stay in reading order');
+  assert.ok(layout.heights.every(height=>height>=44),'mobile controls have 44px touch targets');
+  assert.ok(layout.widths.every(width=>width>250&&width<=390),'controls fit the mobile card');
   await page.getByRole('textbox',{name:'Business name'}).fill('টুলস ও হার্ডওয়্যার');
-  await page.getByRole('button',{name:'Create business'}).click();
+  await owner.fill('owner@example.com');
+  await owner.press('Enter');
+  await page.getByText('Enter a valid Owner Gmail address.').waitFor();
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_reservations').first()).n,0);
+  await owner.fill('fixture.owner@gmail.com');
+  await owner.press('Enter');
   await page.getByRole('button',{name:'Resume setup'}).waitFor();
+  await mkdir('test-results/m01-browser',{recursive:true});
+  await page.screenshot({path:'test-results/m01-browser/m03-local-recovery-mobile.png'});
   assert.equal(creates,1,'first allocation happened and response was lost');
   assert.equal(prepares,0,'no schema write before attributed reconciliation');
   assert.equal(inputs.length,1);
@@ -120,6 +137,7 @@ test('Control Center browser resumes the same lost-response operation against di
   await page.getByText(/ready/i).waitFor();
   assert.equal(creates,1,'Resume never creates a second D1');
   assert.equal(prepares,1);
+  await page.screenshot({path:'test-results/m01-browser/m03-local-ready-mobile.png'});
   const reservation=await db.prepare('SELECT shop_id FROM platform_shop_reservations').first();
   assert.match(reservation.shop_id,shopIdPattern);
   assert.equal((await env.SHOP_A_DB.prepare('SELECT shop_id FROM shop_identity').first()).shop_id,reservation.shop_id);
@@ -129,8 +147,14 @@ test('Control Center browser resumes the same lost-response operation against di
   assert.equal(await page.getByRole('button',{name:'Resume setup'}).isVisible(),false);
   await page.setViewportSize({width:1440,height:900});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),1440);
+  await page.screenshot({path:'test-results/m01-browser/m03-local-ready-desktop.png'});
   await page.reload();
   await page.getByRole('textbox',{name:'Owner Gmail'}).waitFor();
   assert.equal(await owner.inputValue(),'');
   assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_reservations').first()).n,1);
+  await db.prepare('UPDATE platform_admin_sessions SET revoked_at_ms=? WHERE revoked_at_ms IS NULL')
+    .bind(Date.now()).run();
+  await page.reload();
+  await page.getByRole('heading',{name:'Platform sign-in'}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Create business'}).isVisible(),false);
 });

@@ -7,7 +7,10 @@ const code=byId('auth-code');
 const cancelGoogle=byId('back-google');
 const businessForm=byId('business-form');
 const businessName=byId('business-name');
+const businessOwnerEmail=byId('business-owner-email');
+const businessOwnerEmailLabel=byId('business-owner-email-label');
 const businessReceipt=byId('business-receipt');
+const resumeBusiness=byId('resume-business');
 const signOut=byId('sign-out');
 const inviteForm=byId('owner-invitation-form');
 const inviteSubject=byId('owner-google-subject');
@@ -16,6 +19,14 @@ const inviteCode=byId('owner-invitation-code');
 const gmailForm=byId('owner-gmail-form');
 const gmailAddress=byId('owner-gmail-address');
 const RESERVATION_DRAFT='shererp-platform-reservation-draft';
+const setupStages={reserved:'Reserved',allocating:'Allocating database',allocated:'Preparing database',ready:'Ready'};
+const setupFailures={
+  'database-creation':'Database creation',
+  'binding-verification':'Database binding verification',
+  'schema-migrations':'Database schema setup',
+  'owner-readiness':'Owner readiness',
+};
+let localProvisioning=false;
 let generation=0;
 let credential;
 let sdk;
@@ -56,30 +67,88 @@ function reservationDraft(){
   const saved=sessionStorage.getItem(RESERVATION_DRAFT);
   if(saved===null)return null;
   const draft=JSON.parse(saved);
-  if(typeof draft?.operationId!=='string'||typeof draft.displayName!=='string')throw new Error('Invalid draft');
-  return {operationId:draft.operationId,displayName:draft.displayName};
+  if(typeof draft?.operationId!=='string'||typeof draft.displayName!=='string'||
+     (localProvisioning?typeof draft.ownerEmail!=='string':Object.hasOwn(draft,'ownerEmail'))){
+    throw new Error('Invalid draft');
+  }
+  return localProvisioning
+    ?{operationId:draft.operationId,displayName:draft.displayName,ownerEmail:draft.ownerEmail}
+    :{operationId:draft.operationId,displayName:draft.displayName};
+}
+
+function businessBusy(busy){
+  businessForm.querySelector('button[type="submit"]').disabled=busy;
+  resumeBusiness.disabled=busy;
+  signOut.disabled=busy;
+}
+
+function showSetupReceipt(receipt,draft){
+  if(!receipt||receipt.operationId!==draft.operationId||receipt.displayName!==draft.displayName||
+     receipt.ownerEmail!==draft.ownerEmail.trim().toLowerCase()||
+     typeof receipt.shopId!=='string'||!Object.hasOwn(setupStages,receipt.status)||
+     (receipt.failedStage!==null&&!Object.hasOwn(setupFailures,receipt.failedStage))){
+    throw new Error('Setup response does not match request');
+  }
+  businessReceipt.textContent='Business '+receipt.displayName+'. Shop ID: '+receipt.shopId+
+    '. Setup: '+setupStages[receipt.status]+'.'+
+    (receipt.failedStage?' Last issue: '+setupFailures[receipt.failedStage]+'.':'');
+  businessReceipt.hidden=false;
+  resumeBusiness.hidden=receipt.status==='ready';
+  if(receipt.status==='ready'){
+    sessionStorage.removeItem(RESERVATION_DRAFT);
+    businessName.value='';
+    businessName.readOnly=false;
+    businessOwnerEmail.value='';
+    businessOwnerEmail.readOnly=false;
+  }
+}
+
+async function restoreLocalSetup(draft,view){
+  status.textContent='Checking saved business setup…';
+  try{
+    const receipt=await api('/shops/setup/'+encodeURIComponent(draft.operationId),'GET');
+    if(view!==generation)return;
+    showSetupReceipt(receipt,draft);
+    status.textContent='';
+  }catch(error){
+    if(view!==generation)return;
+    if(error.message==='401')show('login','Sign in again to resume business setup.');
+    else status.textContent='Could not verify saved setup. Retry Create business with the same request.';
+  }
 }
 
 function showSignedIn(session){
-  show('signed-in');
+  const view=show('signed-in');
+  localProvisioning=session.localProvisioningEnabled===true;
   businessForm.hidden=session.shopReservationEnabled!==true;
+  businessOwnerEmail.hidden=businessOwnerEmailLabel.hidden=!localProvisioning;
+  businessOwnerEmail.required=localProvisioning;
   gmailForm.hidden=typeof session.ownerGmailApprovalShopId!=='string';
   byId('owner-gmail-shop').textContent=gmailForm.hidden?'':'Shop '+session.ownerGmailApprovalShopId;
   inviteForm.hidden=typeof session.ownerInvitationShopId!=='string';
   byId('owner-invitation-shop').textContent=inviteForm.hidden?'':'Shop '+session.ownerInvitationShopId;
   businessReceipt.hidden=true;
   businessReceipt.textContent='';
+  resumeBusiness.hidden=true;
   businessName.value='';
   businessName.readOnly=false;
+  businessOwnerEmail.value='';
+  businessOwnerEmail.readOnly=false;
   if(businessForm.hidden)return;
   try{
     const draft=reservationDraft();
     if(draft){
       businessName.value=draft.displayName;
       businessName.readOnly=true;
+      if(localProvisioning){
+        businessOwnerEmail.value=draft.ownerEmail;
+        businessOwnerEmail.readOnly=true;
+        void restoreLocalSetup(draft,view);
+      }
     }
   }catch{
-    status.textContent='This browser could not restore the reservation request.';
+    sessionStorage.removeItem(RESERVATION_DRAFT);
+    status.textContent='This browser could not restore the reservation request. Enter a new request.';
   }
 }
 
@@ -94,9 +163,18 @@ businessForm.addEventListener('submit',async event=>{
     businessName.focus();
     return;
   }
+  const email=businessOwnerEmail.value.trim();
+  if(localProvisioning&&!/^[a-z0-9][a-z0-9.+_-]{0,63}@gmail\.com$/i.test(email)){
+    status.textContent='Enter a valid Owner Gmail address.';
+    businessOwnerEmail.focus();
+    return;
+  }
   let draft;
   try{
-    draft=reservationDraft()??{operationId:crypto.randomUUID(),displayName:name};
+    draft=reservationDraft()??{
+      operationId:crypto.randomUUID(),displayName:name,
+      ...(localProvisioning?{ownerEmail:email}:{})
+    };
     sessionStorage.setItem(RESERVATION_DRAFT,JSON.stringify(draft));
   }catch{
     status.textContent='This browser could not save the reservation request.';
@@ -104,34 +182,71 @@ businessForm.addEventListener('submit',async event=>{
   }
   businessName.value=draft.displayName;
   businessName.readOnly=true;
+  if(localProvisioning){
+    businessOwnerEmail.value=draft.ownerEmail;
+    businessOwnerEmail.readOnly=true;
+  }
   businessReceipt.hidden=true;
-  button.disabled=signOut.disabled=true;
+  resumeBusiness.hidden=true;
+  businessBusy(true);
   status.textContent='Reserving business…';
+  let confirmed=false;
   try{
     const receipt=await api('/shops','POST',draft);
-    if(receipt.status!=='reserved'||typeof receipt.shopId!=='string'||receipt.displayName!==draft.displayName){
-      throw new Error('Reservation missing');
+    if(localProvisioning){
+      showSetupReceipt(receipt,draft);
+      confirmed=true;
+      if(receipt.status!=='ready'){
+        status.textContent='Setting up business…';
+        showSetupReceipt(await api('/shops/resume','POST',{operationId:draft.operationId}),draft);
+      }
+      status.textContent='';
+    }else{
+      if(receipt.status!=='reserved'||typeof receipt.shopId!=='string'||
+         receipt.displayName!==draft.displayName)throw new Error('Reservation missing');
+      sessionStorage.removeItem(RESERVATION_DRAFT);
+      businessName.value='';
+      businessName.readOnly=false;
+      businessReceipt.textContent='Business reserved. Shop ID: '+receipt.shopId+'. Database setup is next.';
+      businessReceipt.hidden=false;
+      status.textContent='';
     }
-    sessionStorage.removeItem(RESERVATION_DRAFT);
-    businessName.value='';
-    businessName.readOnly=false;
-    businessReceipt.textContent='Business reserved. Shop ID: '+receipt.shopId+'. Database setup is next.';
-    businessReceipt.hidden=false;
-    status.textContent='';
   }catch(error){
     if(error.message==='401'){
       show('login','Sign in again to resume the reservation.');
-    }else if(error.message==='400'||error.message==='409'){
+    }else if(!confirmed&&(error.message==='400'||error.message==='409')){
       sessionStorage.removeItem(RESERVATION_DRAFT);
       businessName.readOnly=false;
+      businessOwnerEmail.readOnly=false;
       status.textContent=error.message==='409'
         ?'This request conflicts with an existing reservation. Check it before submitting a new request.'
-        :'Enter a valid business name and try again.';
+        :localProvisioning?'Enter a valid business name and Owner Gmail.'
+          :'Enter a valid business name and try again.';
     }else{
-      status.textContent='Could not confirm the reservation. Retry to check the same request.';
+      status.textContent=confirmed
+        ?'Could not confirm setup completion. Resume the saved operation.'
+        :'Could not confirm the reservation. Retry to check the same request.';
     }
   }finally{
-    button.disabled=signOut.disabled=false;
+    businessBusy(false);
+  }
+});
+
+resumeBusiness.addEventListener('click',async()=>{
+  if(!localProvisioning||resumeBusiness.hidden||resumeBusiness.disabled||signOut.disabled)return;
+  let draft;
+  try{draft=reservationDraft();}catch{return;}
+  if(!draft)return;
+  businessBusy(true);
+  status.textContent='Resuming business setup…';
+  try{
+    showSetupReceipt(await api('/shops/resume','POST',{operationId:draft.operationId}),draft);
+    status.textContent='';
+  }catch(error){
+    if(error.message==='401')show('login','Sign in again to resume business setup.');
+    else status.textContent='Could not complete setup. Check the stage and resume the same operation.';
+  }finally{
+    businessBusy(false);
   }
 });
 
@@ -295,6 +410,7 @@ byId('sign-out').addEventListener('click',async event=>{
   try{
     const reply=await api('/auth/logout');
     if(reply.signedOut!==true)throw new Error('Sign-out missing');
+    sessionStorage.removeItem(RESERVATION_DRAFT);
     show('login');
   }catch{
     status.textContent='Could not sign out securely. Try again.';
