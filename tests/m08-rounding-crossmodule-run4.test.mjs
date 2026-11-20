@@ -171,3 +171,49 @@ test('caller source arguments are immutable and prototype/accessor attacks are b
   Object.defineProperty(bad,'unitPrice',{get(){throw new Error('accessor leaked');},enumerable:true});
   assert.throws(()=>auditSourceSaleEditVsM08([bad]),/record|accessor|Invalid|Unsupported/i);
 });
+
+test('two small 0.004 items produce source 0 paisa but candidate header 1 paisa',()=>{
+  const r=auditSourceSaleEditVsM08([
+    {id:'LOW-A',quantity:'1',unitPrice:'0.004'},
+    {id:'LOW-B',quantity:'1',unitPrice:'0.004'}
+  ]);
+  assert.equal(r.sourceSubtotalPaisa,'0');
+  assert.equal(r.candidateHeaderPaisa,'1');
+  assert.equal(r.deltaPaisa,'-1');
+  assert.equal(r.classification,'REQUIRES_ROUNDING_SIGNOFF');
+});
+
+test('25 small fractional-price source lines drift 12 paisa beyond a 1-paisa tolerance',()=>{
+  const lines=Array.from({length:25},(_,i)=>({
+    id:'P-'+String(i+1).padStart(2,'0'),quantity:'1',unitPrice:'0.335'
+  }));
+  const r=auditSourceSaleEditVsM08(lines);
+  assert.equal(r.sourceSubtotalPaisa,'850');
+  assert.equal(r.candidateHeaderPaisa,'838');
+  assert.equal(r.deltaPaisa,'12');
+  assert.equal(r.classification,'REQUIRES_ROUNDING_SIGNOFF');
+  assert.equal(r.candidateLines.reduce((sum,row)=>sum+BigInt(row.netPaisa),0n),838n);
+});
+
+test('30 deterministic sampled multi-line sale previews classify both signs of drift',()=>{
+  let seed=34991;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed;};
+  const hist={negative:false,positive:false,match:false};
+  for(let j=0;j<30;j++){
+    const length=2+random()%7;
+    const lines=Array.from({length},(_,i)=>({
+      id:'SKU-'+String(i).padStart(2,'0'),
+      quantity:String(1+random()%4),
+      unitPrice:'0.'+String(1+random()%999).padStart(3,'0')
+    }));
+    const r=auditSourceSaleEditVsM08(lines);
+    const diff=BigInt(r.deltaPaisa);
+    if(diff<0n)hist.negative=true;
+    else if(diff>0n)hist.positive=true;
+    else hist.match=true;
+    assert.equal(r.candidateLines.reduce((sum,x)=>sum+BigInt(x.netPaisa),0n),
+      BigInt(r.candidateHeaderPaisa));
+    assert.equal(r.classification,diff===0n?'PARITY':'REQUIRES_ROUNDING_SIGNOFF');
+  }
+  assert.ok(hist.negative||hist.positive,'at least one real source-vs-new boundary mismatch must be retained');
+});
