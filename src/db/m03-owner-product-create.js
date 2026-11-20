@@ -9,7 +9,8 @@ const PRICE=/^\d{1,10}(?:\.\d{1,2})?$/;
 const QUANTITY=/^\d{1,10}$/;
 const EXACT_AUTHORITY=`EXISTS(SELECT 1 FROM shop_identity i JOIN shop_owner_write_grant g USING(singleton)
   WHERE i.singleton=1 AND i.shop_id=? AND i.database_id=? AND i.database_marker=?
-    AND g.enabled=1 AND g.token_hash=?)`;
+    AND g.enabled=1 AND g.token_hash=?
+    AND g.expires_at_ms>CAST(unixepoch('subsec') * 1000 AS INTEGER))`;
 export const CLEAN_PRODUCT_SOURCE=`NOT EXISTS(SELECT 1 FROM legacy_product_snapshots)
   AND NOT EXISTS(SELECT 1 FROM products WHERE source_profile='canonical')`;
 
