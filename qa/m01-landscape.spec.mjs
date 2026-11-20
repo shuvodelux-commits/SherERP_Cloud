@@ -722,3 +722,128 @@ test('M01 canonical six-width POS V2 keeps source keyboard and responsive presen
     });
   }
 });
+
+test('M01 POS V2 Drafts dialog preserves keyboard, empty state and failed-load safety',async t=>{
+  // #743: synthetic readonly getSalesDraftList only. Public Worker stays inert.
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-390x844',width:390,height:844,phone:true},
+    {name:'desktop-1280x800',width:1280,height:800,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:phone,hasTouch:phone
+      });
+      const draftCalls=[];
+      let rejectDraftList=false;
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        // Most recent route handles only synthetic reads; fallback keeps
+        // existing test-local login/shell interception and inert public Worker.
+        await page.route('**/api/rpc',async route=>{
+          const request=route.request().postDataJSON();
+          if(request?.fnName!=='getSalesDraftList')return route.fallback();
+          draftCalls.push(request.fnName);
+          if(rejectDraftList){
+            return route.fulfill({
+              status:503,contentType:'application/json',
+              body:JSON.stringify({
+                success:false,error:'Synthetic draft read unavailable'
+              })
+            });
+          }
+          return route.fulfill({
+            status:200,contentType:'application/json',
+            body:JSON.stringify({success:true,data:[]})
+          });
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const login=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await login).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        if(phone){
+          await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+        }else{
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' &&
+          document.body.classList.contains('pos-v2-active'));
+        assert.equal(await page.evaluate(()=>posState.cart.length),0);
+        const drafts=page.locator('#v2DraftsBtn');
+        await drafts.waitFor({state:'visible'});
+        await drafts.focus();
+        await page.keyboard.press('Enter');
+        const modal=page.locator('#v2DraftsModal');
+        await modal.waitFor({state:'visible'});
+        assert.equal(draftCalls.length,1,'keyboard must load draft list once');
+        assert.equal(await modal.locator('#v2DraftsBody tr').count(),0);
+        assert.equal(await modal.locator('#v2DraftsEmpty').isVisible(),true,
+          'empty synthetic list uses original no-drafts UI');
+        assert.equal(await page.evaluate(()=>document.activeElement?.id),
+          'v2DraftSearch','original Drafts search receives keyboard focus');
+        const search=page.locator('#v2DraftSearch');
+        const rect=await search.boundingBox();
+        assert.ok(rect && rect.width>0 && rect.x>=-1 &&
+          rect.x+rect.width<=width+1,
+          'Drafts search must fit '+name+' horizontally');
+        const capture=await captureM01NavEvidence(page,'posv2-drafts-empty-'+name);
+        assert.ok(capture.screenshotBytes>1500);
+        await page.locator('#v2DraftsCloseTop').click();
+        assert.equal(await modal.isVisible(),false,'top close dismisses Drafts');
+
+        await drafts.click();
+        await modal.waitFor({state:'visible'});
+        assert.equal(draftCalls.length,2,'reopening reloads list once');
+        await page.locator('#v2DraftRefreshBtn').click();
+        assert.equal(draftCalls.length,3,'Refresh fetches the list once');
+        assert.equal(await modal.locator('#v2DraftsBody tr').count(),0);
+        assert.equal(await page.locator('#v2DraftsModal').count(),1,
+          'reopen must reuse the same original modal');
+        await page.locator('#v2DraftsCloseBottom').click();
+        assert.equal(await modal.isVisible(),false,'footer close dismisses Drafts');
+
+        rejectDraftList=true;
+        const failedRead=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='getSalesDraftList');
+        await drafts.click();
+        assert.equal((await failedRead).status(),503);
+        assert.equal(draftCalls.length,4);
+        assert.equal(await modal.isVisible(),false,
+          'failed draft-list load must not open stale Drafts modal');
+        assert.equal(await page.evaluate(()=>currentPage),'posv2');
+        assert.equal(await page.evaluate(()=>posState.cart.length),0);
+        assert.equal(await page.evaluate(()=>
+          document.getElementById('loginOverlay')?.hidden===true),true);
+        const failures=await captureM01NavEvidence(page,
+          'posv2-drafts-read-denied-'+name);
+        assert.ok(failures.screenshotBytes>1500);
+        assert.equal(calls.filter(x=>x.fnName==='login').length,1);
+        assert.equal(calls.some(x=>
+          /^(?:saveSalesDraft|deleteSalesDraft|saveSale|createSale|completeSale|postSale|submitSale|saveSalePayment)$/i
+            .test(x.fnName||'')),false,
+          'Drafts QA must never issue sale or draft write RPC');
+      }finally{
+        await page.close();
+      }
+    });
+  }
+});
