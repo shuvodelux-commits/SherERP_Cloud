@@ -86,10 +86,15 @@ export function auditM06MoneyNumbers(input){
   dataArray(input.payments,'payment instruction');
   dataArray(input.accountRows,'account snapshot');
   if(input.payments.length>20)throw new RangeError('Too many M06 payment rows');
+  const exactInstructions=new Map();
   for(const row of input.payments){
     if(typeof row.amount!=='string')
       throw new TypeError('Money tender must be canonical BDT text, not Number');
-    bdt(row.amount);
+    const requested=bdt(row.amount);
+    if(typeof row.id!=='string'||!row.id||row.id.trim()!==row.id||
+        exactInstructions.has(row.id))
+      throw new TypeError('Canonical unique payment row ID required');
+    exactInstructions.set(row.id,{method:row.method,tendered:requested});
   }
   const original=normalizeSalePayments_(
     minorPaisaToBdtText(input.grandPaisa),input.payments,input.accountRows
@@ -102,6 +107,9 @@ export function auditM06MoneyNumbers(input){
     const applied=resultMinor(row.applied,'applied');
     const tendered=resultMinor(row.tendered,'tendered');
     const change=resultMinor(row.change,'leg change');
+    const requested=exactInstructions.get(row.rowId);
+    if(!requested||requested.method!==row.method||requested.tendered!==tendered)
+      throw new RangeError('Lossy M06 tender intent: source output differs from exact instruction');
     if(!['Cash','Bank','Mobile Banking'].includes(row.method))
       throw new RangeError('M06 payment method is not supported');
     if(row.method==='Cash'){
