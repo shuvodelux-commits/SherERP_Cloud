@@ -10,12 +10,14 @@
   --h-shell-border: #e3e8ee;
   --h-shell-accent: #eaf6f4;
   --h-shell-primary: #0d7c74;
+  --h-shell-font: "Geist", "Hind Siliguri", "Inter", sans-serif;
   --h-shell-rail: 64px;
   --h-shell-wide: 256px;
   --h-shell-motion: 200ms cubic-bezier(.4,0,.2,1);
   background: var(--h-shell-bg);
 }
 #app[data-hisabiq-shell] .sidebar {
+  font-family:var(--h-shell-font);
   color:var(--h-shell-ink);
   background:var(--h-shell-surface);
   border-right:1px solid var(--h-shell-border);
@@ -90,7 +92,7 @@
   position:relative;display:flex;align-items:center;gap:10px;
   width:100%;min-height:36px;margin:0;padding:6px 10px;
   border:0;border-radius:8px;background:transparent;
-  color:var(--h-shell-ink);font:500 13px/1.2 var(--font-sans);
+  color:var(--h-shell-ink);font:500 13px/1.2 var(--h-shell-font);
   text-align:left;cursor:pointer;outline:none;
   transition:background-color 150ms,color 150ms;
 }
@@ -133,7 +135,7 @@
   position:relative;display:flex;align-items:center;
   width:100%;min-height:32px;padding:5px 8px;
   border:0;border-radius:6px;background:transparent;
-  color:var(--h-shell-muted);font:400 12.5px/1.3 var(--font-sans);
+  color:var(--h-shell-muted);font:400 12.5px/1.3 var(--h-shell-font);
   text-align:left;cursor:pointer;transition:background-color 150ms,color 150ms;
 }
 #app[data-hisabiq-shell] .h-shell-child:hover { background:var(--h-shell-accent);color:var(--h-shell-ink); }
@@ -161,10 +163,13 @@
 #app[data-hisabiq-shell] .main { min-width:0;background:var(--h-shell-bg); }
 #app[data-hisabiq-shell] .topbar {
   height:auto;min-height:56px;gap:12px;padding:0 24px;
+  font-family:var(--h-shell-font);
   background:rgba(255,255,255,.97);border-bottom:1px solid var(--h-shell-border);
   color:var(--h-shell-ink);box-shadow:none;
 }
 #app[data-hisabiq-shell] .topbar-title { font-size:16px;color:var(--h-shell-ink); }
+#app[data-hisabiq-shell] #refreshBtn {background:var(--h-shell-primary);color:#fff;}
+#app[data-hisabiq-shell] #refreshBtn:hover {background:#0a625c;}
 #app[data-hisabiq-shell] .topbar-title .bn-hint {color:var(--h-shell-muted);}
 #app[data-hisabiq-shell] .topbar-date {color:var(--h-shell-muted);}
 #app[data-hisabiq-shell] .topbar .icon-btn:focus-visible,
@@ -307,7 +312,7 @@
 .h-shell-drawer-nav .nav-item {
   display:flex;align-items:center;width:100%;min-height:40px;gap:10px;
   padding:8px 10px;border:0;border-radius:8px;
-  font:500 13px/1.3 var(--font-sans,Inter,sans-serif);text-align:left;
+  font:500 13px/1.3 var(--h-shell-font,Geist,Inter,sans-serif);text-align:left;
   color:#0b1a2c;background:transparent;cursor:pointer;
 }
 .h-shell-drawer-nav .nav-item svg {width:18px;height:18px;color:#607086;flex-shrink:0;}
@@ -327,7 +332,7 @@
 .h-shell-drawer-nav .h-shell-child {
   width:100%;min-height:36px;border:0;border-radius:6px;
   background:transparent;color:#5a6b80;text-align:left;
-  padding:7px 8px;font:400 12.5px/1.25 var(--font-sans,Inter,sans-serif);cursor:pointer;
+  padding:7px 8px;font:400 12.5px/1.25 var(--h-shell-font,Geist,Inter,sans-serif);cursor:pointer;
 }
 .h-shell-drawer-nav .h-shell-child.active,.h-shell-drawer-nav .h-shell-child:hover {
   background:#eaf6f4;color:#0a625c;
