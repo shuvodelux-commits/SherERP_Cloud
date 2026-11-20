@@ -1,0 +1,36 @@
+name: PORT-P3 activation challenge local Workerd D1 (no deploy)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  activation-challenge:
+    name: Verify separate Google nonce, bounded attempts and exact-once D1 consumption
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler for local disposable Workerd
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify PORT-P3 challenge against disposable Control D1
+        run: node --test tests/integration/port-p3-activation-challenge-workerd.spec.mjs
+      - name: Regression — existing Super Admin ticket, factor and Google-TOTP sessions
+        run: |
+          node --test \
+            tests/integration/port-p3-first-admin-ticket-workerd.spec.mjs \
+            tests/integration/port-p3-first-factor-activation-workerd.spec.mjs \
+            tests/integration/m04-platform-superadmin-bootstrap-workerd.spec.mjs \
+            tests/integration/m04-platform-superadmin-session-workerd.spec.mjs

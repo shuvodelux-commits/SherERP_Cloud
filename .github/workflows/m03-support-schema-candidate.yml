@@ -1,0 +1,29 @@
+name: M03 Support Control D1 schema candidate local Workerd
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  support-schema-candidate:
+    name: M03 SQL candidate exact DDL, current MFA and immutable two-Shop audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned isolated Workerd
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify isolated Control D1 schema candidate and original grant/Owner audit
+        run: node --test tests/integration/m03-support-schema-candidate-workerd.spec.mjs tests/integration/m03-local-support-read-grants-workerd.spec.mjs tests/integration/m03-support-owner-audit-workerd.spec.mjs
