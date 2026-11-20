@@ -1,6 +1,7 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {createM04SourcePosActionProbe} from '../fixtures/m04-source-pos-action-probe.mjs';
 import {createM04RealAuthCashProbe} from '../fixtures/m04-real-auth-cash-probe.mjs';
 import {createTestHarness} from 'wrangler';
 import {createOfflinePasswordCredential,loginWithD1,validateSessionWithD1} from '../../src/auth/d1-auth-core.js';
@@ -534,4 +535,92 @@ test('M04 real D1 staff session SQL-time Cash Session guard, replay, invalidatio
   await deny(request({token:expiry.body.token,operationId:'M04CASH-EXPIRED',cashSessionId:null}));
   assert.equal(await count(intent),2);
   assert.equal(await count(journal),2);
+});
+
+
+test('M04 source POS add/view grants are SQL-current against persisted roles and sessions',async()=>{
+  // Disposable receipt/journal are not real Cash Session or Cash Book writers.
+  const ddl=[
+    "CREATE TABLE m04_source_pos_receipts (operation_id TEXT PRIMARY KEY, action TEXT NOT NULL CHECK(action IN ('startCashSession','closeCashSession')), actor_id TEXT NOT NULL) STRICT",
+    "CREATE TABLE m04_source_pos_journal (operation_id TEXT PRIMARY KEY, action TEXT NOT NULL, actor_id TEXT NOT NULL) STRICT",
+    "CREATE TRIGGER m04_source_pos_journal_trigger AFTER INSERT ON m04_source_pos_receipts BEGIN INSERT INTO m04_source_pos_journal VALUES(NEW.operation_id,NEW.action,NEW.actor_id); SELECT CASE WHEN NEW.operation_id='POS-FAIL' THEN RAISE(ABORT,'synthetic late failure') ELSE 1 END; END"
+  ];
+  for(const sql of ddl)await DB.prepare(sql).run();
+  const addJSON=JSON.stringify({pos:{view:false,add:true,edit:false,delete:'disabled'}});
+  const viewJSON=JSON.stringify({pos:{view:true,add:false,edit:false,delete:'disabled'}});
+  const duplicate='{"pos":{"view":false,"add":true},"pos":{"view":false,"add":true}}';
+  await DB.prepare("INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules) VALUES ('M04PosAdd','Active',?,''),('M04PosView','Active',?,'pos'),('M04PosDuplicate','Active',?,'')")
+    .bind(addJSON,viewJSON,duplicate).run();
+  await seed('USR-M04-POS-ADD','01710000017','M04PosAdd');
+  await seed('USR-M04-POS-VIEW','01710000018','M04PosView');
+  await seed('USR-M04-POS-DUP','01710000019','M04PosDuplicate');
+  let now=BASE+4_000_000;
+  const probe=createM04SourcePosActionProbe(DB,{serverNowMs:()=>now});
+  const [addLogin,viewLogin,invalidLogin,adminLogin]=await Promise.all([
+    rpc('login',{phoneKey:'01710000017',password:PASSWORD,nowMs:now}),
+    rpc('login',{phoneKey:'01710000018',password:PASSWORD,nowMs:now}),
+    rpc('login',{phoneKey:'01710000019',password:PASSWORD,nowMs:now}),
+    rpc('login',{phoneKey:'01710000001',password:PASSWORD,nowMs:now})
+  ]);
+  for(const x of [addLogin,viewLogin,invalidLogin,adminLogin])
+    assert.equal(x.body.authenticated,true);
+  const add=addLogin.body.token,view=viewLogin.body.token;
+  const deny=async cb=>assert.rejects(cb,/Denied|Invalid/i);
+  const call=(token,operationId,action='startCashSession')=>({token,operationId,action});
+  const count=async table=>(await DB.prepare('SELECT COUNT(*) AS n FROM '+table).first()).n;
+
+  assert.deepEqual(await probe.mutate_(call(add,'POS-START-1')),
+    {operationId:'POS-START-1',action:'startCashSession',actorId:'USR-M04-POS-ADD'});
+  assert.deepEqual(await probe.mutate_(call(add,'POS-START-1')),
+    {operationId:'POS-START-1',action:'startCashSession',actorId:'USR-M04-POS-ADD'});
+  assert.deepEqual(await probe.mutate_(call(add,'POS-CLOSE-1','closeCashSession')),
+    {operationId:'POS-CLOSE-1',action:'closeCashSession',actorId:'USR-M04-POS-ADD'});
+  assert.equal(await count('m04_source_pos_receipts'),2);
+  assert.equal(await count('m04_source_pos_journal'),2);
+  await deny(()=>probe.summary_({token:add}),'pos.add must not imply pos.view');
+  await deny(()=>probe.mutate_(call(view,'POS-VIEW-CANNOT-ADD')));
+  assert.deepEqual(await probe.summary_({token:view}),
+    {action:'getCashSessionSummary',actorId:'USR-M04-POS-VIEW'});
+  assert.equal(await count('m04_source_pos_receipts'),2,'summary must never write a synthetic receipt');
+  await deny(()=>probe.mutate_(call(view,'POS-START-1')),'other actor cannot replay receipt');
+  await deny(()=>probe.mutate_(call(add,'POS-START-1','closeCashSession')));
+  await deny(()=>probe.mutate_(call(invalidLogin.body.token,'POS-DUPLICATE-JSON')));
+  await deny(()=>probe.mutate_(call(add,'POS-FAIL')));
+  assert.equal(await count('m04_source_pos_receipts'),2,'late insert abort must roll back receipt');
+  assert.equal(await count('m04_source_pos_journal'),2,'late insert abort must roll back journal');
+  await deny(()=>probe.mutate_({...call(add,'POS-FORGED'),actorId:'USR-ADMIN'}));
+  await deny(()=>probe.mutate_({...call(add,'POS-FORGED'),module:'pos'}));
+  await deny(()=>probe.mutate_({...call(add,'POS-FORGED'),nowMs:now+1000}));
+  await deny(()=>probe.mutate_(call(add,'POS-BAD-METHOD','getCashSessionSummary')));
+
+  assert.deepEqual(await probe.summary_({token:adminLogin.body.token}),
+    {action:'getCashSessionSummary',actorId:'USR-ADMIN'},
+    'Administrator still requires a live authenticated D1 session');
+  assert.deepEqual(await probe.mutate_(call(adminLogin.body.token,'POS-ADMIN-CLOSE','closeCashSession')),
+    {operationId:'POS-ADMIN-CLOSE',action:'closeCashSession',actorId:'USR-ADMIN'});
+
+  // Role metadata contradiction and SQL epoch must both block a current write.
+  await DB.prepare("UPDATE auth_roles SET allowed_modules='pos' WHERE role_name='M04PosAdd'").run();
+  await deny(()=>probe.mutate_(call(add,'POS-DRIFT')));
+  await DB.prepare("UPDATE auth_roles SET allowed_modules='' WHERE role_name='M04PosAdd'").run();
+  await deny(()=>probe.mutate_(call(add,'POS-EPOCH-OLD')));
+  const newLogin=await rpc('login',{
+    phoneKey:'01710000017',password:PASSWORD,nowMs:now+1000
+  });
+  assert.equal(newLogin.body.authenticated,true);
+  await DB.prepare("UPDATE auth_roles SET status='Inactive' WHERE role_name='M04PosAdd'").run();
+  await deny(()=>probe.mutate_(call(newLogin.body.token,'POS-ROLE-OFF')));
+  await DB.prepare("UPDATE auth_roles SET status='Active' WHERE role_name='M04PosAdd'").run();
+  await deny(()=>probe.mutate_(call(newLogin.body.token,'POS-ROLE-RESTORED')));
+  const renewed=await rpc('login',{
+    phoneKey:'01710000017',password:PASSWORD,nowMs:now+2000
+  });
+  assert.equal(renewed.body.authenticated,true);
+  await DB.prepare("UPDATE auth_users SET credential_version=credential_version+1 WHERE user_id='USR-M04-POS-ADD'").run();
+  await deny(()=>probe.mutate_(call(renewed.body.token,'POS-CREDENTIAL-OLD')));
+  await rpc('logout',{token:adminLogin.body.token,nowMs:now+1000});
+  await deny(()=>probe.summary_({token:adminLogin.body.token}));
+  await deny(()=>probe.mutate_(call(adminLogin.body.token,'POS-ADMIN-REVOKED')));
+  assert.equal(await count('m04_source_pos_receipts'),3);
+  assert.equal(await count('m04_source_pos_journal'),3);
 });
