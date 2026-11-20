@@ -16,6 +16,8 @@ const PLAIN = value => value !== null && typeof value === 'object' &&
    Object.getPrototypeOf(value) === null);
 
 function trustedTree(value, label, seen = new Set(), depth = 0) {
+  if (typeof value === 'function' || typeof value === 'symbol')
+    throw new TypeError('Invalid trusted ' + label + ' callable or symbol field');
   if (value === null || typeof value !== 'object') return;
   if (depth > 12 || seen.has(value)) throw new TypeError('Invalid circular/deep ' + label);
   seen.add(value);
@@ -68,6 +70,25 @@ function equalData(left, right) {
   return leftKeys.length === rightKeys.length &&
     leftKeys.every(key => Object.hasOwn(right, key) &&
       equalData(left[key], right[key]));
+}
+
+// A historical receipt must not share any mutable container with the
+// preflight record it independently corroborates, even several levels deep.
+// Input shape and acyclicity were already checked by trustedTree.
+function sharesUnitObject(left, right) {
+  const originals = new WeakSet();
+  function collect(value) {
+    if (value === null || typeof value !== 'object') return;
+    originals.add(value);
+    for (const child of Object.values(value)) collect(child);
+  }
+  function overlaps(value) {
+    if (value === null || typeof value !== 'object') return false;
+    if (originals.has(value)) return true;
+    return Object.values(value).some(overlaps);
+  }
+  collect(left);
+  return overlaps(right);
 }
 
 /**
@@ -172,6 +193,8 @@ export function auditHistoricalUnitLotHandoff(snapshot) {
       if (receipt) issue('UNEXPECTED_UNIT_RECEIPT', {productId});
     } else if (!receipt) {
       issue('MISSING_UNIT_RECEIPT', {productId});
+    } else if (sharesUnitObject(receipt.unit, line.unit)) {
+      issue('UNIT_RECEIPT_ALIASED', {productId});
     } else if (!equalData(receipt.unit, line.unit)) {
       issue('UNIT_RECEIPT_MISMATCH', {productId});
     }
