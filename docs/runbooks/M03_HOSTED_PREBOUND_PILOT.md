@@ -143,3 +143,31 @@ not enable that protected variable on the currently working Owner Worker**.
 The Phase 0 tests establish the safety contract, not the real-world Builds
 configuration. A green PR and a Cloudflare version upload are not approval
 to activate new Shop databases or financial write endpoints.
+
+## Reviewed first-Shop Supplier Cash schema overlay — 2026-11-21
+
+The hosted pilot's original **13** owner-ready migration receipts must
+remain intact. M08's already merged, additive 0010 Supplier Cash Pay and
+0011 Cash Close reconciliation change the SQL schema, so the old exact
+13-step schema-snapshot equality rejects the upgraded Shop until the
+reviewed extension verifier is published.
+
+The isolated M03 schema-seal change permits the **existing first-Shop
+prebound pilot only** to recognize exactly 14 added SQL objects and the
+reviewed replacement of `owner_mvp_cash_close_guard`. It compares the
+Shop's own original receipt snapshot with its current D1 `sqlite_schema`
+and pins every changed object's type, owning table and normalized SQL
+SHA-256. It rejects 0010 alone, unknown tables/triggers, a forged Cash
+Close trigger, wrong immutable Shop identity and stale baseline receipts.
+The original 13 receipts are never edited, and the generic Option A
+multi-Shop schema revision is not broadened.
+
+The first-Shop operational overlay is **not an instruction to run remote
+SQL now**. The two current Cloudflare databases were exported privately
+and both backups restored with `PRAGMA integrity_check=ok`; migrations
+0010→0011 succeeded on an isolated Shop backup. Before applying any
+remote migration, complete the single-publisher handoff, exact-worker
+readback, approved backup/roll-forward/rollback rehearsal, independent
+M08 financial review and CI, then explicitly approve the release.
+Do not enable `OWNER_WRITE_GRANTS_ENABLED` or financial feature flags
+merely because the new schema passes its identity/DDL verifier.

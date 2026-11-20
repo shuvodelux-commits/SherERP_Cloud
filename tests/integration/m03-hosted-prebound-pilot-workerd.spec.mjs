@@ -203,4 +203,13 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
   const events=(await db.prepare(
     'SELECT event_type FROM m03_local_support_events ORDER BY rowid').all()).results;
   assert.deepEqual(events.map(e=>e.event_type),['START','READ','END']);
+
+  // Replacing a named financial guard with permissive SQL must fail the
+  // approved-object digest even if all expected tables still exist.
+  await shopDb.prepare('DROP TRIGGER owner_mvp_cash_close_guard').run();
+  await shopDb.prepare(`CREATE TRIGGER owner_mvp_cash_close_guard
+    BEFORE UPDATE OF status ON owner_mvp_cash_sessions
+    BEGIN SELECT 1; END`).run();
+  assert.equal(await verifiedPreboundPilot({...env,...conf.vars}),null,
+    'a forged cash-close guard may never preserve Shop Ready');
 });

@@ -115,8 +115,14 @@ async function verifyPreparedShop(env, scope) {
       (env.PLATFORM_LOCAL_OWNER_READY_ENABLED==='true' && !isOwnerReadyShopMigrationPlan(plan)) ||
       !await pilotShopIdentityMatches({ ...scope, shopDb: db })) return false;
   const { receipts, schema } = await readPortP2ShopCheckpoint(db);
-  return receipts.length === plan.length && matchesPortP2MigrationPrefix(receipts, plan) &&
-    receipts.at(-1).schema === schema;
+  if(receipts.length!==plan.length||!matchesPortP2MigrationPrefix(receipts,plan))
+    return false;
+  if(receipts.at(-1).schema===schema)return true;
+  // Only trusted server code can inject this optional verifier. Never accept
+  // a browser-provided schema revision, function name or migration receipt.
+  const overlay=env.PLATFORM_LOCAL_SHOP_SCHEMA_OVERLAY_VERIFIER;
+  return typeof overlay==='function' &&
+    await overlay(scope,{receipts,schema})===true;
 }
 
 function finalize(db, hash, row) {
