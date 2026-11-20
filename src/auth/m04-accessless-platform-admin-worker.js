@@ -1,4 +1,5 @@
 import {browserSetupConfigured} from './browser-first-admin-setup.js';
+import {attachHostedPilot} from './m03-hosted-prebound-pilot.js';
 import platformAuth from '../m03-private-platform-auth-worker.js';
 import {hashOpaqueSessionToken} from './session-token.js';
 import html from '../../frontend/platform-auth/index.html';
@@ -104,6 +105,8 @@ export default {
     }
     // Existing private Hono app owns nonce-bound Google verification, TOTP,
     // D1-backed sessions, throttling, CSRF/origin checks and all privilege gates.
-    return platformAuth.fetch(request,{...env,platformPageFiles:files},ctx);
+    const needsPilot=/^\/api\/platform\/(?:shops(?:\/|$)|auth\/(?:session|login)$)/.test(url.pathname);
+    const platformEnv=needsPilot?await attachHostedPilot(env):env;
+    return platformAuth.fetch(request,{...platformEnv,platformPageFiles:files},ctx);
   },
 };
