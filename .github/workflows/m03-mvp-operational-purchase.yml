@@ -1,0 +1,25 @@
+name: M03 MVP operational credit Purchase Shop D1
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  operational-purchase:
+    name: Real local Owner Purchase -> Supplier Due + FIFO Stock
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - run: npm run verify:source
+      - name: Real two-Shop Workerd/D1 posting and denial
+        run: node --test tests/integration/m03-mvp-operational-purchase-workerd.spec.mjs
+      - run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
