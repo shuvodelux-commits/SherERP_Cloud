@@ -1,5 +1,7 @@
 # AGENTS.md — SherERP Cloud Migration
 
+**Operational progress and next-task handoff:** read [PROJECT.md](PROJECT.md) first and refresh its dated GitHub snapshot. PROJECT.md does not override the mandatory safety, architecture, source, file-ownership, TDD or release gates in this file.
+
 This repository is the **target migration workspace** for https://github.com/shuvodelux-commits/Mohim_ERP. Read **docs/MIGRATION_PLAN.md** and the owner-approved **docs/architecture/ADR-007-unified-party-relationships.md** before proposing changes. Follow **docs/superpowers/plans/2026-11-14-unified-party-migration.md** for affected Party/finance modules. This file is mandatory guidance for any coding agent.
 
 ## Status and source of truth

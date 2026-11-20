@@ -2,9 +2,11 @@
 
 Migration workspace for the existing [Mohim_ERP](https://github.com/shuvodelux-commits/Mohim_ERP), preserving the HTML/CSS/vanilla JavaScript frontend and original ERP business/accounting rules while moving from Google Apps Script + Google Sheets to **Cloudflare Workers + Cloudflare D1 (SQLite)**.
 
-> **Current status: Partial foundation and preview setup only.** The Worker/RPC shell is intentionally non-transactional; no real ERP deployment, D1 integration or cutover has occurred. The original repository and Google Sheets remain untouched.
+> **Current status (2026-11-20): MVP integration in progress; production NO-GO.** Read the dated [central project status, handoff and task board](PROJECT.md) first. The public Worker/RPC shell remains intentionally non-transactional and D1-free; internal real local Workerd/D1 integration proofs do not authorize live business posting, remote data import or cutover. The original repository and Google Sheets remain untouched.
 
 ## Read first
+
+- **[PROJECT.md](PROJECT.md)** — **single current status, handoff and prioritized task board**. Refresh its dated GitHub snapshot before using it to decide readiness.
 
 - **[Master migration plan](docs/MIGRATION_PLAN.md)** — architecture, source inventory, phased implementation (M00–M11), acceptance tests, security, reconciliation and rollback.
 - **[Workstream register](docs/WORKSTREAMS.md)** — specific deliverables, dependency graph, high-risk spikes and PR acceptance matrix.
