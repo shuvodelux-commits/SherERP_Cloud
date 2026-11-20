@@ -7,6 +7,7 @@ import {issueFirstPlatformSetupTicket} from '../../src/auth/port-p3-first-admin-
 import {bootstrapPlatformSuperAdmin,readPlatformSetupNonce} from '../../src/auth/platform-superadmin-bootstrap.js';
 import {
   activateFirstPlatformFactorFromChallenge,
+  createTrustedFirstMfaOperator,
   issueFirstPlatformActivationChallenge,
   verifyAndConsumeFirstPlatformActivationChallenge,
   revokeFirstPlatformActivationChallenge,
@@ -35,7 +36,7 @@ function mockGoogleKeys(t){
     url==='https://www.googleapis.com/oauth2/v3/certs'
       ?Promise.resolve(Response.json({keys:[jwk]})):original(url,opts));
 }
-async function withD1(run){
+async function withD1(run,{fixture=true}={}){
   const harness=createTestHarness({workers:[{configPath:'./wrangler.m04-auth-http-test.jsonc'}]});
   try{
     await harness.listen();
@@ -44,8 +45,10 @@ async function withD1(run){
       const sql=await readFile(new URL('../../staging-migrations/platform-auth/'+file,import.meta.url),'utf8');
       await db.batch(sql.trim().split('-- next statement').map(statement=>db.prepare(statement.trim())));
     }
-    const testOnly=await readFile(new URL('../fixtures/port-p3-activation-challenge.sql',import.meta.url),'utf8');
-    await db.prepare(testOnly).run();
+    if(fixture){
+      const testOnly=await readFile(new URL('../fixtures/port-p3-activation-challenge.sql',import.meta.url),'utf8');
+      await db.prepare(testOnly).run();
+    }
     return await run(db);
   }finally{
     await harness.close();
@@ -372,5 +375,101 @@ test('a zero-row factor write rolls back challenge consumption and permits a bou
     assert.equal(await activate(db,setupToken,challenge),true);
     assert.deepEqual(await factor(db),{enabled:1,factor_version:1});
     assert.ok(Number.isSafeInteger((await challengeRow(db,challenge.challengeToken)).consumed_at_ms));
+  });
+});
+
+const operatorBearer=randomBytes(32).toString('hex');
+const operatorId='cloud-operator-01';
+const createOperator=(controlDb,overrides={})=>createTrustedFirstMfaOperator({
+  controlDb,operatorId,operatorBearer,clientId,googleSubject:subject,totpSecret:factorSecret,...overrides,
+});
+async function withOperatorD1(t,run){
+  mockGoogleKeys(t);
+  return withD1(async db=>{
+    const {setupToken}=await enroll(db);
+    const migration=await readFile(new URL(
+      '../../staging-migrations/platform-auth/0003_platform_first_mfa_activation.sql',import.meta.url,
+    ),'utf8');
+    await db.batch(migration.trim().split('-- next statement').map(sql=>db.prepare(sql.trim())));
+    return run(db,setupToken);
+  },{fixture:false});
+}
+const auditRows=db=>db.prepare('SELECT * FROM platform_first_mfa_activation_audit').all();
+const operatorProof=(setupToken,challenge)=>({
+  bearer:operatorBearer,setupToken,challengeToken:challenge.challengeToken,
+  credential:googleCredential(challenge.nonce),code:otp(),
+});
+
+test('numbered activation migration preserves pre-existing enrollment and records one trusted completion',async t=>{
+  await withOperatorD1(t,async(db,setupToken)=>{
+    const operator=await createOperator(db);
+    const challenge=await operator.issueChallenge({bearer:operatorBearer,setupToken});
+    const proof=operatorProof(setupToken,challenge);
+    const results=await Promise.all(Array.from({length:6},()=>operator.activate({
+      ...proof,operatorId:'supplied-by-request',totpSecret:'0'.repeat(40),
+      controlDb:null,clientId:'999-other.apps.googleusercontent.com',
+    })));
+    assert.equal(results.filter(Boolean).length,1);
+    assert.deepEqual(await factor(db),{enabled:1,factor_version:1});
+    assert.equal((await db.prepare('SELECT subject FROM platform_first_superadmin').first()).subject,subject);
+    const {results:[audit]}=await auditRows(db);
+    assert.equal(audit.operator_id,operatorId);
+    assert.equal(audit.challenge_hash,hash(challenge.challengeToken));
+    assert.equal(audit.factor_version,1);
+    assert.equal(audit.activated_at_ms,(await challengeRow(db,challenge.challengeToken)).consumed_at_ms);
+    assert.deepEqual(await operator.readReceipt(proof),{
+      operatorId,factorVersion:1,activatedAtMs:audit.activated_at_ms,
+    });
+    assert.equal(await operator.activate(proof),false);
+    assert.equal((await auditRows(db)).results.length,1);
+    assert.deepEqual(Object.keys(audit).sort(),
+      ['activated_at_ms','challenge_hash','factor_version','operator_id','singleton']);
+    for(const secret of [factorSecret,setupToken,challenge.challengeToken,operatorBearer,proof.credential,proof.code]){
+      assert.ok(!Object.values(audit).includes(secret));
+    }
+    await assert.rejects(db.prepare('UPDATE platform_first_mfa_activation_audit SET operator_id=?').bind('changed').run());
+    await assert.rejects(db.prepare('DELETE FROM platform_first_mfa_activation_audit').run());
+    await assert.rejects(db.prepare(`INSERT OR REPLACE INTO platform_first_mfa_activation_audit
+      SELECT singleton,challenge_hash,'changed',factor_version,activated_at_ms
+      FROM platform_first_mfa_activation_audit`).run());
+  });
+});
+
+test('a caller without the trusted operator credential cannot issue, attempt, or read activation',async t=>{
+  await withOperatorD1(t,async(db,setupToken)=>{
+    const operator=await createOperator(db);
+    assert.equal(await createOperator(db,{operatorBearer:'malformed'}),null);
+    assert.equal(await operator.issueChallenge({bearer:'0'.repeat(64),setupToken}),null);
+    const wrongSubjectOperator=await createOperator(db,{googleSubject:anotherSubject});
+    assert.equal(await wrongSubjectOperator.issueChallenge({bearer:operatorBearer,setupToken}),null);
+    const challenge=await operator.issueChallenge({bearer:operatorBearer,setupToken});
+    const proof=operatorProof(setupToken,challenge);
+    assert.equal(await operator.activate({...proof,bearer:'0'.repeat(64),operatorId}),false);
+    assert.equal(await wrongSubjectOperator.activate({...proof,googleSubject:subject}),false);
+    assert.equal((await challengeRow(db,challenge.challengeToken)).attempt_count,0);
+    assert.equal(await factor(db),null);
+    assert.equal(await operator.activate(proof),true);
+    assert.equal(await operator.readReceipt({...proof,bearer:'0'.repeat(64)}),null);
+    const different=await createOperator(db,{operatorId:'another-operator'});
+    assert.equal(await different.readReceipt(proof),null);
+  });
+});
+
+test('D1 rolls back challenge and factor when the audit write affects no rows',async t=>{
+  await withOperatorD1(t,async(db,setupToken)=>{
+    const operator=await createOperator(db);
+    const challenge=await operator.issueChallenge({bearer:operatorBearer,setupToken});
+    const proof=operatorProof(setupToken,challenge);
+    await db.prepare(`CREATE TRIGGER fixture_ignore_mfa_audit BEFORE INSERT ON platform_first_mfa_activation_audit
+      BEGIN SELECT RAISE(IGNORE); END`).run();
+    assert.equal(await operator.activate(proof),false);
+    const row=await challengeRow(db,challenge.challengeToken);
+    assert.equal(row.attempt_count,1);
+    assert.equal(row.consumed_at_ms,null);
+    assert.equal(await factor(db),null);
+    assert.deepEqual((await auditRows(db)).results,[]);
+    await db.prepare('DROP TRIGGER fixture_ignore_mfa_audit').run();
+    assert.equal(await operator.activate(proof),true);
+    assert.equal((await auditRows(db)).results.length,1);
   });
 });

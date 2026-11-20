@@ -21,7 +21,10 @@ test('private platform assets and isolated Control D1 migrations run together in
     await worker.applyD1Migrations('CONTROL_DB');
     const {CONTROL_DB:db}=await worker.getEnv();
     const {results}=await db.prepare('SELECT name FROM d1_migrations ORDER BY id').all();
-    assert.deepEqual(results.map(row=>row.name),['0001_platform_bootstrap.sql','0002_platform_sessions.sql']);
+    assert.deepEqual(results.map(row=>row.name),[
+      '0001_platform_bootstrap.sql','0002_platform_sessions.sql','0003_platform_first_mfa_activation.sql',
+    ]);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM platform_first_mfa_activation_audit').first()).n,0);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM platform_first_superadmin').first()).n,0);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM platform_admin_sessions').first()).n,0);
 

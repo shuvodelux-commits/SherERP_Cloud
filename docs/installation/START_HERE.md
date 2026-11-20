@@ -289,6 +289,7 @@ There are **multiple migration queues for different purposes**:
 | Schema | Relevant source | Must be applied to |
 | --- | --- | --- |
 | First Admin bootstrap + sessions | `staging-migrations/platform-auth/0001_platform_bootstrap.sql` and `0002_platform_sessions.sql` | **Control D1** only, approved migration run |
+| First Admin TOTP activation audit | `staging-migrations/platform-auth/0003_platform_first_mfa_activation.sql` | **Control D1** only, separate approved migration run |
 | Shop reservations, bindings, invitations, Owner records, challenges, provisioning | `staging-migrations/platform-onboarding/0001...` through `0008...` and `0011_control_center_provisioning.sql` | **Control D1**, reviewed dependency/order |
 | Shop identity and Owner-ready baseline | `staging-migrations/shop-identity/` and the reviewed Owner-ready migration manifest | **Pilot Shop D1** |
 | Original ERP catalog, Party, Tiles and related schemas | Root `migrations/` and M02/M03 contracts | Target Shop D1 only as part of **approved complete business schema**; not blindly applied to the platform database |
