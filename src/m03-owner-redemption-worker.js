@@ -8,6 +8,7 @@ import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
 import {readCleanOwnerCatalog,readOwnerCatalog} from './db/m03-owner-catalog-read.js';
 import {createOwnerProduct} from './db/m03-owner-product-create.js';
 import {createOwnerSupplier,readOwnerSupplierBootstrap} from './db/m03-owner-supplier-create.js';
+import {readMvpOwnerPurchaseBootstrap,readMvpOwnerEmptyPurchaseHistory} from './db/m03-owner-purchase-bootstrap.js';
 import {pilotShopConfiguration} from './auth/platform-shop-binding.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
@@ -174,6 +175,25 @@ app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
     return c.json({success:false,message:'Supplier source history is not verified.'},503);
   return c.json({success:false,message:'Supplier already exists or saved details changed.'},409);
 });
+
+// Source-faithful read-only Purchase screen for a newly initialized empty Shop.
+// Explicit opt-in; does not expose Purchase creation or fabricated accounting.
+const purchaseReadEnabled=env=>env.OWNER_PURCHASE_READ_ENABLED==='true'&&
+  env.OWNER_CATALOG_ENABLED==='true'&&cleanProductsEnabled(env);
+
+for(const [path,handler] of [
+  ['/api/owner/purchases/bootstrap',readMvpOwnerPurchaseBootstrap],
+  ['/api/owner/purchases/history',readMvpOwnerEmptyPurchaseHistory],
+]){
+  app.get(path,protectLogin,async c=>{
+    if(!purchaseReadEnabled(c.env))return c.notFound();
+    const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE));
+    const scope=pilotShopConfiguration(c.env);
+    if(!session||!scope||session.shopId!==scope.shopId)return denied(c);
+    try{return c.json(await handler(scope));}
+    catch{return c.json({error:'Purchase source data unavailable'},503);}
+  });
+}
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{
   const challenge=await beginOwnerGoogleLogin(c.env)??
