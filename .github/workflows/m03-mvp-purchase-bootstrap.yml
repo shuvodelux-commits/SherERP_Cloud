@@ -1,0 +1,29 @@
+name: M03 MVP original Purchase bootstrap two-Shop D1 (no deploy)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  purchase-bootstrap:
+    name: Verify current Owner Purchase bootstrap against real local Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Test two-Shop authenticated read and negative write policy
+        run: node --test tests/integration/m03-mvp-purchase-bootstrap-workerd.spec.mjs
+      - name: Existing Supplier and Product D1 regression
+        run: node --test tests/integration/m03-mvp-supplier-workerd.spec.mjs
