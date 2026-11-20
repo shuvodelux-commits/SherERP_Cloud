@@ -165,8 +165,35 @@ test('Control Center browser resumes the same lost-response operation against di
   await firstRow.getByText('Ready',{exact:false}).waitFor();
   const secondRow=page.locator('#business-roster-list li').filter({hasText:'Second Tools'});
   await secondRow.getByRole('button',{name:'Resume setup for Second Tools'}).waitFor();
+  // Minimal Control Center directory: counts are recent, not total tenants.
+  assert.equal((await page.locator('#business-recent-count').textContent()).trim(),'2');
+  assert.equal((await page.locator('#business-ready-count').textContent()).trim(),'1');
+  assert.equal((await page.locator('#business-pending-count').textContent()).trim(),'1');
+  const search=page.getByRole('searchbox',{name:'Search recent businesses'});
+  const filter=page.getByLabel('Setup status filter');
+  await search.fill('SECOND.OWNER@GMAIL.COM');
+  assert.equal(await firstRow.isVisible(),false);
+  assert.equal(await secondRow.isVisible(),true);
+  await search.fill('অসম্ভব ব্যবসা');
+  await page.getByText('No businesses match your filters.').waitFor();
+  await search.fill('');
+  await filter.selectOption('ready');
+  assert.equal(await firstRow.isVisible(),true);
+  assert.equal(await secondRow.isVisible(),false);
+  await filter.selectOption('pending');
+  assert.equal(await firstRow.isVisible(),false);
+  assert.equal(await secondRow.isVisible(),true);
+  await filter.selectOption('all');
+  assert.equal(await firstRow.isVisible(),true);
+  const directoryTargets=await page.evaluate(()=>[
+    document.getElementById('business-search').getBoundingClientRect().height,
+    document.getElementById('business-status-filter').getBoundingClientRect().height,
+  ]);
+  assert.ok(directoryTargets.every(height=>height>=44),'directory filters are touch accessible');
   await secondRow.getByRole('button',{name:'Resume setup for Second Tools'}).click();
   await secondRow.getByText('Ready',{exact:false}).waitFor();
+  assert.equal((await page.locator('#business-ready-count').textContent()).trim(),'2');
+  assert.equal((await page.locator('#business-pending-count').textContent()).trim(),'0');
   assert.equal(creates,2,'restoring a second operation does not recreate the first D1');
   assert.equal(inputs.length,1,'roster Resume never submits a new Create Business operation');
   assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_reservations').first()).n,2);
@@ -181,5 +208,7 @@ test('Control Center browser resumes the same lost-response operation against di
     .bind(Date.now()).run();
   await page.reload();
   await page.getByRole('heading',{name:'Platform sign-in'}).waitFor();
+  assert.equal(await page.locator('#business-roster-list li').count(),0,'signed-out page clears tenant details');
+  assert.equal(await page.locator('#business-search').inputValue(),'','signed-out page clears business search');
   assert.equal(await page.getByRole('button',{name:'Create business'}).isVisible(),false);
 });

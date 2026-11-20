@@ -14,6 +14,12 @@ const resumeBusiness=byId('resume-business');
 const businessRoster=byId('business-roster');
 const businessRosterList=byId('business-roster-list');
 const businessRosterStatus=byId('business-roster-status');
+const businessSearch=byId('business-search');
+const businessStatusFilter=byId('business-status-filter');
+const businessFilterSummary=byId('business-filter-summary');
+const businessRecentCount=byId('business-recent-count');
+const businessReadyCount=byId('business-ready-count');
+const businessPendingCount=byId('business-pending-count');
 const signOut=byId('sign-out');
 const inviteForm=byId('owner-invitation-form');
 const inviteSubject=byId('owner-google-subject');
@@ -30,6 +36,7 @@ const setupFailures={
   'owner-readiness':'Owner readiness',
 };
 let localProvisioning=false;
+let businessShops=[];
 let generation=0;
 let credential;
 let sdk;
@@ -40,6 +47,18 @@ function clearInviteCode(){
 }
 
 window.addEventListener('pagehide',clearInviteCode);
+
+function clearBusinessDirectory(){
+  businessShops=[];
+  businessSearch.value='';
+  businessStatusFilter.value='all';
+  businessRosterList.replaceChildren();
+  businessRosterStatus.textContent='';
+  businessFilterSummary.textContent='';
+  businessRecentCount.textContent='0';
+  businessReadyCount.textContent='0';
+  businessPendingCount.textContent='0';
+}
 
 function show(view,message=''){
   generation++;
@@ -52,11 +71,9 @@ function show(view,message=''){
   mount.replaceChildren();
   cancelGoogle.disabled=false;
   status.textContent=message;
-  if(view!=='signed-in'){
-    businessRosterList.replaceChildren();
-    businessRosterStatus.textContent='';
-    businessRoster.hidden=true;
-  }
+  clearBusinessDirectory();
+  document.body.classList.toggle('platform-signed-in',view==='signed-in');
+  if(view!=='signed-in')businessRoster.hidden=true;
   for(const panel of panels)panel.hidden=panel.id!==view;
   byId(view).querySelector('h1').focus();
   return generation;
@@ -144,6 +161,48 @@ async function resumeRosterShop(shop,button){
   }
 }
 
+function renderBusinessRoster(){
+  const ready=businessShops.filter(shop=>shop.status==='ready').length;
+  businessRecentCount.textContent=String(businessShops.length);
+  businessReadyCount.textContent=String(ready);
+  businessPendingCount.textContent=String(businessShops.length-ready);
+  const query=businessSearch.value.trim().toLocaleLowerCase();
+  const mode=businessStatusFilter.value;
+  const visible=businessShops.filter(shop=>
+    (mode==='all'||(mode==='ready'?shop.status==='ready':shop.status!=='ready'))&&
+    (!query||shop.displayName.toLocaleLowerCase().includes(query)||
+      shop.ownerEmail.toLocaleLowerCase().includes(query))
+  );
+  businessRosterList.replaceChildren();
+  for(const shop of visible){
+    const row=document.createElement('li');
+    const info=document.createElement('div');
+    const name=document.createElement('strong');
+    name.textContent=shop.displayName;
+    const details=document.createElement('p');
+    details.textContent='Owner: '+shop.ownerEmail+'. Setup: '+setupStages[shop.status]+
+      (shop.failedStage?' — '+setupFailures[shop.failedStage]:'');
+    info.append(name,details);
+    row.append(info);
+    if(shop.status!=='ready'){
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='secondary';
+      button.textContent='Resume setup';
+      button.setAttribute('aria-label','Resume setup for '+shop.displayName);
+      button.addEventListener('click',()=>resumeRosterShop(shop,button));
+      row.append(button);
+    }
+    businessRosterList.append(row);
+  }
+  businessFilterSummary.textContent=businessShops.length===0?'':visible.length===0
+    ?'No businesses match your filters.'
+    :'Showing '+visible.length+' of '+businessShops.length+' recent businesses.';
+}
+
+businessSearch.addEventListener('input',renderBusinessRoster);
+businessStatusFilter.addEventListener('change',renderBusinessRoster);
+
 async function loadBusinessRoster(view){
   if(!localProvisioning||businessRoster.hidden)return;
   businessRosterStatus.textContent='Checking local businesses…';
@@ -154,29 +213,13 @@ async function loadBusinessRoster(view){
        !result.shops.every(validRosterShop)){
       throw new Error('Invalid business roster');
     }
-    businessRosterList.replaceChildren();
-    for(const shop of result.shops){
-      const row=document.createElement('li');
-      const name=document.createElement('strong');
-      name.textContent=shop.displayName;
-      const details=document.createElement('p');
-      details.textContent='Owner: '+shop.ownerEmail+'. Setup: '+setupStages[shop.status]+
-        (shop.failedStage?' — '+setupFailures[shop.failedStage]:'');
-      row.append(name,details);
-      if(shop.status!=='ready'){
-        const button=document.createElement('button');
-        button.type='button';
-        button.className='secondary';
-        button.textContent='Resume setup';
-        button.setAttribute('aria-label','Resume setup for '+shop.displayName);
-        button.addEventListener('click',()=>resumeRosterShop(shop,button));
-        row.append(button);
-      }
-      businessRosterList.append(row);
-    }
+    businessShops=result.shops;
+    renderBusinessRoster();
     businessRosterStatus.textContent=result.shops.length?'':'No local businesses yet.';
   }catch(error){
     if(view!==generation)return;
+    businessShops=[];
+    renderBusinessRoster();
     if(error.message==='401')show('login','Sign in again to view local businesses.');
     else businessRosterStatus.textContent='Could not load business status. Reload to retry.';
   }

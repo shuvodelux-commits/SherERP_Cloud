@@ -59,8 +59,30 @@
       </form>
       <details id="business-roster" hidden open>
         <summary>Recent businesses (up to 50)</summary>
+        <div class="business-roster-counts" aria-label="Setup counts for recently listed businesses">
+          <p><strong id="business-recent-count">0</strong><span>Recent (up to 50)</span></p>
+          <p><strong id="business-ready-count">0</strong><span>Setup ready</span></p>
+          <p><strong id="business-pending-count">0</strong><span>Needs setup</span></p>
+        </div>
+        <div class="business-roster-tools">
+          <div>
+            <label for="business-search">Search recent businesses</label>
+            <input id="business-search" type="search" maxlength="120" autocomplete="off"
+              spellcheck="false" placeholder="Business or Owner Gmail">
+          </div>
+          <div>
+            <label for="business-status-filter">Setup status filter</label>
+            <select id="business-status-filter">
+              <option value="all">All setup states</option>
+              <option value="ready">Setup ready</option>
+              <option value="pending">Needs setup</option>
+            </select>
+          </div>
+        </div>
+        <p id="business-filter-summary" role="status" aria-live="polite"></p>
         <p id="business-roster-status" role="status" aria-live="polite"></p>
         <ul id="business-roster-list"></ul>
+        <p class="business-support-note">ERP Support Access is not enabled yet. Setup ready does not mean the shop ERP is operational.</p>
       </details>
       <form id="owner-invitation-form" hidden>
         <h2>Invite the first Owner</h2>
