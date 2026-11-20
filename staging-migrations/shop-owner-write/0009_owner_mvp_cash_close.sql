@@ -21,6 +21,13 @@ ALTER TABLE owner_mvp_cash_sessions
 ALTER TABLE owner_mvp_cash_sessions
   ADD COLUMN close_notes TEXT NOT NULL DEFAULT '' CHECK(length(close_notes)<=250);
 -- next statement
+-- Original 0006 constrained opening_paisa CHECK(opening_paisa=0). Preserve
+-- existing FK-backed rows and use an additive carry amount for subsequent
+-- physically counted sessions; NEVER recreate that financial parent table.
+ALTER TABLE owner_mvp_cash_sessions
+  ADD COLUMN carried_opening_paisa INTEGER NOT NULL DEFAULT 0
+    CHECK(carried_opening_paisa BETWEEN 0 AND 1000000000000);
+-- next statement
 -- The 0007 pilot denial is superseded ONLY by this guarded cash-count close.
 DROP TRIGGER owner_mvp_sale_cash_close_gate;
 -- next statement
@@ -34,9 +41,10 @@ BEGIN
     OR NEW.close_actor_id IS NULL OR length(NEW.close_actor_id)<8
     OR NEW.closed_operation_id IS NULL OR length(NEW.closed_operation_id)!=36
     OR NEW.closed_at_ms IS NULL OR NEW.closed_at_ms<OLD.started_at_ms
-    OR NEW.opening_paisa != OLD.opening_paisa;
+    OR NEW.opening_paisa != OLD.opening_paisa
+    OR NEW.carried_opening_paisa != OLD.carried_opening_paisa;
   SELECT RAISE(ABORT,'MVP_CLOSE_EXPECTED_CASH_CHANGED')
-  WHERE NEW.expected_paisa != OLD.opening_paisa
+  WHERE NEW.expected_paisa != OLD.opening_paisa + OLD.carried_opening_paisa
     + COALESCE((SELECT SUM(b.received_paisa)
       FROM owner_mvp_sale_cash_book b WHERE b.cash_sequence=OLD.sequence),0)
     - COALESCE((SELECT SUM(r.debit_paisa)
@@ -56,7 +64,7 @@ BEGIN SELECT RAISE(ABORT,'MVP_CLOSE_IMMUTABLE'); END;
 -- separately authorized cash reconciliation/withdrawal flow.
 CREATE TRIGGER owner_mvp_cash_open_carry_guard
 BEFORE INSERT ON owner_mvp_cash_sessions
-WHEN NEW.opening_paisa != COALESCE((
+WHEN NEW.carried_opening_paisa != COALESCE((
   SELECT last.counted_paisa FROM owner_mvp_cash_sessions last
   WHERE last.status='Closed' ORDER BY last.sequence DESC LIMIT 1
 ),0)
@@ -66,3 +74,8 @@ CREATE TRIGGER owner_mvp_cash_opening_immutable
 BEFORE UPDATE OF opening_paisa ON owner_mvp_cash_sessions
 WHEN NEW.opening_paisa != OLD.opening_paisa
 BEGIN SELECT RAISE(ABORT,'MVP_CASH_OPENING_IMMUTABLE'); END;
+-- next statement
+CREATE TRIGGER owner_mvp_cash_carry_immutable
+BEFORE UPDATE OF carried_opening_paisa ON owner_mvp_cash_sessions
+WHEN NEW.carried_opening_paisa != OLD.carried_opening_paisa
+BEGIN SELECT RAISE(ABORT,'MVP_CASH_CARRY_IMMUTABLE'); END;
