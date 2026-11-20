@@ -622,5 +622,39 @@ test('M04 source POS add/view grants are SQL-current against persisted roles and
   await deny(()=>probe.summary_({token:adminLogin.body.token}));
   await deny(()=>probe.mutate_(call(adminLogin.body.token,'POS-ADMIN-REVOKED')));
   assert.equal(await count('m04_source_pos_receipts'),3);
+
   assert.equal(await count('m04_source_pos_journal'),3);
+
+  // Deliberately revoke pos.add AFTER the JS metadata check but BEFORE
+  // the SQL INSERT: current role JSON + epoch must be checked in that write.
+  const raceLogin=await rpc('login',{
+    phoneKey:'01710000017',password:PASSWORD,nowMs:now+3000
+  });
+  assert.equal(raceLogin.body.authenticated,true);
+  let injected=0;
+  const racingDB={
+    prepare(sql){
+      const stmt=DB.prepare(sql);
+      if(!sql.startsWith('INSERT INTO m04_source_pos_receipts'))return stmt;
+      return {bind(...args){
+        const bound=stmt.bind(...args);
+        return {async run(){
+          injected++;
+          await DB.prepare(
+            "UPDATE auth_roles SET permissions_json=?,allowed_modules='pos' WHERE role_name='M04PosAdd'"
+          ).bind(viewJSON).run();
+          return bound.run();
+        }};
+      }};
+    }
+  };
+  const racingProbe=createM04SourcePosActionProbe(racingDB,{
+    serverNowMs:()=>now+3000
+  });
+  await deny(()=>racingProbe.mutate_(call(raceLogin.body.token,'POS-RACE-GRANT')));
+  assert.equal(injected,1,'revocation interleaved between parser and SQL write');
+  assert.equal(await count('m04_source_pos_receipts'),3,
+    'revoked grant must not commit a source POS operation');
+  assert.equal(await count('m04_source_pos_journal'),3,
+    'revoked grant must not append synthetic audit');
 });
