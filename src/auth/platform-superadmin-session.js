@@ -1,12 +1,13 @@
 import {verifyGoogleLoginIdToken} from './google-id-token.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './session-token.js';
+import {PLATFORM_ADMIN_TRUSTED_SESSION_MS} from './platform-admin-trusted-session.js';
 
 const NOW="CAST(unixepoch('subsec') * 1000 AS INTEGER)";
 const STEP_MS=30_000;
 const DB_STEP=`CAST(${NOW}/${STEP_MS} AS INTEGER)`;
 const ATTEMPT_WINDOW_MS=60_000;
 const MAX_ATTEMPTS=5;
-const SESSION_MS=15*60_000;
+const SESSION_MS=PLATFORM_ADMIN_TRUSTED_SESSION_MS;
 const CHALLENGE=`FROM platform_login_challenges c
   JOIN platform_admin_auth a ON a.singleton=1 AND a.enabled=1
   JOIN platform_first_superadmin f ON f.singleton=a.singleton

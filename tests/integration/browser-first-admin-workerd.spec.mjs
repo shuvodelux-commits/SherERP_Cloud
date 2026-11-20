@@ -50,6 +50,9 @@ test('browser setup requires the deployment code, verified Gmail and MFA',async 
     assert.equal(await finishBrowserSetup(env,started.token,'invalid'),false);
     const session=await finishBrowserSetup(env,started.token,otp);
     assert.ok(await validatePlatformSuperAdminSession(db,session));
+    const issued=await db.prepare('SELECT issued_at_ms,expires_at_ms FROM platform_admin_sessions').first();
+    assert.ok(Math.abs(issued.expires_at_ms-issued.issued_at_ms-15*24*60*60_000)<5,
+      'first enrolled device must also receive a 15-day session');
     assert.equal(await readBrowserAdminFactor(env),raw.toString('hex'));
     assert.equal(await beginBrowserSetup(env,{email,setupCode:env.PLATFORM_BOOTSTRAP_CODE}),null);
     assert.equal(await finishBrowserSetup(env,started.token,otp),false);
