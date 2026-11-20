@@ -57,14 +57,15 @@ test('Control Center browser resumes the same lost-response operation against di
   const provider={
     async createDatabase(action){
       creates++;
-      const rec={...action,id:inventory[0].id,binding:inventory[0].binding,evidenceRef:'fixture-attributed-001'};
+      const selected=inventory[creates-1];
+      const rec={...action,id:selected.id,binding:selected.binding,evidenceRef:'fixture-attributed-'+creates};
       receipts.set(action.attemptId,rec);
       if(creates===1)throw new Error('lost response after local allocation');
       return rec;
     },
     async findCreation(action){return receipts.get(action.attemptId);},
     async verifyTarget(scope,target){
-      return scope.databaseId===inventory[0].id && scope.binding==='SHOP_A_DB' && target===env.SHOP_A_DB;
+      return inventory.some(x=>x.id===scope.databaseId&&x.binding===scope.binding&&target===env[x.binding]);
     },
     async prepareShop(scope){
       prepares++;
@@ -98,6 +99,7 @@ test('Control Center browser resumes the same lost-response operation against di
 
   await page.goto(origin);
   await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();
+  await page.getByText('No local businesses yet.').waitFor();
   const owner=page.getByRole('textbox',{name:'Owner Gmail'});
   const layout=await page.evaluate(()=>{
     const name=document.getElementById('business-name').getBoundingClientRect();
@@ -148,10 +150,33 @@ test('Control Center browser resumes the same lost-response operation against di
   await page.setViewportSize({width:1440,height:900});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),1440);
   await page.screenshot({path:'test-results/m01-browser/m03-local-ready-desktop.png'});
+  const second={operationId:crypto.randomUUID(),displayName:'Second Tools',ownerEmail:'second.owner@gmail.com'};
+  const createdSecond=await platform.request(origin+'/api/platform/shops',{
+    method:'POST',
+    headers:{origin,'Content-Type':'application/json',cookie:'__Host-shererp-platform-session='+token},
+    body:JSON.stringify(second)
+  },browserEnv);
+  assert.equal(createdSecond.status,202);
+  await page.evaluate(()=>sessionStorage.clear());
   await page.reload();
   await page.getByRole('textbox',{name:'Owner Gmail'}).waitFor();
   assert.equal(await owner.inputValue(),'');
-  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_reservations').first()).n,1);
+  const firstRow=page.locator('#business-roster-list li').filter({hasText:'টুলস ও হার্ডওয়্যার'});
+  await firstRow.getByText('Ready',{exact:false}).waitFor();
+  const secondRow=page.locator('#business-roster-list li').filter({hasText:'Second Tools'});
+  await secondRow.getByRole('button',{name:'Resume setup for Second Tools'}).waitFor();
+  await secondRow.getByRole('button',{name:'Resume setup for Second Tools'}).click();
+  await secondRow.getByText('Ready',{exact:false}).waitFor();
+  assert.equal(creates,2,'restoring a second operation does not recreate the first D1');
+  assert.equal(inputs.length,1,'roster Resume never submits a new Create Business operation');
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_reservations').first()).n,2);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_owner_gmail_approvals').first()).n,2);
+  const secondShop=await env.SHOP_B_DB.prepare('SELECT shop_id FROM shop_identity').first();
+  assert.notEqual(secondShop.shop_id,reservation.shop_id);
+  assert.equal(await page.evaluate(()=>sessionStorage.length),0);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),1440);
+  await page.setViewportSize({width:320,height:640});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),320);
   await db.prepare('UPDATE platform_admin_sessions SET revoked_at_ms=? WHERE revoked_at_ms IS NULL')
     .bind(Date.now()).run();
   await page.reload();
