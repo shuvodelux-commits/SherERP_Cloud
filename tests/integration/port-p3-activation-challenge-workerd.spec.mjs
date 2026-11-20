@@ -473,3 +473,30 @@ test('D1 rolls back challenge and factor when the audit write affects no rows',a
     assert.equal((await auditRows(db)).results.length,1);
   });
 });
+
+test('private loopback transport gates and completes the audited activation',async t=>{
+  const {createPrivateFirstMfaHandler}=await import('../../src/auth/port-p3-private-transport.js');
+  await withOperatorD1(t,async(db,setupToken)=>{
+    const handler=await createPrivateFirstMfaHandler({
+      controlDb:db,operatorId,operatorBearer,clientId,googleSubject:subject,totpSecret:factorSecret,
+    });
+    const call=(action,body,{token=operatorBearer,host='127.0.0.1',headers={}}={})=>
+      handler(new Request('http://'+host+':8790/'+action,{
+        method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...headers},
+        body:JSON.stringify(body),
+      }));
+    assert.equal((await call('challenge',{setupToken},{token:'0'.repeat(64)})).status,404);
+    assert.equal((await call('challenge',{setupToken},{host:'admin.example.test'})).status,404);
+    assert.equal((await call('challenge',{setupToken},{headers:{Origin:'http://127.0.0.1:8790'}})).status,404);
+    assert.equal((await call('challenge',{setupToken,operatorId:'override'})).status,400);
+    const issued=await call('challenge',{setupToken});
+    assert.equal(issued.status,200);
+    assert.equal(issued.headers.get('Cache-Control'),'no-store');
+    const {challengeToken,nonce}=await issued.json();
+    const proof={setupToken,challengeToken,credential:googleCredential(nonce),code:otp()};
+    assert.equal((await call('activate',proof)).status,200);
+    const receipt=await call('receipt',{challengeToken});
+    assert.equal((await receipt.json()).operatorId,operatorId);
+    assert.equal((await call('activate',proof)).status,409);
+  });
+});
