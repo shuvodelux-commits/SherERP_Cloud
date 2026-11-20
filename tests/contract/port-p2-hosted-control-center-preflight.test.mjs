@@ -80,8 +80,8 @@ test('offline hosted plan is deterministic, ten-step and never authorizes a remo
     fixture().origins.owner,fixture().googleClientId,secret])assert.ok(!message.includes(privateValue));
 });
 
-test('Owner-ready source preflight verifies exactly ten reviewed SQL files before HTTP',async()=>{
-  assert.deepEqual(await verifyOwnerReadyMigrationFiles(),{verified:true,migrationCount:10});
+test('Owner-ready source preflight verifies exactly eleven reviewed SQL files before HTTP',async()=>{
+  assert.deepEqual(await verifyOwnerReadyMigrationFiles(),{verified:true,migrationCount:11});
   const changed=async(file)=> {
     const bytes=await readFile(file);
     return String(file).includes('0013_product_catalog_revisions.sql')
