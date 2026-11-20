@@ -407,6 +407,7 @@ test('numbered activation migration preserves pre-existing enrollment and record
     const proof=operatorProof(setupToken,challenge);
     const results=await Promise.all(Array.from({length:6},()=>operator.activate({
       ...proof,operatorId:'supplied-by-request',totpSecret:'0'.repeat(40),
+      controlDb:null,clientId:'999-other.apps.googleusercontent.com',
     })));
     assert.equal(results.filter(Boolean).length,1);
     assert.deepEqual(await factor(db),{enabled:1,factor_version:1});
@@ -421,9 +422,10 @@ test('numbered activation migration preserves pre-existing enrollment and record
     });
     assert.equal(await operator.activate(proof),false);
     assert.equal((await auditRows(db)).results.length,1);
-    const serialized=JSON.stringify(audit);
+    assert.deepEqual(Object.keys(audit).sort(),
+      ['activated_at_ms','challenge_hash','factor_version','operator_id','singleton']);
     for(const secret of [factorSecret,setupToken,challenge.challengeToken,operatorBearer,proof.credential,proof.code]){
-      assert.ok(!serialized.includes(secret));
+      assert.ok(!Object.values(audit).includes(secret));
     }
     await assert.rejects(db.prepare('UPDATE platform_first_mfa_activation_audit SET operator_id=?').bind('changed').run());
     await assert.rejects(db.prepare('DELETE FROM platform_first_mfa_activation_audit').run());

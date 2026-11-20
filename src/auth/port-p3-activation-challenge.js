@@ -1,9 +1,9 @@
 /**
  * PORT-P3 Run 3 — local-only, separately nonce-bound Google identity challenge.
  *
- * Internal challenge and first-factor activation proofs for disposable D1.
- * Calls require a separately authorized operator and protected configuration.
- * The challenge table is test-only pending M03 schema and release approval.
+ * Internal challenge and first-factor activation for a trusted Control D1 operator.
+ * The operator binds the approved database, Google identity and pending TOTP secret.
+ * Deployed Workers must not expose this operator API.
  */
 import {verifyGoogleLoginIdToken} from './google-id-token.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './session-token.js';
@@ -16,6 +16,9 @@ const ISSUER='https://accounts.google.com';
 const MAX_ATTEMPTS=5;
 const CHALLENGE_MS=120_000;
 const TABLE='port_p3_activation_challenges';
+const OPERATOR_ID=/^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/;
+const GOOGLE_SUBJECT=/^[0-9]{10,128}$/;
+const GOOGLE_CLIENT=/^[a-zA-Z0-9-]{1,218}\.apps\.googleusercontent\.com$/;
 
 function randomNonce(){
   const data=new Uint8Array(32);
@@ -52,6 +55,10 @@ const CONSUME=`UPDATE ${TABLE}
  * including past consumed/revoked/expired challenges.
  */
 export async function issueFirstPlatformActivationChallenge({controlDb,setupToken}={}){
+  return issueActivationChallenge(controlDb,setupToken);
+}
+
+async function issueActivationChallenge(controlDb,setupToken,googleSubject=null){
   if(typeof controlDb?.prepare!=='function')return null;
   const ticketHash=await hashOpaqueSessionToken(setupToken);
   if(!ticketHash)return null;
@@ -68,6 +75,7 @@ export async function issueFirstPlatformActivationChallenge({controlDb,setupToke
       JOIN platform_setup_tickets t ON t.token_hash=f.setup_token_hash
       WHERE f.singleton=1 AND t.token_hash=?
         AND t.issuer=? AND t.issuer=f.issuer AND t.subject=f.subject
+        AND (? IS NULL OR f.subject=?)
         AND t.issued_at_ms<=${NOW} AND t.expires_at_ms>${NOW}
         AND t.revoked_at_ms IS NULL
         AND NOT EXISTS(SELECT 1 FROM platform_admin_auth WHERE singleton=1)
@@ -78,7 +86,8 @@ export async function issueFirstPlatformActivationChallenge({controlDb,setupToke
         AND COALESCE((SELECT SUM(c.attempt_count) FROM ${TABLE} c
           WHERE c.ticket_hash=t.token_hash),0)<?
       RETURNING expires_at_ms AS expiresAtMs`)
-      .bind(challengeHash,nonce,CHALLENGE_MS,ticketHash,ISSUER,MAX_ATTEMPTS).first();
+      .bind(challengeHash,nonce,CHALLENGE_MS,ticketHash,ISSUER,
+        googleSubject,googleSubject,MAX_ATTEMPTS).first();
     return row?{challengeToken,nonce,expiresAtMs:row.expiresAtMs}:null;
   }catch{
     // Fail closed without revealing the Control D1 target or token material.
@@ -88,7 +97,7 @@ export async function issueFirstPlatformActivationChallenge({controlDb,setupToke
 
 async function verifyActivationAttempt({
   controlDb,setupToken,challengeToken,clientId,credential,
-}){
+},googleSubject=null){
   const [ticketHash,challengeHash]=await Promise.all([
     hashOpaqueSessionToken(setupToken),hashOpaqueSessionToken(challengeToken),
   ]);
@@ -97,12 +106,13 @@ async function verifyActivationAttempt({
   const attempt=await controlDb.prepare(`UPDATE ${TABLE}
     SET attempt_count=attempt_count+1
     WHERE challenge_hash=? AND ticket_hash=?
+      AND (? IS NULL OR subject=?)
       AND issued_at_ms<=${NOW} AND expires_at_ms>${NOW}
       AND consumed_at_ms IS NULL AND revoked_at_ms IS NULL
       AND attempt_count<? AND ${TICKET_ATTEMPTS}<?
       AND ${ELIGIBLE}
     RETURNING nonce,issuer,subject,${CURRENT_STEP} AS step`)
-    .bind(challengeHash,ticketHash,MAX_ATTEMPTS,MAX_ATTEMPTS).first();
+    .bind(challengeHash,ticketHash,googleSubject,googleSubject,MAX_ATTEMPTS,MAX_ATTEMPTS).first();
   if(!attempt)return null;
 
   const identity=await verifyGoogleLoginIdToken({
@@ -140,23 +150,84 @@ export async function verifyAndConsumeFirstPlatformActivationChallenge(input={})
  * factor state before retrying.
  */
 export async function activateFirstPlatformFactorFromChallenge(input={}){
+  return activateFactor(input);
+}
+
+async function activateFactor(input,{operatorId,googleSubject}={}){
   const {controlDb,totpSecret,code}=input;
   if(typeof controlDb?.prepare!=='function' || typeof controlDb.batch!=='function' ||
      !validFirstFactorTotp(totpSecret,code))return false;
   try{
-    const proof=await verifyActivationAttempt(input);
+    const proof=await verifyActivationAttempt(input,googleSubject);
     if(!proof || !Number.isSafeInteger(proof.step) || proof.step<1)return false;
     const step=await proveTotpStep(totpSecret,code,proof.step);
     if(step===null)return false;
 
-    await createD1ExactlyOneBatchGuard({DB:controlDb}).execute_([
+    const statements=[
       prepareConsumption(controlDb,proof,step),
       controlDb.prepare('INSERT INTO platform_admin_auth (singleton,enabled,factor_version) VALUES (1,1,1)'),
-    ]);
+    ];
+    if(operatorId){
+      statements.push(controlDb.prepare(`INSERT INTO platform_first_mfa_activation_audit
+        (singleton,challenge_hash,operator_id,factor_version,activated_at_ms)
+        SELECT 1,challenge_hash,?,1,consumed_at_ms FROM ${TABLE}
+        WHERE challenge_hash=? AND consumed_at_ms IS NOT NULL`)
+        .bind(operatorId,proof.challengeHash));
+    }
+    await createD1ExactlyOneBatchGuard({DB:controlDb}).execute_(statements);
     return true;
   }catch{
     return false;
   }
+}
+
+/**
+ * Bind one private operator context. Credential, actor and pending secret come
+ * from the trusted process, never from the operation input.
+ */
+export async function createTrustedFirstMfaOperator({
+  controlDb,operatorId,operatorBearer,clientId,googleSubject,totpSecret,
+}={}){
+  if(typeof controlDb?.prepare!=='function' || typeof controlDb.batch!=='function' ||
+     typeof operatorId!=='string' || !OPERATOR_ID.test(operatorId) ||
+     typeof googleSubject!=='string' || !GOOGLE_SUBJECT.test(googleSubject) ||
+     typeof clientId!=='string' || !GOOGLE_CLIENT.test(clientId) ||
+     !validFirstFactorTotp(totpSecret,'000000'))return null;
+  const expectedHash=await hashOpaqueSessionToken(operatorBearer);
+  if(!expectedHash)return null;
+
+  async function authorized(bearer){
+    const suppliedHash=await hashOpaqueSessionToken(bearer);
+    if(!suppliedHash)return false;
+    let difference=0;
+    for(let i=0;i<expectedHash.length;i++){
+      difference|=suppliedHash.charCodeAt(i)^expectedHash.charCodeAt(i);
+    }
+    return difference===0;
+  }
+
+  return Object.freeze({
+    async issueChallenge({bearer,setupToken}={}){
+      if(!await authorized(bearer))return null;
+      return issueActivationChallenge(controlDb,setupToken,googleSubject);
+    },
+    async activate({bearer,setupToken,challengeToken,credential,code}={}){
+      if(!await authorized(bearer))return false;
+      return activateFactor({controlDb,setupToken,challengeToken,clientId,credential,totpSecret,code},
+        {operatorId,googleSubject});
+    },
+    async readReceipt({bearer,challengeToken}={}){
+      if(!await authorized(bearer))return null;
+      const challengeHash=await hashOpaqueSessionToken(challengeToken);
+      if(!challengeHash)return null;
+      return controlDb.prepare(`SELECT a.operator_id AS operatorId,
+        a.factor_version AS factorVersion,a.activated_at_ms AS activatedAtMs
+        FROM platform_first_mfa_activation_audit a
+        JOIN ${TABLE} c ON c.challenge_hash=a.challenge_hash
+        WHERE a.challenge_hash=? AND a.operator_id=? AND c.subject=?`)
+        .bind(challengeHash,operatorId,googleSubject).first();
+    },
+  });
 }
 
 /** Explicitly cancel a pending challenge by BOTH original and challenge secrets. */

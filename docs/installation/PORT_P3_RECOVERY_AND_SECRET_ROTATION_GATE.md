@@ -9,6 +9,8 @@
 | PORT-P3 Run 1 (#782) | Local operator-only 10-minute setup-ticket issue/revocation; hash stored in Control D1; single first-admin binding | Installer authorization, Cloudflare Access, TOTP secret installation |
 | PORT-P3 Run 2 (#787) | Local first-factor `platform_admin_auth` version 1 activation after verified Google identity and TOTP; replay and SQL time guards | Fresh activation-specific nonce, online attempt throttling, hosted secret-version consistency |
 | PORT-P3 Run 3 (#789) | **Nondeployed local-only** distinct Google challenge nonce with a 2-minute SQL deadline, one active challenge, global five attempts per original ticket, exactly-once verification | Automatic MFA activation, role/session granting, account recovery, production migration |
+| PORT-P3 combined activation (#810) | One D1 batch consumes the separate Google challenge and creates the first TOTP factor | Trusted operator transport, deployment or hosted secret pairing |
+| PORT-P3 operator integration candidate | Numbered Control D1 migration `0003_platform_first_mfa_activation.sql` and a private operator interface that records the activation audit in the same batch | Hosted operator identity and transport approval, a reviewed remote migration, secret installation or recovery |
 | Existing M04 sessions | 15-minute Google+TOTP sessions tied to `platform_admin_auth.factor_version` | Safe second-account configuration or recovery from lost authenticator |
 
 Run 3's `tests/fixtures/port-p3-activation-challenge.sql` is deliberately **TEST ONLY**. It is not installed in hosted Control D1, is not part of the numbered migration series and must not be copied into production. This is a security proof to review, not an exposed login API.
@@ -43,6 +45,8 @@ Verify: latest authorized release, disabled public previews/alternate hostnames,
 ## Separate activation challenge gate
 
 A future hosted first-MFA ceremony must **replace**, not simply sit beside, Run 2's original setup-nonce proof. The final MFA enabling SQL must consume the separately verified challenge and set `platform_admin_auth` in the **same atomic D1 operation**, while checking the fresh Google subject, original ticket, exact challenge nonce, SQL current time, global attempt budget, TOTP proof and trusted operator/audit state. A stand-alone `verifyAndConsume...` boolean cannot serve as a privileged bearer capability. Reusing a consumed challenge, issuing unlimited new challenges, or completing activation after the original ticket expires must be denied.
+
+The private operator integration must call `createTrustedFirstMfaOperator` with an independently verified Control D1 binding and protected operator identity, Google subject and TOTP configuration. Keep the earlier proof entry points confined to disposable tests because they can complete activation without an audit row.
 
 ## Production acceptance checklist
 
