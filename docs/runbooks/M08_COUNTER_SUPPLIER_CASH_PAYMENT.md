@@ -6,6 +6,7 @@ This is a separate, non-overlapping M08 workstream for #690. It adds an append-o
 
 ## Business semantics
 - Requires a currently authenticated Owner, exact Shop identity, current D1 write grant, open Cash Session, active Supplier with unpaid due from an actual credit Purchase, and strictly positive exact amount in integer paisa.
+- Checks the physical Cash Session drawer **at SQL insert time**: prior counted cash carried into the session, plus real Cash Sales, less real Cash Returns and earlier Supplier cash payouts must cover the new cash payout. A first-day shop with zero physical cash cannot pay a Supplier out of thin air. A rejected insufficient-cash operation has no receipts or financial side effects.
 - Same-day Cash only. Bank/mobile, discounts, backdated transactions, opening lender/loan balances, mixed-role netting and Supplier advance are **not** silently accepted.
 - One atomic D1 INSERT triggers a Supplier due decrease, immutable payment credit ledger entry, and physical Cash Out entry. Source credit Purchase debits remain immutable. Operation IDs and canonical tenant+actor+payload hashes prevent duplicate payouts or changed-payload replay.
 - Failing the Cash Book insert must roll back the Supplier due change, ledger and receipt together. The SQLite trigger independently checks the current session, identity and granted token hash at write time.
@@ -21,7 +22,8 @@ This component is not wired into the live Owner Worker nor enabled by `wrangler.
 
 ## Independent tests
 `tests/integration/m08-owner-supplier-cash-payment-workerd.spec.mjs` runs real isolated local Workerd/D1 migrations and checks:
-- credit Purchase 600.00 → cash payout 100.25 → remaining Supplier Due 499.75;
+- credit Purchase 600.00 → real Cash Sale receipt 150.00 → cash payout 100.25 → remaining Supplier Due 499.75 and physical drawer 49.75;
+- zero physical drawer blocks Supplier Pay until actual cash arrives;
 - one receipt, ledger credit and Cash Out; idempotent replay, changed intent rejection;
 - invalid or bank payment, overpayment, no Open Day, wrong Owner/Shop and expired grant denial;
 - injected Cash Book failure rolls back all money changes; retry succeeds;
