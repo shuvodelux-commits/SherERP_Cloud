@@ -190,6 +190,7 @@ test('Original Purchases page offers Start Day and sends one real Owner Purchase
     });
     assert.equal(saved.purchaseId,'PUR-000001');
     assert.equal(ownerPurchaseSaves,1);
+    await page.locator('#page-purchase .tab-btn[data-tab="purHistory"]').click();
     await page.locator('#purHistRefreshBtn').click();
     await page.locator('#purHistoryBody').getByText('PUR-000001').waitFor();
     assert.equal(rpcCount,0);
