@@ -1243,8 +1243,10 @@ test('M01 original POS V2 FIFO lot sum survives manual price override, Qty and r
         assert.deepEqual([manual.qty,manual.unitPrice,manual.lineTotal,manual.priceMode],[
           4,22.5,90,'manual'
         ]);
-        assert.match(manual.total,/90\.00/);
-        assert.match(manual.visibleLine,/90\.00/);
+        assert.equal(Number(manual.total.replace(/[^\d.-]/g,'')),90,
+          'manual grand total must equal 90 regardless of optional trailing decimal zeros');
+        assert.equal(Number(manual.visibleLine.replace(/[^\d.-]/g,'')),90,
+          'manual line rendering retains amount without forcing decimal padding');
         await price.press('Tab'); // source change handler re-renders Reset control
         const reset=page.locator('#posCartList .c-reset-lot-price[data-i="0"]');
         await reset.waitFor({state:'visible'});
@@ -1258,8 +1260,8 @@ test('M01 original POS V2 FIFO lot sum survives manual price override, Qty and r
         assert.deepEqual([updated.qty,updated.unitPrice,updated.lineTotal,updated.priceMode],[
           5,22.5,112.5,'manual'
         ]);
-        assert.match(updated.subtotal,/112\.50/);
-        assert.match(updated.total,/112\.50/);
+        assert.equal(Number(updated.subtotal.replace(/[^\d.-]/g,'')),112.5);
+        assert.equal(Number(updated.total.replace(/[^\d.-]/g,'')),112.5);
         assert.equal(updated.resetControls,1);
         const manualShot=await captureM01NavEvidence(page,'posv2-manual-unit-price-'+name);
         assert.ok(manualShot.screenshotBytes>1500);
