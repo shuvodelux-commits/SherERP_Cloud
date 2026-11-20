@@ -12,6 +12,9 @@ const businessOwnerEmailLabel=byId('business-owner-email-label');
 const businessReceipt=byId('business-receipt');
 const resumeBusiness=byId('resume-business');
 const businessRoster=byId('business-roster');
+const adminDirectoryCount=byId('admin-directory-count');
+const adminDirectoryStatus=byId('admin-directory-status');
+const adminSetupStatus=byId('admin-setup-status');
 const businessRosterList=byId('business-roster-list');
 const businessRosterStatus=byId('business-roster-status');
 const businessSearch=byId('business-search');
@@ -309,6 +312,9 @@ supportClose.addEventListener('click',async()=>{
 });
 
 function renderBusinessRoster(){
+  // The API intentionally returns only the 50 most recent businesses.
+  // Never present this bounded count as a platform-wide total.
+  adminDirectoryCount.textContent=String(businessShops.length);
   const ready=businessShops.filter(shop=>shop.status==='ready').length;
   businessRecentCount.textContent=String(businessShops.length);
   businessReadyCount.textContent=String(ready);
@@ -400,6 +406,12 @@ function showSignedIn(session){
   directoryEnabled=localProvisioning||session.shopDirectoryEnabled===true;
   supportEnabled=session.supportDiagnosticsEnabled===true;
   businessRoster.hidden=!directoryEnabled;
+  adminDirectoryCount.textContent=directoryEnabled?'Loading…':'—';
+  adminDirectoryStatus.textContent=directoryEnabled
+    ?'Recent businesses from Control D1 (up to 50)':'Directory not enabled on this deployment';
+  adminSetupStatus.textContent=session.shopReservationEnabled===true
+    ?'Business reservation is enabled. A reservation alone does not activate an ERP shop.'
+    :'New business setup is not enabled on this deployment. Existing Super Admin access is active.';
   if(directoryEnabled)void loadBusinessRoster(view);
   businessForm.hidden=session.shopReservationEnabled!==true;
   businessOwnerEmail.hidden=businessOwnerEmailLabel.hidden=!localProvisioning;

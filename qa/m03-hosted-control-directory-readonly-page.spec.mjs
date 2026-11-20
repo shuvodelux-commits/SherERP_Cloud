@@ -53,3 +53,40 @@ test('hosted Control Center shows read-only business directory without setup but
   assert.equal(await page.getByText('No businesses match your filters.').count(),1);
   assert.equal(requests.some(([method,path])=>method==='POST'||path==='/api/platform/shops/resume'),false);
 });
+
+test('signed-in Super Admin sees an honest dashboard when business management is disabled',async t=>{
+  const assets=new Map();
+  for(const filename of ['index.html','platform-auth.css','platform-auth.js']){
+    assets.set('/'+(filename==='index.html'?'':filename),
+      await readFile('frontend/platform-auth/'+filename,'utf8'));
+  }
+  const browser=await chromium.launch({headless:true,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})});
+  t.after(()=>browser.close());
+  const page=await browser.newPage({viewport:{width:390,height:844}});
+  const calls=[];
+  await page.route(origin+'/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    calls.push(path);
+    if(path==='/api/platform/auth/session')
+      return route.fulfill({status:200,contentType:'application/json',
+        body:JSON.stringify({role:'PlatformSuperAdmin'})});
+    if(assets.has(path)){
+      const kind=path.endsWith('.js')?'application/javascript'
+        :path.endsWith('.css')?'text/css':'text/html';
+      return route.fulfill({status:200,contentType:kind,body:assets.get(path)});
+    }
+    return route.fulfill({status:404});
+  });
+  await page.goto(origin+'/');
+  await page.getByRole('heading',{name:'Signed in as Platform Super Admin'}).waitFor();
+  assert.equal(await page.getByRole('heading',{name:'Control Center overview'}).isVisible(),true);
+  assert.equal(await page.locator('#admin-auth-state').textContent(),'Active');
+  assert.match(await page.locator('#admin-directory-status').textContent(),/not enabled/i);
+  assert.match(await page.locator('#admin-setup-status').textContent(),/not enabled/i);
+  assert.equal(await page.getByRole('button',{name:'Create business'}).isVisible(),false);
+  assert.equal(await page.getByRole('button',{name:'Sign out'}).isVisible(),true);
+  assert.equal(calls.includes('/api/platform/shops/list'),false);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+});

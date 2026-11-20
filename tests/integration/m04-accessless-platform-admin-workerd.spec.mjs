@@ -52,6 +52,15 @@ test('local Workerd/D1: Accessless Admin requires approved setup and real authen
     assert.equal(page.status,200);
     assert.match(await page.text(),/Platform sign-in/);
     assert.equal(page.headers.get('Cache-Control'),'no-store');
+    const cleanEntry=await get('/?utm_source=cloudflare&next=https%3A%2F%2Fattacker.test',
+      {redirect:'manual'});
+    assert.equal(cleanEntry.status,302,'GET homepage with query should drop tracking parameters');
+    assert.equal(cleanEntry.headers.get('Location'),origin+'/','do not reflect untrusted redirect targets');
+    assert.equal(cleanEntry.headers.get('Cache-Control'),'no-store');
+    assert.equal((await get('/api/platform/wizard?utm_source=cloudflare')).status,400,
+      'API query parameters remain denied');
+    assert.equal((await post('/api/platform/setup/challenge?key=test',{setupToken})).status,400,
+      'setup POST query parameters remain denied');
     assert.equal((await get('/api/platform/auth/session')).status,403,
       'before enrollment, no ordinary session can exist');
     assert.equal((await post('/api/platform/setup/challenge',{setupToken})).status,403,

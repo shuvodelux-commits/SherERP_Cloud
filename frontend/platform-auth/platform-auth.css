@@ -56,6 +56,15 @@ button:disabled { opacity: .68; cursor: wait; }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 #google-button { min-height: 44px; }
 
+.admin-overview { margin: 0 0 18px; }
+.admin-overview h2 { margin: 0 0 12px; font-size: 16px; }
+.admin-overview-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-overview-stat { min-width: 0; padding: 14px 12px; border: 1px solid var(--border); border-radius: var(--control-radius); }
+.admin-overview-stat span, .admin-overview-stat small { display: block; color: var(--muted); font-size: 12px; }
+.admin-overview-stat strong { display: block; margin: 5px 0; font-size: 21px; line-height: 1.2; overflow-wrap: anywhere; }
+.admin-setup-status { margin: 14px 0 0; border-top: 1px solid var(--border); padding-top: 12px; font-size: 13px; }
+@media (max-width: 400px) { .admin-overview-grid { grid-template-columns: 1fr; } }
+
 #business-form { margin-bottom: 12px; }
 #business-receipt { margin: 12px 0 0; overflow-wrap: anywhere; }
 
