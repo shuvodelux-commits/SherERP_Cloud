@@ -58,15 +58,16 @@ test('HisabIQ desktop shell has exact widths, current child and persisted shortc
     await page.locator('#navList .h-shell-child[data-nav-child="returns"]').click();
     assert.equal(await page.locator('#page-returns').isVisible(),true);
     await page.keyboard.press('Control+b');
+    await page.waitForFunction(()=>Math.round(document.getElementById('sidebar').getBoundingClientRect().width)===64);
     assert.equal(await page.locator('#sidebar').evaluate(n=>Math.round(n.getBoundingClientRect().width)),64);
     assert.equal(await page.evaluate(()=>localStorage.getItem('hisabiq:sidebar-collapsed')),'true');
     assert.equal(await page.locator('#navList .nav-item[data-page="sales"]').getAttribute('title'),'Sales');
     await screenshot(page,'after-target-1440-collapsed');
     await page.reload();
     await syntheticShell(page);
-    assert.equal(await page.locator('#sidebar').evaluate(n=>Math.round(n.getBoundingClientRect().width)),64);
+    await page.waitForFunction(()=>Math.round(document.getElementById('sidebar').getBoundingClientRect().width)===64);
     await page.keyboard.press('Control+b');
-    assert.equal(await page.locator('#sidebar').evaluate(n=>Math.round(n.getBoundingClientRect().width)),256);
+    await page.waitForFunction(()=>Math.round(document.getElementById('sidebar').getBoundingClientRect().width)===256);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
@@ -80,6 +81,7 @@ test('HisabIQ tablet and mobile nav drawer traps focus, dismisses, keeps origina
       assert.equal(await page.locator('#menuToggle').isVisible(),true);
       await page.locator('#menuToggle').click();
       assert.equal(await page.locator('#erp-mobile-drawer').getAttribute('aria-modal'),'true');
+      await page.locator('#hisabiqMobileDrawer').waitFor({state:'visible'});
       assert.equal(await page.locator('#hisabiqMobileDrawer').isVisible(),true);
       assert.equal(await page.evaluate(()=>document.body.style.overflow),'hidden');
       await screenshot(page,'after-target-'+width+'-drawer');
