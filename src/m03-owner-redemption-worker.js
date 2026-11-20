@@ -272,9 +272,15 @@ for(const [path,operation] of [
     const ctx=await verifiedOwnerPurchaseContext(c,true);
     if(!ctx)return denied(c);
     const input=await ownerPurchaseJson(c);
-    if(!input||typeof input.operationId!=='string')return purchaseError(c,'invalid');
+    const keys=operation===openOwnerCashSession
+      ?['operationId','openingCash','notes']
+      :['operationId','countedCash','notes'];
+    if(!input||typeof input.operationId!=='string'||
+      Object.keys(input).length!==keys.length||
+      keys.some(key=>!Object.hasOwn(input,key)))return purchaseError(c,'invalid');
+    // Never let browser JSON override the authenticated Owner subject/token.
     const result=await operation(ctx.scope,{
-      token:ctx.token,ownerSubject:ctx.ownerSubject,...input
+      ...input,token:ctx.token,ownerSubject:ctx.ownerSubject
     });
     if(['started','closed','replayed','already-open'].includes(result.status)){
       return c.json({success:true,data:{sessionId:result.sessionId,
