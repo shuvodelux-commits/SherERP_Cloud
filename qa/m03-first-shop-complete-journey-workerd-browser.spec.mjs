@@ -32,7 +32,11 @@ async function migrate(db){
   }
 }
 
-test('original Owner browser creates a product, supplier, purchase, POS invoice and return against one real Shop D1',async()=>{
+for(const view of [
+  {name:'desktop',width:1280,height:900,phone:false},
+  {name:'compact phone',width:375,height:812,phone:true}
+]){
+test('original Owner browser completes Product → Supplier → Purchase → POS → Return against one real Shop D1 ('+view.name+')',async()=>{
   const dir=await mkdtemp(join(tmpdir(),'shererp-real-journey-'));
   let fixtures,browser;
   try{
@@ -62,7 +66,7 @@ test('original Owner browser creates a product, supplier, purchase, POS invoice 
     };
     const records=[];
     browser=await chromium.launch({headless:true});
-    const context=await browser.newContext({viewport:{width:1280,height:900},timezoneId:'Asia/Dhaka'});
+    const context=await browser.newContext({viewport:{width:view.width,height:view.height},timezoneId:'Asia/Dhaka'});
     await context.addCookies([{name:OWNER_COOKIE,value:ownerA.token,url:ORIGIN,
       secure:true,httpOnly:true,sameSite:'Strict'}]);
     const page=await context.newPage();
@@ -85,7 +89,8 @@ test('original Owner browser creates a product, supplier, purchase, POS invoice 
     });
 
     await page.goto(ORIGIN+'/app',{waitUntil:'domcontentloaded'});
-    await page.locator('#navList .nav-item[aria-label="Products"]').click();
+    if(view.phone) await page.locator('#mobileBottomNav [data-mobile-page="products"]').click();
+    else await page.locator('#navList .nav-item[aria-label="Products"]').click();
     await page.locator('#prodAddBtn').click();
     await page.locator('#prodName').fill('Complete Journey Pipe');
     await page.locator('#prodUnit + .touch-select-trigger').click();
@@ -96,7 +101,10 @@ test('original Owner browser creates a product, supplier, purchase, POS invoice 
     await page.locator('#prodTableBody tr').filter({hasText:'Complete Journey Pipe'}).waitFor();
     assert.equal((await a.prepare('SELECT count(*) AS n FROM products').first()).n,1);
 
-    await page.locator('#navList .nav-item[aria-label="Suppliers"]').click();
+    if(view.phone){
+      await page.locator('#mobileBottomNav [data-mobile-page="more"]').click();
+      await page.locator('#mobileMoreList [data-mobile-target="suppliers"]').click();
+    }else await page.locator('#navList .nav-item[aria-label="Suppliers"]').click();
     await page.locator('#supAddBtn').click();
     await page.locator('#supName').fill('Complete Journey Supplier');
     await page.locator('#supSaveBtn').click();
@@ -113,25 +121,37 @@ test('original Owner browser creates a product, supplier, purchase, POS invoice 
     assert.match(deniedHistorical,/Historical opening balances are not connected/);
     assert.equal(supplierPosts().length,1,'Unsupported historical reason must never reach Shop API');
 
-    await page.locator('#navList .nav-item[aria-label="Purchases"]').click();
+    if(view.phone){
+      await page.locator('#mobileBottomNav [data-mobile-page="more"]').click();
+      await page.locator('#mobileMoreList [data-mobile-target="purchase"]').click();
+    }else await page.locator('#navList .nav-item[aria-label="Purchases"]').click();
     await page.locator('#owner-purchase-start-day').click();
     await page.waitForFunction(()=>document.getElementById('owner-purchase-day-state')
       ?.textContent?.includes('Day Open'));
-    const purchased=await page.evaluate(async today=>
-      serverCall('createPurchase','',{
-        supplierId:'SUP-000001',date:today,backdatedReason:'',
-        items:[{productId:'PRD-000001',name:'Complete Journey Pipe',
-          qty:'10',unitPrice:'60.00',sellingPrice:'75.00'}],
-        discount:'0',paidAmount:'0',paymentMethod:'Cash',bankAccountId:'',
-        notes:'Original browser to real D1'
-      }),day());
-    assert.equal(purchased.purchaseId,'PUR-000001');
-    assert.equal(purchased.dueAmount,600);
+    // Do not bypass the original Purchase UI with a direct serverCall:
+    // exercise supplier combobox, inline cart, confirmation and D1 POST.
+    await page.locator('#purSupplierSearch').fill('Complete Journey Supplier');
+    await page.locator('#purSupplierResults [role="option"]').filter({
+      hasText:'Complete Journey Supplier'
+    }).first().click();
+    assert.equal(await page.locator('#purSupplier').inputValue(),'SUP-000001');
+    await page.locator('#purCartList [data-pur-product-input][data-pur-product-mode="add"]')
+      .fill('Complete Journey Pipe');
+    await page.locator('#purCartProductPopup [data-pur-product-pick="PRD-000001"]').click();
+    await page.locator('#purCartList input[data-f="qty"]').first().fill('10');
+    await page.locator('#purNotes').fill('Original browser to real D1');
+    await page.locator('#purSubmitBtn').click();
+    await page.locator('#confirmActionModal:not([hidden])').waitFor();
+    await page.locator('#confirmActionConfirm').click();
+    await page.waitForFunction(()=>document.getElementById('purCartCount')?.textContent==='0');
+    assert.equal(records.filter(x=>x.path==='/api/owner/purchases'&&x.method==='POST').length,1);
+    assert.equal((await a.prepare('SELECT COUNT(*) AS n FROM owner_mvp_purchase_receipts').first()).n,1);
     await page.locator('#page-purchase .tab-btn[data-tab="purHistory"]').click();
     await page.locator('#purHistRefreshBtn').click();
     await page.locator('#purHistoryBody').getByText('PUR-000001').waitFor();
 
-    await page.locator('#navList .nav-item[aria-label="POS"]').click();
+    if(view.phone) await page.locator('#mobileBottomNav [data-mobile-page="pos"]').click();
+    else await page.locator('#navList .nav-item[aria-label="POS"]').click();
     await page.waitForFunction(()=>typeof posState!=='undefined'&&
       posState.products?.some(row=>row.name==='Complete Journey Pipe'&&Number(row.stock)===10));
     await page.evaluate(()=>{
@@ -142,8 +162,10 @@ test('original Owner browser creates a product, supplier, purchase, POS invoice 
       posState.cart=[line];
       posRenderCart_();
     });
+    if(view.phone) await page.locator('#page-pos [data-pos-v2-tab="customer"]').click();
     await page.locator('#posCustomerName').fill('Walk-in Tester');
     await page.locator('#posCustomerPhone').fill('01712345678');
+    if(view.phone) await page.locator('#page-pos [data-pos-v2-tab="payment"]').click();
     await page.locator('#posAmountReceived').fill('150');
     await page.locator('#posCompleteBtn').click();
     await page.locator('#confirmActionModal:not([hidden])').waitFor();
@@ -174,7 +196,8 @@ test('original Owner browser creates a product, supplier, purchase, POS invoice 
     assert.equal(money.body.data.netPaisa,7500);
 
     await page.reload({waitUntil:'domcontentloaded'});
-    await page.locator('#navList .nav-item[aria-label="POS"]').waitFor();
+    if(view.phone) await page.locator('#mobileBottomNav [data-mobile-page="pos"]').waitFor();
+    else await page.locator('#navList .nav-item[aria-label="POS"]').waitFor();
     const invoice=await page.evaluate(()=>serverCall('findInvoice','','INV-000001'));
     assert.equal(invoice.invoiceId,'INV-000001');
     assert.match(await page.evaluate(data=>renderInvoiceHtml_(data),invoice),/Complete Journey Pipe/);
@@ -197,3 +220,4 @@ test('original Owner browser creates a product, supplier, purchase, POS invoice 
     await rm(dir,{recursive:true,force:true});
   }
 });
+}
