@@ -104,7 +104,9 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
         headers:Object.fromEntries(res.headers),body:Buffer.from(await res.arrayBuffer())});
     });
     await page.goto(origin+'/app',{waitUntil:'domcontentloaded'});
-    await page.locator('#navList .nav-item[aria-label="Returns"]').click();
+    // Source UI.gs puts New Return under the Sales group, not sidebar.
+    await page.locator('#navList .nav-item[aria-label="Sales"]').click();
+    await page.locator('#subNav .tab-btn').filter({hasText:'New Return'}).click();
     await page.locator('#page-returns').waitFor({state:'visible'});
     await page.locator('#rtSearchInput').fill('INV-000001');
     await page.locator('#rtSearchInput').press('Enter');
