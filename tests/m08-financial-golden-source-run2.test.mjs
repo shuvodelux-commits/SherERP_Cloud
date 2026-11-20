@@ -224,13 +224,17 @@ function returnHarness(method) {
     generateId_:()=> 'MOVE-1',
     actorName_:u=>u.name,
     addCashBookEntry_:row=>state.cash.push({...row}),
-    roundMoney_:n=>Math.round((Number(n)+Number.EPSILON)*100)/100
+    roundMoney_:n=>Math.round((Number(n)+Number.EPSILON)*100)/100,
+    customerInvoiceCashCollected_:()=>0,
+    activeRows_:()=>[]
   };
-  const {commitPreparedSalesReturn_}=loadPinnedGASFunctions({
-    'SalesReturn.gs':['commitPreparedSalesReturn_']
+  const {commitPreparedSalesReturn_,salesReturnCashRefundAvailable_}=loadPinnedGASFunctions({
+    'SalesReturn.gs':['salesReturnCashRefundAvailable_','commitPreparedSalesReturn_']
   },stubs);
+  const informationalCashAvailable=salesReturnCashRefundAvailable_('INV-1',0);
   const prepared={
-    sale:{'Customer Name':'Synthetic Buyer','Customer Phone':'','Customer Address':''},
+    sale:{'Customer Name':'Synthetic Buyer','Customer Phone':'','Customer Address':'',
+      'Paid Amount':0,'Due Amount':200},
     invoiceId:'INV-1',customerId:'CUS-1',creditCustomer:state.customer,
     refundMethod:method,totalReturnAmount:75,
     validatedItems:[{productId:'PRD-1',name:'Fixture Product',qty:1,price:75,lineTotal:75}],
@@ -240,11 +244,13 @@ function returnHarness(method) {
     reason:'Fixture return',notes:''
   };
   const result=commitPreparedSalesReturn_(prepared,{returnId:'RETURN-1',actingUser:{name:'Fixture Cashier'}});
-  return {result,state};
+  return {result,state,informationalCashAvailable};
 }
 
 test('G16 source Cash return on an unpaid Customer invoice records money out but does not reduce AR',()=>{
-  const {result,state}=returnHarness('Cash');
+  const {result,state,informationalCashAvailable}=returnHarness('Cash');
+  assert.equal(informationalCashAvailable,0,
+    'source cash collected is zero; this helper is informational rather than a posting ceiling');
   assert.equal(result.newDue,null);
   assert.equal(state.customer['Current Due'],200);
   assert.equal(state.cash.length,1);
