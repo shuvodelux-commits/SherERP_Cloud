@@ -9,7 +9,8 @@ import {parse} from 'acorn';
 import {runInNewContext} from 'node:vm';
 
 const ALLOWED = new Set(['Utils.gs','CashBook.gs','CashSession.gs','BankBook.gs','BankLedger.gs','PartyLedger.gs','DeleteEngine.gs','FinanceModule.gs','CashReconciliation.gs',
-  'Vendors.gs','ExpenseSettings.gs']);
+  'Vendors.gs','ExpenseSettings.gs',
+  'SettlementDiscount.gs','Suppliers.gs','SupplierSettlement.gs','SalesReturn.gs']);
 const VALID_NAME = /^[A-Za-z_$][\w$]*$/;
 
 /**
