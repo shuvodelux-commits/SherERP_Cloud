@@ -112,7 +112,7 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
     'business Ready means approved Gmail but NOT automatically authenticated Owner');
 
   // The existing local provider, not this test, must have fully installed
-  // and sealed all six migration receipts before declaring either Shop ready.
+  // and sealed all seven migration receipts before declaring either Shop ready.
   for(const item of inventory){
     const shopDb=env[item.binding];
     const {results}=await shopDb.prepare('SELECT position,name,checksum FROM port_p2_shop_migrations ORDER BY position').all();
@@ -180,6 +180,11 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
     ownerSessions.push({env:ownerEnv,token});
     assert.equal(await beginFirstOwnerGmailLogin(ownerEnv),null,
       'first-Owner signup cannot be reopened after successful claim');
+  }
+  for(const item of ownerSessions){
+    const lease=await item.env.PLATFORM_PILOT_DB.prepare(
+      'SELECT expires_at_ms AS expiresAtMs FROM shop_owner_write_grant WHERE singleton=1').first();
+    assert.ok(Number.isSafeInteger(lease.expiresAtMs)&&lease.expiresAtMs>Date.now());
   }
   assert.equal(await validateOwnerSession({
     ...ownerSessions[0].env,

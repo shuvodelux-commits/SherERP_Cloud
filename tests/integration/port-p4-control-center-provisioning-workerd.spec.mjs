@@ -275,7 +275,7 @@ test('Owner-ready local setup refuses baseline-only migrations before publishing
   ).first()).n,0);
 });
 
-test('Owner-ready recovery seals six D1 migrations after partial failure without second database allocation',async t=>{
+test('Owner-ready recovery seals seven D1 migrations after partial failure without second database allocation',async t=>{
   const {request,db,env,inventory}=await startControlCenter(t);
   const operationId=crypto.randomUUID();
   const input={operationId,displayName:'Safe Recovery',ownerEmail:'safe.recovery@gmail.com'};

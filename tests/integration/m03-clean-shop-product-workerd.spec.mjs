@@ -137,7 +137,7 @@ test('withdrawal fences a reserved generation before its first Shop publication'
     await assert.rejects(revokeOwnerSession({...env,OWNER_WRITE_GRANTS_ENABLED:'false'},token),/Fence Owner/);
     assert.equal(await revokeOwnerSession(env,token),true);
     await SHOP_A_DB.prepare('DROP TRIGGER fixture_pause_publish').run();
-    assert.equal(await publishOwnerWriteGrant(SHOP_A_DB,pilotShopConfiguration(env),token,claim.generation),false);
+    assert.equal(await publishOwnerWriteGrant(SHOP_A_DB,pilotShopConfiguration(env),token,claim.generation,Date.now()+60_000),false);
     assert.deepEqual(await SHOP_A_DB.prepare('SELECT generation,enabled FROM shop_owner_write_grant').first(),
       {generation:claim.generation,enabled:0});
   }finally{await close();}

@@ -32,6 +32,8 @@ async function seed(CONTROL_DB,DB,scope,subject,index,installProductReceipts){
     const productMigration=await readFile('staging-migrations/shop-owner-write/0003_owner_product_create_receipts.sql','utf8');
     await DB.batch(productMigration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
   }
+  const leaseMigration=await readFile('staging-migrations/shop-owner-write/0004_owner_write_lease.sql','utf8');
+  await DB.batch(leaseMigration.split('-- next statement').map(sql=>DB.prepare(sql.trim())));
   assert.equal(await publishCurrentOwnerWriteSession(env,token),true);
   return {env:{...env,OWNER_WRITE_GRANTS_ENABLED:'true'},token};
 }

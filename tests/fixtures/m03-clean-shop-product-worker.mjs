@@ -11,7 +11,8 @@ const PRODUCT_FIELDS=`product_id AS id, product_name AS name, base_unit_name AS 
   purchase_price_text AS purchasePrice, selling_price_text AS sellingPrice, opening_stock_text AS stock`;
 const OPERATIONS=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const PRICE=/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/;
-const CAN_WRITE='EXISTS(SELECT 1 FROM shop_owner_write_grant WHERE token_hash=? AND enabled=1)';
+const CAN_WRITE=`EXISTS(SELECT 1 FROM shop_owner_write_grant WHERE token_hash=? AND enabled=1
+  AND expires_at_ms>CAST(unixepoch('subsec') * 1000 AS INTEGER))`;
 
 app.use('/__clean_shop__/*',async(c,next)=>{
   if(c.env.CLEAN_SHOP_FIXTURE!=='true')return c.notFound();
