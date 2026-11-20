@@ -12,7 +12,7 @@ import {createOpaqueSessionToken,hashOpaqueSessionToken} from './session-token.j
 
 const NOW="CAST(unixepoch('subsec') * 1000 AS INTEGER)";
 const ISSUER='https://accounts.google.com';
-const SUBJECT=/^[0-9]{6,255}$/;
+const SUBJECT=/^[!-~]{1,255}$/;
 const LIFETIME_MS=600_000;
 
 function newNonce(){
