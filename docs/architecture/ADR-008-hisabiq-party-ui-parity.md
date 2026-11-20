@@ -89,3 +89,12 @@ M03 must version and freeze the real contracts with M01/M09 and M08 before imple
 6. **M11 hosted gate:** deploy only after independent financial and auth release acceptance. M08-S optional manual cross-role settlement is a separate later milestone.
 
 All implementation must follow `AGENTS.md`, GitHub branch→PR→CI, Superpowers plan→test-first RED→minimal GREEN→refactor→retest→QA/review, KISS, narrow file ownership and human-approved merges. This design PR is an **approval record and implementation handoff only**, not executable feature delivery.
+
+## Binding reusable design system — approved in follow-up 2026-11-21
+
+The owner additionally directed that the **entire design system** be derived from the pinned `hisabiq_ui` source and followed in future Party and explicitly migrated Owner ERP components—not just the Party screen layout.
+
+- Canonical [design system](../design-system/HISABIQ_SHERERP.md) covers light/dark, Geist/Hind Siliguri, component catalogue, 36px controls, 48px explicit completion buttons, 6px control radii, 13/12/11px tables, Party responsive breakpoints, and source motion tokens including reduced-motion behavior.
+- [Machine-readable tokens](../design-system/hisabiq-tokens.json) and [opt-in scoped CSS](../../src/ui/hisabiq/hisabiq-design-system.css) provide reusable style primitives without a production-global override; [contract tests](../../tests/hisabiq-design-system.test.mjs) guard source values.
+- **Do not modify the shared legacy Owner ERP, authentication entry point, D1 migration or posting kernel to activate these assets.** A later authorized, tested Party UI port will import the scoped CSS and connect real authenticated Shop APIs. Motion must never delay postings, alter accounting or animate financial values.
+- Preserve the exact source component styling and timings. In particular current `Dialog.tsx` uses a 180ms entrance, despite a 220ms description in an older guide section; the implementation is the parity reference.
