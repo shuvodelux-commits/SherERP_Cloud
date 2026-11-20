@@ -2,6 +2,14 @@
 
 Start with [issue #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690) and the latest GitHub `main`. Related workstreams are #22 for D1 and #23 for authorization. Before editing, check the open PRs, current CI, `AGENTS.md`, and `docs/PARALLEL_EXECUTION.md`. Review status in GitHub takes precedence over this dated summary.
 
+## Tenant Control Center Run 1 checkpoint — 20 November 2026
+
+- [#720](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/720) is merged as the RED checkpoint. A valid Super Admin session reached Create Business in local Workerd/D1, and the existing route returned HTTP 400 for a valid business name and Owner Gmail. Continue the implementation in [draft #722](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/722) on `integration/control-center-resumable-green`.
+- The M03 backend at `4ccb5b40` passes the merged RED test. Create Business records one durable reservation and Gmail intent per operation, returns the same shop on replay, and rejects changed intent. Status and Resume require a current Super Admin session. Resume reconciles an interrupted allocation using the original attempt, verifies the actual disposable Shop D1 binding before DDL, then checks Shop identity and pinned migration receipts. A guarded Control D1 transition publishes readiness and one local Gmail approval together.
+- Local tests covered concurrent Create Business and Resume, a lost allocation response, a swapped blank binding, a skipped readiness write, and session revocation before approval. The focused Workerd tests passed, along with the existing local Access release suite and both existing Control Center and Owner Chromium tests. GitHub exact-head status is in [#722 Checks](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/722/checks). Independent re-review found no remaining high-severity issue in the reviewed backend.
+- **Next:** Record the M01 UI owner handshake, then continue on #722 with the Owner Gmail field, setup status, failure message, and Resume in the existing Control Center HTML and JavaScript. Verify reload and recovery through the browser against disposable D1, then run full CI and independent review on the combined PR. [M03 assignment](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/22#issuecomment-7030088112) · [File reservation](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456#issuecomment-7030092096)
+- An ambiguous allocation stays pending until the provider can attribute it to the original attempt or an operator reconciles it. Hosted provisioning, remote migrations, real Owner access, public RPC, and financial posting remain gated separately.
+
 ## Run 2 resume checkpoint
 
 - PR #706 merged on GitHub main at `6325c83d0d1f088996e2ed0c107695e27a246efb`. It completed the private Owner grant lifecycle and left the flag disabled in checked-in deployment profiles.
