@@ -27,3 +27,7 @@ jobs:
         run: node --test tests/integration/m03-mvp-purchase-bootstrap-workerd.spec.mjs
       - name: Existing Supplier and Product D1 regression
         run: node --test tests/integration/m03-mvp-supplier-workerd.spec.mjs
+      - name: Install Chromium for original Purchase browser
+        run: npx playwright install --with-deps chromium
+      - name: Original preserved Purchase screen reads Shop D1, denies financial posting
+        run: node --test qa/m03-mvp-purchase-bootstrap-browser.spec.mjs
