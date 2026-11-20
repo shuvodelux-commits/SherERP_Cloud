@@ -620,3 +620,105 @@ test('M01 Run 2 authenticated POS V2 stays role-safe through phone landscape tab
       'viewport changes and POS tabs must never post sales or payments');
   }finally{await page.close();}
 });
+
+test('M01 canonical six-width POS V2 keeps source keyboard and responsive presentation',async t=>{
+  // Follow-up #733: no new RPC/auth business implementation; local browser only.
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]},
+    {key:'bank',label:'Bank',sidebarGroup:4,sidebarOrder:50}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-320x640',width:320,height:640,phone:true},
+    {name:'phone-360x780',width:360,height:780,phone:true},
+    {name:'phone-390x844',width:390,height:844,phone:true},
+    {name:'tablet-768x1024',width:768,height:1024,phone:false},
+    {name:'desktop-1024x768',width:1024,height:768,phone:false},
+    {name:'desktop-1440x900',width:1440,height:900,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:phone,hasTouch:phone
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const login=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await login).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        if(phone){
+          await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+        }else{
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' &&
+          document.body.classList.contains('pos-v2-active'));
+        assert.equal(await page.evaluate(()=>isPhoneViewport_()),phone,
+          name+' must retain the source mobile/desktop breakpoint');
+        assert.equal(await page.locator('#page-pos').isVisible(),true);
+        assert.equal(await page.locator('#page-posv2').isVisible(),false,
+          'POS V2 must use the original operational page, not a second cart');
+        assert.equal(await page.locator('#v2AddProductBtn').isVisible(),false,
+          'Products-add denied means visually hidden on '+name);
+        assert.equal(await page.locator('#navList .nav-item[data-page="bank"]').count(),0);
+        if(phone){
+          const tabs=page.locator('#page-pos .pos-v2-workflow-tabs');
+          assert.equal(await tabs.isVisible(),true);
+          for(const key of ['customer','payment','cart']){
+            const tab=tabs.locator('[data-pos-v2-tab="'+key+'"]');
+            await tab.focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await tab.getAttribute('aria-selected'),'true',
+              name+' keyboard Enter must select '+key);
+            assert.equal(await page.locator('#page-pos')
+              .getAttribute('data-pos-v2-tab-state'),key);
+          }
+        }
+        const search=page.locator('#posSearch');
+        await search.waitFor({state:'visible'});
+        const rect=await search.boundingBox();
+        assert.ok(rect && rect.width>0 && rect.x>=-1 &&
+          rect.x+rect.width<=width+1,
+          name+' POS search must remain within horizontal viewport');
+        await search.fill('m01-unmatched-product-six-viewport');
+        for(const key of ['ArrowDown','ArrowUp','Enter']){
+          await search.press(key);
+          assert.equal(await page.evaluate(()=>posState.cart.length),0,
+            name+' no-match '+key+' must never add product lines');
+        }
+        await search.press('Escape');
+        assert.equal(await search.inputValue(),'',
+          name+' Escape clears unmatched search');
+        assert.equal(await page.evaluate(()=>document.activeElement?.id),'posSearch',
+          name+' Escape retains keyboard focus');
+        assert.equal(await page.evaluate(()=>posState.cart.length),0);
+        const shot=await captureM01NavEvidence(page,'six-width-posv2-'+name);
+        assert.deepEqual(shot.viewport,{width,height});
+        assert.ok(shot.screenshotBytes>1500,'PNG screenshot captured for '+name);
+        assert.equal(shot.loginHidden,true);
+        assert.equal(shot.appVisible,true);
+        assert.equal(shot.bankNavCount,0);
+        assert.equal(calls.filter(x=>x.fnName==='login').length,1);
+        assert.equal(calls.some(x=>
+          /^(?:saveSale|createSale|completeSale|postSale|submitSale|saveSalePayment)$/i
+            .test(x.fnName||'')),false,
+          'browser parity must never post financial writes');
+      }finally{await page.close();}
+    });
+  }
+});
