@@ -1,0 +1,666 @@
+/**
+ * M01 Owner Party workspace: source-faithful HisabIQ visual adapter.
+ * Uses ONLY authenticated read endpoints. No Party creation, payment or D1
+ * posting is faked. Supplier fallback is identified as a source record and
+ * NEVER treated as a reviewed unified Party identity.
+ */
+export const ROLES=Object.freeze(['Customer','Supplier','Vendor','Lender','Borrower','Payee','Owner']);
+const SUPPLIER_ID=/^SUP-[0-9]{6,}$/;
+const SOURCE_PARTY_ID=/^PTY-[0-9]{6,}$/;
+const ROLE_SET=new Set(ROLES);
+const MAX_ROWS=1000;
+const SOURCE_ERROR='Party source data unavailable';
+const BENGALI=Object.freeze({
+  All:'সব',Customer:'ক্রেতা',Supplier:'সরবরাহকারী',Vendor:'ভেন্ডর',
+  Lender:'ঋণদাতা',Borrower:'ঋণগ্রহীতা',Payee:'টাকা প্রাপক',Owner:'মালিক'
+});
+
+function plainObject(value) {
+  return value!==null&&typeof value==='object'&&!Array.isArray(value);
+}
+function nonempty(value,max=180) {
+  return typeof value==='string'&&value.trim().length>0&&value.length<=max;
+}
+function safePaisa(value) {
+  if(!Number.isSafeInteger(value))throw new Error(SOURCE_ERROR);
+  return value;
+}
+export function parseMoneyPaisa(value) {
+  if(typeof value!=='string'&&typeof value!=='number')throw new Error(SOURCE_ERROR);
+  const normalized=String(value);
+  if(!/^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/.test(normalized))
+    throw new Error(SOURCE_ERROR);
+  const negative=normalized[0]==='-';
+  const digits=negative?normalized.slice(1):normalized;
+  const [whole,fraction='']=digits.split('.');
+  const paisa=Number(whole)*100+Number(fraction.padEnd(2,'0'));
+  return safePaisa(negative?-paisa:paisa);
+}
+export function formatMoneyPaisa(paisa) {
+  safePaisa(paisa);
+  return (paisa<0?'−':'')+'৳'+(Math.abs(paisa)/100).toLocaleString('en-IN',{
+    minimumFractionDigits:2,maximumFractionDigits:2
+  });
+}
+function uniqueRoles(roles) {
+  if(!Array.isArray(roles)||roles.length<1||roles.length>ROLES.length||
+     roles.some(role=>!ROLE_SET.has(role))||new Set(roles).size!==roles.length)
+    throw new Error('Invalid or duplicate Party role');
+  return ROLES.filter(role=>roles.includes(role));
+}
+function textField(value,max=250) {
+  if(value==null)return '';
+  if(typeof value!=='string'||value.length>max||/[\u0000-\u001f\u007f]/.test(value))
+    throw new Error(SOURCE_ERROR);
+  return value;
+}
+function resultRows(raw,key) {
+  if(!plainObject(raw)||!Array.isArray(raw[key])||raw[key].length>MAX_ROWS)
+    throw new Error('Party data limit or source unavailable');
+  return raw[key];
+}
+export function sourceSupplierParties(raw) {
+  const seen=new Set();
+  return resultRows(raw,'suppliers').map(row=>{
+    if(!plainObject(row)||!SUPPLIER_ID.test(row['Supplier ID'])||
+       !nonempty(row['Supplier Name'],120)||seen.has(row['Supplier ID']))
+      throw new Error('Invalid or duplicate Supplier source record');
+    seen.add(row['Supplier ID']);
+    const due=parseMoneyPaisa(row['Current Due']);
+    return {
+      id:'source:'+row['Supplier ID'],partyId:null,sourceOnly:true,
+      sourceIds:{Supplier:row['Supplier ID']},
+      name:textField(row['Supplier Name'],120),
+      nameBn:'',phone:textField(row.Phone,40),address:textField(row.Address,250),
+      roles:['Supplier'],status:row.Status==='Inactive'?'Inactive':'Active',
+      gross:{Supplier:{receivablePaisa:due<0?-due:0,payablePaisa:due>0?due:0}}
+    };
+  });
+}
+export function normalizePartyDirectory(raw) {
+  if(!plainObject(raw)||raw.success!==true||!plainObject(raw.data))
+    throw new Error(SOURCE_ERROR);
+  const seen=new Set();
+  return resultRows(raw.data,'parties').map(row=>{
+    if(!plainObject(row)||!SOURCE_PARTY_ID.test(row.partyId)||
+       !nonempty(row.displayName,180)||seen.has(row.partyId))
+      throw new Error('Invalid or duplicate Party identity');
+    seen.add(row.partyId);
+    const roles=uniqueRoles(row.roles);
+    const gross={};
+    const balances=row.roleBalances??[];
+    if(!Array.isArray(balances)||balances.length>ROLES.length)
+      throw new Error(SOURCE_ERROR);
+    for(const balance of balances){
+      if(!plainObject(balance)||!roles.includes(balance.role)||gross[balance.role]||
+         balance.receivablePaisa<0||balance.payablePaisa<0)
+        throw new Error('Invalid role-specific Party account');
+      gross[balance.role]={
+        receivablePaisa:safePaisa(balance.receivablePaisa),
+        payablePaisa:safePaisa(balance.payablePaisa)
+      };
+    }
+    const sourceIds={};
+    if(row.sourceIds!=null){
+      if(!plainObject(row.sourceIds)||Object.keys(row.sourceIds).some(key=>key!=='Supplier'))
+        throw new Error(SOURCE_ERROR);
+      if(row.sourceIds.Supplier!=null){
+        if(!roles.includes('Supplier')||!SUPPLIER_ID.test(row.sourceIds.Supplier))
+          throw new Error(SOURCE_ERROR);
+        sourceIds.Supplier=row.sourceIds.Supplier;
+      }
+    }
+    return {
+      id:'party:'+row.partyId,partyId:row.partyId,sourceOnly:false,sourceIds,
+      name:textField(row.displayName,180),nameBn:textField(row.nameBn,180),
+      phone:textField(row.phone,40),address:textField(row.address,250),
+      roles,status:row.status==='Inactive'?'Inactive':'Active',gross
+    };
+  });
+}
+export function filterPartyDirectory(parties,query='',role='All') {
+  if(!Array.isArray(parties)||!['All',...ROLES].includes(role))
+    throw new Error(SOURCE_ERROR);
+  const q=String(query).trim().toLocaleLowerCase();
+  return parties.filter(p=>(role==='All'||p.roles.includes(role))&&
+    (!q||[p.name,p.nameBn,p.phone,p.address,p.id].some(v=>String(v||'').toLocaleLowerCase().includes(q))));
+}
+export function projectSupplierStatement(raw,expectedSourceId){
+  const row=raw?.data;
+  if(raw?.success!==true||!plainObject(row)||
+    row.supplierId!==expectedSourceId||!SUPPLIER_ID.test(expectedSourceId)||
+    !['purchase-credit-only','purchase-and-cash-payment'].includes(row.scope)||
+    !Number.isSafeInteger(row.currentDuePaisa)||
+    typeof row.hasMore!=='boolean'||!Array.isArray(row.entries)||row.entries.length>50)
+    throw new Error('Supplier statement unavailable');
+  const entries=row.entries.map(entry=>{
+    if(!plainObject(entry)||!['Purchase','Supplier Payment'].includes(entry.kind)||
+      !/^(PUR|SPY)-[0-9]{6,}$/.test(entry.reference)||
+      !/^\d{4}-\d{2}-\d{2}$/.test(entry.purchaseDate)||
+      !Number.isSafeInteger(entry.debitPaisa)||entry.debitPaisa<0||
+      !Number.isSafeInteger(entry.creditPaisa)||entry.creditPaisa<0||
+      !Number.isSafeInteger(entry.balancePaisa))
+      throw new Error('Invalid Supplier statement row');
+    return {kind:entry.kind,reference:entry.reference,date:entry.purchaseDate,
+      debitPaisa:entry.debitPaisa,creditPaisa:entry.creditPaisa,
+      balancePaisa:entry.balancePaisa};
+  });
+  if(entries.length && entries[0].balancePaisa!==row.currentDuePaisa)
+    throw new Error('Supplier statement balance mismatch');
+  for(let i=1;i<entries.length;i++) {
+    if(entries[i].balancePaisa!==
+       entries[i-1].balancePaisa-entries[i-1].debitPaisa+entries[i-1].creditPaisa)
+      throw new Error('Supplier statement running balance mismatch');
+  }
+  return {scope:row.scope,currentDuePaisa:row.currentDuePaisa,
+    entries,complete:!row.hasMore,sourceId:expectedSourceId,
+    cashPayAvailable:row.cashPayAvailable===true};
+}
+
+const create=(tag,className,textValue)=>{
+  const node=document.createElement(tag);
+  if(className)node.className=className;
+  if(textValue!==undefined)node.textContent=textValue;
+  return node;
+};
+const asButton=(label,className='hds-button')=>{
+  const b=create('button',className,label);b.type='button';return b;
+};
+const labelFor=role=>role+' · '+BENGALI[role];
+const moneyOrUnknown=account=>account?{
+  receivable:formatMoneyPaisa(account.receivablePaisa),
+  payable:formatMoneyPaisa(account.payablePaisa)
+}:null;
+function currencyCsv(value) {
+  return String(value).replace(/^[=+@-]/,"'$&").replace(/"/g,'""');
+}
+function saveStatementCsv(party,ledger){
+  if(!ledger?.complete)throw new Error('Complete source statement unavailable');
+  const columns=['Date','Source','Reference','Increase (BDT)','Decrease (BDT)','Balance (BDT)'];
+  const data=ledger.entries.map(r=>[
+    r.date,r.kind,r.reference,(r.debitPaisa/100).toFixed(2),
+    (r.creditPaisa/100).toFixed(2),(r.balancePaisa/100).toFixed(2)
+  ]);
+  const csv='\ufeff'+[columns,...data].map(row=>row.map(v=>'"'+currencyCsv(v)+'"').join(',')).join('\r\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;
+  a.download='Supplier-'+ledger.sourceId+'-ledger.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+function makeRoleChip(role,active,callback){
+  const button=asButton(role==='All'?'All · সব':labelFor(role),'hparty-role-chip');
+  button.setAttribute('aria-pressed',String(active));
+  button.addEventListener('click',callback);
+  return button;
+}
+function setContent(node,message){
+  node.replaceChildren(create('p','hparty-message',message));
+}
+
+/** Instantiate the owner-authenticated Party screen only when mounted under /app. */
+export function mountOwnerParties(){
+  const page=document.getElementById('page-hisabiqParties');
+  const root=document.getElementById('hisabiq-party-root');
+  if(!page||!root||root.dataset.initialized==='true')return;
+  root.dataset.initialized='true';
+  root.innerHTML=`
+    <div class="hparty-head">
+      <div><h1>Parties &amp; Ledger <span lang="bn">পার্টি ও খাতা</span></h1>
+        <p id="hparty-summary" role="status">Role-specific accounts · সম্পর্কভিত্তিক হিসাব</p></div>
+      <div class="hparty-head-actions">
+        <button type="button" class="hds-button" id="hparty-refresh">Refresh · নতুন করে দেখুন</button>
+        <button type="button" class="hds-button" disabled title="The reviewed Party writer is not connected">+ Add Party</button>
+        <button type="button" class="hds-button" id="hparty-change">Change Party</button>
+      </div>
+    </div>
+    <p class="hparty-connection" id="hparty-source-mode" role="status"></p>
+    <div class="hparty-layout">
+      <aside class="hparty-directory hds-surface" aria-label="Party directory">
+        <div class="hparty-directory-top">
+          <label for="hparty-search" class="hparty-sr-only">Search name or phone</label>
+          <input class="hds-input" id="hparty-search" type="search" autocomplete="off" placeholder="Search name or phone… · নাম বা ফোন"/>
+          <div class="hparty-role-filters" id="hparty-filters" aria-label="Filter by relationship" role="group"></div>
+        </div>
+        <p class="hparty-directory-caption" id="hparty-count" aria-live="polite"></p>
+        <ul class="hparty-list" id="hparty-list" role="listbox" aria-label="Parties"></ul>
+      </aside>
+      <div class="hparty-detail hds-surface" id="hparty-detail" aria-live="polite">
+        <div class="hparty-empty">Choose a Party · পার্টি বাছাই করুন</div>
+      </div>
+    </div>
+    <div class="hparty-picker" id="hparty-picker" hidden data-open="false">
+      <button type="button" class="hparty-picker-backdrop" aria-label="Close Party picker"></button>
+      <section class="hparty-picker-panel" role="dialog" aria-modal="true" aria-labelledby="hparty-picker-title">
+        <div class="hparty-picker-header"><strong id="hparty-picker-title">Choose Party · পার্টি বাছুন</strong>
+          <button class="hds-button" type="button" id="hparty-picker-close" aria-label="Close">×</button></div>
+        <label for="hparty-picker-search" class="hparty-sr-only">Search Party</label>
+        <input class="hds-input" id="hparty-picker-search" type="search" placeholder="Name or phone · নাম বা ফোন"/>
+        <div class="hparty-role-filters" id="hparty-picker-filters" role="group" aria-label="Picker relationship"></div>
+        <ul class="hparty-list" id="hparty-picker-list" role="listbox" aria-label="Choose Party"></ul>
+      </section>
+    </div>
+  `;
+  const pick=sel=>root.querySelector(sel);
+  const state={items:[],selectionId:null,roleFilter:'All',query:'',relationship:null,
+    tab:'Ledger',ledger:null,loading:false,error:'',ledgerError:'',mode:'',request:null,
+    ledgerRequest:null,opener:null,closeTimer:null};
+  const search=pick('#hparty-search'),pickerSearch=pick('#hparty-picker-search');
+  const header=pick('#hparty-summary'),banner=pick('#hparty-source-mode');
+  const detail=pick('#hparty-detail'),picker=pick('#hparty-picker');
+  const getSelected=()=>state.items.find(p=>p.id===state.selectionId)||null;
+  const isVisible=()=>!page.hidden;
+  const updateUrl=()=>{
+    const p=getSelected();
+    const url=new URL(location.href);
+    if(p?.partyId)url.searchParams.set('id',p.partyId);
+    else url.searchParams.delete('id');
+    if(p?.partyId&&state.relationship)url.searchParams.set('role',state.relationship);
+    else url.searchParams.delete('role');
+    history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+  };
+  const applyMode=()=>{
+    const dark=document.documentElement.classList.contains('dark')||
+      document.body.classList.contains('dark')||matchMedia('(prefers-color-scheme: dark)').matches;
+    page.dataset.theme=dark?'dark':'light';
+  };
+  const setActiveTab=tab=>{
+    state.tab=tab;
+    detail.querySelectorAll('.hparty-tab').forEach(b=>{
+      b.setAttribute('aria-selected',String(b.dataset.tab===tab));
+      b.tabIndex=b.dataset.tab===tab?0:-1;
+    });
+    const area=detail.querySelector('#hparty-tab-content');
+    if(area)renderTab(area);
+    const bar=detail.querySelector('.hparty-tabs');
+    const current=bar?.querySelector('[aria-selected="true"]');
+    const underline=bar?.querySelector('.hparty-tab-underline');
+    if(current&&underline) {
+      underline.style.width=current.offsetWidth+'px';
+      underline.style.transform='translateX('+current.offsetLeft+'px)';
+    }
+  };
+  function renderTab(area) {
+    area.replaceChildren();
+    const p=getSelected();
+    if(!p)return;
+    if(state.tab==='Notes'||state.tab==='Attachments'){
+      setContent(area,state.tab+' are not connected to this Shop yet. No preview data is shown.');
+      return;
+    }
+    if(!state.relationship||state.relationship!=='Supplier'||!p.sourceIds.Supplier){
+      setContent(area,'This relationship ledger is not connected to the authenticated Shop service yet.');
+      return;
+    }
+    if(state.ledgerError) {setContent(area,state.ledgerError);return;}
+    if(state.loading && !state.ledger) {setContent(area,'Loading verified Supplier ledger…');return;}
+    if(!state.ledger) {setContent(area,'Select a Supplier to load its actual D1 ledger.');return;}
+    const ledger=state.ledger;
+    const rows=ledger.entries.filter(row=>state.tab==='Ledger'||
+      (state.tab==='Bills'&&row.kind==='Purchase')||
+      (state.tab==='Payments'&&row.kind==='Supplier Payment'));
+    const toolbar=create('div','hparty-ledger-toolbar');
+    const heading=create('strong','',state.tab==='Ledger'?'Supplier purchase & cash-payment ledger':state.tab);
+    toolbar.append(heading);
+    if(state.tab==='Ledger') {
+      const exportButton=asButton('CSV · রপ্তানি','hds-button');
+      exportButton.dataset.variant='outline';
+      exportButton.disabled=!ledger.complete;
+      exportButton.title=ledger.complete?'Export verified complete source rows':'More than 50 rows: full source export is not connected';
+      exportButton.addEventListener('click',()=>saveStatementCsv(p,ledger));
+      const print=asButton('Print · ছাপান','hds-button');
+      print.dataset.variant='outline';
+      print.disabled=!ledger.complete;
+      print.addEventListener('click',()=>window.print());
+      toolbar.append(exportButton,print);
+    }
+    area.append(toolbar);
+    if(!ledger.complete)area.append(create('p','hparty-warning',
+      'Latest 50 entries only. Full history, opening and complete statement are not available for export/print.'));
+    const wrapper=create('div','hparty-table-wrap');
+    const table=create('table','hds-table hparty-table');
+    table.innerHTML='<thead><tr><th>Date</th><th>Source</th><th>Reference</th><th data-numeric>Increase</th><th data-numeric>Decrease</th><th data-numeric>Balance</th></tr></thead>';
+    const tbody=create('tbody');
+    for(const row of rows){
+      const tr=create('tr');
+      for(const [key,textValue] of [
+        ['Date',row.date],['Source',row.kind],['Reference',row.reference],
+        ['Increase',formatMoneyPaisa(row.debitPaisa)],['Decrease',formatMoneyPaisa(row.creditPaisa)],
+        ['Balance',formatMoneyPaisa(row.balancePaisa)]]) {
+        const td=create('td','',textValue);
+        td.dataset.label=key;
+        if(['Increase','Decrease','Balance'].includes(key))td.dataset.numeric='';
+        tr.append(td);
+      }
+      tbody.append(tr);
+    }
+    table.append(tbody);wrapper.append(table);area.append(wrapper);
+    if(!rows.length)area.append(create('p','hparty-message','No verified source rows found · কোনো লেনদেন নেই'));
+  }
+  function renderDetail() {
+    const p=getSelected();
+    state.ledger=null;state.ledgerError='';
+    detail.replaceChildren();
+    if(!p) {setContent(detail,state.error||'Choose a Party · পার্টি বাছাই করুন');return;}
+    const head=create('header','hparty-profile');
+    const avatar=create('div','hparty-avatar',p.name.slice(0,1).toUpperCase());
+    avatar.setAttribute('aria-hidden','true');
+    const info=create('div','hparty-profile-info');
+    info.append(create('h2','',p.name));
+    if(p.nameBn)info.append(create('p','hparty-bn',p.nameBn));
+    const sub=create('p','hparty-meta',([p.phone,p.address].filter(Boolean).join(' · '))||'No phone or address');
+    info.append(sub);
+    const badges=create('div','hparty-profile-roles');
+    p.roles.forEach(role=>{const b=create('span','hparty-badge',labelFor(role));b.dataset.role=role;badges.append(b);});
+    info.append(badges);
+    const finances=create('div','hparty-account-balance');
+    const roleAccount=p.gross[state.relationship]||null;
+    if(roleAccount){
+      for(const [kind,value] of [
+        ['Receivable',roleAccount.receivablePaisa],
+        ['Payable',roleAccount.payablePaisa]
+      ]) {
+        const card=create('div','hparty-balance-card');
+        card.dataset.kind=kind;
+        card.append(create('small','',kind+(kind==='Receivable'?' · পাওনা':' · দেনা')),
+          create('strong','',formatMoneyPaisa(value)));
+        finances.append(card);
+      }
+    }else if(state.relationship==='Payee'){
+      finances.append(create('span','hparty-message','Payee is an identity, not an automatic debt.'));
+    }else{
+      finances.append(create('span','hparty-message','Account amount not yet connected. No estimated balance.'));
+    }
+    head.append(avatar,info,finances);
+    detail.append(head);
+    const top=create('div','hparty-detail-actions');
+    if(p.roles.length>1){
+      const label=create('label','hparty-role-choice','Relationship · সম্পর্ক');
+      const select=create('select','hds-select');
+      // Preserve the scoped HisabIQ control: the legacy Owner shell wraps all
+      // other SELECTs in a proxy and hides the original, breaking role switching.
+      select.dataset.touchSelectSkip='true';
+      select.setAttribute('aria-label','Selected Party relationship');
+      for(const role of p.roles){const o=create('option','',labelFor(role));o.value=role;select.append(o);}
+      select.value=state.relationship;
+      select.addEventListener('change',()=>{
+        state.relationship=select.value;state.tab='Ledger';updateUrl();renderDetail();void loadLedger();
+      });
+      label.append(select);top.append(label);
+    }
+    const jump=asButton('Open original Supplier · পুরোনো সাপ্লায়ার','hds-button');
+    jump.dataset.variant='outline';
+    jump.disabled=!p.sourceIds.Supplier;
+    jump.addEventListener('click',()=>{
+      if(typeof window.goToPage==='function')window.goToPage('suppliers');
+    });
+    top.append(jump);
+    const label=create('span','hparty-readonly','Authenticated read-only view · নিরাপদ দেখুন');
+    top.append(label);detail.append(top);
+    const tabs=create('div','hparty-tabs');
+    tabs.setAttribute('role','tablist');
+    for(const name of ['Ledger','Bills','Payments','Notes','Attachments']){
+      const b=asButton(name,'hparty-tab');b.setAttribute('role','tab');
+      b.dataset.tab=name;b.setAttribute('aria-selected',String(state.tab===name));
+      b.addEventListener('click',()=>setActiveTab(name));
+      b.addEventListener('keydown',event=>{
+        const all=Array.from(tabs.querySelectorAll('[role="tab"]'));
+        const index=all.indexOf(b);
+        if(['ArrowRight','ArrowLeft','Home','End'].includes(event.key)){
+          event.preventDefault();
+          const next=event.key==='Home'?0:event.key==='End'?all.length-1:
+            (index+(event.key==='ArrowRight'?1:-1)+all.length)%all.length;
+          all[next].focus();setActiveTab(all[next].dataset.tab);
+        }
+      });
+      tabs.append(b);
+    }
+    tabs.append(create('span','hparty-tab-underline'));
+    detail.append(tabs,create('div','hparty-tab-content'));
+    detail.lastChild.id='hparty-tab-content';
+    setActiveTab(state.tab);
+  }
+  function renderDirectory() {
+    const matches=filterPartyDirectory(state.items,state.query,state.roleFilter);
+    pick('#hparty-count').textContent=matches.length+' parties · পার্টি  · Balance by selected relationship';
+    for(const el of [pick('#hparty-list'),pick('#hparty-picker-list')]){
+      const focusId=el.querySelector('[aria-selected="true"]')?.dataset.id||null;
+      el.replaceChildren();
+      for(const p of matches) {
+        const li=create('li');
+        const button=asButton('','hparty-directory-row');
+        button.dataset.id=p.id;
+        button.setAttribute('role','option');
+        button.setAttribute('aria-selected',String(state.selectionId===p.id));
+        button.tabIndex=state.selectionId===p.id?0:-1;
+        const initials=create('span','hparty-list-avatar',p.name.slice(0,1).toUpperCase());
+        initials.setAttribute('aria-hidden','true');
+        const content=create('span','hparty-directory-copy');
+        content.append(create('strong','',p.name));
+        const sub=create('small','',p.roles.map(r=>BENGALI[r]).join(' · ')+(p.phone?' · '+p.phone:''));
+        content.append(sub);
+        const balances=create('span','hparty-directory-money');
+        if(p.roles.length>1){
+          balances.append(create('strong','', 'Multiple ledgers'));
+          balances.append(create('small','', 'Select relationship'));
+        } else {
+          const account=p.gross[p.roles[0]];
+          if(account) {
+            const owed=account.payablePaisa>0;
+            balances.append(create('strong','',formatMoneyPaisa(
+              owed?account.payablePaisa:account.receivablePaisa)));
+            balances.append(create('small','',owed?'Payable · দেনা':
+              account.receivablePaisa>0?'Advance · অগ্রিম':'Settled'));
+          }else balances.append(create('small','', 'Balance unavailable'));
+        }
+        button.append(initials,content,balances);
+        button.addEventListener('click',()=>chooseParty(p.id));
+        li.append(button);el.append(li);
+      }
+      if(!matches.length)el.append(create('li','hparty-no-results',state.error||'No matching parties · কোনো পার্টি নেই'));
+      if(focusId){
+        const same=Array.from(el.querySelectorAll('[role="option"]')).find(b=>b.dataset.id===focusId);
+        if(same)same.tabIndex=0;
+      }
+    }
+    for(const el of [pick('#hparty-filters'),pick('#hparty-picker-filters')]){
+      el.replaceChildren();
+      for(const role of ['All',...ROLES])el.append(makeRoleChip(role,state.roleFilter===role,()=>{
+        state.roleFilter=role;renderDirectory();
+      }));
+    }
+    search.value=state.query;pickerSearch.value=state.query;
+    header.textContent='Parties '+state.items.length+' · '+(state.mode==='supplier-source'?
+      'Supplier source only; Customer/Owner/Loan totals unavailable':
+      'Independent role balances; no cross-role offset');
+    banner.textContent=state.error||(
+      state.mode==='supplier-source'
+        ? 'Supplier-only D1 source view. Multi-role Party linking and Customer ledgers are not connected. Existing Supplier controls remain available.'
+        : 'Unified Party identities from authenticated Shop D1. Source-ledger actions remain gated.');
+  }
+  function chooseParty(id) {
+    const p=state.items.find(row=>row.id===id);
+    if(!p)return;
+    state.selectionId=id;
+    state.relationship=p.roles.includes(state.roleFilter)?state.roleFilter:p.roles[0];
+    state.tab='Ledger';
+    renderDirectory();renderDetail();updateUrl();closePicker();void loadLedger();
+  }
+  function openPicker(){
+    if(state.closeTimer)clearTimeout(state.closeTimer);
+    state.opener=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    picker.hidden=false;
+    requestAnimationFrame(()=>picker.dataset.open='true');
+    pickerSearch.focus();
+  }
+  function closePicker(){
+    if(picker.hidden)return;
+    picker.dataset.open='false';
+    clearTimeout(state.closeTimer);
+    const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    state.closeTimer=setTimeout(()=>{if(picker.dataset.open==='false')picker.hidden=true;},reduce?0:280);
+    if(state.opener?.isConnected)state.opener.focus({preventScroll:true});
+    state.opener=null;
+  }
+  async function requestJson(path,signal) {
+    const res=await fetch(path,{method:'GET',credentials:'same-origin',
+      cache:'no-store',headers:{Accept:'application/json'},signal});
+    if(res.status===404)return {notFound:true};
+    if(res.status===401||res.status===403)throw new Error('Shop session denied. Sign in again.');
+    if(!res.ok)throw new Error('Verified Party source unavailable. No cached balances are shown.');
+    return {body:await res.json()};
+  }
+  async function loadDirectory(){
+    state.request?.abort();
+    const controller=new AbortController();
+    state.request=controller;state.error='';
+    banner.textContent='Loading verified Shop data · তথ্য আসছে…';
+    try {
+      const generic=await requestJson('/api/owner/parties',controller.signal);
+      let data;
+      if(generic.notFound) {
+        const fallback=await requestJson('/api/owner/suppliers',controller.signal);
+        if(fallback.notFound)throw new Error('Party data service is not connected for this Shop.');
+        data=sourceSupplierParties(fallback.body);
+        state.mode='supplier-source';
+      }else {
+        data=normalizePartyDirectory(generic.body);
+        state.mode='unified';
+      }
+      if(state.request!==controller)return;
+      state.items=data;
+      const wantedId=new URL(location.href).searchParams.get('id');
+      const previous=data.find(p=>p.id===state.selectionId);
+      const fromUrl=data.find(p=>p.partyId===wantedId);
+      const selected=fromUrl||previous||data[0]||null;
+      state.selectionId=selected?.id||null;
+      state.relationship=selected?.roles.includes(new URL(location.href).searchParams.get('role'))
+        ?new URL(location.href).searchParams.get('role')
+        :selected?.roles[0]||null;
+      renderDirectory();renderDetail();
+      if(selected)void loadLedger();
+    }catch(error){
+      if(controller.signal.aborted||state.request!==controller)return;
+      state.items=[];state.selectionId=null;state.mode='';
+      state.error=error instanceof Error?error.message:'Shop Party service unavailable';
+      renderDirectory();renderDetail();
+    }
+  }
+  async function loadLedger(){
+    state.ledgerRequest?.abort();state.ledger=null;state.ledgerError='';
+    const p=getSelected();
+    if(!p||state.relationship!=='Supplier'||!p.sourceIds.Supplier) {
+      const area=detail.querySelector('#hparty-tab-content');
+      if(area)renderTab(area);
+      return;
+    }
+    const controller=new AbortController();state.ledgerRequest=controller;
+    state.loading=true;
+    const area=detail.querySelector('#hparty-tab-content');
+    if(area)renderTab(area);
+    try{
+      const response=await requestJson('/api/owner/suppliers/'+encodeURIComponent(p.sourceIds.Supplier)+'/ledger',controller.signal);
+      if(response.notFound)throw new Error('Supplier D1 ledger not connected for this Shop.');
+      const ledger=projectSupplierStatement(response.body,p.sourceIds.Supplier);
+      if(state.ledgerRequest!==controller)return;
+      state.ledger=ledger;
+    }catch(error){
+      if(controller.signal.aborted||state.ledgerRequest!==controller)return;
+      state.ledgerError=error instanceof Error?error.message:'Supplier ledger unavailable';
+    }finally{
+      if(state.ledgerRequest===controller){
+        state.loading=false;
+        const target=detail.querySelector('#hparty-tab-content');if(target)renderTab(target);
+      }
+    }
+  }
+  const onSearch=event=>{
+    state.query=event.target.value;
+    search.value=state.query;pickerSearch.value=state.query;
+    renderDirectory();
+  };
+  search.addEventListener('input',onSearch);pickerSearch.addEventListener('input',onSearch);
+  for(const input of [search,pickerSearch])input.addEventListener('keydown',event=>{
+    if(event.key==='ArrowDown'){
+      const host=input===search?pick('#hparty-list'):pick('#hparty-picker-list');
+      const first=host.querySelector('[role="option"]');if(first){event.preventDefault();first.focus();}
+    }
+  });
+  for(const el of [pick('#hparty-list'),pick('#hparty-picker-list')])el.addEventListener('keydown',event=>{
+    const items=Array.from(el.querySelectorAll('[role="option"]'));
+    const index=items.indexOf(document.activeElement);
+    if(index<0)return;
+    if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+      event.preventDefault();
+      const next=(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length;
+      items[next].focus();items[next].scrollIntoView({block:'nearest'});
+    }
+  });
+  pick('#hparty-refresh').addEventListener('click',()=>void loadDirectory());
+  pick('#hparty-change').addEventListener('click',openPicker);
+  pick('#hparty-picker-close').addEventListener('click',closePicker);
+  pick('.hparty-picker-backdrop').addEventListener('click',closePicker);
+  picker.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closePicker();}
+    if(event.key==='Tab'){
+      const focusable=Array.from(picker.querySelectorAll('button:not([disabled]),input:not([disabled])'))
+        .filter(el=>el.getClientRects().length);
+      if(!focusable.length)return;
+      if(event.shiftKey&&document.activeElement===focusable[0]){
+        event.preventDefault();focusable[focusable.length-1].focus();
+      }else if(!event.shiftKey&&document.activeElement===focusable[focusable.length-1]){
+        event.preventDefault();focusable[0].focus();
+      }
+    }
+  });
+  const openPage=()=>{
+    applyMode();
+    document.querySelectorAll('.page').forEach(el=>el.hidden=el!==page);
+    page.hidden=false;
+    const title=document.getElementById('pageTitle');
+    if(title)title.textContent='Parties & Ledger · পার্টি ও খাতা';
+    const subnav=document.getElementById('subNav');
+    if(subnav)subnav.hidden=true;
+    document.querySelectorAll('#navList .nav-item').forEach(item=>
+      item.classList.toggle('active',item.dataset.page==='hisabiqParties'));
+    if(typeof window.closeMobileMore_==='function')window.closeMobileMore_();
+    if(typeof window.collapseSidebarOverlay_==='function')window.collapseSidebarOverlay_();
+    if(typeof window.currentPage==='string')window.currentPage='hisabiqParties';
+    void loadDirectory();
+  };
+  const addNav=(host,mobile)=>{
+    if(!host||!host.children.length||host.querySelector('[data-page="hisabiqParties"],[data-mobile-target="hisabiqParties"]'))return;
+    const btn=asButton('','nav-item');
+    if(mobile){
+      btn.className='mobile-more-item';
+      btn.dataset.mobileTarget='hisabiqParties';
+      btn.append(create('span','mobile-more-item-icon','♧'));
+      const text=create('span','mobile-more-item-copy');
+      text.append(create('strong','','Parties & Ledger'),create('span','bn-hint','পার্টি ও খাতা'));
+      btn.append(text);
+    } else {
+      btn.dataset.page='hisabiqParties';
+      btn.append(create('span','nav-item-text','Parties & Ledger · পার্টি ও খাতা'));
+    }
+    btn.addEventListener('click',openPage);
+    host.append(btn);
+  };
+  const sidebar=document.getElementById('navList');
+  const more=document.getElementById('mobileMoreList');
+  const syncNav=()=>{addNav(sidebar,false);addNav(more,true);};
+  const sidebarObserver=new MutationObserver(syncNav);
+  const mobileObserver=new MutationObserver(syncNav);
+  if(sidebar)sidebarObserver.observe(sidebar,{childList:true});
+  if(more)mobileObserver.observe(more,{childList:true});
+  syncNav();
+  const refresh=document.getElementById('refreshBtn');
+  if(refresh)refresh.addEventListener('click',event=>{
+    if(!isVisible())return;
+    event.preventDefault();event.stopImmediatePropagation();void loadDirectory();
+  },true);
+  const darkQuery=matchMedia('(prefers-color-scheme: dark)');
+  darkQuery.addEventListener?.('change',applyMode);
+}
+if(typeof document!=='undefined'){
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mountOwnerParties,{once:true});
+  else mountOwnerParties();
+}
