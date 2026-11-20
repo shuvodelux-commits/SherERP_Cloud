@@ -5,6 +5,11 @@ import { test } from 'node:test';
 import { createTestHarness, unstable_splitSqlQuery } from 'wrangler';
 import { issueOwnerSession } from '../../src/auth/platform-owner-sessions.js';
 
+const migrations = await import('../fixtures/port-p2-local-shop-migrations.mjs').catch(error => {
+  if (error.code !== 'ERR_MODULE_NOT_FOUND' || !error.url?.endsWith('/fixtures/port-p2-local-shop-migrations.mjs')) throw error;
+  return {};
+});
+
 const sentinelId = 'PORT-P2-SENTINEL';
 
 const shops = ['A', 'B'].map((name, index) => ({
@@ -50,13 +55,13 @@ async function seedOwner(control, db, shop) {
   return token;
 }
 
-async function startProof(t) {
+async function startProof(t, { through } = {}) {
   const controlId = crypto.randomUUID();
-  const makeConfig = (name, placement, databaseOrder) => ({
+  const makeConfig = (name, placement, databaseOrder, generation = 2) => ({
     config: {
       name: `port-p2-${name}`, main: fixture, compatibility_date: '2026-11-14',
       workers_dev: false, preview_urls: false, vars: {
-        PORT_P2_FIXTURE: 'true', PORT_P2_SENTINEL_ID: sentinelId, PORT_P2_ROSTER: { generation: 2, shops: placement }
+        PORT_P2_FIXTURE: 'true', PORT_P2_SENTINEL_ID: sentinelId, PORT_P2_ROSTER: { generation, shops: placement }
       },
       d1_databases: [
         { binding: 'CONTROL_DB', database_name: 'port-p2-control', database_id: controlId, remote: false },
@@ -69,12 +74,14 @@ async function startProof(t) {
   });
   const server = createTestHarness({ workers: [
     makeConfig('active', shops, shops),
-    makeConfig('swapped', shops, [...shops].reverse())
+    makeConfig('swapped', shops, [...shops].reverse()),
+    makeConfig('previous', [shops[0]], [shops[0]], 1)
   ] });
   t.after(() => server.close());
   await server.listen();
   const active = server.getWorker('port-p2-active');
   const swapped = server.getWorker('port-p2-swapped');
+  const previous = server.getWorker('port-p2-previous');
   const env = await active.getEnv();
   const control = env.CONTROL_DB;
   for (const name of controlMigrations) {
@@ -83,15 +90,19 @@ async function startProof(t) {
   const tokens = [];
   for (const shop of shops) {
     const db = env[shop.binding];
-    await applySql(db, 'staging-migrations/shop-identity/0001_shop_identity.sql');
-    await applySql(db, 'migrations/0001_core_catalog.sql');
-    await db.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)')
-      .bind(shop.shopId, shop.databaseId, shop.databaseMarker).run();
+    if (migrations.applyLocalShopMigrations) {
+      await migrations.applyLocalShopMigrations(db, shop, { through });
+    } else {
+      await applySql(db, 'staging-migrations/shop-identity/0001_shop_identity.sql');
+      await applySql(db, 'migrations/0001_core_catalog.sql');
+      await db.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)')
+        .bind(shop.shopId, shop.databaseId, shop.databaseMarker).run();
+    }
     await db.prepare('INSERT INTO settings(key,value) VALUES (?,?)')
       .bind(sentinelId, `Value from Shop ${shop.name}`).run();
     tokens.push(await seedOwner(control, db, shop));
   }
-  return { active, swapped, env, tokens };
+  return { active, swapped, previous, env, tokens };
 }
 
 const request = (worker, token, options = {}) => worker.fetch(
@@ -110,9 +121,94 @@ test('one Workerd Owner host reads the same ID from two independent Shop D1 data
 
 test('a Worker with swapped physical D1 bindings fails closed for both Owners', async t => {
   const { swapped, tokens } = await startProof(t);
+  const wrong = (await swapped.getEnv()).SHOP_A_DB;
+  assert.equal((await wrong.prepare('SELECT shop_id FROM shop_identity').first()).shop_id, shops[1].shopId);
   for (const token of tokens) {
     const response = await request(swapped, token);
     assert.equal(response.status, 503, 'a current Owner must be denied on identity mismatch');
     assert.equal(await response.text(), '');
   }
+});
+
+
+test('a revoked session and client-supplied selectors cannot change the binding', async t => {
+  const { active, env, tokens } = await startProof(t);
+  assert.equal((await request(active, 'bad-token')).status, 401);
+  assert.equal((await request(active, tokens[0], { headers: { 'x-shop-id': shops[1].shopId } })).status, 400);
+  assert.equal((await request(active, tokens[0], { path: '/__port_p2__/sentinel?shopId=' + shops[1].shopId })).status, 400);
+  assert.equal((await request(active, tokens[0], { path: '/api/rpc' })).status, 404);
+  await env.CONTROL_DB.prepare('UPDATE platform_shop_owner_access SET enabled=0 WHERE shop_id=?')
+    .bind(shops[0].shopId).run();
+  assert.equal((await request(active, tokens[0])).status, 401);
+  assert.deepEqual(await (await request(active, tokens[1])).json(), { value: 'Value from Shop B' });
+});
+
+test('an incompatible rollback withholds Shop B and a compatible configuration restores access', async t => {
+  const { active, previous, tokens, env } = await startProof(t);
+  assert.deepEqual(await (await request(previous, tokens[0])).json(), { value: 'Value from Shop A' });
+  assert.equal((await request(previous, tokens[1])).status, 503);
+  assert.deepEqual(await (await request(active, tokens[1])).json(), { value: 'Value from Shop B' });
+  await env.CONTROL_DB.prepare('UPDATE port_p2_shop_placements SET ready=0 WHERE shop_id=?')
+    .bind(shops[1].shopId).run();
+  assert.equal((await request(active, tokens[1])).status, 503);
+  assert.deepEqual(await (await request(active, tokens[0])).json(), { value: 'Value from Shop A' });
+  await env.CONTROL_DB.prepare('UPDATE port_p2_shop_placements SET ready=1 WHERE shop_id=?')
+    .bind(shops[1].shopId).run();
+  assert.deepEqual(await (await request(active, tokens[1])).json(), { value: 'Value from Shop B' });
+});
+
+const readReceipts = async db => (await db.prepare(
+  'SELECT position, name, checksum FROM port_p2_shop_migrations ORDER BY position'
+).all()).results;
+const readSentinel = async db => (await db.prepare('SELECT key,value FROM settings ORDER BY key').all()).results;
+const readPlacements = async db => (await db.prepare(
+  'SELECT * FROM port_p2_shop_placements ORDER BY shop_id'
+).all()).results;
+
+test('interrupted migrations roll back late failure and resume exactly once on the correct Shop D1', async t => {
+  assert.equal(typeof migrations.applyLocalShopMigrations, 'function', 'local recovery executor is missing');
+  const { active, env, tokens } = await startProof(t, { through: 2 });
+  const { CONTROL_DB: control, SHOP_A_DB: a, SHOP_B_DB: b } = env;
+  await migrations.applyLocalShopMigrations(b, shops[1]);
+  const aData = await readSentinel(a);
+  const bState = { receipts: await readReceipts(b), records: await readSentinel(b) };
+  const placements = await readPlacements(control);
+  const prefix = await readReceipts(a);
+  assert.equal(prefix.length, 2);
+  assert.equal((await request(active, tokens[0])).status, 503);
+  await a.prepare(`CREATE TRIGGER fixture_stop_receipt BEFORE INSERT ON port_p2_shop_migrations
+    WHEN NEW.position=3 BEGIN SELECT RAISE(ABORT,'fixture late migration interruption'); END`).run();
+  await assert.rejects(migrations.applyLocalShopMigrations(a, shops[0]), /fixture late migration interruption/);
+  assert.deepEqual(await readReceipts(a), prefix);
+  assert.equal(await a.prepare("SELECT name FROM sqlite_schema WHERE name='legacy_product_snapshots'").first(), null);
+  assert.deepEqual(await readSentinel(a), aData);
+  await a.prepare('DROP TRIGGER fixture_stop_receipt').run();
+
+  await assert.rejects(migrations.applyLocalShopMigrations(a, shops[1]), /SHOP_IDENTITY_MISMATCH/);
+  assert.deepEqual(await migrations.applyLocalShopMigrations(a, shops[0]), { applied: 1 });
+  assert.deepEqual(await migrations.applyLocalShopMigrations(a, shops[0]), { applied: 0 });
+  assert.equal((await readReceipts(a)).length, 3);
+  assert.deepEqual(await readSentinel(a), aData);
+  assert.deepEqual({ receipts: await readReceipts(b), records: await readSentinel(b) }, bState);
+  assert.deepEqual(await readPlacements(control), placements);
+  assert.deepEqual(await (await request(active, tokens[0])).json(), { value: 'Value from Shop A' });
+  assert.deepEqual(await (await request(active, tokens[1])).json(), { value: 'Value from Shop B' });
+});
+
+test('migration bytes and applied receipt drift stop resume without overwriting existing data', async t => {
+  assert.equal(typeof migrations.applyLocalShopMigrations, 'function', 'local recovery executor is missing');
+  const { active, env, tokens } = await startProof(t);
+  const db = env.SHOP_A_DB;
+  const baseline = await readReceipts(db);
+  const data = await readSentinel(db);
+  const files = await migrations.loadLocalShopMigrations();
+  files[0].sql += '\n-- changed bytes';
+  await assert.rejects(migrations.applyLocalShopMigrations(db, shops[0], { files }), /MIGRATION_CHECKSUM_MISMATCH/);
+  assert.deepEqual(await readReceipts(db), baseline);
+
+  await db.prepare("UPDATE port_p2_shop_migrations SET checksum=? WHERE position=1").bind('0'.repeat(64)).run();
+  await assert.rejects(migrations.applyLocalShopMigrations(db, shops[0]), /MIGRATION_CHECKSUM_MISMATCH/);
+  assert.equal((await request(active, tokens[0])).status, 503);
+  assert.deepEqual(await readSentinel(db), data);
+  assert.deepEqual(await (await request(active, tokens[1])).json(), { value: 'Value from Shop B' });
 });
