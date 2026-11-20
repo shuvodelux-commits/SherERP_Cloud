@@ -11,9 +11,7 @@ function prepareReadyPlacement(control, shopId) {
     FROM port_p2_shop_placements WHERE shop_id=? AND ready=1`).bind(shopId);
 }
 
-/** Read-only PORT-00 candidate. Only the server passes the deployed roster.
- * This is not an Owner login or a Shop D1 write grant.
- */
+/** Read-only PORT-00 candidate scoped to the trusted server roster and current request. */
 export async function resolvePortP2OwnerShop(env, token, roster) {
   try {
     const hash = await hashOpaqueSessionToken(token);

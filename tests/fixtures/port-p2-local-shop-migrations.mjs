@@ -39,29 +39,75 @@ export async function applyLocalShopMigrations(db, shop, { through = shopMigrati
   const ledger = await db.prepare(`SELECT 1 FROM sqlite_schema
     WHERE type='table' AND name='port_p2_shop_migrations'`).first();
   let applied = 0;
+  let priorSchema = '[]';
   if (ledger) {
     if (!await pilotShopIdentityMatches({ ...shop, shopDb: db })) throw new Error('SHOP_IDENTITY_MISMATCH');
     const { receipts, schema } = await readPortP2ShopCheckpoint(db);
     if (!matchesPortP2MigrationPrefix(receipts, shopMigrationPlan)) throw new Error('MIGRATION_CHECKSUM_MISMATCH');
     if (receipts.at(-1)?.schema !== schema) throw new Error('MIGRATION_SCHEMA_DRIFT');
+    priorSchema = schema;
     applied = receipts.length;
   } else {
     const schema = await db.prepare(`SELECT ${PORT_P2_SHOP_SCHEMA} AS schema`).first('schema');
-    if (schema !== '[]') throw new Error('MIGRATION_SCHEMA_DRIFT');
+    if (schema !== priorSchema) throw new Error('MIGRATION_SCHEMA_DRIFT');
   }
 
   if (through < applied) throw new Error('INVALID_MIGRATION_TARGET');
   for (let index = applied; index < through; index++) {
-    const statements = unstable_splitSqlQuery(sources[index].sql).map(sql => db.prepare(sql));
-    if (index === 0) {
-      statements.unshift(db.prepare(createLedger));
-      statements.push(db.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)')
-        .bind(shop.shopId, shop.databaseId, shop.databaseMarker));
-    }
-    const { name, checksum } = shopMigrationPlan[index];
-    statements.push(db.prepare(`INSERT INTO port_p2_shop_migrations (position,name,checksum,schema_snapshot)
-      VALUES (?,?,?,${PORT_P2_SHOP_SCHEMA})`).bind(index + 1, name, checksum));
-    await db.batch(statements);
+    priorSchema = await applyMigration(db, shop, index, sources[index].sql, priorSchema);
   }
   return { applied: through - applied };
+}
+
+const receiptPrefixSql = `(
+  SELECT json_group_array(json_array(position,name,checksum)) FROM (
+    SELECT position,name,checksum FROM port_p2_shop_migrations ORDER BY position
+  )
+)`;
+
+async function applyMigration(db, shop, index, sql, priorSchema) {
+  const position = index + 1;
+  const { name, checksum } = shopMigrationPlan[index];
+  const prefix = JSON.stringify(shopMigrationPlan.slice(0, index).map((item, prior) =>
+    [prior + 1, item.name, item.checksum]
+  ));
+  const identity = [shop.shopId, shop.databaseId, shop.databaseMarker];
+  const priorGuard = index === 0 ? '' : `AND EXISTS(
+    SELECT 1 FROM shop_identity WHERE singleton=1 AND shop_id=? AND database_id=? AND database_marker=?
+  ) AND EXISTS (
+    SELECT 1 FROM port_p2_shop_migrations WHERE position=? AND schema_snapshot=?
+  )`;
+  const priorParameters = index === 0 ? [] : [...identity, index, priorSchema];
+  // The NOT NULL constraint aborts the batch on a stale preflight. The
+  // resulting schema snapshot replaces the claim inside the same batch.
+  const statements = [
+    ...(index === 0 ? [db.prepare(createLedger)] : []),
+    db.prepare(`INSERT INTO port_p2_shop_migrations (position,name,checksum,schema_snapshot)
+      VALUES (?,?,?,CASE WHEN ${PORT_P2_SHOP_SCHEMA}=? AND ${receiptPrefixSql}=? ${priorGuard} THEN '' END)`)
+      .bind(position, name, checksum, priorSchema, prefix, ...priorParameters),
+    ...unstable_splitSqlQuery(sql).map(statement => db.prepare(statement)),
+    ...(index === 0 ? [db.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)').bind(...identity)] : []),
+    db.prepare(`UPDATE port_p2_shop_migrations SET schema_snapshot=${PORT_P2_SHOP_SCHEMA}
+      WHERE position=?`).bind(position),
+    // A suppressed UPDATE has zero effects. Abort DDL and the claim in SQL
+    // if the final receipt does not describe the schema now in the batch.
+    db.prepare(`INSERT INTO port_p2_shop_migrations (position,name,checksum,schema_snapshot)
+      SELECT 0,'invalid-receipt',?,''
+      WHERE NOT EXISTS (SELECT 1 FROM port_p2_shop_migrations
+        WHERE position=? AND name=? AND checksum=? AND schema_snapshot=${PORT_P2_SHOP_SCHEMA})`)
+      .bind(checksum, position, name, checksum),
+    db.prepare('SELECT schema_snapshot AS schema FROM port_p2_shop_migrations WHERE position=?').bind(position)
+  ];
+  try {
+    const results = await db.batch(statements);
+    return results.at(-1).results[0].schema;
+  } catch (error) {
+    if (String(error?.message).includes('NOT NULL constraint failed: port_p2_shop_migrations.schema_snapshot')) {
+      throw new Error('MIGRATION_SCHEMA_DRIFT', { cause: error });
+    }
+    if (String(error?.message).includes('CHECK constraint failed: position>0')) {
+      throw new Error('MIGRATION_RECEIPT_NOT_SEALED', { cause: error });
+    }
+    throw error;
+  }
 }
