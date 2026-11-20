@@ -186,8 +186,11 @@ app.post('/api/platform/auth/challenge',limitIngress,async c=>{
 });
 
 function hostedDirectoryEnabled(env){
+  // The current Admin's read-only Control D1 roster is independent of the
+  // optional Shop pilot attachment. A failed pilot verification must never
+  // grant business creation, but must not hide existing Admin-scoped shops.
   return env.PLATFORM_SHOP_DIRECTORY_ENABLED==='true'&&
-    (env.PLATFORM_HOSTED_PILOT_ENABLED!=='true'||localProvisioningEnabled(env));
+    typeof env.CONTROL_DB?.prepare==='function';
 }
 
 function localProvisioningEnabled(env){
