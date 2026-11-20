@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {readFileSync} from 'node:fs';
 import {normalizeMvpPosV2SaleIntent} from '../src/modules/mvp-pos-v2-sale-intent.js';
 
 const context=()=>({tenantId:'SHOP-A',actorId:'USER-A',invoiceId:'INV-MVP-0001',operationId:'OP-MVP-0000000001'});
@@ -122,4 +123,65 @@ test('normalizes deterministic replay intent without inventing receipt or doing 
   const a=normalize(payload()),b=normalize({...payload(),items:[{...item()}]});
   assert.deepEqual(a,b);
   assert.equal(Object.keys(a).some(k=>/status|success|receipt/i.test(k)),false);
+});
+
+test('frozen original POS default auto/negative cart becomes eligible only with server price and sufficient owned stock',()=>{
+  const original=readFileSync(new URL('../legacy/source/pos.html',import.meta.url),'utf8');
+  const cart=original.slice(original.indexOf('function posCreateCartLine_('),
+    original.indexOf('function posAddToCart_('));
+  assert.match(cart,/priceMode: 'auto'/);
+  assert.match(cart,/shortageResolution: 'negative'/);
+  const source={...payload(),items:[{...item(),priceMode:'auto',shortageResolution:'negative'}]};
+  const trustedProduct={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  const actual=normalizeMvpPosV2SaleIntent({
+    context:context(),payload:source,accountRows:accountRows(),trustedProduct,
+  });
+  assert.deepEqual(actual,normalize(payload()),'a fully stocked default cart must conserve the same M06 intent');
+});
+
+test('default POS auto price fails closed without independently reviewed current product/stock evidence',()=>{
+  const source={...payload(),items:[{...item(),priceMode:'auto',shortageResolution:'negative'}]};
+  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  for(const trustedProduct of [
+    undefined,
+    {...full,productId:'OTHER'},
+    {...full,effectiveUnitPrice:'101.00'},
+    {...full,availableUnits:1},
+    {...full,availableUnits:-1},
+    {...full,availableUnits:1.5},
+    {...full,availableUnits:NaN},
+    {...full,effectiveUnitPrice:100},
+    {...full,priceOverride:'browser'},
+    Object.defineProperty({...full},'availableUnits',{get(){return 2},enumerable:true}),
+  ]){
+    assert.throws(()=>normalizeMvpPosV2SaleIntent({
+      context:context(),payload:source,accountRows:accountRows(),trustedProduct,
+    }),/trusted|current|price|stock|invalid|not enough|unavailable|unsupported|source/i);
+  }
+});
+
+test('default negative shortage resolution is not an oversell permission, even for manual price',()=>{
+  const source={...payload(),items:[{...item(),priceMode:'manual',shortageResolution:'negative'}]};
+  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  assert.deepEqual(normalizeMvpPosV2SaleIntent({
+    context:context(),payload:source,accountRows:accountRows(),trustedProduct:full,
+  }),normalize(payload()));
+  for(const trustedProduct of [undefined,{...full,availableUnits:1}]){
+    assert.throws(()=>normalizeMvpPosV2SaleIntent({
+      context:context(),payload:source,accountRows:accountRows(),trustedProduct,
+    }),/trusted|stock|unavailable|not enough|unsupported/i);
+  }
+});
+
+test('current trusted default auto price is bounded, and pending financial rules still refuse other POS modes',()=>{
+  const source={...payload(),items:[{...item(),priceMode:'auto',shortageResolution:'negative'}]};
+  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  assert.throws(()=>normalizeMvpPosV2SaleIntent({
+    context:context(),payload:{...source,items:[{...source.items[0],productType:'Bundle'}]},
+    accountRows:accountRows(),trustedProduct:full,
+  }),/unsupported/i);
+  assert.throws(()=>normalizeMvpPosV2SaleIntent({
+    context:context(),payload:{...source,items:[{...source.items[0],shortageResolution:'vendor'}]},
+    accountRows:accountRows(),trustedProduct:full,
+  }),/unsupported/i);
 });
