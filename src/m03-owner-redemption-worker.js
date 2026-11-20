@@ -12,6 +12,8 @@ import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,
   postOwnerCreditPurchase,readOwnerPurchaseBootstrap,readOwnerPurchaseHistory,
   readOwnerPurchaseDetail} from './db/m03-owner-mvp-purchase.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './auth/platform-shop-binding.js';
+import {readOwnerPosBootstrap,postOwnerCashSale,readOwnerCashSaleInvoice}
+  from './db/m03-owner-mvp-cash-sale.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
@@ -181,14 +183,15 @@ app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
 // M03 MVP first operational credit Purchase is private, explicitly opt-in,
 // never included in public Worker RPC or DB-free PR previews.
 const ownerPurchaseEnabled=env=>cleanProductsEnabled(env)&&env.OWNER_MVP_PURCHASE_ENABLED==='true';
+const ownerCashPosEnabled=env=>ownerPurchaseEnabled(env)&&env.OWNER_MVP_POS_CASH_ENABLED==='true';
 
-async function verifiedOwnerPurchaseContext(c,subject=false){
+async function verifiedOwnerPurchaseContext(c,subject=false,dashboard=false){
   const token=getCookie(c,SESSION_COOKIE);
-  const session=await validateOwnerSession(c.env,token,{includeOwnerSubject:subject});
+  const session=await validateOwnerSession(c.env,token,{includeOwnerSubject:subject,dashboard});
   const scope=pilotShopConfiguration(c.env);
   if(!session||!scope||session.shopId!==scope.shopId||
      !await pilotShopIdentityMatches(scope))return null;
-  return {token,ownerSubject:session.ownerSubject,scope};
+  return {token,ownerSubject:session.ownerSubject,shopName:session.dashboard?.displayName,scope};
 }
 function purchaseError(c,status){
   if(status==='denied')return c.json({success:false,message:'Purchase Owner access denied.'},403);
@@ -290,6 +293,68 @@ for(const [path,operation] of [
     return purchaseError(c,result.status);
   });
 }
+
+// ONE real MVP cash sale through the existing private Owner/Shop boundary.
+app.get('/api/owner/pos/bootstrap',protectLogin,async c=>{
+  if(!ownerCashPosEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c,false,true);
+  if(!ctx)return denied(c);
+  try{return c.json({success:true,data:await readOwnerPosBootstrap(ctx.scope.shopDb,{
+    shopName:ctx.shopName,
+  })});}catch{return c.json({success:false,message:'POS stock data unavailable'},503);}
+});
+
+app.get('/api/owner/pos/drafts',protectLogin,async c=>{
+  if(!ownerCashPosEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c,false,true);
+  if(!ctx)return denied(c);
+  try{
+    // There is no draft store for this verified clean new Shop; never
+    // fabricate historical drafts or silently claim restored drafts.
+    await readOwnerPosBootstrap(ctx.scope.shopDb,{shopName:ctx.shopName});
+    return c.json({success:true,data:[]});
+  }catch{return c.json({success:false,message:'Draft list unavailable'},503);}
+});
+
+app.get('/api/owner/pos/invoices/:invoiceId',protectLogin,async c=>{
+  if(!ownerCashPosEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{
+    const invoice=await readOwnerCashSaleInvoice(ctx.scope.shopDb,c.req.param('invoiceId'));
+    return invoice?c.json({success:true,data:invoice}):c.notFound();
+  }catch{return c.json({success:false,message:'Invoice unavailable'},503);}
+});
+
+app.post('/api/owner/pos/sales',protectLogin,limitBody,async c=>{
+  if(!ownerCashPosEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c,true,true);
+  if(!ctx)return denied(c);
+  const input=await ownerPurchaseJson(c);
+  if(!input||Object.keys(input).length!==2||
+    !Object.hasOwn(input,'operationId')||!Object.hasOwn(input,'payload'))
+    return c.json({success:false,message:'Invalid POS checkout'},400);
+  const result=await postOwnerCashSale(ctx.scope,{
+    token:ctx.token,ownerSubject:ctx.ownerSubject,shopName:ctx.shopName,
+    operationId:input.operationId,payload:input.payload
+  });
+  if(result.status==='created'||result.status==='replayed')
+    return c.json({success:true,data:result.invoice},result.status==='created'?201:200);
+  if(result.status==='denied')
+    return c.json({success:false,message:'Owner POS access denied'},403);
+  if(result.status==='session-required')
+    return c.json({success:false,message:'Start Day before completing a sale'},409);
+  if(result.status==='unsupported')
+    return c.json({success:false,message:
+      'Only one in-stock Standard product, original FIFO price, cash paid in full, no discount or Customer Due is supported in this MVP pilot.'},422);
+  if(result.status==='declined')
+    return c.json({success:false,message:'Stock or FIFO sale price changed. Refresh POS before retrying.'},409);
+  if(result.status==='invalid')
+    return c.json({success:false,message:'Invalid POS checkout details.'},400);
+  if(result.status==='conflict')
+    return c.json({success:false,message:'Checkout changed after saving. Review the original invoice before retry.'},409);
+  return c.json({success:false,message:'POS transaction unavailable. Retry unchanged checkout.'},503);
+});
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{
   const challenge=await beginOwnerGoogleLogin(c.env)??
