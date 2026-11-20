@@ -1,0 +1,33 @@
+name: M03 MVP clean-shop Supplier master real local Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  supplier-mvp:
+    name: Verified Owner creates Shop Supplier and linked Party in local D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler for disposable local Workerd only
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Verify reviewed source
+        run: npm run verify:source
+      - name: Exercise Supplier create and isolation on two real local Shop D1s
+        run: node --test tests/integration/m03-mvp-supplier-workerd.spec.mjs
+      - name: Keep public preview DB-free
+        run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
