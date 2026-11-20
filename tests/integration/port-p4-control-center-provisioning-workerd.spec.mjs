@@ -303,7 +303,8 @@ test('Owner-ready recovery seals seven D1 migrations after partial failure witho
       }
       assert.deepEqual(await applyLocalShopMigrations(env.SHOP_A_DB,scope,{
         plan:ownerReadyShopMigrationPlan
-      }),{applied:4},'retry must apply exactly the missing four SQL files');
+      }),{applied:ownerReadyShopMigrationPlan.length-3},
+        'retry must apply the remaining reviewed Shop migrations, including Supplier');
     }
   };
   const bindings={
