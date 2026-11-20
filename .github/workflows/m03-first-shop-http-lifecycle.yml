@@ -26,5 +26,6 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
       - name: Execute exact Owner API transaction lifecycle on isolated Workerd/D1
         run: node --test tests/integration/mvp-first-shop-http-lifecycle-workerd.spec.mjs
