@@ -152,6 +152,11 @@ export function auditSupplierPaymentReturnBacking(input){
       if(bankLike)counts.bankPaymentLegs++;
       else counts.cashPaymentLegs++;
       matchBook(b,bankLike?'BANK':'CASH',payment,'PAYMENT',block);
+      // Original BankLedger.gs writes a linked Reversal Of mirror and
+      // can preserve both rows; never count the original as still
+      // independently money-backed, even if its status is stale.
+      if(bankLike&&[...bank.values()].some(row=>row['Reversal Of']===b['Entry ID']))
+        block('REVERSED_BANK_ENTRY_REQUIRES_REVIEW');
     }
   }
 
