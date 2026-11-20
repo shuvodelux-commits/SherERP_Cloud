@@ -132,7 +132,7 @@ test('frozen original POS default auto/negative cart becomes eligible only with 
   assert.match(cart,/priceMode: 'auto'/);
   assert.match(cart,/shortageResolution: 'negative'/);
   const source={...payload(),items:[{...item(),priceMode:'auto',shortageResolution:'negative'}]};
-  const trustedProduct={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  const trustedProduct={productId:'PIPE-001',effectiveUnitPrice:'100.00',effectiveLineTotal:'200.00',availableUnits:2};
   const actual=normalizeMvpPosV2SaleIntent({
     context:context(),payload:source,accountRows:accountRows(),trustedProduct,
   });
@@ -141,11 +141,13 @@ test('frozen original POS default auto/negative cart becomes eligible only with 
 
 test('default POS auto price fails closed without independently reviewed current product/stock evidence',()=>{
   const source={...payload(),items:[{...item(),priceMode:'auto',shortageResolution:'negative'}]};
-  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',effectiveLineTotal:'200.00',availableUnits:2};
   for(const trustedProduct of [
     undefined,
     {...full,productId:'OTHER'},
     {...full,effectiveUnitPrice:'101.00'},
+    {...full,effectiveLineTotal:'200.01'},
+    {...full,effectiveLineTotal:'199.99'},
     {...full,availableUnits:1},
     {...full,availableUnits:-1},
     {...full,availableUnits:1.5},
@@ -162,7 +164,7 @@ test('default POS auto price fails closed without independently reviewed current
 
 test('default negative shortage resolution is not an oversell permission, even for manual price',()=>{
   const source={...payload(),items:[{...item(),priceMode:'manual',shortageResolution:'negative'}]};
-  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',effectiveLineTotal:'200.00',availableUnits:2};
   assert.deepEqual(normalizeMvpPosV2SaleIntent({
     context:context(),payload:source,accountRows:accountRows(),trustedProduct:full,
   }),normalize(payload()));
@@ -175,7 +177,7 @@ test('default negative shortage resolution is not an oversell permission, even f
 
 test('current trusted default auto price is bounded, and pending financial rules still refuse other POS modes',()=>{
   const source={...payload(),items:[{...item(),priceMode:'auto',shortageResolution:'negative'}]};
-  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',availableUnits:2};
+  const full={productId:'PIPE-001',effectiveUnitPrice:'100.00',effectiveLineTotal:'200.00',availableUnits:2};
   assert.throws(()=>normalizeMvpPosV2SaleIntent({
     context:context(),payload:{...source,items:[{...source.items[0],productType:'Bundle'}]},
     accountRows:accountRows(),trustedProduct:full,
@@ -184,4 +186,16 @@ test('current trusted default auto price is bounded, and pending financial rules
     context:context(),payload:{...source,items:[{...source.items[0],shortageResolution:'vendor'}]},
     accountRows:accountRows(),trustedProduct:full,
   }),/unsupported/i);
+});
+
+test('frozen FIFO auto-pricing line totals may diverge from rounded unitPrice × quantity: deny lossy quote',()=>{
+  const original=readFileSync(new URL('../legacy/source/pos.html',import.meta.url),'utf8');
+  assert.match(original,/total \+= take \* \(Number\(segments\[i\]\.sellPrice\)/);
+  assert.match(original,/unitPrice = Math\.round\(\(\(lineTotal \/ quantity\)/);
+  const raw={...payload(),items:[{...item(),priceMode:'auto',shortageResolution:'negative'}]};
+  assert.throws(()=>normalizeMvpPosV2SaleIntent({
+    context:context(),payload:raw,accountRows:accountRows(),
+    trustedProduct:{productId:'PIPE-001',effectiveUnitPrice:'100.00',
+      effectiveLineTotal:'200.01',availableUnits:2},
+  }),/line|price|FIFO|mismatch|source|trusted|stock/i);
 });
