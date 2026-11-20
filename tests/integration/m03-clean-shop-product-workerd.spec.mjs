@@ -137,7 +137,7 @@ test('withdrawal fences a reserved generation before its first Shop publication'
     await assert.rejects(revokeOwnerSession({...env,OWNER_WRITE_GRANTS_ENABLED:'false'},token),/Fence Owner/);
     assert.equal(await revokeOwnerSession(env,token),true);
     await SHOP_A_DB.prepare('DROP TRIGGER fixture_pause_publish').run();
-    assert.equal(await publishOwnerWriteGrant(SHOP_A_DB,pilotShopConfiguration(env),token,claim.generation),false);
+    assert.equal(await publishOwnerWriteGrant(SHOP_A_DB,pilotShopConfiguration(env),token,claim.generation,Date.now()+60_000),false);
     assert.deepEqual(await SHOP_A_DB.prepare('SELECT generation,enabled FROM shop_owner_write_grant').first(),
       {generation:claim.generation,enabled:0});
   }finally{await close();}
@@ -187,6 +187,17 @@ test('private Owner candidate posts a source-ID product once and reads it from t
     const saved=await request(next);
     assert.equal(saved.status,201);
     assert.equal((await saved.json()).data.id,'PRD-000002');
+
+    // The deployed private Owner product handler must enforce the Shop lease in
+    // its D1 insert/receipt SQL, even while Control D1 still accepts this Owner.
+    await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET expires_at_ms=? WHERE singleton=1')
+      .bind(Date.now()-1000).run();
+    assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
+    const afterExpiry={...draft,name:'Expired lease product',operationId:crypto.randomUUID()};
+    assert.equal((await request(afterExpiry)).status,403,'expired Shop lease denies new Product');
+    assert.equal((await request(next)).status,403,'expired Shop lease denies receipt replay');
+    assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM products').first()).n,2);
+    assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM owner_product_create_receipts').first()).n,2);
     await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
     assert.equal((await request(next)).status,403);
     assert.equal((await request({...next,name:'Spanner',operationId:crypto.randomUUID()})).status,403);
@@ -217,5 +228,35 @@ test('the clean-shop receipt migration rolls back when a historical catalog alre
     await assert.rejects(SHOP_A_DB.batch(migration.split('-- next statement').map(sql=>SHOP_A_DB.prepare(sql.trim()))),/CHECK/);
     assert.equal(await SHOP_A_DB.prepare("SELECT name FROM sqlite_master WHERE name='owner_product_create_receipts'").first(),null);
     assert.equal((await SHOP_A_DB.prepare('SELECT product_id FROM legacy_product_snapshots').first()).product_id,'PRD-001000');
+  }finally{await close();}
+});
+
+test('a live Owner must have a Shop SQL-time lease; old enabled grants cannot post after expiry',async()=>{
+  const {worker,ownerA,ownerB,SHOP_A_DB,SHOP_B_DB,close}=await startCleanShopHarness();
+  try{
+    const active=await SHOP_A_DB.prepare('SELECT expires_at_ms AS expiresAtMs,enabled FROM shop_owner_write_grant').first();
+    assert.equal(active.enabled,1);
+    assert.ok(Number.isSafeInteger(active.expiresAtMs)&&active.expiresAtMs>Date.now(),
+      'a current Control session must grant only a bounded Shop write lease');
+    const second=await SHOP_B_DB.prepare('SELECT expires_at_ms AS expiresAtMs FROM shop_owner_write_grant').first();
+    assert.ok(second.expiresAtMs>Date.now(),'other Shop has its own lease');
+    const draft=(name)=>({operationId:crypto.randomUUID(),name,unit:'pcs',
+      purchasePrice:'5.00',sellingPrice:'8.00'});
+    const post=(shop,token,input)=>worker.fetch('https://'+shop+'.example.test/__clean_shop__/products',{
+      method:'POST',headers:{Origin:'https://'+shop+'.example.test',
+        'Content-Type':'application/json',Cookie:'__Host-shererp-owner-session='+token},
+      body:JSON.stringify(input),
+    });
+    assert.equal((await post('a',ownerA.token,draft('Before lease expiry'))).status,201);
+    // Simulate the passage of server time by shortening only this Shop lease.
+    // An active Control cookie must not silently re-authorize Shop SQL writes.
+    await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET expires_at_ms=? WHERE singleton=1')
+      .bind(Date.now()-1000).run();
+    assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
+    assert.equal((await post('a',ownerA.token,draft('After lease expiry'))).status,409);
+    assert.equal(await publishCurrentOwnerWriteSession(ownerA.env,ownerA.token),false,
+      'publishing the same session may not extend an expired lease');
+    assert.equal((await SHOP_A_DB.prepare('SELECT COUNT(*) AS n FROM products').first()).n,1);
+    assert.equal((await post('b',ownerB.token,draft('Independent Shop still works'))).status,201);
   }finally{await close();}
 });

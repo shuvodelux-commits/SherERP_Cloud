@@ -275,7 +275,7 @@ test('Owner-ready local setup refuses baseline-only migrations before publishing
   ).first()).n,0);
 });
 
-test('Owner-ready recovery seals six D1 migrations after partial failure without second database allocation',async t=>{
+test('Owner-ready recovery seals seven D1 migrations after partial failure without second database allocation',async t=>{
   const {request,db,env,inventory}=await startControlCenter(t);
   const operationId=crypto.randomUUID();
   const input={operationId,displayName:'Safe Recovery',ownerEmail:'safe.recovery@gmail.com'};
@@ -303,7 +303,7 @@ test('Owner-ready recovery seals six D1 migrations after partial failure without
       }
       assert.deepEqual(await applyLocalShopMigrations(env.SHOP_A_DB,scope,{
         plan:ownerReadyShopMigrationPlan
-      }),{applied:3},'retry must apply exactly the missing three SQL files');
+      }),{applied:4},'retry must apply exactly the missing four SQL files');
     }
   };
   const bindings={

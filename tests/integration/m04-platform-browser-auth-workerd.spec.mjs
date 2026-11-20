@@ -409,6 +409,7 @@ test('operator ticket setup and MFA login use separate browser cookies and real 
     [db,'platform-owner-write/0009_owner_session_generation.sql'],
     [db,'platform-owner-write/0010_owner_grant_claim.sql'],
     [pilotDb,'shop-owner-write/0002_shop_owner_write_grant.sql'],
+    [pilotDb,'shop-owner-write/0004_owner_write_lease.sql'],
   ]){
     const sql=await readFile(new URL('../../staging-migrations/'+file,import.meta.url),'utf8');
     await target.batch(sql.trim().split('-- next statement').map(statement=>target.prepare(statement.trim())));
@@ -522,6 +523,7 @@ test('approved Gmail signs in directly and claims only its intended shop once',a
   await migrate(gmailDb,'shop-identity/0001_shop_identity');
   await gmailDb.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)').bind(shopId,gmailDbId,marker).run();
   await migrate(gmailDb,'shop-owner-write/0002_shop_owner_write_grant');
+  await migrate(gmailDb,'shop-owner-write/0004_owner_write_lease');
   await db.batch([
     db.prepare('INSERT INTO platform_shop_reservations VALUES (?,?,?,?,?)').bind(shopId,randomUUID(),'Fixture Gmail shop',subject,now),
     db.prepare('INSERT INTO platform_shop_bindings VALUES (?,?,?,?,?)').bind(shopId,gmailDbId,marker,subject,now),

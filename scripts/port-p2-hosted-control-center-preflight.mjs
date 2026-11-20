@@ -4,7 +4,7 @@
  *
  * This operator tool is not imported by an active Worker. It reuses P1/P2
  * account checks, verifies existing private Worker D1 bindings via GET-only
- * Cloudflare API, and hashes the merged six-step local Owner-ready manifest.
+ * Cloudflare API, and hashes the reviewed Owner-ready SQL manifest.
  *
  * IMPORTANT: passing this check is NOT deployment authorization, and it
  * cannot create D1, apply SQL, upload Worker versions or activate an Owner.
@@ -22,14 +22,14 @@ import {
 const CF_ORIGIN='https://api.cloudflare.com/client/v4';
 const TOKEN=/^[A-Za-z0-9._~-]{10,512}$/;
 const denied=()=>new Error('Hosted Control Center preflight denied');
-const sixSteps=()=>isOwnerReadyShopMigrationPlan(OWNER_READY_SHOP_MIGRATION_PLAN)
+const readySteps=()=>isOwnerReadyShopMigrationPlan(OWNER_READY_SHOP_MIGRATION_PLAN)
   ?OWNER_READY_SHOP_MIGRATION_PLAN:undefined;
 const remainingGates=Object.freeze([
   'independent-security-review',
   'cloudflare-access-and-google-origin-review',
   'private-installer-operation-journal',
   'new-shop-d1-create-and-recovery-approval',
-  'six-migration-d1-remote-execution-approval',
+  'owner-ready-migration-d1-remote-execution-approval',
   'worker-version-binding-promotion',
   'm10-recovery',
   'm11-private-worker-release',
@@ -47,7 +47,7 @@ const permissions=Object.freeze({
 /** Sanitized, deterministic offline draft; does not touch Cloudflare. */
 export function planHostedControlCenterDryRun(instance){
   validatePortableInstance(instance);
-  const steps=sixSteps();
+  const steps=readySteps();
   if(!steps)throw denied();
   return {
     formatVersion:1,mode:'offline-dry-run',resourceVerification:'not-checked',
@@ -56,9 +56,9 @@ export function planHostedControlCenterDryRun(instance){
   };
 }
 
-/** Read exact six on-disk SQL bytes; a drift must be rejected before any GET. */
+/** Read every exact reviewed on-disk SQL file; a drift must be rejected before any GET. */
 export async function verifyOwnerReadyMigrationFiles({readFileFn=readFile}={}){
-  const steps=sixSteps();
+  const steps=readySteps();
   if(!steps||typeof readFileFn!=='function')throw denied();
   try{
     for(const {name,checksum} of steps){

@@ -1,5 +1,5 @@
 import {publishOwnerWriteGrant,fenceOwnerWriteGrant} from '../db/shop-owner-write-grant.js';
-import {OWNER_SESSION_FRESH_SQL} from './platform-owner-session-deadline.js';
+import {OWNER_SESSION_FRESH_SQL,OWNER_SESSION_MAX_AGE_SECONDS} from './platform-owner-session-deadline.js';
 import {CURRENT_PLATFORM_ADMIN_FROM} from './platform-superadmin-session.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches} from './platform-shop-binding.js';
 import {hashOpaqueSessionToken} from './session-token.js';
@@ -21,9 +21,13 @@ export async function publishCurrentOwnerWriteSession(env,token){
     ON CONFLICT(shop_id) DO UPDATE SET token_hash=excluded.token_hash
     WHERE platform_owner_grant_claim.token_hash=excluded.token_hash
       AND platform_owner_grant_claim.generation=excluded.generation
-    RETURNING generation`).bind(shopId,hash,databaseId,databaseMarker).first();
-  if(!current)return false;
-  return publishOwnerWriteGrant(shopDb,scope,token,current.generation);
+    RETURNING generation,(SELECT s.issued_at_ms + ${OWNER_SESSION_MAX_AGE_SECONDS * 1000}
+      FROM platform_shop_owner_sessions s
+      WHERE s.shop_id=platform_owner_grant_claim.shop_id
+        AND s.token_hash=platform_owner_grant_claim.token_hash) AS expiresAtMs`)
+    .bind(shopId,hash,databaseId,databaseMarker).first();
+  if(!current||!Number.isSafeInteger(current.expiresAtMs))return false;
+  return publishOwnerWriteGrant(shopDb,scope,token,current.generation,current.expiresAtMs);
 }
 
 // Only trusted callers may supply the digest selected by an authenticated
