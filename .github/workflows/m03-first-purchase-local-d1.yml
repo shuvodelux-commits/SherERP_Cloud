@@ -1,0 +1,33 @@
+name: M03 first purchase SQL-atomic local Workerd/D1 (test-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  m03-first-purchase:
+    name: M03 first new-shop purchase atomic authority, stock and money
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned local-only Wrangler
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify original frozen source integrity
+        run: npm run verify:source
+      - name: First purchase real Workerd D1 two-shop atomic integration
+        run: node --test tests/integration/m03-first-purchase-atomic-workerd.spec.mjs
+      - name: Preserve public preview without financial D1 binding
+        run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
