@@ -1370,9 +1370,16 @@ test('M01 original POS V2 discount and cash tender preview keeps due and change 
           posRenderCart_();
         });
         const paymentTab=page.locator('#page-pos [data-pos-v2-tab="payment"]');
-        await paymentTab.waitFor({state:'visible'});
-        await paymentTab.click();
-        assert.equal(await paymentTab.getAttribute('aria-selected'),'true');
+        // The original workflow tabs are phone-only. Tablet and desktop
+        // expose the checkout summary without a tab switch.
+        if(phone){
+          await paymentTab.waitFor({state:'visible'});
+          await paymentTab.click();
+          assert.equal(await paymentTab.getAttribute('aria-selected'),'true');
+        }else{
+          assert.equal(await paymentTab.isVisible(),false,
+            'source tablet/desktop layout intentionally hides phone workflow tabs');
+        }
         const discount=page.locator('#posDiscount');
         const received=page.locator('#posAmountReceived');
         await discount.waitFor({state:'visible'});
