@@ -16,6 +16,8 @@ import {pilotShopConfiguration,verifyPlatformShopBinding} from './auth/platform-
 import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js';
 
 import {listLocalProvisioning,readLocalProvisioning,resumeLocalProvisioning,startLocalProvisioning} from './auth/port-p4-local-provisioning.js';
+import {hostedShopServiceEnabled,hostedShopOperation,readHostedShopSetup,listHostedShopSetups}
+  from './auth/m03-hosted-shop-service-bridge.js';
 import {approvePlatformOwnerGmail} from './auth/platform-owner-gmail-approvals.js';
 import {handleLocalSupportHttpRequest} from './modules/m03-local-support-http-contract.js';
 import {hostedSupportRequest} from './auth/m03-hosted-support.js';
@@ -230,7 +232,10 @@ function signedIn(c){
     role:'PlatformSuperAdmin',
     ...(localProvisioningEnabled(c.env)
       ?{localProvisioningEnabled:true}:{}),
-    ...(localProvisioningEnabled(c.env)||hostedDirectoryEnabled(c.env)
+    ...(hostedShopServiceEnabled(c.env)
+      ?{hostedProvisioningEnabled:true}:{}),
+    ...(localProvisioningEnabled(c.env)||hostedDirectoryEnabled(c.env)||
+        hostedShopServiceEnabled(c.env)
       ?{shopDirectoryEnabled:true}:{}),
     ...(localSupportEnvironment(c.env)||c.env.PLATFORM_HOSTED_SUPPORT_READY==='true'
       ?{supportDiagnosticsEnabled:true}:{}),
@@ -288,6 +293,12 @@ app.post('/api/platform/shops',async(c,next)=>{
     return localProvisioningResponse(c,await startLocalProvisioning(
       c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),body,prebound));
   }
+  if(hostedShopServiceEnabled(c.env)){
+    const body=await expectedJson(c,['operationId','displayName','ownerEmail']);
+    if(!body)return c.json({error:'Enter a business name and Owner Gmail'},400);
+    return localProvisioningResponse(c,await hostedShopOperation(
+      c.env,getCookie(c,SESSION_COOKIE),'reserve',body));
+  }
   const body=await expectedJson(c,['operationId','displayName']);
   if(!body)return c.json({error:'Invalid business reservation'},400);
   const result=await reservePlatformShop(c.env.CONTROL_DB,{
@@ -308,26 +319,33 @@ function localProvisioningResponse(c,result){
 }
 
 async function localProvisioningGate(c,next){
-  if(!localProvisioningEnabled(c.env)){
+  if(!localProvisioningEnabled(c.env)&&!hostedShopServiceEnabled(c.env)){
     return c.notFound();
   }
   await next();
 }
 
 async function directoryGate(c,next){
-  if(!localProvisioningEnabled(c.env)&&!hostedDirectoryEnabled(c.env))return c.notFound();
+  if(!localProvisioningEnabled(c.env)&&!hostedDirectoryEnabled(c.env)&&
+     !hostedShopServiceEnabled(c.env))return c.notFound();
   await next();
 }
 
 app.get('/api/platform/shops/list',directoryGate,async c=>
-  localProvisioningResponse(c,await listLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE))));
+  localProvisioningResponse(c,hostedShopServiceEnabled(c.env)
+    ?await listHostedShopSetups(c.env,getCookie(c,SESSION_COOKIE))
+    :await listLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE))));
 app.get('/api/platform/shops/setup/:operationId',localProvisioningGate,async c=>
-  localProvisioningResponse(c,await readLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),
-    c.req.param('operationId'))));
+  localProvisioningResponse(c,hostedShopServiceEnabled(c.env)
+    ?await readHostedShopSetup(c.env,getCookie(c,SESSION_COOKIE),c.req.param('operationId'))
+    :await readLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),
+      c.req.param('operationId'))));
 app.post('/api/platform/shops/resume',localProvisioningGate,limitIngress,limitBody,async c=>{
   const body=await expectedJson(c,['operationId']);
   if(!body)return c.json({error:'Invalid setup request'},400);
-  return localProvisioningResponse(c,await resumeLocalProvisioning(c.env,getCookie(c,SESSION_COOKIE),body.operationId));
+  return localProvisioningResponse(c,hostedShopServiceEnabled(c.env)
+    ?await hostedShopOperation(c.env,getCookie(c,SESSION_COOKIE),'resume',body)
+    :await resumeLocalProvisioning(c.env,getCookie(c,SESSION_COOKIE),body.operationId));
 });
 
 app.post('/api/platform/shops/verify-binding',async(c,next)=>{
