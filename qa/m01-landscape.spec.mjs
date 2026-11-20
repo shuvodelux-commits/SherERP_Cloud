@@ -1142,3 +1142,162 @@ test('M01 original POS V2 pointer reorder keeps product quantity, unit, pricing 
     });
   }
 });
+
+test('M01 original POS V2 FIFO lot sum survives manual price override, Qty and reset',async t=>{
+  // #760: original source arithmetic and DOM controls; synthetic in-tab data only.
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-390x844',width:390,height:844,phone:true},
+    {name:'desktop-1280x800',width:1280,height:800,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:phone,hasTouch:phone
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const login=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await login).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        if(phone){
+          await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+        }else{
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' &&
+          document.body.classList.contains('pos-v2-active'));
+        if(phone){
+          await page.locator('#page-pos [data-pos-v2-tab="cart"]').tap();
+        }
+
+        // The public Worker does not bootstrap real POS data. Use exact
+        // deterministic source-shaped records in browser memory only.
+        await page.evaluate(()=>{
+          const product={
+            id:'M01-FIFO-PRICE',name:'M01 Synthetic FIFO Fastener',
+            productType:'Standard',unit:'Pcs',category:'Fasteners',
+            brand:'M01',sellingPrice:30,fallbackSellPrice:30,stock:100,
+            lotPricing:[
+              {qty:2,sellPrice:19.99},
+              {qty:3,sellPrice:24.99}
+            ]
+          };
+          posState.products=[product];
+          posState.productStockById={[product.id]:100};
+          smartIndexProducts_(posState.products);
+          posState.cart=[posCreateCartLine_(product)];
+          posState.cartEntryIndex=null;
+          posState.cartEditIndex=null;
+          posRenderCart_();
+          posV2EnhanceCartRows_();
+        });
+        const qty=page.locator('#posCartList input[data-f="qty"][data-i="0"]');
+        await qty.waitFor({state:'visible'});
+        await qty.fill('4');
+        const read=()=>page.evaluate(()=>{
+          const line=posState.cart[0];
+          return {
+            count:posState.cart.length,productId:line.productId,
+            qty:line.qty,unitPrice:line.unitPrice,
+            lineTotal:line.lineTotal,priceMode:line.priceMode,
+            subtotal:document.getElementById('posSubtotal').textContent,
+            total:document.getElementById('posGrandTotal').textContent,
+            visibleLine:document.querySelector('#posCartList .cart-row:not(.pos-cart-entry-row) .c-line-total')?.textContent,
+            resetControls:document.querySelectorAll('#posCartList .c-reset-lot-price').length
+          };
+        });
+        const auto=await read();
+        assert.deepEqual([auto.count,auto.productId,auto.qty,auto.unitPrice,auto.lineTotal,auto.priceMode],[
+          1,'M01-FIFO-PRICE',4,22.49,89.96,'auto'
+        ],'auto line sum is FIFO lot cents, not 4 × rounded average');
+        assert.match(auto.subtotal,/89\.96/);
+        assert.match(auto.total,/89\.96/);
+        assert.match(auto.visibleLine,/89\.96/);
+        assert.equal(auto.resetControls,0);
+        assert.equal(await page.evaluate(()=>
+          document.activeElement?.matches('#posCartList input[data-f="qty"][data-i="0"]')),true,
+          'Qty input retains focus while auto FIFO total changes');
+
+        const price=page.locator('#posCartList input[data-f="price"][data-i="0"]');
+        await price.fill('22.50');
+        const manual=await read();
+        assert.deepEqual([manual.qty,manual.unitPrice,manual.lineTotal,manual.priceMode],[
+          4,22.5,90,'manual'
+        ]);
+        assert.equal(Number(manual.total.replace(/[^\d.-]/g,'')),90,
+          'manual grand total must equal 90 regardless of optional trailing decimal zeros');
+        assert.equal(Number(manual.visibleLine.replace(/[^\d.-]/g,'')),90,
+          'manual line rendering retains amount without forcing decimal padding');
+        await price.press('Tab'); // source change handler re-renders Reset control
+        const reset=page.locator('#posCartList .c-reset-lot-price[data-i="0"]');
+        await reset.waitFor({state:'visible'});
+        assert.equal(await reset.count(),1);
+        assert.equal((await read()).resetControls,1);
+        assert.equal(await page.locator('#posCartList input[data-f="price"][data-i="0"]').inputValue(),'22.5');
+
+        const manualQty=page.locator('#posCartList input[data-f="qty"][data-i="0"]');
+        await manualQty.fill('5');
+        const updated=await read();
+        assert.deepEqual([updated.qty,updated.unitPrice,updated.lineTotal,updated.priceMode],[
+          5,22.5,112.5,'manual'
+        ]);
+        assert.equal(Number(updated.subtotal.replace(/[^\d.-]/g,'')),112.5);
+        assert.equal(Number(updated.total.replace(/[^\d.-]/g,'')),112.5);
+        assert.equal(updated.resetControls,1);
+        const manualShot=await captureM01NavEvidence(page,'posv2-manual-unit-price-'+name);
+        assert.ok(manualShot.screenshotBytes>1500);
+
+        await reset.click();
+        const restored=await read();
+        assert.deepEqual([restored.qty,restored.unitPrice,restored.lineTotal,restored.priceMode],[
+          5,22.99,114.95,'auto'
+        ],'reset restores 2×19.99 + 3×24.99 with no cent loss');
+        assert.match(restored.subtotal,/114\.95/);
+        assert.match(restored.total,/114\.95/);
+        assert.equal(restored.resetControls,0,'reset button removed after auto mode');
+        assert.equal(await page.locator('#posCartCount').innerText(),'1');
+        await page.evaluate(()=>{
+          posRenderCart_();
+          posV2EnhanceCartRows_();
+        });
+        assert.deepEqual(await read(),restored,
+          'original rerender cannot silently change unit price or grand total');
+
+        await page.locator('#posCartList input[data-f="qty"][data-i="0"]').fill('6');
+        const fallback=await read();
+        assert.deepEqual([fallback.qty,fallback.lineTotal,fallback.priceMode],[
+          6,144.95,'auto'
+        ],'sixth item must use the explicit ৳30 fallback, without altering previous lots');
+        assert.match(fallback.subtotal,/144\.95/);
+        const restoredShot=await captureM01NavEvidence(page,'posv2-fifo-lot-restored-'+name);
+        assert.ok(restoredShot.screenshotBytes>1500);
+        assert.equal(calls.filter(x=>x.fnName==='login').length,1);
+        assert.equal(calls.some(x=>
+          /^(?:saveSalesDraft|deleteSalesDraft|saveSale|createSale|completeSale|postSale|submitSale|saveSalePayment|postLedger|createPayment|postCash)$/i
+            .test(x.fnName||'')),false,
+          'display-only price test must never post finance or stock');
+      }finally{
+        await page.close();
+      }
+    });
+  }
+});
