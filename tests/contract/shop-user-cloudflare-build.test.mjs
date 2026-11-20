@@ -110,3 +110,55 @@ test('never follows a preexisting symlink nor overwrites arbitrary file',async()
     assert.equal(await readFile(target,'utf8'),'preserve');
   }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+const approvedReadiness=()=>({
+ status:'BLOCKED',productionReady:false,authConfigured:true,
+ shopIdentityVerified:true,baseline13Verified:true,
+ coreReadConfigured:false,coreWriteConfigured:false,supplierCashConfigured:false,
+ blockers:[
+  'OWNER_CATALOG_ENABLED_DISABLED','OWNER_CLEAN_PRODUCTS_ENABLED_DISABLED',
+  'OWNER_WRITE_GRANTS_ENABLED_DISABLED','OWNER_MVP_PURCHASE_ENABLED_DISABLED',
+  'OWNER_MVP_POS_CASH_ENABLED_DISABLED','OWNER_MVP_CASH_RETURN_ENABLED_DISABLED',
+  'SUPPLIER_CASH_MIGRATION_0010_MISSING',
+  'SUPPLIER_CASH_RECONCILIATION_0011_MISSING',
+  'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED_DISABLED'
+ ]
+});
+const coreApprovedEnv=()=>({
+ ...buildEnv(),
+ WORKERS_CI_COMMIT_SHA:'a'.repeat(40),
+ SHERERP_FIRST_SHOP_CORE_RELEASE:'FIRST_SHOP_CORE_MVP_TEST_ONLY',
+ SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:'a'.repeat(40),
+ SHERERP_FIRST_SHOP_CORE_READINESS_JSON:JSON.stringify(approvedReadiness())
+});
+test('RED: only the exact pinned production SHA and D1 evidence activate first-Shop core',()=>{
+ const config=buildShopUserDeployment(coreApprovedEnv());
+ for(const flag of ['OWNER_CATALOG_ENABLED','OWNER_CLEAN_PRODUCTS_ENABLED',
+   'OWNER_WRITE_GRANTS_ENABLED','OWNER_MVP_PURCHASE_ENABLED',
+   'OWNER_MVP_POS_CASH_ENABLED'])assert.equal(config.vars[flag],'true');
+ for(const flag of ['OWNER_MVP_CASH_RETURN_ENABLED',
+   'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED','OWNER_SUPPORT_AUDIT_ENABLED',
+   'OWNER_REDEMPTION_ENABLED'])assert.equal(config.vars[flag],'false');
+ assert.equal(config.workers_dev,true);
+ assert.equal(config.preview_urls,false);
+ assert.deepEqual(config.d1_databases.map(b=>b.binding),
+   ['CONTROL_DB','PLATFORM_PILOT_DB']);
+});
+test('RED: future main builds and unverifiable first-Shop release fail instead of silently reverting',()=>{
+ const env=coreApprovedEnv();
+ for(const patch of [
+   {WORKERS_CI_COMMIT_SHA:'b'.repeat(40)},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:'b'.repeat(40)},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:'invalid'},
+   {SHERERP_FIRST_SHOP_CORE_READINESS_JSON:'{}'},
+   {SHERERP_FIRST_SHOP_CORE_READINESS_JSON:'not json'},
+   {SHERERP_FIRST_SHOP_CORE_READINESS_JSON:JSON.stringify({
+      ...approvedReadiness(),shopIdentityVerified:false
+   })},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE:'UNKNOWN'},
+   {WORKERS_CI_BRANCH:'feature/personal'}
+ ])assert.throws(()=>buildShopUserDeployment({...env,...patch}),/Shop-user deployment/);
+ assert.throws(()=>buildShopUserDeployment({
+   ...buildEnv(),SHERERP_FIRST_SHOP_CORE_RELEASE:'FIRST_SHOP_CORE_MVP_TEST_ONLY'
+ }),/Shop-user deployment/);
+});

@@ -137,3 +137,92 @@ private D1 bindings to branch previews. If the authorized release fails, stop
 new Owner login attempts and use the Cloudflare Worker deployment history
 for a reviewed rollback to the previous known version. A Worker rollback is not
 a database restore and cannot undo D1 writes. Do not delete or recreate D1.
+
+## First hosted Shop — reviewed core-only acceptance release (21 November 2026)
+
+**Use existing Workers Builds as the sole deployment owner.** Do not create
+a second deploy job or use a manual Wrangler promotion while the one-Shop
+Builds integration is active. The default login-only generated profile
+remains unchanged.
+
+The private, nondeploying candidate command is:
+
+```sh
+# Run only in the reviewed main worktree, with the live Worker version
+# already read by wrangler versions view and D1 inspected read-only.
+export SHERERP_ACCOUNT_ID="<same account selected in Wrangler>"
+export SHERERP_FIRST_SHOP_CORE_APPROVAL=FIRST_SHOP_CORE_MVP_TEST_ONLY
+node scripts/m03-first-shop-core-activation.mjs --prepare-from-version \
+  <private-worker-version.json> <read-only-live-readiness.json>
+npx wrangler versions upload --dry-run --strict --keep-vars \
+  --config .wrangler/first-shop-activation/owner.core-only.candidate.jsonc
+```
+
+This outputs a mode-0600 private config and performs no remote write or
+Worker upload/deploy. The candidate must preserve precisely the current
+Control D1, first Shop D1, Owner Google origin, rate limiter, authenticated
+Owner routes, assets and first-Shop immutable identity. It refuses changed
+Shop/database identifiers, new or missing bindings, unsafe preview flags,
+unknown feature flags, unverified baseline receipts and extra migration
+requirements.
+
+**Single-owner live release (separate operator approval, after CI):**
+
+1. Confirm the current `shererp` deployment and database D1 bindings
+   still match the read-only evidence. Backup **both** live D1 databases,
+   restore both exports into isolated SQLite and require
+   `PRAGMA integrity_check=ok`. Confirm existing Owner access and an
+   exact 13-step Shop migration receipt/snapshot. No live 0010/0011 SQL
+   is required for this restricted core mode.
+2. Merge the reviewed release PR with green tests. Before the next
+   production build, add these three **production Builds-only** variables
+   in Cloudflare Workers → `shererp` → Settings → Builds:
+   - `SHERERP_FIRST_SHOP_CORE_RELEASE` =
+     `FIRST_SHOP_CORE_MVP_TEST_ONLY`.
+   - `SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT` = the exact full
+     40-character GitHub **main SHA** approved for this release.
+   - `SHERERP_FIRST_SHOP_CORE_READINESS_JSON` = the exact, identity-
+     verified read-only report from
+     `scripts/m03-live-owner-readiness.mjs`. This report intentionally
+     has exactly nine expected `BLOCKED` reasons (six core flags, two
+     missing Supplier migration phases, Supplier Pay disabled).
+   The report must not contain credentials, personal data or raw D1 IDs.
+   These are **Build-time settings**, not Worker runtime secrets.
+3. Trigger an approved **production** Cloudflare Build for that exact
+   SHA. The existing build/deploy command remains the only publisher.
+   Any other commit SHA, unknown Shop, invalid report or explicit release
+   mode mismatch fails the build instead of silently deploying the old
+   login-only profile over a financial pilot.
+4. Independently read the **active** Worker version and verify Products,
+   write grants, Purchase and POS Cash are `true`, but Cash Returns,
+   Supplier Cash Pay, public RPC, support audit and Redemption stay OFF.
+   Verify both D1 bindings and the Owner origin are unchanged.
+5. The Owner must **sign out and sign in again** with their approved
+   Gmail. New authenticated login publishes a fresh SQL-time, generation-
+   fenced Shop D1 write grant; the historical disabled grant cannot
+   authorize a save and must not be manually rewritten.
+6. In the original Owner ERP perform a small, recognizable test:
+   Create standard Product (zero opening stock), Create Supplier,
+   Start Cash Session, Credit Purchase, one cash POS sale, then re-open
+   Product stock, Supplier Purchase ledger, Invoice and Cash Book.
+   Verify exact FIFO/cash/stock amounts and reload persistence. Test
+   changed payment/return and negative paths. Do **not** test Cash Return
+   or Supplier Cash Pay on this core profile — they remain OFF until the
+   separately verified 0010+0011 schema extension is deployed.
+7. Preserve before/after D1 exports, active Worker version and CI SHA.
+   On a validation failure roll the Worker **back** to the captured
+   login-only version using Cloudflare's version rollback controls,
+   remove the approval Build variables and retain financial data for
+   reconciliation; do not delete immutable Shop identity, D1 receipt,
+   grant generation or posted transactions.
+
+Only a **single existing Shop D1** is in scope; this is an operator
+acceptance test, **not** general production MVP, multi-Shop readiness or
+approval to enable existing original Customer Due, full Finance, Bank,
+Tiles, serial/bundle/multi-unit variants or general RPC. The private
+Option A publisher, multi-Shop Owner resolver release, M10/M11 full
+recovery and independent accounting/security acceptance remain separate.
+
+Cloudflare documents `WORKERS_CI_COMMIT_SHA` as the current build SHA;
+the release script relies on that protected commit pin and refuses an
+unreviewed later `main` build.

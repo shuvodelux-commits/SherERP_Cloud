@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {buildFirstShopCoreCandidate} from '../../scripts/m03-first-shop-core-activation.mjs';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {buildFirstShopCoreCandidate,prepareFirstShopCoreCandidate} from '../../scripts/m03-first-shop-core-activation.mjs';
+import {buildLoginOnlyProfileFromLiveVersion} from '../../scripts/m03-first-shop-live-base.mjs';
 
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const current=()=>({
  name:'shererp',main:'src/m03-owner-redemption-worker.js',
  workers_dev:true,preview_urls:false,
  assets:{directory:'dist-owner',binding:'ASSETS',run_worker_first:true},
- ratelimits:[{name:'OWNER_INGRESS',namespace_id:'654322',simple:{limit:100,period:60}}],
+ ratelimits:[{name:'OWNER_INGRESS',namespace_id:'654322',simple:{limit:20,period:60}}],
  d1_databases:[
   {binding:'CONTROL_DB',database_id:uuid(1),database_name:'control-test'},
   {binding:'PLATFORM_PILOT_DB',database_id:uuid(2),database_name:'shop-test'}
@@ -84,4 +88,43 @@ test('RED: no generic multi-shop, swapped binding, public preview, or writable r
   assert.throws(()=>buildFirstShopCoreCandidate(b,evidence(),approval));
  }
  assert.throws(()=>buildFirstShopCoreCandidate(current(),evidence(),'wrong'));
+});
+
+test('RED: derive same private one-Shop profile from actual Wrangler version bindings',()=>{
+ const base=current();
+ const bindings=[
+  {name:'ASSETS',type:'assets'},
+  ...base.d1_databases.map(db=>({name:db.binding,type:'d1',database_id:db.database_id})),
+  ...base.ratelimits.map(x=>({...x,type:'ratelimit'})),
+  ...Object.entries(base.vars).map(([name,text])=>({name,type:'plain_text',text}))
+ ];
+ const profile=buildLoginOnlyProfileFromLiveVersion(
+  {resources:{bindings}},'0123456789abcdef0123456789abcdef');
+ const core=buildFirstShopCoreCandidate(profile,evidence(),approval);
+ assert.equal(core.vars.OWNER_MVP_POS_CASH_ENABLED,'true');
+ assert.equal(core.vars.OWNER_MVP_CASH_RETURN_ENABLED,'false');
+ assert.equal(profile.d1_databases[1].database_id,base.d1_databases[1].database_id);
+ assert.equal(profile.vars.PLATFORM_PILOT_MARKER,base.vars.PLATFORM_PILOT_MARKER);
+ assert.equal(profile.preview_urls,false);
+ for(const corrupt of [
+  bindings.filter(b=>b.name!=='OWNER_INGRESS'),
+  bindings.map(b=>b.name==='PLATFORM_PILOT_DB'?{...b,database_id:uuid(9)}:b),
+  [...bindings,{name:'UNREVIEWED_SHOP',type:'d1',database_id:uuid(10)}],
+  bindings.map(b=>b.name==='OWNER_MVP_POS_CASH_ENABLED'?{...b,text:'true'}:b)
+ ]){
+  assert.throws(()=>buildLoginOnlyProfileFromLiveVersion(
+   {resources:{bindings:corrupt}},'0123456789abcdef0123456789abcdef'));
+ }
+});
+
+test('RED: private config nested under .wrangler uses correct Worker and asset paths',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'m03-core-candidate-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ const path=await prepareFirstShopCoreCandidate(current(),evidence(),approval,root);
+ const config=JSON.parse(await readFile(path,'utf8'));
+ assert.equal(config.main,'../../src/m03-owner-redemption-worker.js');
+ assert.equal(config.assets.directory,'../../dist-owner');
+ assert.deepEqual(config.d1_databases.map(x=>x.binding),['CONTROL_DB','PLATFORM_PILOT_DB']);
+ await assert.rejects(prepareFirstShopCoreCandidate(current(),evidence(),approval,root),
+   /EEXIST/,'immutable candidate cannot be silently replaced');
 });
