@@ -126,7 +126,10 @@ test('empty history is distinct from unavailable, malformed and expired Owner se
     const {page,counts}=await ownerPage({enabled:true,status,response});
     try{
       await page.locator('#owner-support-refresh').click();
-      await page.getByText(phrase).waitFor();
+      await page.waitForFunction(pattern=>new RegExp(pattern).test(
+        document.getElementById('owner-support-status')?.textContent||''
+      ),phrase.source);
+      assert.match(await page.locator('#owner-support-status').textContent(),phrase);
       assert.equal(await page.locator('#owner-support-events li').count(),0);
       assert.equal(counts().auditCount,1);
     }finally{await page.close();}
