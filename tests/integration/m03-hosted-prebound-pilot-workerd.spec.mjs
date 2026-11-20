@@ -7,6 +7,8 @@ import {createTestHarness,unstable_splitSqlQuery} from 'wrangler';
 import {generateHostedPilotMigrations,composeHostedShopMigrations,
   HOSTED_CONTROL_MIGRATIONS} from '../../scripts/m03-hosted-pilot-migrations.mjs';
 import {verifiedPreboundPilot} from '../../src/auth/m03-hosted-prebound-pilot.js';
+import {readPortP2ShopCheckpoint} from '../../src/db/port-p2-shop-schema.js';
+import {matchesApprovedSupplierCashSchemaOverlay} from '../../src/db/m03-approved-supplier-overlay.js';
 import {beginFirstOwnerGmailLogin} from '../../src/auth/platform-owner-gmail-login.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
@@ -86,6 +88,14 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
   await shopDb.batch(unstable_splitSqlQuery(m11).map(sql=>shopDb.prepare(sql)));
   assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
     'Only the exact reviewed 0010+0011 extension should preserve existing Shop readiness');
+  const {receipts:sealedReceipts,schema:sealedSchema}=await readPortP2ShopCheckpoint(shopDb);
+  const alteredSql=JSON.parse(sealedSchema);
+  const paymentLedger=alteredSql.find(row=>row[1]==='owner_mvp_supplier_payment_ledger');
+  assert.match(paymentLedger[3],/'Supplier Payment'/);
+  paymentLedger[3]=paymentLedger[3].replaceAll("'Supplier Payment'","'Supplier  Payment'");
+  assert.equal(await matchesApprovedSupplierCashSchemaOverlay(
+    sealedReceipts.at(-1).schema,JSON.stringify(alteredSql)),false,
+    'changing SQL literal whitespace changes the payment kind and must invalidate its seal');
   await shopDb.prepare('CREATE TABLE m03_unreviewed_table (id TEXT)').run();
   assert.equal(await verifiedPreboundPilot({...env,...conf.vars}),null,
     'extra SQL schema invalidates the approved extension');

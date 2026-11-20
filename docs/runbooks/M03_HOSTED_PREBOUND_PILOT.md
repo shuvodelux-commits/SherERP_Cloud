@@ -156,8 +156,9 @@ The isolated M03 schema-seal change permits the **existing first-Shop
 prebound pilot only** to recognize exactly 14 added SQL objects and the
 reviewed replacement of `owner_mvp_cash_close_guard`. It compares the
 Shop's own original receipt snapshot with its current D1 `sqlite_schema`
-and pins every changed object's type, owning table and normalized SQL
-SHA-256. It rejects 0010 alone, unknown tables/triggers, a forged Cash
+and pins every changed object's type, owning table and exact stored SQL
+SHA-256. Whitespace inside SQL string literals is significant and remains
+part of the digest. It rejects 0010 alone, unknown tables/triggers, a forged Cash
 Close trigger, wrong immutable Shop identity and stale baseline receipts.
 The original 13 receipts are never edited, and the generic Option A
 multi-Shop schema revision is not broadened.

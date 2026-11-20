@@ -9,21 +9,21 @@
  * not authorize a Worker deployment or financial feature toggle.
  */
 const approvedSqlObjects=Object.freeze({
-  owner_mvp_cash_close_guard:['trigger','owner_mvp_cash_sessions','23374efada145243917cc01fc3482b875f7858d8c11029b320b6054c29dc4e9d'],
-  owner_mvp_cash_return_drawer_guard:['trigger','owner_mvp_sale_return_receipts','68b6ecf7e87cfa1f1c83d15f1fa0683d7e8233db8f8ff34f67923673f83a10c1'],
-  owner_mvp_supplier_cash_book_no_delete:['trigger','owner_mvp_supplier_payment_cash_book','7751ec9c5585ac039cd30cdf1baaa096d01f5cbf95efa58f4c2bf8b09ecf95b5'],
-  owner_mvp_supplier_cash_book_no_update:['trigger','owner_mvp_supplier_payment_cash_book','2e52072cee0f4ecdf70f642db5dbf184b06d86482979f4092cd69438e0223e49'],
-  owner_mvp_supplier_cash_ledger_no_delete:['trigger','owner_mvp_supplier_payment_ledger','fe752bcb503b50dabacefe4c11ab4008d3decd9c4bf315109224caa14a4e5fe4'],
-  owner_mvp_supplier_cash_ledger_no_update:['trigger','owner_mvp_supplier_payment_ledger','5dae74bba8e5bd98726edb2f80c0c7530359eb0a96b548010b30938db6fa737c'],
-  owner_mvp_supplier_cash_payment_receipts:['table','owner_mvp_supplier_cash_payment_receipts','e6a403486df546644689aee405d6fd2fce672c8282e70d879c64a44ea3e3fd2f'],
-  owner_mvp_supplier_cash_payment_supplier_idx:['index','owner_mvp_supplier_cash_payment_receipts','149d8660fba0f87931537bd8ee7c7b01e3f92553aca6a2621b1a7162a74a49ed'],
-  owner_mvp_supplier_cash_post:['trigger','owner_mvp_supplier_cash_payment_receipts','694d2f68f2c2f3175c042891e7816202c7161bf7f98a5b2d779dcf20e72444b4'],
-  owner_mvp_supplier_cash_receipt_no_delete:['trigger','owner_mvp_supplier_cash_payment_receipts','161b5ccfa970c503c387c4b9b481fd00241ceae602519a4ce096dcfcb9dfaaaf'],
-  owner_mvp_supplier_cash_receipt_no_update:['trigger','owner_mvp_supplier_cash_payment_receipts','c61ad0153810e29ab9095d1870b6a90f30c861ae2cf438e47ab10fec7d6d062f'],
-  owner_mvp_supplier_cash_validate:['trigger','owner_mvp_supplier_cash_payment_receipts','bc8908ede79fd1199179480ed1913cd9957ecd5cd7617f64c7552afdb1e66cac'],
-  owner_mvp_supplier_payment_cash_book:['table','owner_mvp_supplier_payment_cash_book','14df23e44bf565bad237000a76eae78ba70c6cbe40b0e152919a2af739f9972a'],
-  owner_mvp_supplier_payment_cash_session_idx:['index','owner_mvp_supplier_payment_cash_book','a704785d4f59842ea02276dfd89b8e56760e5020d476328949e72ed5fd4dff0c'],
-  owner_mvp_supplier_payment_ledger:['table','owner_mvp_supplier_payment_ledger','177559d7b84e8c30639684f6d83cdbd218626fac9fa47b2010e15f132e01073b']
+  owner_mvp_cash_close_guard:['trigger','owner_mvp_cash_sessions','0f857bf47f7828709db4a31150fd3a74ca476764e85d088e136385d2f692456b'],
+  owner_mvp_cash_return_drawer_guard:['trigger','owner_mvp_sale_return_receipts','f410b2b5afbf30bbe6df1346b96ae8d0f72ca2bb10da235e697086875b7194a6'],
+  owner_mvp_supplier_cash_book_no_delete:['trigger','owner_mvp_supplier_payment_cash_book','5f66cfb1be24d7e1b50bf6d0b48e9e68d486ae71399bf22ec32eff11f9c1428d'],
+  owner_mvp_supplier_cash_book_no_update:['trigger','owner_mvp_supplier_payment_cash_book','90d3869af4351ce530568e0b6314403e23e0ba3b85c7034b2ab289d4b255bf96'],
+  owner_mvp_supplier_cash_ledger_no_delete:['trigger','owner_mvp_supplier_payment_ledger','2b622d6ae0f50f4342787f29d24579c0e163fdb92bf5209153ddd4bdd45b0a7d'],
+  owner_mvp_supplier_cash_ledger_no_update:['trigger','owner_mvp_supplier_payment_ledger','9dea5d5ae0b0ab3eefc09d37b087d522e46f4a70bcfe3f4d38c37b3c2bbe4133'],
+  owner_mvp_supplier_cash_payment_receipts:['table','owner_mvp_supplier_cash_payment_receipts','5f21ee19b51c74482222e506ec529eb4570c7811ac8b064e53608bfbcc1bc1dd'],
+  owner_mvp_supplier_cash_payment_supplier_idx:['index','owner_mvp_supplier_cash_payment_receipts','8cd3e5ee5a80a9ad2ac5dc95d19eb3527b310692108f01b1ff12ed8059981382'],
+  owner_mvp_supplier_cash_post:['trigger','owner_mvp_supplier_cash_payment_receipts','4944af13d301ee7085358612bff125f8d3c8d0d4ab1652e7b241107c4c94d686'],
+  owner_mvp_supplier_cash_receipt_no_delete:['trigger','owner_mvp_supplier_cash_payment_receipts','21fb1e71961f0f3172dd12b6c642050b679cf1f75992633de4ad9ee1b4f13287'],
+  owner_mvp_supplier_cash_receipt_no_update:['trigger','owner_mvp_supplier_cash_payment_receipts','b8b4f3acc792149d4908fa14b19eb9d9b764f4dfac3622d01de4fac134c4e1b1'],
+  owner_mvp_supplier_cash_validate:['trigger','owner_mvp_supplier_cash_payment_receipts','97be4fc51c8daf8bcf49256acbab0a3056a4e4615cf05f54128e554d49a00d28'],
+  owner_mvp_supplier_payment_cash_book:['table','owner_mvp_supplier_payment_cash_book','4586b77e6b91235a101c60d5fccd10966297cc8406f4ec165f65a8df195e7823'],
+  owner_mvp_supplier_payment_cash_session_idx:['index','owner_mvp_supplier_payment_cash_book','73e1327b80f42fc73f6368fc2f8b28197319eef8f230d05ac591b0e2da0fec9d'],
+  owner_mvp_supplier_payment_ledger:['table','owner_mvp_supplier_payment_ledger','3b0c6529345b5b20f4c78f42ab2b1b3e755b4484f1823ee2e2cd2d490606bc80']
 });
 const modifiedBaseObject='owner_mvp_cash_close_guard';
 const isObjectRow=row=>Array.isArray(row)&&row.length===4 &&
@@ -41,8 +41,9 @@ const toMap=rows=>{
   return out;
 };
 async function sha256Sql(sql){
-  const normalized=sql.trim().replace(/\s+/g,' ');
-  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(normalized));
+  // Hash the exact SQLite-stored SQL, not whitespace-collapsed text: SQL
+  // literals such as 'Supplier Payment' can change meaning with spaces.
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(sql.trim()));
   return Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
 }
 
