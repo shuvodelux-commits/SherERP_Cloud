@@ -218,13 +218,114 @@ export function patchOwnerApp(html){
     });
   }
 
+  var ownerPurchasePendingSave = null;
+  var ownerPurchaseSaveInProgress = false;
+  var ownerCashPendingAction = null;
+
+  function ownerPurchasePost_(path,body,uncertain) {
+    return fetch(path,{method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json'},body:body
+    }).catch(function () { throw new Error(uncertain); }).then(async function (response) {
+      var payload = await response.json().catch(function () { throw new Error(uncertain); });
+      if (response.status >= 500) throw new Error(uncertain);
+      if (!response.ok || payload.success !== true) {
+        throw new Error(payload.message || 'Business transaction unavailable.');
+      }
+      return payload.data;
+    });
+  }
+
+  function saveOwnerCreditPurchase_(payload) {
+    if (ownerPurchaseSaveInProgress) return Promise.reject(new Error('Purchase is already saving.'));
+    var fingerprint = JSON.stringify(payload);
+    if (ownerPurchasePendingSave?.fingerprint !== fingerprint) {
+      ownerPurchasePendingSave={fingerprint:fingerprint,body:JSON.stringify({
+        operationId:crypto.randomUUID(),payload:payload
+      })};
+    }
+    ownerPurchaseSaveInProgress=true;
+    var btn=document.getElementById('purSubmitBtn');
+    if (btn) btn.disabled=true;
+    return ownerPurchasePost_('/api/owner/purchases',ownerPurchasePendingSave.body,
+      'Could not confirm the purchase. Retry Complete Purchase to check the same operation.')
+      .then(function (result) {
+        if (!result || typeof result.purchaseId !== 'string')
+          throw new Error('Could not confirm purchase. Retry Complete Purchase.');
+        ownerPurchasePendingSave=null;
+        return result;
+      }).finally(function () {
+        ownerPurchaseSaveInProgress=false;
+        if(btn)btn.disabled=false;
+      });
+  }
+
+  function ownerCashAction_(type,amount,notes) {
+    var path=type==='startCashSession'?'/api/owner/cash-session/start':'/api/owner/cash-session/close';
+    var intent={operationId:crypto.randomUUID(),notes:notes||''};
+    if(type==='startCashSession')intent.openingCash=amount;
+    else intent.countedCash=amount;
+    var fingerprint=type+JSON.stringify({amount,notes});
+    if(ownerCashPendingAction?.fingerprint!==fingerprint)
+      ownerCashPendingAction={fingerprint:fingerprint,body:JSON.stringify(intent)};
+    return ownerPurchasePost_(path,ownerCashPendingAction.body,
+      'Could not confirm Cash Session. Retry the same action.')
+      .then(function (result) {ownerCashPendingAction=null;return result;});
+  }
+
+  function ownerPurchaseDayBar_(session) {
+    var page=document.getElementById('page-purchase');
+    if(!page)return;
+    var bar=document.getElementById('owner-purchase-day-bar');
+    if(!bar) {
+      bar=document.createElement('div');
+      bar.id='owner-purchase-day-bar';
+      bar.setAttribute('role','status');
+      bar.style.cssText='padding:10px 12px;margin:8px 0 12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+      var label=document.createElement('span');
+      label.id='owner-purchase-day-state';
+      var start=document.createElement('button');
+      start.type='button';
+      start.className='btn btn-primary';
+      start.id='owner-purchase-start-day';
+      start.textContent='Start Day (0 opening cash)';
+      start.addEventListener('click',function(){
+        start.disabled=true;
+        ownerCashAction_('startCashSession','0','MVP credit purchases')
+          .then(function(r){ownerPurchaseDayBar_({sessionId:r.sessionId,status:'Open'});})
+          .catch(function(e){showToast(e.message,'error');})
+          .finally(function(){start.disabled=false;});
+      });
+      bar.append(label,start);
+      page.prepend(bar);
+    }
+    var active=session?.status==='Open';
+    document.getElementById('owner-purchase-day-state').textContent=active
+      ?'Day Open · Unpaid purchases in one stock unit only.'
+      :'Start Day before purchasing. Unpaid purchases only; payments, returns and Tiles are not connected.';
+    document.getElementById('owner-purchase-start-day').hidden=active;
+    document.getElementById('owner-data-notice').textContent=
+      'Products, Suppliers and credit Purchase can use Shop D1. POS payments, returns and full ledgers are not connected.';
+  }
+
   function serverCall(fnName) {
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
     if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
+    if (fnName === 'createPurchase') return saveOwnerCreditPurchase_(arguments[2]);
+    if (fnName === 'startCashSession'||fnName === 'closeCashSession')
+      return ownerCashAction_(fnName,arguments[2],arguments[3]);
     var path, method = 'GET';
     if (fnName === 'getAppShellData') path = '/api/owner/app-shell';
     else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
     else if (fnName === 'getSuppliersBootstrap') path = '/api/owner/suppliers';
+    else if (fnName === 'getPurchaseBootstrap') path = '/api/owner/purchase/bootstrap';
+    else if (fnName === 'getPurchaseManagementList') path = '/api/owner/purchases';
+    else if (fnName === 'getCashSessionSummary') path = '/api/owner/cash-session';
+    else if (fnName === 'getPurchaseDetail') {
+      var purchaseId=arguments[2];
+      if(typeof purchaseId !== 'string'||!/^PUR-[0-9]{6,}$/.test(purchaseId))
+        return Promise.reject(new Error('Invalid Purchase ID.'));
+      path='/api/owner/purchases/'+purchaseId;
+    }
     else if (fnName === 'logout') { path = '/api/owner/auth/logout'; method = 'POST'; }
     else return Promise.reject(new Error('Shop business data is not connected yet.'));
     return fetch(path, {method:method,credentials:'same-origin',cache:'no-store'})
@@ -232,7 +333,8 @@ export function patchOwnerApp(html){
         return response.json().catch(function () { throw new Error('Owner request failed.'); })
           .then(function (result) {
             if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
-              fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' : 'Owner session is unavailable.');
+              fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' :
+              fnName.startsWith('getPurchase') ? 'Purchase data is unavailable.' : 'Owner session is unavailable.');
             if (fnName === 'getProductsBootstrap') {
               var operational = result.mode === 'operational';
               var products = result.data.map(function (row) {
@@ -245,6 +347,9 @@ export function patchOwnerApp(html){
               return {products:products,units:[],categories:Array.from(new Set(products.map(function (row) {
                 return row.Category;
               }).filter(Boolean))).map(function (name) { return {name:name}; })};
+            }
+            if (fnName === 'getPurchaseBootstrap' && result?.success===true) {
+              ownerPurchaseDayBar_(result.data.cashSession);
             }
             return result && result.data !== undefined ? result.data : result;
           });
