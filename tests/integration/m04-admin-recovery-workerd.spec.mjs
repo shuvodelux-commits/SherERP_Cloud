@@ -107,6 +107,35 @@ test('only a current MFA-verified Admin can generate and rotate 8 high-entropy b
   assert.equal(current.length,8,'code regeneration atomically replaces earlier codes');
 });
 
+
+test('a factor rotation during code regeneration preserves existing recovery codes',async t=>{
+  const f=await fixture(t);
+  const issued=await issueAdminRecoveryCodes(f.env,f.session,totp());
+  assert.equal(issued.length,8);
+  const before=(await f.db.prepare(
+    'SELECT code_hash FROM platform_admin_recovery_codes ORDER BY code_hash').all()).results;
+
+  let batches=0;
+  const raced={...f.env,CONTROL_DB:{
+    prepare:(...args)=>f.db.prepare(...args),
+    batch:async statements=>{
+      batches++;
+      // Reproduce an MFA change after session/factor reads, but before the
+      // SQL transaction; the old trusted session must no longer mutate codes.
+      await f.db.prepare('UPDATE platform_admin_auth SET factor_version=2 WHERE singleton=1').run();
+      return f.db.batch(statements);
+    }
+  }};
+  assert.equal(await issueAdminRecoveryCodes(raced,f.session,totp()),null);
+  assert.equal(batches,1);
+  assert.deepEqual((await f.db.prepare(
+    'SELECT code_hash FROM platform_admin_recovery_codes ORDER BY code_hash').all()).results,
+    before,'failed authorization must not delete or replace saved backup codes');
+  assert.equal((await f.db.prepare(
+    'SELECT factor_version FROM platform_admin_recovery_generation WHERE singleton=1').first())
+    .factor_version,1,'rejected regeneration must not silently rebind the generation');
+});
+
 test('lost-phone recovery requires matching Google nonce and one unused backup code',async t=>{
   googleMock(t);
   const f=await fixture(t),codes=await issueAdminRecoveryCodes(f.env,f.session,totp());
