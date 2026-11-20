@@ -7,26 +7,8 @@ import {
   validatePortableInstance,buildPortableProfiles,writePortableInstanceConfigs
 } from '../../scripts/port-p1-instance.mjs';
 
-const sample=()=>({
-  formatVersion:1,
-  accountId:'0123456789abcdef0123456789abcdef',
-  workersSubdomain:'fresh-shop-account',
-  workers:{admin:'admin-shererp',owner:'owner-shererp'},
-  origins:{
-    admin:'https://admin-shererp.fresh-shop-account.workers.dev',
-    owner:'https://owner-shererp.fresh-shop-account.workers.dev'
-  },
-  googleClientId:'123-fixture.apps.googleusercontent.com',
-  d1:{
-    control:{name:'control-new',id:'11111111-1111-4111-8111-111111111111'},
-    pilot:{
-      name:'shop-new',id:'22222222-2222-4222-8222-222222222222',
-      shopId:'33333333-3333-4333-8333-333333333333',
-      marker:'44444444-4444-4444-8444-444444444444'
-    }
-  },
-  rateLimits:{adminNamespaceId:'654321',ownerNamespaceId:'654322'}
-});
+import instanceFixture from '../fixtures/portable-instance.json' with {type:'json'};
+const sample=()=>structuredClone(instanceFixture);
 
 test('rejects unknown keys, malformed or placeholder identity and unapproved origins',()=>{
   const good=sample();
@@ -111,4 +93,21 @@ test('never enables preview DB or remote migrations and validates two distinct S
   assert.ok(profiles.owner.d1_databases.some(d=>d.binding==='CONTROL_DB'));
   assert.notEqual(profiles.owner.d1_databases[0].database_id,
     profiles.owner.d1_databases[1].database_id);
+});
+
+test('private profile generation rejects the public preview Worker in either role',()=>{
+  for(const role of ['admin','owner']){
+    const instance=sample();
+    instance.workers[role]='hisabiq';
+    instance.origins[role]='https://hisabiq.'+instance.workersSubdomain+'.workers.dev';
+    assert.throws(()=>buildPortableProfiles(instance),/Invalid portable instance/);
+  }
+});
+
+test('ingress namespaces use distinct positive integer identities',()=>{
+  for(const [adminNamespaceId,ownerNamespaceId] of [['0','2'],['1','01']]){
+    const instance=sample();
+    instance.rateLimits={adminNamespaceId,ownerNamespaceId};
+    assert.throws(()=>validatePortableInstance(instance),/Invalid portable instance/);
+  }
 });

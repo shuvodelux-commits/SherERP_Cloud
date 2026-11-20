@@ -13,7 +13,7 @@ import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {validatePortableInstance} from './port-p1-instance.mjs';
+import {buildPortableProfiles,validatePortableInstance} from './port-p1-instance.mjs';
 import {verifyBootstrapReadOnly} from './port-p2-bootstrap-preflight.mjs';
 import {
   OWNER_READY_SHOP_MIGRATION_PLAN,isOwnerReadyShopMigrationPlan
@@ -72,7 +72,8 @@ export async function verifyOwnerReadyMigrationFiles({readFileFn=readFile}={}){
   return {verified:true,migrationCount:steps.length};
 }
 
-function assertExactBindings(settings,required){
+function assertExactBindings(settings,profile){
+  const [ingress]=profile.ratelimits;
   if(!settings || typeof settings!=='object' || Array.isArray(settings) ||
      !Array.isArray(settings.bindings))throw denied();
   const names=new Set(),matched=new Set();
@@ -81,12 +82,16 @@ function assertExactBindings(settings,required){
        typeof binding.name!=='string' || !binding.name || names.has(binding.name) ||
        typeof binding.type!=='string')throw denied();
     names.add(binding.name);
+    if(binding.name===ingress.name){
+      if(binding.type!=='ratelimit' || binding.namespace_id!==ingress.namespace_id ||
+        binding.simple?.limit!==ingress.simple.limit || binding.simple?.period!==ingress.simple.period)throw denied();
+    }
     if(binding.type!=='d1')continue;
-    const expected=required[binding.name];
-    if(!expected || binding.database_id!==expected || matched.has(binding.name))throw denied();
+    const expected=profile.d1_databases.find(db=>db.binding===binding.name);
+    if(!expected || binding.database_id!==expected.database_id)throw denied();
     matched.add(binding.name);
   }
-  if(matched.size!==Object.keys(required).length)throw denied();
+  if(!names.has(ingress.name) || matched.size!==profile.d1_databases.length)throw denied();
 }
 
 async function readWorkerSettings(instance,name,fetchFn,token){
@@ -117,13 +122,11 @@ export async function verifyHostedControlCenterReadOnly(instance,{token,fetchFn=
   await verifyOwnerReadyMigrationFiles();
   try{
     await verifyBootstrapReadOnly(p,{token,fetchFn});
+    const profiles=buildPortableProfiles(p);
     const admin=await readWorkerSettings(p,p.workers.admin,fetchFn,token);
-    assertExactBindings(admin,{CONTROL_DB:p.d1.control.id});
+    assertExactBindings(admin,profiles.admin);
     const owner=await readWorkerSettings(p,p.workers.owner,fetchFn,token);
-    assertExactBindings(owner,{
-      CONTROL_DB:p.d1.control.id,
-      PLATFORM_PILOT_DB:p.d1.pilot.id
-    });
+    assertExactBindings(owner,profiles.owner);
   }catch{
     throw denied();
   }
@@ -132,7 +135,7 @@ export async function verifyHostedControlCenterReadOnly(instance,{token,fetchFn=
     migrationFilesVerified:true,ownerReadyMigrationCount:OWNER_READY_SHOP_MIGRATION_PLAN.length,
     remoteQueries:6,verified:[
       'cloudflare-account','workers-subdomain','control-d1','pilot-d1',
-      'admin-worker-d1-bindings','owner-worker-d1-bindings','owner-ready-migration-files'
+      'admin-worker-d1-bindings','owner-worker-d1-bindings','private-worker-ingress-limits','owner-ready-migration-files'
     ],...permissions,remainingGates:[...remainingGates]
   };
 }
