@@ -7,6 +7,7 @@ import {acceptOwnerInvite,readOwnerInviteChallenge} from './auth/platform-owner-
 import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
 import {readCleanOwnerCatalog,readOwnerCatalog} from './db/m03-owner-catalog-read.js';
 import {createOwnerProduct} from './db/m03-owner-product-create.js';
+import {createOwnerSupplier,readOwnerSupplierBootstrap} from './db/m03-owner-supplier-create.js';
 import {pilotShopConfiguration} from './auth/platform-shop-binding.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
@@ -136,6 +137,41 @@ app.post('/api/owner/catalog',protectLogin,limitBody,async c=>{
   if(result.status==='invalid')return c.json({success:false,message:'Enter a standard product with valid prices and zero opening stock.'},400);
   if(result.status==='unavailable')return c.json({success:false,message:'Operational catalog is unavailable.'},503);
   return c.json({success:false,message:'A product with this name already exists or the original save details changed.'},409);
+});
+
+const supplierApiEnabled=env=>env.OWNER_SUPPLIERS_ENABLED==='true'&&env.OWNER_WRITE_GRANTS_ENABLED==='true';
+
+// Actual private clean-Shop Supplier master; no financial balances are posted.
+app.get('/api/owner/suppliers',protectLogin,async c=>{
+  if(!supplierApiEnabled(c.env))return c.notFound();
+  const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE));
+  const scope=pilotShopConfiguration(c.env);
+  if(!session||!scope||session.shopId!==scope.shopId)return denied(c);
+  try{return c.json(await readOwnerSupplierBootstrap(scope.shopDb));}
+  catch{return c.json({error:'Supplier list unavailable'},503);}
+});
+
+app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
+  if(!supplierApiEnabled(c.env))return c.notFound();
+  const token=getCookie(c,SESSION_COOKIE);
+  const session=await validateOwnerSession(c.env,token,{includeOwnerSubject:true});
+  const scope=pilotShopConfiguration(c.env);
+  if(!session||!scope||session.shopId!==scope.shopId)return denied(c);
+  if(c.req.header('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json')
+    return c.json({success:false,message:'Expected a JSON supplier.'},400);
+  const input=await c.req.json().catch(()=>null);
+  const result=await createOwnerSupplier(scope,{
+    token,ownerSubject:session.ownerSubject,input
+  });
+  if(result.status==='created'||result.status==='replayed')
+    return c.json({success:true,data:{id:result.id}},result.status==='created'?201:200);
+  if(result.status==='denied')
+    return c.json({success:false,message:'Owner supplier access is unavailable.'},403);
+  if(result.status==='invalid')
+    return c.json({success:false,message:'Enter a supplier name. Nonzero opening balances require a ledger.'},400);
+  if(result.status==='unavailable')
+    return c.json({success:false,message:'Supplier source history is not verified.'},503);
+  return c.json({success:false,message:'Supplier already exists or saved details changed.'},409);
 });
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{
