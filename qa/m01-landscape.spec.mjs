@@ -847,3 +847,145 @@ test('M01 POS V2 Drafts dialog preserves keyboard, empty state and failed-load s
     });
   }
 });
+
+test('M01 original POS V2 keyboard product picker creates, edits and clears synthetic cart without posting',async t=>{
+  // #747: use original compiled UI and original picker handlers, not a mock cart.
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-390x844',width:390,height:844,phone:true},
+    {name:'desktop-1280x800',width:1280,height:800,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:phone,hasTouch:phone
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const login=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await login).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        if(phone){
+          await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+        }else{
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' &&
+          document.body.classList.contains('pos-v2-active'));
+        assert.equal(await page.locator('#page-pos').isVisible(),true);
+        assert.equal(await page.evaluate(()=>posState.cart.length),0);
+        assert.equal(await page.locator('#posClearCartBtn').isDisabled(),true);
+        assert.equal(await page.locator('#posSaveDraftBtn').isDisabled(),true);
+
+        // The Worker is deliberately not authorized to provide POS data.
+        // These records exist ONLY in this isolated Chromium tab's memory.
+        await page.evaluate(()=>{
+          posState.products=[
+            {id:'M01-SYNTH-HAMMER',name:'M01 Synthetic Hammer',productType:'Standard',
+              unit:'Pcs',category:'Tools',brand:'M01',sellingPrice:20,
+              fallbackSellPrice:20,stock:240,lotPricing:[]},
+            {id:'M01-SYNTH-WIRE',name:'M01 Synthetic Wire',productType:'Standard',
+              unit:'Feet',category:'Electrical',brand:'M01',sellingPrice:15,
+              fallbackSellPrice:15,stock:150,lotPricing:[]}
+          ];
+          posState.productStockById={
+            'M01-SYNTH-HAMMER':240,'M01-SYNTH-WIRE':150
+          };
+          smartIndexProducts_(posState.products);
+          posRenderProductGrid_();
+          posRenderCart_();
+        });
+        const search=page.locator('#posSearch');
+        await search.waitFor({state:'visible'});
+        await search.fill('M01 Synthetic Hammer');
+        const hammer=page.locator(
+          '#posCartProductPopup [data-cart-product-pick="M01-SYNTH-HAMMER"]');
+        await hammer.waitFor({state:'visible'});
+        assert.equal(await search.getAttribute('aria-expanded'),'true');
+        assert.equal(await hammer.getAttribute('aria-selected'),'true');
+        await search.press('Enter');
+        const quantity=page.locator('#posCartList input[data-cart-entry-qty]');
+        await quantity.waitFor({state:'visible'});
+        assert.equal(await page.evaluate(()=>posState.cart.length),1);
+        assert.equal(await page.evaluate(()=>posState.cart[0].productId),'M01-SYNTH-HAMMER');
+        await quantity.fill('3');
+        assert.equal(await page.evaluate(()=>posState.cart[0].qty),3);
+        assert.equal(await page.evaluate(()=>document.activeElement?.hasAttribute('data-cart-entry-qty')),true,
+          'quantity updates should preserve keyboard focus');
+        await quantity.press('Enter');
+        assert.equal(await page.evaluate(()=>posState.cartEntryIndex),null);
+        assert.equal(await page.locator('#posCartCount').innerText(),'1');
+        assert.equal(await page.locator('#posCartList .cart-row:not(.pos-cart-entry-row)').count(),1);
+        assert.equal(await page.locator('#posCartList .cart-row:not(.pos-cart-entry-row) .c-unit').first().innerText(),'Pcs');
+        assert.equal(await page.locator('#posCartList input[data-f="qty"][data-i="0"]').inputValue(),'3');
+        assert.equal(await page.locator('#posSaveDraftBtn').isDisabled(),false,
+          'original nonempty cart enables draft button, not an actual save');
+
+        // The original V2 picker must not create a second line for one Product.
+        await search.fill('M01 Synthetic Hammer');
+        await hammer.waitFor({state:'visible'});
+        await search.press('Enter');
+        assert.equal(await page.evaluate(()=>posState.cart.length),1);
+        assert.equal(await page.evaluate(()=>posState.cart[0].qty),3);
+        assert.equal(await page.evaluate(()=>posState.cartEntryIndex),null);
+
+        await search.fill('M01 Synthetic Wire');
+        const wire=page.locator(
+          '#posCartProductPopup [data-cart-product-pick="M01-SYNTH-WIRE"]');
+        await wire.waitFor({state:'visible'});
+        await search.press('Enter');
+        const wireQty=page.locator('#posCartList input[data-cart-entry-qty]');
+        await wireQty.waitFor({state:'visible'});
+        assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),[
+          'M01-SYNTH-HAMMER','M01-SYNTH-WIRE'
+        ]);
+        await wireQty.fill('2');
+        await wireQty.press('Enter');
+        assert.equal(await page.locator('#posCartCount').innerText(),'2');
+        assert.equal(await page.locator('#posCartList .cart-row:not(.pos-cart-entry-row)').count(),2);
+        assert.equal(await page.locator('#posCartList .cart-row:not(.pos-cart-entry-row) .c-unit').last().innerText(),'Feet');
+        const populated=await captureM01NavEvidence(page,'posv2-cart-populated-'+name);
+        assert.ok(populated.screenshotBytes>1500);
+
+        await page.locator('#posCartList .cart-remove[data-i="0"]').click();
+        assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),[
+          'M01-SYNTH-WIRE'
+        ]);
+        assert.equal(await page.locator('#posCartCount').innerText(),'1');
+        await page.locator('#posClearCartBtn').click();
+        assert.equal(await page.evaluate(()=>posState.cart.length),0);
+        assert.equal(await page.locator('#posCartCount').innerText(),'0');
+        assert.equal(await page.locator('#posCartList .cart-row:not(.pos-cart-entry-row)').count(),0);
+        assert.equal(await page.locator('#posClearCartBtn').isDisabled(),true);
+        assert.equal(await page.locator('#posSaveDraftBtn').isDisabled(),true);
+        const cleared=await captureM01NavEvidence(page,'posv2-cart-cleared-'+name);
+        assert.ok(cleared.screenshotBytes>1500);
+        assert.equal(calls.filter(x=>x.fnName==='login').length,1);
+        assert.equal(calls.some(x=>
+          /^(?:saveSalesDraft|deleteSalesDraft|saveSale|createSale|completeSale|postSale|submitSale|saveSalePayment)$/i
+            .test(x.fnName||'')),false,
+          'synthetic cart editing must never send draft, sale or payment writes');
+      }finally{
+        await page.close();
+      }
+    });
+  }
+});
