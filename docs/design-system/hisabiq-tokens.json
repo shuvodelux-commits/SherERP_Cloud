@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "SherERP HisabIQ source-derived UI tokens",
+  "version": "1.0.0",
+  "status": "design-system-reference-not-runtime-enabled",
+  "source": {
+    "repository": "shuvodelux-commits/hisabiq_ui",
+    "commit": "e42a00a9f48ffc1f5c4ec10083e36d9eb4686484",
+    "guide": "docs/ui/HISABIQ-DESIGN-GUIDE.md",
+    "runtimeTheme": "src/theme.css",
+    "sourceControls": "src/index.css",
+    "sourceMotion": "src/motion/tokens.ts",
+    "sourceDialog": "src/components/Dialog.tsx",
+    "sourcePartySheet": "src/components/parties/PartyActionSheet.tsx"
+  },
+  "colors": {
+    "light": {
+      "background": "#F5F7FA",
+      "card": "#FFFFFF",
+      "popover": "#FFFFFF",
+      "foreground": "#0B1A2C",
+      "mutedForeground": "#5A6B80",
+      "helper": "#607086",
+      "primary": "#0D7C74",
+      "primaryHover": "#0A625C",
+      "primaryForeground": "#FFFFFF",
+      "accent": "#EAF6F4",
+      "accentForeground": "#0A625C",
+      "border": "#E3E8EE",
+      "input": "#7B8999",
+      "ring": "#0D7C74",
+      "inverse": "#0B1A2C",
+      "inverseForeground": "#FFFFFF",
+      "mint": "#3DD6B5",
+      "success": "#116F35",
+      "successBg": "#E8F5EC",
+      "warning": "#974407",
+      "warningBg": "#FDF3E3",
+      "danger": "#B92E25",
+      "dangerBg": "#FCEBEA",
+      "info": "#1E56D3",
+      "infoBg": "#EAF0FD"
+    },
+    "dark": {
+      "background": "#0B1A2C",
+      "card": "#14263B",
+      "popover": "#14263B",
+      "foreground": "#EDF3FA",
+      "mutedForeground": "#B1BED0",
+      "helper": "#9FAFC3",
+      "primary": "#3DB8AC",
+      "primaryHover": "#55CBBD",
+      "primaryForeground": "#0B1A2C",
+      "accent": "#133B3A",
+      "accentForeground": "#7EDBD0",
+      "border": "#2E425B",
+      "input": "#6A819C",
+      "ring": "#3DB8AC",
+      "inverse": "#22364F",
+      "inverseForeground": "#FFFFFF",
+      "mint": "#3DD6B5",
+      "success": "#7DDFAB",
+      "successBg": "#13392C",
+      "warning": "#F7C47B",
+      "warningBg": "#3B2B17",
+      "danger": "#FFAAA1",
+      "dangerBg": "#402328",
+      "info": "#A4CBFF",
+      "infoBg": "#1D2F4B"
+    }
+  },
+  "typography": {
+    "english": "Geist, Hind Siliguri, system-ui, sans-serif",
+    "bangla": "Hind Siliguri, Geist, system-ui, sans-serif",
+    "moneyDigits": "proportional",
+    "noMonospaceNumbers": true,
+    "noTabularNumbers": true,
+    "sizesPx": {
+      "pageTitle": 20,
+      "pageTitleCompact": 18,
+      "dialogTitle": 18,
+      "panelTitle": 14,
+      "body": 14,
+      "formLabel": 13,
+      "inputValue": 13,
+      "tableData": 13,
+      "tableHeading": 12,
+      "tableHelper": 11,
+      "button": 14,
+      "terminalButton": 15,
+      "dashboardMetric": 22,
+      "majorFinancialSummary": 28
+    },
+    "lineHeightsPx": {
+      "pageTitle": 28,
+      "dialogTitle": 26,
+      "panelTitle": 20,
+      "body": 20,
+      "formLabel": 20,
+      "inputValue": 20,
+      "tableData": 20,
+      "tableHeading": 16,
+      "tableHelper": 16,
+      "button": 20,
+      "terminalButton": 20,
+      "dashboardMetric": 28,
+      "majorFinancialSummary": 34
+    }
+  },
+  "geometry": {
+    "controlHeightPx": 36,
+    "iconButtonWidthPx": 36,
+    "iconButtonHeightPx": 36,
+    "transactionCompletionHeightPx": 48,
+    "controlRadiusRem": 0.375,
+    "cardRadiusPx": 12,
+    "dialogRadiusPx": 12,
+    "badgeRadiusPx": 6,
+    "iconPx": {
+      "inline": 16,
+      "navigation": 20,
+      "empty": 32
+    },
+    "spacingScalePx": [
+      4,
+      8,
+      12,
+      16,
+      20,
+      24,
+      32,
+      40,
+      48
+    ],
+    "gapsPx": {
+      "labelField": 6,
+      "fieldHelper": 4,
+      "iconTextMin": 6,
+      "iconTextMax": 8,
+      "toolbar": 8,
+      "compactToolbar": 6,
+      "formGrid": 16,
+      "panel": 16,
+      "sectionMin": 16,
+      "sectionMax": 24
+    },
+    "pageGutterPx": {
+      "phone": 12,
+      "tablet": 16,
+      "desktop": 24
+    },
+    "tableCellPaddingPx": {
+      "x": 12,
+      "y": 8
+    },
+    "popupViewportMarginPx": 8,
+    "popoverMaxHeightPx": {
+      "shortSelect": 264,
+      "searchSelect": 380
+    },
+    "modalWidthCapPx": {
+      "quickAdd": 448,
+      "editor": 512,
+      "detailedEditor": 672,
+      "preview": 896
+    },
+    "partyDirectoryWidthPx": {
+      "desktop": 340,
+      "largeDesktop": 380
+    },
+    "desktopPartyBreakpointPx": 1024,
+    "tabletBreakpointPx": 768
+  },
+  "shadows": {
+    "card": "0 1px 2px rgba(11,26,44,0.04), 0 1px 1px rgba(11,26,44,0.03)",
+    "pop": "0 12px 32px -8px rgba(11,26,44,0.18), 0 2px 6px rgba(11,26,44,0.06)"
+  },
+  "motion": {
+    "reducedMotion": "instant-open-no-positional-travel",
+    "navHoverMs": 110,
+    "navActiveMs": 190,
+    "numberStepperMs": 120,
+    "sidebarToggleMs": 220,
+    "tabUnderlineMs": 200,
+    "buttonAndFieldColorMs": 150,
+    "dialogEntryMs": 180,
+    "dialogVeilMs": 180,
+    "menuEntryMs": 140,
+    "menuExitMs": 90,
+    "partySheetMs": 280,
+    "partySheetVeilMs": 200,
+    "advancedFiltersEntryMs": 180,
+    "advancedFiltersExitMs": 120,
+    "moduleEntryMs": 280,
+    "activeEase": [
+      0.16,
+      1,
+      0.3,
+      1
+    ],
+    "popupEase": [
+      0.22,
+      1,
+      0.36,
+      1
+    ],
+    "sheetEase": [
+      0.32,
+      0.72,
+      0,
+      1
+    ],
+    "dialogInitial": {
+      "opacity": 0,
+      "scale": 0.96,
+      "translateYPx": 8
+    },
+    "popupInitial": {
+      "opacity": 0,
+      "scale": 0.97,
+      "translateYPx": 4
+    },
+    "tabUnderlineHeightPx": 2,
+    "segmentedSpring": {
+      "stiffness": 520,
+      "damping": 38,
+      "mass": 0.7
+    },
+    "currentDialogSourceOverrulesOlderGuideMs": 220
+  },
+  "accessibility": {
+    "focusOutlinePx": 2,
+    "focusOutlineOffsetPx": 3,
+    "normalTextContrastMin": 4.5,
+    "largeTextContrastMin": 3,
+    "controlBoundaryContrastMin": 3,
+    "keyboardOperable": true,
+    "bilingual": "EN-BN",
+    "viewportWidthsPx": [
+      320,
+      390,
+      768,
+      1024,
+      1440
+    ]
+  },
+  "adoption": {
+    "cssSelector": "[data-hisabiq-design-system]",
+    "runtimeImported": false,
+    "designAppliesTo": "new and explicitly migrated Owner ERP UI only",
+    "previewFixturesProductionForbidden": true,
+    "autoNetPartyRolesForbidden": true
+  }
+}

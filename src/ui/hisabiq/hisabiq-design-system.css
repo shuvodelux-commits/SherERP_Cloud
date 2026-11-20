@@ -1,0 +1,321 @@
+/* SherERP HisabIQ UI baseline; source: hisabiq_ui@e42a00a9f48ffc1f5c4ec10083e36d9eb4686484
+ * Opt-in ONLY via [data-hisabiq-design-system]. Do not import into the legacy
+ * Owner shell globally. Motion fallback for non-Framer surfaces is opt-in.
+ * React/Framer component animation must NOT be paired with CSS animation.
+ */
+[data-hisabiq-design-system] {
+  --hds-background: #f5f7fa;
+  --hds-card: #ffffff;
+  --hds-popover: #ffffff;
+  --hds-foreground: #0b1a2c;
+  --hds-muted-foreground: #5a6b80;
+  --hds-helper: #607086;
+  --hds-primary: #0d7c74;
+  --hds-primary-hover: #0a625c;
+  --hds-primary-foreground: #ffffff;
+  --hds-accent: #eaf6f4;
+  --hds-accent-foreground: #0a625c;
+  --hds-border: #e3e8ee;
+  --hds-input: #7b8999;
+  --hds-ring: #0d7c74;
+  --hds-inverse: #0b1a2c;
+  --hds-inverse-foreground: #ffffff;
+  --hds-mint: #3dd6b5;
+  --hds-success: #116f35;
+  --hds-success-bg: #e8f5ec;
+  --hds-warning: #974407;
+  --hds-warning-bg: #fdf3e3;
+  --hds-danger: #b92e25;
+  --hds-danger-bg: #fcebea;
+  --hds-info: #1e56d3;
+  --hds-info-bg: #eaf0fd;
+
+  --hds-control-height: 36px;
+  --hds-completion-height: 48px;
+  --hds-control-radius: 0.375rem;
+  --hds-panel-radius: 12px;
+  --hds-badge-radius: 6px;
+  --hds-text-body: 14px;
+  --hds-text-input: 13px;
+  --hds-text-table: 13px;
+  --hds-text-table-heading: 12px;
+  --hds-text-table-helper: 11px;
+  --hds-space-1: 4px;
+  --hds-space-2: 8px;
+  --hds-space-3: 12px;
+  --hds-space-4: 16px;
+  --hds-space-5: 20px;
+  --hds-space-6: 24px;
+  --hds-space-8: 32px;
+  --hds-shadow-card: 0 1px 2px rgba(11, 26, 44, .04), 0 1px 1px rgba(11, 26, 44, .03);
+  --hds-shadow-pop: 0 12px 32px -8px rgba(11, 26, 44, .18), 0 2px 6px rgba(11, 26, 44, .06);
+
+  --hds-nav-hover: 110ms;
+  --hds-nav-active: 190ms;
+  --hds-sidebar-toggle: 220ms;
+  --hds-tab-entry: 200ms;
+  --hds-stepper: 120ms;
+  --hds-control-color: 150ms;
+  --hds-dialog-entry: 180ms;
+  --hds-dialog-veil: 180ms;
+  --hds-popup-entry: 140ms;
+  --hds-popup-exit: 90ms;
+  --hds-sheet-entry: 280ms;
+  --hds-sheet-veil: 200ms;
+  --hds-advanced-entry: 180ms;
+  --hds-advanced-exit: 120ms;
+  --hds-module-entry: 280ms;
+  --hds-ease-nav: cubic-bezier(.16, 1, .3, 1);
+  --hds-ease-pop: cubic-bezier(.22, 1, .36, 1);
+  --hds-ease-sheet: cubic-bezier(.32, .72, 0, 1);
+
+  font-family: 'Geist', 'Hind Siliguri', system-ui, sans-serif;
+  font-size: var(--hds-text-body);
+  line-height: 20px;
+  font-feature-settings: normal;
+  font-variant-numeric: proportional-nums;
+  background-color: var(--hds-background);
+  color: var(--hds-foreground);
+  color-scheme: light;
+  min-width: 0;
+}
+:is(.dark [data-hisabiq-design-system],
+    [data-hisabiq-design-system][data-theme="dark"]) {
+  --hds-background: #0b1a2c;
+  --hds-card: #14263b;
+  --hds-popover: #14263b;
+  --hds-foreground: #edf3fa;
+  --hds-muted-foreground: #b1bed0;
+  --hds-helper: #9fafc3;
+  --hds-primary: #3db8ac;
+  --hds-primary-hover: #55cbbd;
+  --hds-primary-foreground: #0b1a2c;
+  --hds-accent: #133b3a;
+  --hds-accent-foreground: #7edbd0;
+  --hds-border: #2e425b;
+  --hds-input: #6a819c;
+  --hds-ring: #3db8ac;
+  --hds-inverse: #22364f;
+  --hds-inverse-foreground: #ffffff;
+  --hds-mint: #3dd6b5;
+  --hds-success: #7ddfab;
+  --hds-success-bg: #13392c;
+  --hds-warning: #f7c47b;
+  --hds-warning-bg: #3b2b17;
+  --hds-danger: #ffaaa1;
+  --hds-danger-bg: #402328;
+  --hds-info: #a4cbff;
+  --hds-info-bg: #1d2f4b;
+  color-scheme: dark;
+}
+
+/* No implicit global `button`, `input`, `table`, or `:root` rules.
+ * Mount these opt-in classes only on approved Party/ERP components.
+ * Portal dialogs must keep the scoped design-system ancestor.
+ */
+[data-hisabiq-design-system] .hds-font-bn {
+  font-family: 'Hind Siliguri', 'Geist', system-ui, sans-serif;
+  font-feature-settings: normal;
+  font-variant-numeric: proportional-nums;
+}
+[data-hisabiq-design-system] .hds-surface {
+  min-width: 0;
+  border: 1px solid var(--hds-border);
+  border-radius: var(--hds-panel-radius);
+  background: var(--hds-card);
+  color: var(--hds-foreground);
+  box-shadow: var(--hds-shadow-card);
+}
+[data-hisabiq-design-system] .hds-input,
+[data-hisabiq-design-system] .hds-select,
+[data-hisabiq-design-system] .hds-button {
+  box-sizing: border-box;
+  height: var(--hds-control-height);
+  min-height: var(--hds-control-height);
+  border-radius: var(--hds-control-radius);
+  font-feature-settings: normal;
+  font-variant-numeric: proportional-nums;
+  transition: background-color var(--hds-control-color), border-color var(--hds-control-color),
+              color var(--hds-control-color), box-shadow var(--hds-control-color);
+}
+[data-hisabiq-design-system] .hds-input,
+[data-hisabiq-design-system] .hds-select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hds-border);
+  background: var(--hds-card);
+  color: var(--hds-foreground);
+  font: 400 13px/20px 'Geist', 'Hind Siliguri', system-ui, sans-serif;
+  padding-inline: 12px;
+}
+[data-hisabiq-design-system] .hds-input::placeholder {
+  color: var(--hds-muted-foreground);
+  opacity: 1;
+}
+[data-hisabiq-design-system] .hds-input:is(:focus, :focus-visible),
+[data-hisabiq-design-system] .hds-select:is(:focus, :focus-visible) {
+  outline: none;
+  border-color: var(--hds-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hds-primary) 25%, transparent);
+}
+[data-hisabiq-design-system] .hds-input[aria-invalid="true"],
+[data-hisabiq-design-system] .hds-select[aria-invalid="true"] {
+  border-color: var(--hds-danger);
+}
+[data-hisabiq-design-system] .hds-button {
+  border: 1px solid var(--hds-primary);
+  background: var(--hds-primary);
+  color: var(--hds-primary-foreground);
+  font: 500 14px/20px 'Geist', 'Hind Siliguri', system-ui, sans-serif;
+  padding-inline: 12px;
+  cursor: pointer;
+}
+[data-hisabiq-design-system] .hds-button:hover:not(:disabled) {
+  background: var(--hds-primary-hover);
+}
+[data-hisabiq-design-system] .hds-button[data-variant="outline"] {
+  border-color: var(--hds-border);
+  background: var(--hds-card);
+  color: var(--hds-foreground);
+}
+[data-hisabiq-design-system] .hds-button[data-variant="outline"]:hover:not(:disabled) {
+  border-color: var(--hds-primary);
+  background: var(--hds-card);
+}
+[data-hisabiq-design-system] .hds-button[data-variant="ghost"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--hds-foreground);
+}
+[data-hisabiq-design-system] .hds-button[data-variant="ghost"]:hover:not(:disabled) {
+  background: var(--hds-accent);
+}
+[data-hisabiq-design-system] .hds-button[data-variant="ghost"]:hover:not(:disabled),
+[data-hisabiq-design-system] .hds-button[data-variant="outline"]:hover:not(:disabled) {
+  color: var(--hds-foreground);
+}
+[data-hisabiq-design-system] .hds-button[data-icon-only] {
+  width: var(--hds-control-height);
+  min-width: var(--hds-control-height);
+  padding-inline: 0;
+}
+[data-hisabiq-design-system] .hds-button[data-erp-workflow-action="complete"] {
+  height: var(--hds-completion-height);
+  min-height: var(--hds-completion-height);
+  font-size: 15px;
+  font-weight: 600;
+}
+[data-hisabiq-design-system] :is(.hds-button, .hds-input, .hds-select):focus-visible {
+  outline: 2px solid var(--hds-ring);
+  outline-offset: 3px;
+}
+[data-hisabiq-design-system] :is(.hds-button, .hds-input, .hds-select):disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+[data-hisabiq-design-system] .hds-tab {
+  position: relative;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--hds-muted-foreground);
+  font: 500 13px/20px 'Geist', 'Hind Siliguri', system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+[data-hisabiq-design-system] .hds-tab[aria-selected="true"] {
+  color: var(--hds-foreground);
+}
+[data-hisabiq-design-system] .hds-tab-indicator {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--hds-primary);
+  pointer-events: none;
+}
+[data-hisabiq-design-system] .hds-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--hds-foreground);
+  font: 400 13px/20px 'Geist', 'Hind Siliguri', system-ui, sans-serif;
+  font-feature-settings: normal;
+  font-variant-numeric: proportional-nums;
+}
+[data-hisabiq-design-system] .hds-table th {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--hds-muted-foreground);
+}
+[data-hisabiq-design-system] .hds-table td,
+[data-hisabiq-design-system] .hds-table th {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hds-border);
+  text-align: left;
+}
+[data-hisabiq-design-system] .hds-table :is(td, th)[data-numeric] {
+  text-align: right;
+}
+[data-hisabiq-design-system] .hds-table [data-table-helper] {
+  font-size: 11px;
+  line-height: 16px;
+}
+[data-hisabiq-design-system] .hds-popover {
+  border: 1px solid var(--hds-border);
+  border-radius: var(--hds-panel-radius);
+  background: var(--hds-popover);
+  color: var(--hds-foreground);
+  box-shadow: var(--hds-shadow-pop);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+}
+[data-hisabiq-design-system] .hds-modal {
+  border: 1px solid var(--hds-border);
+  border-radius: var(--hds-panel-radius);
+  background: var(--hds-popover);
+  color: var(--hds-foreground);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+[data-hisabiq-design-system] [data-hds-motion="css-dialog"] {
+  animation: hds-dialog-enter var(--hds-dialog-entry) var(--hds-ease-pop) both;
+}
+[data-hisabiq-design-system] [data-hds-motion="css-popup"] {
+  animation: hds-popup-enter var(--hds-popup-entry) var(--hds-ease-pop) both;
+}
+[data-hisabiq-design-system] [data-hds-motion="css-sheet-bottom"] {
+  animation: hds-sheet-bottom-enter var(--hds-sheet-entry) var(--hds-ease-sheet) both;
+}
+[data-hisabiq-design-system] [data-hds-motion="css-sheet-right"] {
+  animation: hds-sheet-right-enter var(--hds-sheet-entry) var(--hds-ease-sheet) both;
+}
+@keyframes hds-dialog-enter {
+  from { opacity: 0; scale: .96; translate: 0 8px; }
+  to   { opacity: 1; scale: 1; translate: 0 0; }
+}
+@keyframes hds-popup-enter {
+  from { opacity: 0; scale: .97; translate: 0 -4px; }
+  to   { opacity: 1; scale: 1; translate: 0 0; }
+}
+@keyframes hds-sheet-bottom-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes hds-sheet-right-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-hisabiq-design-system] :is(.hds-button, .hds-input, .hds-select) {
+    transition: none;
+  }
+  [data-hisabiq-design-system] [data-hds-motion] {
+    animation: none;
+    transform: none;
+    translate: none;
+    scale: 1;
+  }
+}

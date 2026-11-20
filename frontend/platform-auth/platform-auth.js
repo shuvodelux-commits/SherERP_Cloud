@@ -4,6 +4,8 @@ const status=byId('status');
 const mount=byId('google-button');
 const ticket=byId('setup-ticket');
 const code=byId('auth-code');
+const recoveryCodesPanel=byId('admin-recovery-codes');
+const recoveryCodesText=byId('admin-recovery-codes-text');
 const cancelGoogle=byId('back-google');
 const businessForm=byId('business-form');
 const businessName=byId('business-name');
@@ -60,6 +62,23 @@ let generation=0;
 let credential;
 let sdk;
 
+function clearRecoveryCodes(){
+  recoveryCodesText.value='';
+  recoveryCodesPanel.hidden=true;
+}
+
+function showRecoveryCodes(codes){
+  if(!Array.isArray(codes)||codes.length!==8||
+     !codes.every(value=>typeof value==='string'&&
+       /^[0-9a-f]{8}(?:-[0-9a-f]{8}){3}$/.test(value)))
+    throw new Error('Recovery codes unavailable');
+  recoveryCodesText.value=codes.join('\n');
+  recoveryCodesPanel.hidden=false;
+  byId('admin-recovery-settings').hidden=false;
+  byId('admin-recovery-settings').open=true;
+  recoveryCodesText.focus();
+}
+
 function clearInviteCode(){
   inviteCode.value='';
   inviteResult.hidden=true;
@@ -83,6 +102,7 @@ function clearSupport(){
   supportClose.disabled=false;
 }
 window.addEventListener('pagehide',()=>{
+  clearRecoveryCodes();
   clearInviteCode();
   // A page close drops the opaque bearer; it is never persisted.
   clearSupport();
@@ -101,6 +121,11 @@ function clearBusinessDirectory(){
 }
 
 function show(view,message=''){
+  clearRecoveryCodes();
+  if(view!=='recovery-enroll'){
+    byId('recovery-key').textContent='';
+    byId('recovery-qr').removeAttribute('src');
+  }
   if(view!=='wizard-mfa'){
     byId('wizard-key').textContent='';
     byId('wizard-qr').removeAttribute('src');
@@ -408,6 +433,10 @@ function showSignedIn(session){
   const view=show('signed-in');
   // Reuse the original Create/Resume form for either local rehearsal or the
   // strictly service-bound hosted provisioner. No second UI is necessary.
+  const canRecover=session.adminRecoveryEnabled===true;
+  byId('admin-recovery-settings').hidden=!canRecover;
+  byId('start-recovery').hidden=!canRecover;
+  byId('open-recovery').hidden=!canRecover;
   localProvisioning=session.localProvisioningEnabled===true||
     session.hostedProvisioningEnabled===true;
   directoryEnabled=localProvisioning||session.shopDirectoryEnabled===true;
@@ -649,10 +678,10 @@ async function startGoogle(mode,setupToken){
       ux_mode:'popup',
       callback:async result=>{
         if(current!==generation||typeof result?.credential!=='string'||cancelGoogle.disabled)return;
-        if(mode==='login'){
-          show('mfa');
+        if(mode==='login'||mode==='recover'){
+          show(mode==='recover'?'recovery-code':'mfa');
           credential=result.credential;
-          code.focus();
+          (mode==='recover'?byId('recovery-code-input'):code).focus();
           return;
         }
         cancelGoogle.disabled=true;
@@ -682,11 +711,19 @@ async function startGoogle(mode,setupToken){
     const message=error.message==='429'
       ?'Too many attempts. Try again in a minute.'
       :'Could not start Google Sign-In. Try again.';
-    show(mode,message);
+    show(mode==='recover'?'login':mode,message);
   }
 }
 
 byId('start-login').addEventListener('click',()=>startGoogle('login'));
+byId('start-recovery').addEventListener('click',()=>startGoogle('recover'));
+byId('open-recovery').addEventListener('click',()=>{
+  const verifiedGoogleCredential=credential;
+  show('recovery-code');
+  credential=verifiedGoogleCredential;
+  byId('recovery-code-input').focus();
+});
+byId('back-recovery-code').addEventListener('click',()=>show('login'));
 byId('open-setup').addEventListener('click',()=>show('setup'));
 for(const id of ['back-setup','back-google','back-mfa'])byId(id).addEventListener('click',()=>show('login'));
 
@@ -746,6 +783,83 @@ byId('mfa-form').addEventListener('submit',async event=>{
   }
 });
 
+byId('recovery-code-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(!credential)return;
+  const button=event.currentTarget.querySelector('button[type="submit"]');
+  const recoveryCodeInput=byId('recovery-code-input');
+  const input={credential,recoveryCode:recoveryCodeInput.value.trim().toLowerCase()};
+  credential=undefined;
+  recoveryCodeInput.value='';
+  button.disabled=true;
+  status.textContent='Verifying your Google account and saved recovery code…';
+  try{
+    const result=await api('/auth/recovery/start','POST',input);
+    if(typeof result.manualKey!=='string'||!/^[A-Z2-7]{32}$/.test(result.manualKey)||
+      typeof result.qr!=='string'||!result.qr.startsWith('data:image/svg+xml;base64,'))
+      throw new Error('Invalid recovery response');
+    show('recovery-enroll');
+    byId('recovery-key').textContent=result.manualKey;
+    byId('recovery-qr').src=result.qr;
+    byId('recovery-otp').focus();
+  }catch{
+    show('login','Recovery could not be verified. Start again with an unused backup code and the enrolled Google account.');
+  }finally{button.disabled=false;}
+});
+
+byId('recovery-confirm-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const button=event.currentTarget.querySelector('button[type="submit"]');
+  const otp=byId('recovery-otp');
+  const code=otp.value;
+  otp.value='';
+  button.disabled=true;
+  status.textContent='Verifying the replacement authenticator…';
+  try{
+    const result=await api('/auth/recovery/finish','POST',{code});
+    if(result.recoveryCompleted!==true)throw new Error('Recovery incomplete');
+    const session=await api('/auth/session','GET');
+    if(session.role!=='PlatformSuperAdmin')throw new Error('Session unavailable');
+    showSignedIn(session);
+    showRecoveryCodes(result.codes);
+    status.textContent='Authenticator replaced. Save the new recovery codes securely before leaving this page.';
+  }catch{
+    status.textContent='New authenticator code not accepted. Retry a current code; recovery expires in 10 minutes.';
+  }finally{button.disabled=false;}
+});
+
+byId('admin-recovery-generate-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const button=event.currentTarget.querySelector('button[type="submit"]');
+  const otp=byId('admin-recovery-otp');
+  const code=otp.value;
+  otp.value='';
+  button.disabled=true;
+  status.textContent='Verifying your current authenticator…';
+  try{
+    const result=await api('/auth/recovery/codes','POST',{code});
+    showRecoveryCodes(result.codes);
+    status.textContent='Previous backup codes were replaced. Save these eight new codes offline.';
+  }catch(error){
+    if(error.message==='401')show('login','Sign in again to manage recovery codes.');
+    else status.textContent='Could not generate backup codes. Verify the current authenticator code.';
+  }finally{button.disabled=false;}
+});
+
+byId('admin-recovery-copy').addEventListener('click',async()=>{
+  if(recoveryCodesPanel.hidden||!recoveryCodesText.value)return;
+  try{
+    await navigator.clipboard.writeText(recoveryCodesText.value);
+    status.textContent='Backup codes copied. Keep them offline and private.';
+  }catch{
+    status.textContent='Copy unavailable. Select the codes in the text field and save them securely.';
+  }
+});
+byId('admin-recovery-hide').addEventListener('click',()=>{
+  clearRecoveryCodes();
+  status.textContent='Recovery codes hidden. They cannot be shown again; you can generate a new set with MFA.';
+});
+
 byId('sign-out').addEventListener('click',async event=>{
   const button=event.currentTarget;
   button.disabled=true;
@@ -777,6 +891,8 @@ api('/auth/session','GET').then(
     try{
       const wizard=await api('/wizard','GET');
       byId('open-setup').hidden=true;
+      byId('start-recovery').hidden=wizard.recoveryEnabled!==true;
+      byId('open-recovery').hidden=wizard.recoveryEnabled!==true;
       if(wizard.setup===true){
         show('wizard');
         return;
