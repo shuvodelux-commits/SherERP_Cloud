@@ -86,10 +86,10 @@ test('existing M06 rules reject Bank overpayment and duplicate payment row IDs',
   assert.throws(()=>check('67',[bank('20'),bank('20')]),/duplicate/i);
 });
 
-test('existing M06 rules reject missing/inactive bank account identity and fractional-paisa tender',()=>{
+test('M06 rejects invalid Bank identity while M08 rejects sub-paisa and exponent tender input',()=>{
   assert.throws(()=>check('67',[{id:'BANK',method:'Bank',amount:'0.25',accountId:'FOREIGN'}]),/active payment account/i);
-  assert.throws(()=>check('67',[{id:'CASH',method:'Cash',amount:'0.001'}]),/two decimal/i);
-  assert.throws(()=>check('67',[{id:'CASH',method:'Cash',amount:'1e3'}]),/two decimal/i);
+  assert.throws(()=>check('67',[{id:'CASH',method:'Cash',amount:'0.001'}]),TypeError);
+  assert.throws(()=>check('67',[{id:'CASH',method:'Cash',amount:'1e3'}]),TypeError);
 });
 
 test('invalid canonical input values or unsafe JS numeric input are rejected before M06',()=>{
@@ -149,15 +149,17 @@ test('300 deterministic split-payment cases conserve exact integer paisa and rem
     const cashApplied=BigInt(random()%Number(grand-bankPaid+1n));
     const cashChange=BigInt(random()%200);
     const amount=cashApplied+cashChange;
+    const sourceCashApplied=amount<grand-bankPaid?amount:grand-bankPaid;
+    const expectedChange=amount-sourceCashApplied;
     const instructions=[
       ...(bankPaid>0n?[bank(String(bankPaid))]:[]),
       ...(amount>0n?[cash(String(amount))]:[])
     ];
     const r=check(String(grand),instructions);
     assert.equal(BigInt(r.paidPaisa)+BigInt(r.duePaisa),grand);
-    assert.equal(BigInt(r.cashChangePaisa),cashChange);
+    assert.equal(BigInt(r.cashChangePaisa),expectedChange);
     assert.equal(r.legs.reduce((s,p)=>s+BigInt(p.appliedPaisa),0n),BigInt(r.paidPaisa));
     assert.equal(r.legs.filter(p=>p.method==='Cash').reduce((s,p)=>
-      s+BigInt(p.tenderedPaisa)-BigInt(p.appliedPaisa),0n),cashChange);
+      s+BigInt(p.tenderedPaisa)-BigInt(p.appliedPaisa),0n),expectedChange);
   }
 });
