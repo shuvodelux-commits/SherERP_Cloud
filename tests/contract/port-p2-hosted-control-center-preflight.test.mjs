@@ -6,8 +6,13 @@ import {
   verifyHostedControlCenterReadOnly,
   verifyOwnerReadyMigrationFiles
 } from '../../scripts/port-p2-hosted-control-center-preflight.mjs';
+import {OWNER_READY_SHOP_MIGRATION_PLAN} from '../../src/db/m03-owner-ready-shop-migrations.js';
 
 const secret='SYNTHETIC_BEARER_DO_NOT_PRINT_012345';
+// The reviewed, SHA-pinned SQL profile is the authority. An append-only
+// migration must not break read-only hosted preflight tests via a stale count.
+const reviewedMigrations=OWNER_READY_SHOP_MIGRATION_PLAN;
+const reviewedMigrationCount=reviewedMigrations.length;
 const fixture=()=>({
   formatVersion:1,
   accountId:'0123456789abcdef0123456789abcdef',
@@ -62,12 +67,12 @@ function simulatedCloudflare(values=resources(),options={}){
   return {fetchFn,calls};
 }
 
-test('offline hosted plan is deterministic, ten-step and never authorizes a remote operation',()=>{
+test('offline hosted plan tracks the reviewed migration manifest without authorizing remote operations',()=>{
   const plan=planHostedControlCenterDryRun(fixture());
   assert.deepEqual(plan,planHostedControlCenterDryRun(fixture()));
   assert.equal(plan.mode,'offline-dry-run');
   assert.equal(plan.remoteQueries,0);
-  assert.equal(plan.ownerReadyMigrationCount,10);
+  assert.equal(plan.ownerReadyMigrationCount,reviewedMigrationCount);
   assert.equal(plan.migrationFilesVerified,false);
   for(const flag of ['allowCreateDatabase','allowRemoteWrites','allowRemoteMigrations','allowDeploy','allowOwnerActivation'])
     assert.equal(plan[flag],false,flag);
@@ -80,15 +85,19 @@ test('offline hosted plan is deterministic, ten-step and never authorizes a remo
     fixture().origins.owner,fixture().googleClientId,secret])assert.ok(!message.includes(privateValue));
 });
 
-test('Owner-ready source preflight verifies exactly ten reviewed SQL files before HTTP',async()=>{
-  assert.deepEqual(await verifyOwnerReadyMigrationFiles(),{verified:true,migrationCount:10});
-  const changed=async(file)=> {
-    const bytes=await readFile(file);
-    return String(file).includes('0013_product_catalog_revisions.sql')
-      ?Buffer.concat([bytes,Buffer.from('\n-- unexpected mutation')]):bytes;
-  };
-  await assert.rejects(()=>verifyOwnerReadyMigrationFiles({readFileFn:changed}),
-    /Hosted Control Center preflight denied/);
+test('Owner-ready source preflight verifies every SHA-pinned SQL file before HTTP',async()=>{
+  assert.ok(reviewedMigrationCount>=10,'unexpected truncation of reviewed Owner-ready migrations');
+  assert.deepEqual(await verifyOwnerReadyMigrationFiles(),
+    {verified:true,migrationCount:reviewedMigrationCount});
+  for(const target of [reviewedMigrations[3].name,reviewedMigrations.at(-1).name]){
+    const changed=async(file)=> {
+      const bytes=await readFile(file);
+      return String(file).endsWith('/'+target.split('/').at(-1))
+        ?Buffer.concat([bytes,Buffer.from('\\n-- unexpected mutation')]):bytes;
+    };
+    await assert.rejects(()=>verifyOwnerReadyMigrationFiles({readFileFn:changed}),
+      /Hosted Control Center preflight denied/);
+  }
 });
 
 test('hosted preflight makes six Cloudflare GETs, proves exact Worker D1 bindings and redacts results',async()=>{
@@ -96,7 +105,7 @@ test('hosted preflight makes six Cloudflare GETs, proves exact Worker D1 binding
   const output=await verifyHostedControlCenterReadOnly(fixture(),{token:secret,fetchFn});
   assert.equal(output.mode,'cloudflare-read-only');
   assert.equal(output.remoteQueries,6);
-  assert.equal(output.ownerReadyMigrationCount,10);
+  assert.equal(output.ownerReadyMigrationCount,reviewedMigrationCount);
   assert.equal(output.migrationFilesVerified,true);
   assert.deepEqual(output.verified,[
     'cloudflare-account','workers-subdomain','control-d1','pilot-d1',
