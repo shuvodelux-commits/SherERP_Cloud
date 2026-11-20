@@ -300,3 +300,57 @@ test('JSON object field order does not create a false changed-intent conflict',a
   assert.equal((await submitLocalFirstPurchase(DB,inputs,{now:NOW})).state,'replay');
   assert.deepEqual(await snapshot(ctx),before);
 });
+
+
+test('frozen Purchase.gs purchase.add denies POS-only roles before any Supplier, stock or money mutation',async()=>{
+  await DB.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
+    VALUES ('M03PosSaleOnly','Active','{"pos":{"add":true},"purchase":{"add":false}}','')`).run();
+  const ctx=await shop({userRole:'M03PosSaleOnly'});
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>post(ctx),/denied|permission|refused/i,
+    'POS sale permission must not authorize createPurchase');
+  assert.deepEqual(await snapshot(ctx),before);
+});
+
+test('frozen Purchase.gs purchase.add authorizes an unpaid purchase without POS grant or Cash Book movement',async()=>{
+  await DB.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
+    VALUES ('M03PurchaseOnly','Active','{"pos":{"add":false},"purchase":{"add":true}}','')`).run();
+  const ctx=await shop({userRole:'M03PurchaseOnly'});
+  const result=await post(ctx,{
+    lines:[baseLines()[0]],payments:[]
+  });
+  assert.deepEqual(result,{state:'inserted',purchaseId:'PUR-000001',
+    grandPaisa:'34',paidPaisa:'0',duePaisa:'34'});
+  const s=await snapshot(ctx);
+  assert.deepEqual(s.stock.filter(x=>x.product_id==='A').map(x=>x.quantity),[11]);
+  assert.deepEqual(s.supplierLedger.map(x=>[
+    x.entry_type,x.debit_paisa,x.credit_paisa
+  ]),[['Purchase',34,0]]);
+  assert.deepEqual(s.moneyBook,[]);
+  assert.equal(s.seal.length,1);
+});
+
+test('frozen source Cash Session check still rejects zero-paid purchase when Closed',async()=>{
+  const ctx=await shop({userRole:'M03PurchaseOnly',cashStatus:'Closed'});
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>post(ctx,{
+    lines:[baseLines()[0]],payments:[]
+  }),/denied|session|refused/i);
+  assert.deepEqual(await snapshot(ctx),before);
+});
+
+test('revoking purchase.add between JS preflight and SQL batch blocks the complete purchase',async()=>{
+  await DB.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
+    VALUES ('M03PurchaseRevoked','Active','{"purchase":{"add":true}}','')`).run();
+  const ctx=await shop({userRole:'M03PurchaseRevoked'});
+  const before=await snapshot(ctx);
+  await assert.rejects(()=>submitLocalFirstPurchase(DB,intent(ctx,{
+    lines:[baseLines()[0]],payments:[]
+  }),{
+    now:NOW,
+    beforeBatch:async db=>db.prepare(
+      'UPDATE auth_roles SET permissions_json=? WHERE role_name=?'
+    ).bind('{"purchase":{"add":false}}','M03PurchaseRevoked').run()
+  }),/denied|refused/i);
+  assert.deepEqual(await snapshot(ctx),before);
+});
