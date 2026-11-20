@@ -1,0 +1,30 @@
+name: M03 MVP First-Shop HTTP business lifecycle (synthetic D1)
+
+on:
+  pull_request:
+    paths:
+      - "tests/integration/mvp-first-shop-http-lifecycle-workerd.spec.mjs"
+      - "tests/fixtures/m03-clean-shop-harness.mjs"
+      - "src/m03-owner-redemption-worker.js"
+      - ".github/workflows/m03-first-shop-http-lifecycle.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  shop-http-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Execute exact Owner API transaction lifecycle on isolated Workerd/D1
+        run: node --test tests/integration/mvp-first-shop-http-lifecycle-workerd.spec.mjs
