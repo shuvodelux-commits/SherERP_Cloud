@@ -81,7 +81,8 @@ async function currentAuthority(scope,token){
   const tokenHash=await hashOpaqueSessionToken(token);
   if(!tokenHash)return null;
   const bindings=[scope.shopId,scope.databaseId,scope.databaseMarker,tokenHash];
-  const row=await scope.shopDb.prepare(`SELECT ${AUTH} AS allowed`).bind(...bindings).first();
+  const DB=scope.shopDb;
+  const row=await DB.prepare(`SELECT ${AUTH} AS allowed`).bind(...bindings).first();
   return row?.allowed===1?bindings:null;
 }
 async function currentLot(DB,sku){
