@@ -89,7 +89,11 @@ test('fail-closed on wrong host, missing explicit mode, approved identity, facto
   }
   assert.equal((await get('/',{...base,PLATFORM_OPERATOR_GOOGLE_SUBJECT:'not-valid!'})).status,503);
   assert.equal((await get('/',{...base,PLATFORM_FACTOR_VERSION:'0'})).status,503);
-  assert.equal((await get('/?token=never')).status,400);
+  const cleanEntry=await get('/?token=never');
+  assert.equal(cleanEntry.status,302,'homepage query parameters are stripped');
+  assert.equal(cleanEntry.headers.get('Location'),origin+'/','query input never selects redirect destination');
+  assert.equal((await get('/api/platform/auth/session?token=never')).status,400,
+    'authentication API query parameters remain unsupported');
   assert.equal((await post('/api/platform/auth/challenge',base,{Origin:'https://attacker.test'})).status,403);
   assert.equal((await post('/api/platform/auth/challenge',base,{Origin:''})).status,403);
 });

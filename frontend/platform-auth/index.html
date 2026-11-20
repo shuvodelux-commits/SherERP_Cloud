@@ -73,6 +73,22 @@
 
     <section id="signed-in" hidden>
       <h1 tabindex="-1">Signed in as Platform Super Admin</h1>
+      <section class="admin-overview" aria-labelledby="admin-overview-title">
+        <h2 id="admin-overview-title">Control Center overview</h2>
+        <div class="admin-overview-grid">
+          <div class="admin-overview-stat">
+            <span>Admin authentication</span>
+            <strong id="admin-auth-state">Active</strong>
+            <small>Google sign-in and MFA verified</small>
+          </div>
+          <div class="admin-overview-stat">
+            <span>Business directory</span>
+            <strong id="admin-directory-count">—</strong>
+            <small id="admin-directory-status">Checking configuration…</small>
+          </div>
+        </div>
+        <p id="admin-setup-status" class="admin-setup-status" role="status">Checking business setup…</p>
+      </section>
       <form id="business-form" hidden>
         <label for="business-name">Business name</label>
         <input id="business-name" type="text" required maxlength="120" autocomplete="off">

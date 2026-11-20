@@ -59,7 +59,15 @@ export default {
     const url=new URL(request.url);
     if(url.origin!==env?.PLATFORM_AUTH_ORIGIN || !WORKERS_ORIGIN.test(url.origin))return deny();
     if(!configured(env))return unavailable();
-    if(url.search)return Response.json({error:'Query parameters are unsupported'},{status:400,headers});
+    if(url.search){
+      // A pasted Admin link may contain tracking/query parameters. Strip them
+      // from the entry page only; never interpret a user-supplied redirect.
+      // All API methods and assets retain the fail-closed query policy.
+      if(request.method==='GET' && url.pathname==='/' && !request.headers.has('Origin')){
+        return new Response(null,{status:302,headers:{...headers,Location:env.PLATFORM_AUTH_ORIGIN+'/'}});
+      }
+      return Response.json({error:'Query parameters are unsupported'},{status:400,headers});
+    }
     const requestOrigin=request.headers.get('Origin');
     if((request.method==='POST'||requestOrigin!==null) && requestOrigin!==url.origin)return deny();
     // The public Admin login page has no Cloudflare Access outer throttle.
