@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { createTestHarness, unstable_splitSqlQuery } from 'wrangler';
 import platform from '../../src/m03-private-platform-auth-worker.js';
-import { applyLocalShopMigrations, shopMigrationPlan } from '../fixtures/port-p2-local-shop-migrations.mjs';
+import { applyLocalShopMigrations, shopMigrationPlan, ownerReadyShopMigrationPlan, loadLocalShopMigrations } from '../fixtures/port-p2-local-shop-migrations.mjs';
 import { hashOpaqueSessionToken } from '../../src/auth/session-token.js';
 
 const origin = 'https://platform.example.test';
@@ -273,4 +273,73 @@ test('Owner-ready local setup refuses baseline-only migrations before publishing
   assert.equal((await env.SHOP_A_DB.prepare(
     "SELECT count(*) AS n FROM sqlite_schema WHERE type='table' AND name='products'"
   ).first()).n,0);
+});
+
+test('Owner-ready recovery seals six D1 migrations after partial failure without second database allocation',async t=>{
+  const {request,db,env,inventory}=await startControlCenter(t);
+  const operationId=crypto.randomUUID();
+  const input={operationId,displayName:'Safe Recovery',ownerEmail:'safe.recovery@gmail.com'};
+  assert.equal((await request('/shops',input)).status,202);
+  let allocations=0,preparations=0;
+  const allocationsByAttempt=new Map();
+  const provider={
+    async createDatabase(action){
+      allocations++;
+      const receipt={...action,id:inventory[0].id,binding:inventory[0].binding,evidenceRef:'fixture-ownerready'};
+      allocationsByAttempt.set(action.attemptId,receipt);
+      return receipt;
+    },
+    async findCreation(action){return allocationsByAttempt.get(action.attemptId);},
+    async verifyTarget(scope,candidate){
+      return scope.databaseId===inventory[0].id&&scope.binding===inventory[0].binding&&candidate===env.SHOP_A_DB;
+    },
+    async prepareShop(scope){
+      preparations++;
+      if(preparations===1){
+        assert.deepEqual(await applyLocalShopMigrations(env.SHOP_A_DB,scope,{
+          plan:ownerReadyShopMigrationPlan,through:3
+        }),{applied:3});
+        throw new Error('synthetic interruption after three sealed Shop migrations');
+      }
+      assert.deepEqual(await applyLocalShopMigrations(env.SHOP_A_DB,scope,{
+        plan:ownerReadyShopMigrationPlan
+      }),{applied:3},'retry must apply exactly the missing three SQL files');
+    }
+  };
+  const bindings={
+    PLATFORM_LOCAL_OWNER_READY_ENABLED:'true',PLATFORM_LOCAL_SHOP_MIGRATIONS:ownerReadyShopMigrationPlan,
+    PLATFORM_LOCAL_SHOP_PROVIDER:provider
+  };
+  const first=await request('/shops/resume',{operationId},bindings);
+  assert.equal(first.status,200);
+  assert.deepEqual(
+    (({status,failedStage})=>({status,failedStage}))(await first.json()),
+    {status:'allocated',failedStage:'schema-migrations'}
+  );
+  const shop=env.SHOP_A_DB;
+  const list=()=>shop.prepare('SELECT position,name,checksum FROM port_p2_shop_migrations ORDER BY position').all();
+  assert.equal((await list()).results.length,3);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_owner_gmail_approvals').first()).n,0);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_bindings').first()).n,0);
+  const scope={shopId:(await db.prepare('SELECT shop_id FROM platform_shop_reservations').first()).shop_id,
+    databaseId:inventory[0].id,databaseMarker:(await db.prepare(
+      'SELECT database_marker FROM platform_shop_provisioning'
+    ).first()).database_marker};
+  const mutatedFiles=await loadLocalShopMigrations(ownerReadyShopMigrationPlan);
+  mutatedFiles[3].sql+='\n-- modified Owner Product DDL';
+  await assert.rejects(applyLocalShopMigrations(shop,scope,{
+    plan:ownerReadyShopMigrationPlan,files:mutatedFiles
+  }),/MIGRATION_CHECKSUM_MISMATCH/);
+  assert.equal((await list()).results.length,3,'unreviewed DDL changes no receipts');
+  const again=await request('/shops/resume',{operationId},bindings);
+  assert.equal(again.status,200);
+  assert.equal((await again.json()).status,'ready');
+  assert.deepEqual((await list()).results,ownerReadyShopMigrationPlan.map(({name,checksum},i)=>({
+    position:i+1,name,checksum
+  })));
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_owner_gmail_approvals').first()).n,1);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_bindings').first()).n,1);
+  assert.deepEqual([allocations,preparations],[1,2]);
+  assert.equal((await (await request('/shops/resume',{operationId},bindings)).json()).status,'ready');
+  assert.deepEqual([allocations,preparations],[1,2],'ready replay never reallocates or remigrates');
 });
