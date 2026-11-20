@@ -43,5 +43,5 @@ jobs:
         run: npm run build:owner-frontend
       - name: Generate synthetic deploy-time profile
         run: node scripts/build-shop-user-deploy.mjs --generate
-      - name: Bundle ONLY: never deploy, never connect any live D1
+      - name: Bundle only without deployment or live database
         run: npx --yes wrangler@4.161.0 deploy --dry-run --config wrangler.shop-user.jsonc
