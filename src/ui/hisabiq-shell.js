@@ -350,7 +350,7 @@
     copy.className = 'h-shell-business-copy';
     var branch = document.createElement('span');
     branch.className = 'h-shell-business-branch';
-    branch.textContent = 'Main branch · Dhaka';
+    branch.textContent = 'Current business';
     copy.appendChild(businessName);
     copy.appendChild(branch);
     business.appendChild(initials);
