@@ -72,6 +72,42 @@ test('RED: no activation without exact approved Shop binding and 13 receipts',()
  for(const mutation of malformed)assert.throws(()=>buildFirstShopCoreCandidate(
    current(),{...evidence(),...mutation},approval));
 });
+const migratedBlockers=blockers.filter(x=>
+ !['SUPPLIER_CASH_MIGRATION_0010_MISSING',
+   'SUPPLIER_CASH_RECONCILIATION_0011_MISSING'].includes(x));
+const migratedEvidence=()=>({...evidence(),
+ approvedSupplierOverlayVerified:true,blockers:migratedBlockers});
+
+test('core-only first-Shop release accepts the exact approved 0010+0011 overlay',()=>{
+ const base=current();
+ const core=buildFirstShopCoreCandidate(base,migratedEvidence(),approval);
+ assert.equal(core.vars.OWNER_CATALOG_ENABLED,'true');
+ assert.equal(core.vars.OWNER_MVP_POS_CASH_ENABLED,'true');
+ assert.equal(core.vars.OWNER_MVP_CASH_RETURN_ENABLED,'false');
+ assert.equal(core.vars.OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED,'false');
+ assert.deepEqual(core.d1_databases,base.d1_databases);
+ assert.equal(base.vars.OWNER_CATALOG_ENABLED,'false','do not modify signed input');
+});
+
+test('core release rejects incomplete, contradictory and unverified migrated schema evidence',()=>{
+ for(const changed of [
+   {approvedSupplierOverlayVerified:false},
+   {approvedSupplierOverlayVerified:undefined},
+   {approvedSupplierOverlayVerified:'true'},
+   {blockers:[...migratedBlockers,'SUPPLIER_CASH_MIGRATION_0010_MISSING']},
+   {blockers:[...blockers],approvedSupplierOverlayVerified:true},
+   {blockers:migratedBlockers.slice(1)},
+   {blockers:[...migratedBlockers,'BASELINE_13_SCHEMA_SEAL_DRIFT']},
+   {baseline13Verified:false}
+ ]){
+   assert.throws(()=>buildFirstShopCoreCandidate(
+     current(),{...migratedEvidence(),...changed},approval));
+ }
+ assert.throws(()=>buildFirstShopCoreCandidate(current(),
+   {...evidence(),approvedSupplierOverlayVerified:true},approval),
+   'old missing-migration report may not falsely claim approved overlay');
+});
+
 test('RED: no generic multi-shop, swapped binding, public preview, or writable returns',()=>{
  const changes=[
   b=>b.d1_databases.push({binding:'SHOP_A',database_id:uuid(5),database_name:'shop-other'}),
