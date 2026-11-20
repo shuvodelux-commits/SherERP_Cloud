@@ -77,6 +77,23 @@ BEGIN
     WHERE s.supplier_id=NEW.supplier_id AND s.status='Active'
       AND s.current_due_paisa>=NEW.paid_paisa
   );
+  -- A cash payout is a current-session cash movement, never an opening
+  -- balance. Require enough verified physical cash (prior physical count,
+  -- cash sale receipts minus refunds and previously paid suppliers).
+  SELECT RAISE(ABORT,'MVP_SUPPLIER_CASH_INSUFFICIENT_DRAWER')
+  WHERE COALESCE((
+    SELECT cs.opening_paisa + cs.carried_opening_paisa
+      + COALESCE((SELECT SUM(b.received_paisa)
+        FROM owner_mvp_sale_cash_book b
+        WHERE b.cash_sequence=NEW.cash_sequence),0)
+      - COALESCE((SELECT SUM(b.debit_paisa)
+        FROM owner_mvp_return_cash_book b
+        WHERE b.cash_sequence=NEW.cash_sequence),0)
+      - COALESCE((SELECT SUM(b.paid_paisa)
+        FROM owner_mvp_supplier_payment_cash_book b
+        WHERE b.cash_sequence=NEW.cash_sequence),0)
+    FROM owner_mvp_cash_sessions cs WHERE cs.sequence=NEW.cash_sequence
+  ),-1) < NEW.paid_paisa;
   SELECT RAISE(ABORT,'MVP_SUPPLIER_CASH_NOT_CURRENT_DAY')
   WHERE NEW.paid_date!=date('now','+6 hours');
 END;
