@@ -67,7 +67,7 @@ export async function listLocalProvisioning(db, token) {
   const hash = await hashOpaqueSessionToken(token);
   if (!hash) return { code: 401 };
   // One D1 read/snapshot covers both session validity and row scoping.
-  const response = await db.prepare(\`WITH admin AS (SELECT f.subject \${CURRENT_PLATFORM_ADMIN_FROM}),
+  const response = await db.prepare(`WITH admin AS (SELECT f.subject ${CURRENT_PLATFORM_ADMIN_FROM}),
     recent AS (
       SELECT r.operation_id AS operationId,r.display_name AS displayName,r.shop_id AS shopId,
         p.owner_email AS ownerEmail,p.stage AS status,p.failed_stage AS failedStage,
@@ -81,7 +81,7 @@ export async function listLocalProvisioning(db, token) {
       recent.operationId,recent.displayName,recent.shopId,recent.ownerEmail,
       recent.status,recent.failedStage,recent.createdAtMs
     FROM (SELECT 1) singleton LEFT JOIN recent ON TRUE
-    ORDER BY recent.createdAtMs DESC,recent.operationId DESC\`).bind(hash).all();
+    ORDER BY recent.createdAtMs DESC,recent.operationId DESC`).bind(hash).all();
   const rows = response.results;
   if (rows[0]?.authorized !== 1) return { code: 401 };
   return {
