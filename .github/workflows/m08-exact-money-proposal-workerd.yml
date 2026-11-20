@@ -1,0 +1,35 @@
+name: M08 exact-decimal proposal real local Workerd D1 (test-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  m08-exact-money:
+    name: M08 exact monetary quote proof (real local Workerd/D1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned local-only Wrangler
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify frozen original accounting source
+        run: npm run verify:source
+      - name: Pure BigInt decimal and source Tile parity
+        run: node --test tests/m08-exact-decimal-proposal.test.mjs
+      - name: Real isolated Workerd/D1 integer conservation and late rollback
+        run: node --test tests/integration/m08-exact-decimal-workerd.spec.mjs
+      - name: Enforce public preview remains DB-free
+        run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
