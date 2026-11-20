@@ -9,6 +9,8 @@ import {patchM01Accessibility} from './patch-m01-a11y.mjs';
 import {installM01ProductsPreviewAssets,patchM01ProductsPreview} from './patch-m01-products-preview.mjs';
 
 const ownerNotice='<div id="owner-data-notice" role="status" style="padding:10px 16px;background:#fff4ce;color:#573b00;border-bottom:1px solid #e8c86b;font-weight:600;">Business data is not connected. ERP screens are visible, but reads and saves are unavailable.</div>';
+const ownerSupportActivity="<section id=\"owner-support-activity\" aria-label=\"Owner support activity\" hidden><div class=\"owner-support-title\">Support activity · read-only</div><p>The Super Admin support history for this shop. Only your own business is shown.</p><button type=\"button\" id=\"owner-support-refresh\" aria-controls=\"owner-support-events\">View support activity</button><p id=\"owner-support-status\" role=\"status\" aria-live=\"polite\"></p><ol id=\"owner-support-events\" aria-label=\"Recorded support actions\"></ol></section>";
+const ownerSupportCss="<style>#owner-support-activity[hidden]{display:none!important}#owner-support-activity{margin:0;padding:12px 16px;background:#fff;color:#172033;border-bottom:1px solid #e4e7ec;font:14px/1.45 Arial,sans-serif;max-width:100%;overflow-wrap:anywhere}#owner-support-activity .owner-support-title{font-weight:700;margin-bottom:4px}#owner-support-activity p{margin:4px 0 8px;color:#475467}#owner-support-refresh{padding:8px 12px;min-height:36px;border-radius:6px;border:1px solid #1a56db;background:#fff;color:#123fae;font:inherit;cursor:pointer}#owner-support-refresh:focus-visible{outline:2px solid #1a56db;outline-offset:3px}#owner-support-refresh:disabled{opacity:.65;cursor:wait}#owner-support-events{padding-left:22px;margin:10px 0 0;max-width:100%}#owner-support-events li{padding:5px 0;overflow-wrap:anywhere}</style>";
 const ownerLogin=`<div id="loginOverlay" class="login-overlay" hidden>
   <div class="login-card"><div class="login-brand">SherERP Cloud</div>
     <h2 class="login-title">Owner session required</h2>
@@ -26,13 +28,68 @@ export function patchOwnerApp(html){
   const app='<div id="app" style="visibility:hidden;">';
   const main='<div class="main">\n      <header class="topbar">';
   if(html.split(app).length!==2||html.split(main).length!==2)throw new Error('Original ERP app shell boundary changed');
-  html=html.replace(overlay,ownerLogin).replace(main,'<div class="main">\n      '+ownerNotice+'\n      <header class="topbar">');
+  html=html.replace(overlay,ownerLogin).replace(main,'<div class="main">\n      '+ownerNotice+'\n      '+ownerSupportActivity+'\n      <header class="topbar">');
 
   const start='  function bootstrapSession_() {';
   const next='\n  function wireLoginForm_() {';
   const a=html.indexOf(start),b=html.indexOf(next,a);
   if(a<0||b<0||html.indexOf(start,a+start.length)>=0)throw new Error('Owner session bootstrap boundary changed');
-  const bootstrap=`  function bootstrapSession_() {
+  const bootstrap=`  function ownerSupportActivityInit_(session) {
+    var panel = document.getElementById('owner-support-activity');
+    var button = document.getElementById('owner-support-refresh');
+    var status = document.getElementById('owner-support-status');
+    var list = document.getElementById('owner-support-events');
+    if (!panel || !button || !status || !list) return;
+    panel.hidden = session.supportAuditEnabled !== true;
+    list.replaceChildren();
+    status.textContent = '';
+    if (panel.hidden || button.dataset.wired === 'yes') return;
+    button.dataset.wired = 'yes';
+    button.addEventListener('click', async function () {
+      button.disabled = true;
+      list.replaceChildren();
+      status.textContent = 'Checking your shop support activity…';
+      try {
+        var response = await fetch('/api/owner/support/audit', {
+          method:'GET',credentials:'same-origin',cache:'no-store',
+          signal:AbortSignal.timeout(8000)
+        });
+        if (response.status === 401) {
+          panel.hidden = true;
+          status.textContent = 'Sign in again to view support activity.';
+          return;
+        }
+        if (!response.ok) throw new Error('Audit is not available');
+        var body = await response.json();
+        if (!body || !Array.isArray(body.events) || body.events.length > 50)
+          throw new Error('Invalid support audit');
+        var items = [];
+        for (var row of body.events) {
+          if (!row || !['START','READ','END'].includes(row.eventType) ||
+              !Number.isSafeInteger(row.eventAtMs) || row.eventAtMs <= 0 ||
+              typeof row.reason !== 'string' || row.reason.length > 180 ||
+              typeof row.operationId !== 'string' ||
+              row.actor !== 'Platform Super Admin') throw new Error('Invalid support event');
+          var stamp = new Date(row.eventAtMs);
+          if (!Number.isFinite(stamp.getTime())) throw new Error('Invalid event time');
+          var li = document.createElement('li');
+          li.textContent = row.eventType + ' · ' + stamp.toLocaleString() +
+            ' · ' + row.reason + ' · Platform Super Admin';
+          items.push(li);
+        }
+        list.replaceChildren(...items);
+        status.textContent = items.length ? 'Recent support activity for this shop:' :
+          'No support activity recorded.';
+      } catch {
+        list.replaceChildren();
+        status.textContent = 'Support activity is temporarily unavailable.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
+  function bootstrapSession_() {
     fetch('/api/owner/auth/session', {credentials:'same-origin',cache:'no-store'})
       .then(function (response) {
         if (!response.ok) throw new Error('Owner session unavailable');
@@ -46,6 +103,7 @@ export function patchOwnerApp(html){
             session.dashboard.dataAvailable !== false) {
           throw new Error('Invalid Owner session');
         }
+        ownerSupportActivityInit_(session);
         onAuthenticated_({role:'Owner',shopId:session.shopId,shopName:session.dashboard.displayName,
           user:{id:session.shopId,name:session.dashboard.displayName,mobile:'',role:'Owner'}});
       })
@@ -162,6 +220,7 @@ export function patchOwnerApp(html){
 `;
   html=html.slice(0,e)+rpc+html.slice(f);
   html=html.replace('</head>', '<style>[data-owner-clean-products] #m01ProductUnitPanel {display:none!important}</style></head>');
+  html=html.replace('</head>',ownerSupportCss+'</head>');
   const catalogReplacements=[
     ["    prodState.addSource = source || 'products';", `    prodState.addSource = source || 'products';
     if (ownerProductsEnabled) {

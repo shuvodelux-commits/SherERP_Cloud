@@ -162,7 +162,12 @@ app.get('/api/owner/auth/session',protectLogin,async c=>{
   const session=await validateOwnerSession(c.env,getCookie(c,SESSION_COOKIE),{
     dashboard:c.env.OWNER_DASHBOARD_BOOTSTRAP_ENABLED==='true',
   });
-  return session?c.json(session):denied(c);
+  // Only an authenticated current Owner learns about the read-only audit UI.
+  // Hosted configs omit OWNER_SUPPORT_AUDIT_ENABLED, keeping this default-off.
+  return session?c.json({
+    ...session,
+    ...(c.env.OWNER_SUPPORT_AUDIT_ENABLED==='true'?{supportAuditEnabled:true}:{}),
+  }):denied(c);
 });
 
 app.post('/api/owner/auth/logout',protectLogin,async c=>{

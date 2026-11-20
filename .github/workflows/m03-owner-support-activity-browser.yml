@@ -1,0 +1,29 @@
+name: M03 Owner Support Activity UI and existing ERP browser regressions
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  owner-support-activity:
+    name: M03 Owner activity hidden by default, redacted list, XSS/mobile and original ERP
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install lockfile dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Test Owner support activity and original ERP authenticated browser
+        run: node --test qa/m03-owner-support-activity-browser.spec.mjs qa/m03-owner-erp-browser.spec.mjs
