@@ -6,6 +6,16 @@
 >
 > **Original source of business truth:** [Mohim_ERP](https://github.com/shuvodelux-commits/Mohim_ERP) at pinned `29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`. Do not modify legacy GAS or its source data without a separate approved migration/cutover.
 
+## 20 November 2026 — hosted Admin first-run deployment handoff (newest)
+
+**Verified GitHub source:** `main@0b12f021fa3024ff09feff0aa82a63e62232b806`, including first-Admin browser setup PR #814 and hosted directory PR #813. Local Workerd/D1 first-run and Accessless auth regressions passed. These are **not** real Google/browser activation evidence.
+
+**Deployment performed:** The new Cloudflare account's Worker `admin` was updated from Hello World to the private Accessless Google/TOTP Admin entry at `https://admin.hisab.workers.dev` (deployed version `2ca6e483-f996-44e7-bdc0-10a6c6add570`). A **separate empty Control D1**, `shererp-admin-control-v2`, received the reviewed platform-auth migrations 0001–0004. The previously enrolled `shererp-control` D1 remains intact and unmodified. The Worker has a per-minute rate limiter and no Shop data bindings, financial API, reservations or dynamic provisioning enabled.
+
+**Current LIVE state: FAIL-CLOSED 503, not yet usable.** `wrangler secret list --name admin` reports no secrets and unauthenticated `/`, `/api/platform/wizard`, `/api/platform/auth/session` return HTTP 503. Two 64-character secrets were generated into 0600-permission operator-local files but could not be installed via the connected device. No setup token, Google credential, QR secret or TOTP was sent to GitHub or chat. The operator must add `PLATFORM_BOOTSTRAP_CODE` and `PLATFORM_FACTOR_ENCRYPTION_KEY` in Cloudflare Dashboard, verify the Google OAuth Authorized JavaScript origin, then enroll Gmail + authenticator code through the UI. Follow [START_HERE.md](docs/installation/START_HERE.md) Step 12. Only then test `/api/platform/wizard` setup closure, session restore and logout.
+
+**Remaining:** Hosted first-admin Google/TOTP signoff; separately reviewed Control Center onboarding schemas and real Shop D1 provisioner; authenticated Owner/ERP financial loop and M10/M11 release gates. The original ERP and public Worker remain **production NO-GO**. Do not silently rebind the Admin to the old, partially enrolled Control D1 or claim this staging deployment restored that identity.
+
 ## 20 November 2026 — current merged-code integration audit (no-repeat QA)
 
 **No-rebuild decision.** Do **not** recreate the original ERP UI, POS V2 cart, FIFO, Purchase, Returns, Party, Cash/Bank or report algorithms merely because an operational browser/API route is missing. Reuse their merged modules and test evidence. As of audited main above, GitHub has **zero open PRs**; [#795](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/795), [#797](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/797), [#798](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/798) and [#799](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/799) are merged. Older open-PR snapshots farther down this file reflect their original dates, **not** current state.
