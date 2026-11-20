@@ -36,6 +36,10 @@ function validateDraft(input){
   return payload;
 }
 
+// Reuse exactly the validated Owner Product input for Support corrections.
+// Exporting the pure validator does not change existing Owner posting.
+export const validateOwnerProductDraft=validateDraft;
+
 export async function createOwnerProduct(scope,{token,ownerSubject,input}){
   const payload=validateDraft(input);
   if(!payload)return {status:'invalid'};
