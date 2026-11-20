@@ -117,7 +117,7 @@ app.get('/api/owner/catalog',protectLogin,async c=>{
   if(!session)return denied(c);
   try{
     return c.json(cleanProductsEnabled(c.env)
-      ?await readCleanOwnerCatalog(c.env.PLATFORM_PILOT_DB)
+      ?await readCleanOwnerCatalog(c.env.PLATFORM_PILOT_DB,{withMvpStock:ownerPurchaseEnabled(c.env)})
       :{data:await readOwnerCatalog(c.env.PLATFORM_PILOT_DB)});
   }catch{
     return c.json({error:'Owner catalog unavailable'},503);
