@@ -87,7 +87,7 @@ test('bank Supplier Payment matches original Ledger ID and separate bank account
 });
 test('Mobile Banking uses bank-like book backing rather than assumed Cash Book',()=>{
   const x=base();x.supplierLedger[0]['Payment Method']='Mobile Banking';
-  x.bankBook=[{...x.cashBook.shift(),'Entry ID':'BANK-MOBILE','Bank Account ID':'BA-2'}];
+  x.bankBook=[{...x.cashBook.shift(),'Entry ID':'BANK-MOBILE','Bank Account ID':'BA-2',Status:'Active'}];
   assert.equal(audit(x).candidateReady,true);
 });
 test('source discount is never falsely classified as money or authorized without separate audit',()=>{
@@ -156,6 +156,14 @@ test('a later Bank Book reversal mirror invalidates an otherwise active Supplier
     'Bank Account ID':'BA-1',Status:'Active','Reversal Of':'BANK-1'
   });
   blocked(x,'REVERSED_BANK_ENTRY_REQUIRES_REVIEW');
+});
+test('Bank Book absent or blank Status is not independently verified Active money',()=>{
+  const x=base();x.supplierLedger[0]['Payment Method']='Bank';
+  x.bankBook=[{...x.cashBook.shift(),'Entry ID':'BANK-1',
+    'Bank Account ID':'BA-1'}];
+  blocked(x,'BANK_ENTRY_STATUS_UNREVIEWED');
+  x.bankBook[0].Status='';
+  blocked(x,'BANK_ENTRY_STATUS_UNREVIEWED');
 });
 test('original Cash purchase return means money IN as Cash Book Credit, not Supplier Ledger credit',()=>{
   const x=base();x.cashBook[1].Credit='';x.cashBook[1].Debit='1.20';
