@@ -1,6 +1,7 @@
 import { getCookie } from 'hono/cookie';
-import { validateOwnerSession } from '../../src/auth/platform-owner-sessions.js';
+import { resolvePortP2OwnerShop } from '../../src/auth/port-p2-owner-shop-binding.js';
 
+// This entry point is only used by the disposable Workerd test harness.
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -10,17 +11,11 @@ export default {
     }
     if (url.search || request.headers.has('x-shop-id')) return new Response(null, { status: 400 });
 
-    // RED adapter uses the current single-pilot entry point.
-    const context = { req: { raw: request } };
-    const token = getCookie(context, '__Host-shererp-owner-session');
-    const [shop] = env.PORT_P2_ROSTER.shops;
-    const session = await validateOwnerSession({
-      CONTROL_DB: env.CONTROL_DB, PLATFORM_PILOT_DB: env[shop.binding],
-      PLATFORM_PILOT_SHOP_ID: shop.shopId, PLATFORM_PILOT_D1_ID: shop.databaseId,
-      PLATFORM_PILOT_MARKER: shop.databaseMarker
-    }, token);
-    if (!session) return new Response(null, { status: 401 });
-    const row = await env[shop.binding].prepare('SELECT value FROM settings WHERE key=?').bind(env.PORT_P2_SENTINEL_ID).first();
+    const token = getCookie({ req: { raw: request } }, '__Host-shererp-owner-session');
+    const scope = await resolvePortP2OwnerShop(env, token, env.PORT_P2_ROSTER);
+    if (scope.status !== 'ready') return new Response(null, { status: scope.status === 'denied' ? 401 : 503 });
+    const row = await scope.shopDb.prepare('SELECT value FROM settings WHERE key=?')
+      .bind(env.PORT_P2_SENTINEL_ID).first();
     return Response.json(row, { headers: { 'Cache-Control': 'no-store' } });
   }
 };

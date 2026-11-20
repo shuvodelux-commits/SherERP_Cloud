@@ -5,10 +5,9 @@ import { test } from 'node:test';
 import { createTestHarness, unstable_splitSqlQuery } from 'wrangler';
 import { issueOwnerSession } from '../../src/auth/platform-owner-sessions.js';
 
-const migrations = await import('../fixtures/port-p2-local-shop-migrations.mjs').catch(error => {
-  if (error.code !== 'ERR_MODULE_NOT_FOUND' || !error.url?.endsWith('/fixtures/port-p2-local-shop-migrations.mjs')) throw error;
-  return {};
-});
+import {
+  applyLocalShopMigrations, loadLocalShopMigrations, shopMigrationPlan
+} from '../fixtures/port-p2-local-shop-migrations.mjs';
 
 const sentinelId = 'PORT-P2-SENTINEL';
 
@@ -61,7 +60,7 @@ async function startProof(t, { through } = {}) {
     config: {
       name: `port-p2-${name}`, main: fixture, compatibility_date: '2026-11-14',
       workers_dev: false, preview_urls: false, vars: {
-        PORT_P2_FIXTURE: 'true', PORT_P2_SENTINEL_ID: sentinelId, PORT_P2_ROSTER: { generation, shops: placement }
+        PORT_P2_FIXTURE: 'true', PORT_P2_SENTINEL_ID: sentinelId, PORT_P2_ROSTER: { generation, shops: placement, migrations: shopMigrationPlan }
       },
       d1_databases: [
         { binding: 'CONTROL_DB', database_name: 'port-p2-control', database_id: controlId, remote: false },
@@ -87,20 +86,21 @@ async function startProof(t, { through } = {}) {
   for (const name of controlMigrations) {
     await applySql(control, `staging-migrations/platform-onboarding/${name}.sql`);
   }
+  await control.prepare(`CREATE TABLE port_p2_shop_placements (
+    shop_id TEXT PRIMARY KEY NOT NULL REFERENCES platform_shop_bindings(shop_id),
+    binding_key TEXT NOT NULL UNIQUE,
+    minimum_generation INTEGER NOT NULL CHECK(minimum_generation>0),
+    ready INTEGER NOT NULL CHECK(ready IN (0,1))
+  ) STRICT`).run();
   const tokens = [];
   for (const shop of shops) {
     const db = env[shop.binding];
-    if (migrations.applyLocalShopMigrations) {
-      await migrations.applyLocalShopMigrations(db, shop, { through });
-    } else {
-      await applySql(db, 'staging-migrations/shop-identity/0001_shop_identity.sql');
-      await applySql(db, 'migrations/0001_core_catalog.sql');
-      await db.prepare('INSERT INTO shop_identity VALUES (1,?,?,?)')
-        .bind(shop.shopId, shop.databaseId, shop.databaseMarker).run();
-    }
+    await applyLocalShopMigrations(db, shop, { through });
     await db.prepare('INSERT INTO settings(key,value) VALUES (?,?)')
       .bind(sentinelId, `Value from Shop ${shop.name}`).run();
     tokens.push(await seedOwner(control, db, shop));
+    await control.prepare('INSERT INTO port_p2_shop_placements VALUES (?,?,?,1)')
+      .bind(shop.shopId, shop.binding, shop.minimumGeneration).run();
   }
   return { active, swapped, previous, env, tokens };
 }
@@ -152,7 +152,10 @@ test('an incompatible rollback withholds Shop B and a compatible configuration r
     .bind(shops[1].shopId).run();
   assert.equal((await request(active, tokens[1])).status, 503);
   assert.deepEqual(await (await request(active, tokens[0])).json(), { value: 'Value from Shop A' });
-  await env.CONTROL_DB.prepare('UPDATE port_p2_shop_placements SET ready=1 WHERE shop_id=?')
+  await env.CONTROL_DB.prepare('UPDATE port_p2_shop_placements SET ready=1, minimum_generation=3 WHERE shop_id=?')
+    .bind(shops[1].shopId).run();
+  assert.equal((await request(active, tokens[1])).status, 503, 'a stale generation cannot use a present binding');
+  await env.CONTROL_DB.prepare('UPDATE port_p2_shop_placements SET minimum_generation=2 WHERE shop_id=?')
     .bind(shops[1].shopId).run();
   assert.deepEqual(await (await request(active, tokens[1])).json(), { value: 'Value from Shop B' });
 });
@@ -166,10 +169,9 @@ const readPlacements = async db => (await db.prepare(
 ).all()).results;
 
 test('interrupted migrations roll back late failure and resume exactly once on the correct Shop D1', async t => {
-  assert.equal(typeof migrations.applyLocalShopMigrations, 'function', 'local recovery executor is missing');
   const { active, env, tokens } = await startProof(t, { through: 2 });
   const { CONTROL_DB: control, SHOP_A_DB: a, SHOP_B_DB: b } = env;
-  await migrations.applyLocalShopMigrations(b, shops[1]);
+  await applyLocalShopMigrations(b, shops[1]);
   const aData = await readSentinel(a);
   const bState = { receipts: await readReceipts(b), records: await readSentinel(b) };
   const placements = await readPlacements(control);
@@ -178,15 +180,15 @@ test('interrupted migrations roll back late failure and resume exactly once on t
   assert.equal((await request(active, tokens[0])).status, 503);
   await a.prepare(`CREATE TRIGGER fixture_stop_receipt BEFORE INSERT ON port_p2_shop_migrations
     WHEN NEW.position=3 BEGIN SELECT RAISE(ABORT,'fixture late migration interruption'); END`).run();
-  await assert.rejects(migrations.applyLocalShopMigrations(a, shops[0]), /fixture late migration interruption/);
+  await assert.rejects(applyLocalShopMigrations(a, shops[0]), /fixture late migration interruption/);
   assert.deepEqual(await readReceipts(a), prefix);
   assert.equal(await a.prepare("SELECT name FROM sqlite_schema WHERE name='legacy_product_snapshots'").first(), null);
   assert.deepEqual(await readSentinel(a), aData);
   await a.prepare('DROP TRIGGER fixture_stop_receipt').run();
 
-  await assert.rejects(migrations.applyLocalShopMigrations(a, shops[1]), /SHOP_IDENTITY_MISMATCH/);
-  assert.deepEqual(await migrations.applyLocalShopMigrations(a, shops[0]), { applied: 1 });
-  assert.deepEqual(await migrations.applyLocalShopMigrations(a, shops[0]), { applied: 0 });
+  await assert.rejects(applyLocalShopMigrations(a, shops[1]), /SHOP_IDENTITY_MISMATCH/);
+  assert.deepEqual(await applyLocalShopMigrations(a, shops[0]), { applied: 1 });
+  assert.deepEqual(await applyLocalShopMigrations(a, shops[0]), { applied: 0 });
   assert.equal((await readReceipts(a)).length, 3);
   assert.deepEqual(await readSentinel(a), aData);
   assert.deepEqual({ receipts: await readReceipts(b), records: await readSentinel(b) }, bState);
@@ -196,18 +198,23 @@ test('interrupted migrations roll back late failure and resume exactly once on t
 });
 
 test('migration bytes and applied receipt drift stop resume without overwriting existing data', async t => {
-  assert.equal(typeof migrations.applyLocalShopMigrations, 'function', 'local recovery executor is missing');
   const { active, env, tokens } = await startProof(t);
   const db = env.SHOP_A_DB;
   const baseline = await readReceipts(db);
   const data = await readSentinel(db);
-  const files = await migrations.loadLocalShopMigrations();
+  const files = await loadLocalShopMigrations();
   files[0].sql += '\n-- changed bytes';
-  await assert.rejects(migrations.applyLocalShopMigrations(db, shops[0], { files }), /MIGRATION_CHECKSUM_MISMATCH/);
+  await assert.rejects(applyLocalShopMigrations(db, shops[0], { files }), /MIGRATION_CHECKSUM_MISMATCH/);
   assert.deepEqual(await readReceipts(db), baseline);
 
+  await db.prepare('CREATE TABLE fixture_unreviewed_schema (id INTEGER PRIMARY KEY)').run();
+  await assert.rejects(applyLocalShopMigrations(db, shops[0]), /MIGRATION_SCHEMA_DRIFT/);
+  assert.equal((await request(active, tokens[0])).status, 503);
+  await db.prepare('DROP TABLE fixture_unreviewed_schema').run();
+  assert.deepEqual(await applyLocalShopMigrations(db, shops[0]), { applied: 0 });
+
   await db.prepare("UPDATE port_p2_shop_migrations SET checksum=? WHERE position=1").bind('0'.repeat(64)).run();
-  await assert.rejects(migrations.applyLocalShopMigrations(db, shops[0]), /MIGRATION_CHECKSUM_MISMATCH/);
+  await assert.rejects(applyLocalShopMigrations(db, shops[0]), /MIGRATION_CHECKSUM_MISMATCH/);
   assert.equal((await request(active, tokens[0])).status, 503);
   assert.deepEqual(await readSentinel(db), data);
   assert.deepEqual(await (await request(active, tokens[1])).json(), { value: 'Value from Shop B' });
