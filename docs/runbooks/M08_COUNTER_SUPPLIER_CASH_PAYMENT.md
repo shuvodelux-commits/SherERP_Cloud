@@ -1,6 +1,6 @@
 # M08 Counter Supplier Cash Pay — isolated first-Shop backend slice
 
-**Status:** GitHub test-backed implementation; NOT an activated endpoint, hosted deployment, migration approval or completed Counter.
+**Status:** GitHub test-backed implementation plus separate reviewed-proposal 0011 cash reconciliation; NOT a live endpoint, hosted deployment, remote migration approval or completed Counter.
 
 This is a separate, non-overlapping M08 workstream for #690. It adds an append-only, cash-only Supplier Pay posting module rather than duplicating or changing the frontend/API routing being edited in PR #825 or Super Admin access in #824.
 
@@ -11,14 +11,25 @@ This is a separate, non-overlapping M08 workstream for #690. It adds an append-o
 - One atomic D1 INSERT triggers a Supplier due decrease, immutable payment credit ledger entry, and physical Cash Out entry. Source credit Purchase debits remain immutable. Operation IDs and canonical tenant+actor+payload hashes prevent duplicate payouts or changed-payload replay.
 - Failing the Cash Book insert must roll back the Supplier due change, ledger and receipt together. The SQLite trigger independently checks the current session, identity and granted token hash at write time.
 
-## Critical integration/release gate
-The current M03 cash session calculator and older cash book UI only include Cash Sales and Cash Returns. They **do not include this new Supplier Pay Cash Out** yet. Consequently the additive migration includes an explicit trigger preventing a Cash Session with supplier payout from closing until M08/M03 reviews the full Cash Session total/variance and reconciles every source. Do not disable that protection merely to make a Close Day test pass.
+## Follow-up reconciliation: additive migration 0011 (PR #828)
 
-This component is not wired into the live Owner Worker nor enabled by `wrangler.shop-user.jsonc`. The integration owner must:
-1. Complete the original `paySupplier` UI↔API contract and add route under current Owner authentication, CSRF/origin protection, per-Shop authorization, request validation and audited permissions.
-2. Extend **all** session cash-in/cash-out views and Close Day expected/counted/variance guards to include Supplier Pay; reconcile Supplier purchase debit minus payment credit, without counting historical opening balances as cash.
-3. Update the supplier ledger screen (PR #825 currently covers purchase-only readbacks) to include this distinct immutable Supplier Payment credit leg in gross role-specific history.
-4. Complete first-Shop hosted browser tests, migration review, backups, two-Shop isolation and a controlled release gate before activating postings.
+The 0010 safeguard remains deliberately active until a Shop D1 also receives the separately reviewed **`0011_owner_supplier_cash_reconciliation.sql`** migration. Migration 0011 replaces the Cash Session Close guard with a formula that includes real Supplier Pay Cash Out, and protects Sales Returns posted *after* a supplier payout against a negative cash drawer. The Supplier payment trigger from 0010 already protects the reverse posting order.
+
+Exact cash-session arithmetic is now:
+
+`Expected Cash = previous physical count carried into session + same-session cash sales − same-session cash returns − same-session supplier cash payments`
+
+`Cash In` and `Cash Out` report current-session movements. Physical counts carried over between sessions are **not Cash In**, and historical opening customer balances, loans, lenders, and other opening Party balances do not enter the drawer calculation. Count variance is recorded as an audit fact without manufacturing a balancing Cash Book transaction.
+
+The private Owner Cash Session read and write functions now select the Supplier Pay cash table only when it exists (legacy D1 compatibility), and the read-only Cash Book shows an immutable Supplier Payment entry and exact current-plus-historical Cash Out. The test enforces actual POS Sale cash availability, opposite refund/payout ordering, counted Close Day, idempotent retry, next-session carry and forged SQL-close rejection. This migration is **NOT automatically applied to live D1**.
+
+### Critical remaining ERP release gates
+
+This component is **not yet wired into the live Counter screen** or enabled by `wrangler.shop-user.jsonc`. Before doing so:
+1. Connect the original `paySupplier` RPC to an authenticated Owner API with CSRF/origin protection, server-verified Shop context, audited permissions and the new D1 posting module; do not expose unauthenticated public RPC.
+2. Extend the visible supplier detail ledger (currently strict `purchase-credit-only` from PR #825) to a reviewed *combined* purchase debit and cash-payment credit history with correct running balances. Do not change the existing scope claim without updating the frontend contract.
+3. Keep the Cash Session scope **narrow** until all additional real cash operations (Customer Receive, Expenses, Bank Cash movements, etc.) are implemented and included in these formulas. If any new cash writer is introduced, it must extend every authority/projection/Close Day guard together, not silently bypass the 0011 guard.
+4. Complete hosted browser tests with two shops, schema backups, forward-only migration review and explicit production release approval before enabling posting.
 
 ## Independent tests
 `tests/integration/m08-owner-supplier-cash-payment-workerd.spec.mjs` runs real isolated local Workerd/D1 migrations and checks:

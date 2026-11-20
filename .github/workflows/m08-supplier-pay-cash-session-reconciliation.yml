@@ -1,0 +1,32 @@
+name: M08 Cash Session Supplier Pay reconciliation (local D1)
+
+on:
+  pull_request:
+    paths:
+      - "staging-migrations/shop-owner-write/0011_owner_supplier_cash_reconciliation.sql"
+      - "tests/integration/m08-supplier-pay-cash-session-reconciliation-workerd.spec.mjs"
+      - "src/db/m03-owner-mvp-purchase.js"
+      - "src/db/m03-owner-pilot-ledger-read.js"
+      - ".github/workflows/m08-supplier-pay-cash-session-reconciliation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cash-session-supplier-pay-reconciliation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Validate Sale, Supplier Pay, Return, Cash Book and Cash Close using isolated Shop D1
+        run: node --test tests/integration/m08-supplier-pay-cash-session-reconciliation-workerd.spec.mjs
