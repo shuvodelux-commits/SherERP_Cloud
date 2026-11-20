@@ -62,7 +62,7 @@ export async function readOwnerPilotSupplierPurchaseLedger(db,supplierId){
   if(typeof supplierId!=='string'||!/^SUP-\d{6}$/.test(supplierId))
     return null;
   const [identity,totals,records]=await db.batch([
-    db.prepare(`SELECT m.supplier_id AS supplierId,p.display_name AS supplierName,
+    db.prepare(`SELECT m.supplier_id AS supplierId,p.display_name AS supplierName,p.phone,
       m.current_due_paisa AS currentDuePaisa
       FROM owner_supplier_master m JOIN parties p ON p.party_id=m.party_id
       WHERE m.supplier_id=?`).bind(supplierId),
@@ -74,7 +74,7 @@ export async function readOwnerPilotSupplierPurchaseLedger(db,supplierId){
       FROM owner_mvp_supplier_ledger l
       JOIN owner_mvp_purchase_receipts r ON r.sequence=l.purchase_sequence
       WHERE l.supplier_id=?
-      ORDER BY r.created_at_ms DESC,r.sequence DESC LIMIT 51`).bind(supplierId)
+      ORDER BY r.purchase_date DESC,r.created_at_ms DESC,r.sequence DESC LIMIT 51`).bind(supplierId)
   ]);
   if(!identity.success||!totals.success||!records.success||
     totals.results.length!==1||identity.results.length>1)
@@ -84,15 +84,17 @@ export async function readOwnerPilotSupplierPurchaseLedger(db,supplierId){
   if(due!==safePaisa(totals.results[0].duePaisa))
     throw Error('Supplier due reconciliation failed');
   const entries=checkedRows(records.results);
+  // Walk backward from the reconciled full balance, including off-page history.
+  let balancePaisa=due;
   for(const row of entries){
-    safePaisa(row.debitPaisa);
-    safePaisa(row.creditPaisa);
+    row.balancePaisa=balancePaisa;
+    balancePaisa=safePaisa(balancePaisa-safePaisa(row.debitPaisa)+safePaisa(row.creditPaisa));
     if(!Number.isSafeInteger(row.occurredAtMs))
       throw Error('Supplier ledger row unavailable');
   }
   return {
     scope:'purchase-credit-only',
-    supplierId,supplierName:supplier.supplierName,currentDuePaisa:due,
+    supplierId,supplierName:supplier.supplierName,phone:supplier.phone,currentDuePaisa:due,
     entries:entries.slice(0,PAGE_SIZE),hasMore:entries.length>PAGE_SIZE
   };
 }

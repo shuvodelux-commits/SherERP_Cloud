@@ -136,6 +136,27 @@ test('original POS checkout button and invoice renderer post ONE real saved D1 c
     assert.equal(restored.invoiceId,'INV-000001');
     assert.equal(restored.customerName,'Counter Buyer');
     assert.match(await page.evaluate(invoice=>renderInvoiceHtml_(invoice),restored),/INV-000001/);
+    // Reopen the supplier through the original action menu after reloading the Shop.
+    await page.locator('#navList .nav-item[aria-label="Suppliers"]').click();
+    const supplierRow=page.locator('#supTableBody tr').filter({hasText:'MVP Supplier'});
+    await supplierRow.getByRole('button',{name:/Actions/}).click();
+    await page.getByRole('menuitem',{name:'View',exact:true}).click();
+    await page.locator('#supDetailModal').waitFor({state:'visible'});
+    assert.match(await page.locator('#supDetailName').innerText(),/MVP Supplier.*01712345678/);
+    const payAmount=page.locator('#supPayAmount');
+    if(await payAmount.isEnabled())await payAmount.fill('1');
+    assert.equal(await page.locator('#supPaySaveBtn').isDisabled(),true);
+    assert.equal(await page.locator('#supPaySettleFullBtn').isDisabled(),true);
+    assert.match(await page.locator('#supDetailModal').innerText(),/credit purchases only|purchase[- ]only|unpaid purchases only|purchase ledger only/i);
+    const purchaseAmount=await page.evaluate(()=>formatMoney(600));
+    assert.equal(await page.locator('#supDetailDue').innerText(),'Credit '+purchaseAmount);
+    const ledgerRow=page.locator('#supLedgerBody tr');
+    assert.equal(await ledgerRow.count(),1);
+    assert.equal(await ledgerRow.locator('td').nth(1).innerText(),'Purchase');
+    assert.equal(await ledgerRow.locator('td').nth(2).innerText(),'PUR-000001');
+    assert.equal(await ledgerRow.locator('td').nth(3).innerText(),purchaseAmount);
+    assert.equal(await ledgerRow.locator('td').nth(4).innerText(),'');
+    assert.equal(await ledgerRow.locator('td').nth(5).innerText(),purchaseAmount);
     assert.equal(errors.length,0,'original browser JS errors: '+errors.join(' | '));
   }finally{
     try{await browser?.close();}finally{

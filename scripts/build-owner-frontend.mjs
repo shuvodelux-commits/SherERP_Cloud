@@ -412,6 +412,16 @@ export function patchOwnerApp(html){
       }).finally(function(){ownerReturnSaveInProgress=false;});
   }
 
+  function supplierDisplayAmount_(paisa) {
+    if (!Number.isSafeInteger(paisa)) throw new Error('Supplier purchase ledger is unavailable.');
+    var amount = paisa / 100;
+    // The original ledger uses Intl with at most two decimals. Verify its displayed minor units.
+    var decimal = amount.toLocaleString('en-US', {useGrouping:false,minimumFractionDigits:2,maximumFractionDigits:2});
+    if (BigInt(decimal.replace('.', '')) !== BigInt(paisa))
+      throw new Error('The supplier ledger cannot display this amount accurately.');
+    return amount;
+  }
+
   function serverCall(fnName) {
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
     if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
@@ -424,6 +434,12 @@ export function patchOwnerApp(html){
     if (fnName === 'getAppShellData') path = '/api/owner/app-shell';
     else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
     else if (fnName === 'getSuppliersBootstrap') path = '/api/owner/suppliers';
+    else if (fnName === 'getSupplierDetail') {
+      var supplierId = arguments[2];
+      if (typeof supplierId !== 'string' || !/^SUP-[0-9]{6}$/.test(supplierId))
+        return Promise.reject(new Error('Invalid supplier ID.'));
+      path = '/api/owner/suppliers/' + supplierId + '/ledger';
+    }
     else if (fnName === 'getPurchaseBootstrap') path = '/api/owner/purchase/bootstrap';
     else if (fnName === 'getPosBootstrap') path = '/api/owner/pos/bootstrap';
     else if (fnName === 'getSalesDraftList') path = '/api/owner/pos/drafts';
@@ -457,13 +473,36 @@ export function patchOwnerApp(html){
     else return Promise.reject(new Error('Shop business data is not connected yet.'));
     return fetch(path, {method:method,credentials:'same-origin',cache:'no-store'})
       .then(function (response) {
-        return response.json().catch(function () { throw new Error('Owner request failed.'); })
+        if (response.status === 401) throw new Error('Your session expired. Sign in again.');
+        var unavailable = fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
+          fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' :
+          fnName === 'getSupplierDetail' ? 'Supplier purchase ledger is unavailable.' :
+          fnName.startsWith('getPurchase') ? 'Purchase data is unavailable.' :
+          fnName === 'getPosBootstrap' || fnName === 'getSalesDraftList' || fnName === 'findInvoice' ? 'POS data is unavailable.' :
+          fnName === 'searchInvoicesForReturn' || fnName === 'getInvoiceForReturn' ? 'Returns data is unavailable.' :
+          fnName === 'getCashSessionSummary' ? 'Cash session data is unavailable.' : 'Owner session is unavailable.';
+        if (!response.ok) throw new Error(unavailable);
+        return response.json().catch(function () { throw new Error(unavailable); })
           .then(function (result) {
-            if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
-              fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' :
-              fnName.startsWith('getPurchase') ? 'Purchase data is unavailable.' :
-              fnName==='getPosBootstrap'||fnName==='getSalesDraftList'||fnName==='findInvoice' ? 'POS data is unavailable.' :
-              fnName==='searchInvoicesForReturn'||fnName==='getInvoiceForReturn' ? 'Returns data is unavailable.' : 'Owner session is unavailable.');
+            if (result?.success === false) throw new Error(unavailable);
+            if (fnName === 'getSupplierDetail') {
+              var detail = result?.data;
+              if (result?.success !== true || detail?.scope !== 'purchase-credit-only' ||
+                  detail.supplierId !== supplierId || !Array.isArray(detail.entries) ||
+                  typeof detail.hasMore !== 'boolean') throw new Error(unavailable);
+              return {
+                supplier:{'Supplier ID':supplierId,'Supplier Name':detail.supplierName,
+                  Phone:detail.phone,'Current Due':supplierDisplayAmount_(detail.currentDuePaisa)},
+                ledger:detail.entries.map(function (entry) {
+                  if (entry.kind !== 'Purchase')
+                    throw new Error(unavailable);
+                  return {Type:entry.kind,Date:entry.purchaseDate,Reference:entry.reference,
+                    Debit:supplierDisplayAmount_(entry.debitPaisa),Credit:supplierDisplayAmount_(entry.creditPaisa),
+                    Balance:supplierDisplayAmount_(entry.balancePaisa)};
+                }),
+                hasMore:detail.hasMore
+              };
+            }
             if (fnName === 'getProductsBootstrap') {
               var operational = result.mode === 'operational';
               var products = result.data.map(function (row) {
@@ -489,7 +528,18 @@ export function patchOwnerApp(html){
   html=html.slice(0,e)+rpc+html.slice(f);
   html=html.replace('</head>', '<style>[data-owner-clean-products] #m01ProductUnitPanel {display:none!important}</style></head>');
   html=html.replace('</head>',ownerSupportCss+'</head>');
-  const catalogReplacements=[
+  const screenReplacements=[
+    ['id="supDetailDue"></div></div>\n        <div class="mobile-payment-workspace" style="',
+      'id="supDetailDue"></div></div>\n        <fieldset disabled aria-label="Supplier payments unavailable" class="mobile-payment-workspace" style="border:0;padding:0;margin:0;'],
+    ['id="supPayError"></div>\n        </div>', 'id="supPayError"></div>\n        </fieldset>'],
+    ['<div class="empty-state" id="supLedgerEmpty"', '<p id="ownerSupplierLedgerScope"></p><div class="empty-state" id="supLedgerEmpty"'],
+    ["withLoader(serverCall('getSupplierDetail', authToken, id)).then(function (data) {",
+      "withLoader(serverCall('getSupplierDetail', authToken, id)).then(function (data) {\n    if (supState.detailId !== id) return;"],
+    ['    supState.ledger = data.ledger;', `
+    document.getElementById('ownerSupplierLedgerScope').textContent =
+      'Credit purchases only. Supplier payments are unavailable.' +
+      (data.hasMore ? ' Showing the latest 50 purchases.' : '');
+    supState.ledger = data.ledger;`],
     ["    prodState.addSource = source || 'products';", `    prodState.addSource = source || 'products';
     if (ownerProductsEnabled) {
       ['prodType','prodManageCategoriesBtn','prodManageUnitsBtn'].forEach(function (id) {
@@ -509,8 +559,8 @@ export function patchOwnerApp(html){
     ["+ stockCell + '</td>'","+ escapeHtml(p['Current Stock'] ?? 'Unavailable') + '</td>'"],
     ["(isBundle ? '—' : formatMoney(p['Stock Value']))","'Unavailable'"],
   ];
-  for(const [original,replacement] of catalogReplacements){
-    if(html.split(original).length!==2)throw new Error('Owner catalog screen boundary changed: '+original);
+  for(const [original,replacement] of screenReplacements){
+    if(html.split(original).length!==2)throw new Error('Owner screen boundary changed: '+original);
     html=html.replace(original,replacement);
   }
   const rowActionStart="        '<td>' + statusBadge + '</td>' +\n        '<td class=\"erp-sticky-action-col\">' +\n          rowActionTriggerHtml_(";
