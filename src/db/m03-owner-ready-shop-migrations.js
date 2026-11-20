@@ -8,7 +8,9 @@ export const OWNER_READY_SHOP_MIGRATION_PLAN=Object.freeze([
   ['migrations/0013_product_catalog_revisions.sql','f57b46ee4f65478b8d3e18141e75c74010b0f2d7b87274675d7ecf4a3d1254b7'],
   ['staging-migrations/shop-owner-write/0002_shop_owner_write_grant.sql','a0a11c67d116579961b6ec26fc51026a30d629fb18a304da2e1f56bada608b76'],
   ['staging-migrations/shop-owner-write/0003_owner_product_create_receipts.sql','9f4b8b4b210c70d20ab8df1576d4decb5aa0274f3a28909062ad8a51804c7c5f'],
-  ['staging-migrations/shop-owner-write/0004_owner_write_lease.sql','0d9492bdaf1d2a38709ef74f8a5b006c6892329e885b4cc18b993d0bed0539c0']
+  ['staging-migrations/shop-owner-write/0004_owner_write_lease.sql','0d9492bdaf1d2a38709ef74f8a5b006c6892329e885b4cc18b993d0bed0539c0'],
+  ['migrations/0002_party_identity.sql','9ea71c03a06ba7a5b0325e5aed9ed16dd3f78eb63719c3ed05d074b55b27b3e3'],
+  ['staging-migrations/shop-owner-write/0005_owner_supplier_master.sql','416d898fe6f40f619fb87e646a20ca20b653b47e144d7e93e17be6c0de410330']
 ].map(([name,checksum])=>Object.freeze({name,checksum})));
 
 export function isOwnerReadyShopMigrationPlan(plan){
