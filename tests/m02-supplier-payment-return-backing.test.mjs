@@ -145,6 +145,18 @@ test('bank Book active account, status and reversal evidence must be explicit',(
   x.bankBook[0].Status='Active';x.bankBook[0]['Reversal Of']='BANK-OLD';
   blocked(x,'REVERSED_BANK_ENTRY_REQUIRES_REVIEW');
 });
+test('a later Bank Book reversal mirror invalidates an otherwise active Supplier payment',()=>{
+  const x=base();x.supplierLedger[0]['Payment Method']='Bank';
+  x.bankBook=[{...x.cashBook.shift(),'Entry ID':'BANK-1',
+    'Bank Account ID':'BA-1',Status:'Active'}];
+  // Original BankLedger.gs may post a separate opposite row with
+  // Reversal Of referencing the first Entry ID.
+  x.bankBook.push({
+    ...C('BANK-REVERSAL','Manual Reversal','BANK-1','','5.00',3),
+    'Bank Account ID':'BA-1',Status:'Active','Reversal Of':'BANK-1'
+  });
+  blocked(x,'REVERSED_BANK_ENTRY_REQUIRES_REVIEW');
+});
 test('original Cash purchase return means money IN as Cash Book Credit, not Supplier Ledger credit',()=>{
   const x=base();x.cashBook[1].Credit='';x.cashBook[1].Debit='1.20';
   blocked(x,'CASH_RETURN_REFUND_MISMATCH');
