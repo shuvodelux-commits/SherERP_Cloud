@@ -62,6 +62,35 @@ export async function readLocalProvisioning(db, token, operationId) {
   return hash ? receipt(await currentSetup(db, hash, operationId).first()) : { code: 401 };
 }
 
+/** Private, current-session-only view of recent local onboarding operations. */
+export async function listLocalProvisioning(db, token) {
+  const hash = await hashOpaqueSessionToken(token);
+  if (!hash) return { code: 401 };
+  // One D1 read/snapshot covers both session validity and row scoping.
+  const response = await db.prepare(`WITH admin AS (SELECT f.subject ${CURRENT_PLATFORM_ADMIN_FROM}),
+    recent AS (
+      SELECT r.operation_id AS operationId,r.display_name AS displayName,r.shop_id AS shopId,
+        p.owner_email AS ownerEmail,p.stage AS status,p.failed_stage AS failedStage,
+        r.created_at_ms AS createdAtMs
+      FROM admin a
+      JOIN platform_shop_reservations r ON r.created_by_subject=a.subject
+      JOIN platform_shop_provisioning p ON p.shop_id=r.shop_id
+      ORDER BY r.created_at_ms DESC,r.operation_id DESC LIMIT 50
+    )
+    SELECT (SELECT count(*) FROM admin) AS authorized,
+      recent.operationId,recent.displayName,recent.shopId,recent.ownerEmail,
+      recent.status,recent.failedStage,recent.createdAtMs
+    FROM (SELECT 1) singleton LEFT JOIN recent ON TRUE
+    ORDER BY recent.createdAtMs DESC,recent.operationId DESC`).bind(hash).all();
+  const rows = response.results;
+  if (rows[0]?.authorized !== 1) return { code: 401 };
+  return {
+    code: 200,
+    body: { shops: rows.filter(row => row.operationId !== null)
+      .map(({ authorized, createdAtMs, ...safe }) => safe) }
+  };
+}
+
 function localScope(env, row) {
   const inventory = env.PLATFORM_LOCAL_SHOP_INVENTORY;
   if (!Array.isArray(inventory)) return null;

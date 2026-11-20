@@ -63,3 +63,9 @@ button:disabled { opacity: .68; cursor: wait; }
 #owner-invitation-form h2, #owner-gmail-form h2 { margin: 0 0 8px; font-size: 16px; }
 #owner-invitation-shop, #owner-gmail-shop { overflow-wrap: anywhere; }
 #owner-invitation-result { margin-top: 12px; }
+
+#business-roster { margin: 12px 0 18px; }
+#business-roster summary { cursor: pointer; font-weight: 600; }
+#business-roster-list { padding-left: 20px; overflow-wrap: anywhere; }
+#business-roster-list li { padding: 10px 0; border-bottom: 1px solid var(--border); }
+#business-roster-list p { margin: 4px 0; }

@@ -12,7 +12,7 @@ import {reservePlatformShop} from './auth/platform-shop-reservations.js';
 import {pilotShopConfiguration,verifyPlatformShopBinding} from './auth/platform-shop-binding.js';
 import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js';
 
-import {readLocalProvisioning,resumeLocalProvisioning,startLocalProvisioning} from './auth/port-p4-local-provisioning.js';
+import {listLocalProvisioning,readLocalProvisioning,resumeLocalProvisioning,startLocalProvisioning} from './auth/port-p4-local-provisioning.js';
 import {approvePlatformOwnerGmail} from './auth/platform-owner-gmail-approvals.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
@@ -222,6 +222,8 @@ async function localProvisioningGate(c,next){
   await next();
 }
 
+app.get('/api/platform/shops/list',localProvisioningGate,async c=>
+  localProvisioningResponse(c,await listLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE))));
 app.get('/api/platform/shops/setup/:operationId',localProvisioningGate,async c=>
   localProvisioningResponse(c,await readLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),
     c.req.param('operationId'))));

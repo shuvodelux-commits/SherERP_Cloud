@@ -195,3 +195,53 @@ test('Resume reconciles an interrupted create and verifies two disposable Shop d
   assert.equal(aIdentity, readyA.shopId);
   assert.notEqual(aIdentity, bIdentity);
 });
+
+
+test('local Control Center roster lists only current Super Admin operations without D1 secrets', async t => {
+  const {request, db} = await startControlCenter(t);
+  const saved=[];
+  for (const [name,email] of [
+    ['দোকান এক','first@gmail.com'],['Second Tools','second@gmail.com']
+  ]) {
+    const input={operationId:crypto.randomUUID(),displayName:name,ownerEmail:email};
+    const response=await request('/shops',input);
+    assert.equal(response.status,202);
+    saved.push({...input,shopId:(await response.json()).shopId});
+  }
+  // A different creator's durable records must not appear, even if they share the same D1.
+  const stranger={shopId:crypto.randomUUID(),operationId:crypto.randomUUID()};
+  const now=Date.now();
+  const inserts=[
+    db.prepare('INSERT INTO platform_shop_reservations (shop_id,operation_id,display_name,created_by_subject,created_at_ms) VALUES (?,?,?,?,?)')
+      .bind(stranger.shopId,stranger.operationId,'Other operator','other-admin',now),
+    db.prepare("INSERT INTO platform_shop_provisioning (shop_id,owner_email,database_marker,stage) VALUES (?,?,?,'reserved')")
+      .bind(stranger.shopId,'stranger@gmail.com',crypto.randomUUID())
+  ];
+  for(let i=0;i<50;i++){
+    const shopId=crypto.randomUUID(),operationId=crypto.randomUUID();
+    inserts.push(db.prepare('INSERT INTO platform_shop_reservations (shop_id,operation_id,display_name,created_by_subject,created_at_ms) VALUES (?,?,?,?,?)')
+      .bind(shopId,operationId,'Visible '+i,'fixture-admin',now+i+1));
+    inserts.push(db.prepare("INSERT INTO platform_shop_provisioning (shop_id,owner_email,database_marker,stage) VALUES (?,?,?,'reserved')")
+      .bind(shopId,'fixture'+i+'@gmail.com',crypto.randomUUID()));
+  }
+  await db.batch(inserts);
+
+  const list=await request('/shops/list');
+  assert.equal(list.status,200,'only current signed-in Super Admin can list local operations');
+  const payload=await list.json();
+  assert.deepEqual(Object.keys(payload),['shops']);
+  assert.equal(payload.shops.length,50,'bounded local MVP avoids unbounded Control D1 response');
+  assert.ok(payload.shops.some(x=>x.displayName==='Visible 49'));
+  assert.ok(payload.shops.every(x=>x.displayName!=='Other operator'));
+  assert.deepEqual(Object.keys(payload.shops[0]).sort(),[
+    'displayName','failedStage','operationId','ownerEmail','shopId','status'
+  ]);
+  assert.ok(payload.shops.every(x=>x.status==='reserved'&&x.failedStage===null));
+  assert.equal(payload.shops.some(x=>'databaseId' in x||'binding' in x||
+    'databaseMarker' in x||'allocation_evidence' in x),false);
+  assert.equal((await request('/shops/list',undefined,undefined,'0'.repeat(64))).status,401);
+  assert.equal((await request('/shops/list',undefined,{PLATFORM_LOCAL_PROVISIONING_ENABLED:'false'})).status,404);
+  await db.prepare('UPDATE platform_admin_sessions SET revoked_at_ms=? WHERE revoked_at_ms IS NULL')
+    .bind(Date.now()).run();
+  assert.equal((await request('/shops/list')).status,401,'revocation takes effect at SQL read time');
+});

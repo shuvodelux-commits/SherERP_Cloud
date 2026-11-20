@@ -11,6 +11,9 @@ const businessOwnerEmail=byId('business-owner-email');
 const businessOwnerEmailLabel=byId('business-owner-email-label');
 const businessReceipt=byId('business-receipt');
 const resumeBusiness=byId('resume-business');
+const businessRoster=byId('business-roster');
+const businessRosterList=byId('business-roster-list');
+const businessRosterStatus=byId('business-roster-status');
 const signOut=byId('sign-out');
 const inviteForm=byId('owner-invitation-form');
 const inviteSubject=byId('owner-google-subject');
@@ -49,6 +52,11 @@ function show(view,message=''){
   mount.replaceChildren();
   cancelGoogle.disabled=false;
   status.textContent=message;
+  if(view!=='signed-in'){
+    businessRosterList.replaceChildren();
+    businessRosterStatus.textContent='';
+    businessRoster.hidden=true;
+  }
   for(const panel of panels)panel.hidden=panel.id!==view;
   byId(view).querySelector('h1').focus();
   return generation;
@@ -103,6 +111,77 @@ function showSetupReceipt(receipt,draft){
   }
 }
 
+function validRosterShop(shop){
+  return shop!==null&&typeof shop==='object'&&
+    Object.keys(shop).length===6&&
+    ['operationId','displayName','shopId','ownerEmail'].every(k=>typeof shop[k]==='string')&&
+    Object.hasOwn(setupStages,shop.status)&&
+    (shop.failedStage===null||Object.hasOwn(setupFailures,shop.failedStage));
+}
+
+async function resumeRosterShop(shop,button){
+  const view=generation;
+  button.disabled=true;
+  businessRosterStatus.textContent='Resuming business setup…';
+  try{
+    const result=await api('/shops/resume','POST',{operationId:shop.operationId});
+    if(view!==generation)return;
+    if(!validRosterShop(result)||result.operationId!==shop.operationId||
+       result.shopId!==shop.shopId||result.ownerEmail!==shop.ownerEmail){
+      throw new Error('Unexpected setup response');
+    }
+    await loadBusinessRoster(view);
+    if(view===generation && businessRosterStatus.textContent===''){
+      businessRosterStatus.textContent=result.status==='ready'
+        ?'Business ready.':'Setup is not ready. Review its stage and resume again.';
+    }
+  }catch(error){
+    if(view!==generation)return;
+    if(error.message==='401')show('login','Sign in again to resume business setup.');
+    else businessRosterStatus.textContent='Could not complete setup. Retry the same business.';
+  }finally{
+    button.disabled=false;
+  }
+}
+
+async function loadBusinessRoster(view){
+  if(!localProvisioning||businessRoster.hidden)return;
+  businessRosterStatus.textContent='Checking local businesses…';
+  try{
+    const result=await api('/shops/list','GET');
+    if(view!==generation)return;
+    if(!Array.isArray(result.shops)||result.shops.length>50||
+       !result.shops.every(validRosterShop)){
+      throw new Error('Invalid business roster');
+    }
+    businessRosterList.replaceChildren();
+    for(const shop of result.shops){
+      const row=document.createElement('li');
+      const name=document.createElement('strong');
+      name.textContent=shop.displayName;
+      const details=document.createElement('p');
+      details.textContent='Owner: '+shop.ownerEmail+'. Setup: '+setupStages[shop.status]+
+        (shop.failedStage?' — '+setupFailures[shop.failedStage]:'');
+      row.append(name,details);
+      if(shop.status!=='ready'){
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='secondary';
+        button.textContent='Resume setup';
+        button.setAttribute('aria-label','Resume setup for '+shop.displayName);
+        button.addEventListener('click',()=>resumeRosterShop(shop,button));
+        row.append(button);
+      }
+      businessRosterList.append(row);
+    }
+    businessRosterStatus.textContent=result.shops.length?'':'No local businesses yet.';
+  }catch(error){
+    if(view!==generation)return;
+    if(error.message==='401')show('login','Sign in again to view local businesses.');
+    else businessRosterStatus.textContent='Could not load business status. Reload to retry.';
+  }
+}
+
 async function restoreLocalSetup(draft,view){
   status.textContent='Checking saved business setup…';
   try{
@@ -120,6 +199,8 @@ async function restoreLocalSetup(draft,view){
 function showSignedIn(session){
   const view=show('signed-in');
   localProvisioning=session.localProvisioningEnabled===true;
+  businessRoster.hidden=!localProvisioning;
+  if(localProvisioning)void loadBusinessRoster(view);
   businessForm.hidden=session.shopReservationEnabled!==true;
   businessOwnerEmail.hidden=businessOwnerEmailLabel.hidden=!localProvisioning;
   businessOwnerEmail.required=localProvisioning;
@@ -229,6 +310,7 @@ businessForm.addEventListener('submit',async event=>{
     }
   }finally{
     businessBusy(false);
+    if(localProvisioning&&!businessRoster.hidden)void loadBusinessRoster(generation);
   }
 });
 
@@ -247,6 +329,7 @@ resumeBusiness.addEventListener('click',async()=>{
     else status.textContent='Could not complete setup. Check the stage and resume the same operation.';
   }finally{
     businessBusy(false);
+    if(localProvisioning&&!businessRoster.hidden)void loadBusinessRoster(generation);
   }
 });
 
