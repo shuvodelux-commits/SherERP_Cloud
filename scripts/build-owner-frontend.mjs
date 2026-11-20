@@ -304,13 +304,44 @@ export function patchOwnerApp(html){
       :'Start Day before purchasing. Unpaid purchases only; payments, returns and Tiles are not connected.';
     document.getElementById('owner-purchase-start-day').hidden=active;
     document.getElementById('owner-data-notice').textContent=
-      'Products, Suppliers and credit Purchase can use Shop D1. POS payments, returns and full ledgers are not connected.';
+      'Shop D1 supports credit Purchase and one-product Cash POS. Split payments, due sales, returns and full ledgers remain unavailable.';
+  }
+
+  // Source POS still calls completeSale(authToken,payload). Only this
+  // private Owner adapter can submit the narrowly authorized real cash MVP.
+  // An uncertain response MUST retry the identical payload and operation ID.
+  var ownerSalePendingSave = null;
+  var ownerSaleSaveInProgress = false;
+
+  function saveOwnerCashSale_(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+      return Promise.reject(new Error('Invalid POS checkout.'));
+    if (ownerSaleSaveInProgress)
+      return Promise.reject(new Error('Sale already saving.'));
+    var fingerprint=JSON.stringify(payload);
+    if (ownerSalePendingSave && ownerSalePendingSave.fingerprint!==fingerprint)
+      return Promise.reject(new Error('Previous checkout changed. Reload and review the original sale before posting again.'));
+    if (!ownerSalePendingSave) {
+      ownerSalePendingSave={fingerprint:fingerprint,body:JSON.stringify({
+        operationId:payload.operationId || crypto.randomUUID(),payload:payload
+      })};
+    }
+    ownerSaleSaveInProgress=true;
+    return ownerPurchasePost_('/api/owner/pos/sales',ownerSalePendingSave.body,
+      'Could not confirm the Sale. Retry Complete Sale unchanged to check the same transaction.')
+      .then(function(invoice){
+        if(!invoice || typeof invoice.invoiceId!=='string' || !Array.isArray(invoice.items))
+          throw new Error('Could not confirm saved invoice. Retry unchanged checkout.');
+        ownerSalePendingSave=null;
+        return invoice;
+      }).finally(function(){ownerSaleSaveInProgress=false;});
   }
 
   function serverCall(fnName) {
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
     if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
     if (fnName === 'createPurchase') return saveOwnerCreditPurchase_(arguments[2]);
+    if (fnName === 'completeSale') return saveOwnerCashSale_(arguments[2]);
     if (fnName === 'startCashSession'||fnName === 'closeCashSession')
       return ownerCashAction_(fnName,arguments[2],arguments[3]);
     var path, method = 'GET';
@@ -318,6 +349,14 @@ export function patchOwnerApp(html){
     else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
     else if (fnName === 'getSuppliersBootstrap') path = '/api/owner/suppliers';
     else if (fnName === 'getPurchaseBootstrap') path = '/api/owner/purchase/bootstrap';
+    else if (fnName === 'getPosBootstrap') path = '/api/owner/pos/bootstrap';
+    else if (fnName === 'getSalesDraftList') path = '/api/owner/pos/drafts';
+    else if (fnName === 'findInvoice') {
+      var invoiceId=arguments[2];
+      if(typeof invoiceId!=='string'||!/^INV-[0-9]{6,}$/.test(invoiceId))
+        return Promise.reject(new Error('Invalid Invoice ID.'));
+      path='/api/owner/pos/invoices/'+invoiceId;
+    }
     else if (fnName === 'getPurchaseManagementList') path = '/api/owner/purchases';
     else if (fnName === 'getCashSessionSummary') path = '/api/owner/cash-session';
     else if (fnName === 'getPurchaseDetail') {
@@ -334,7 +373,8 @@ export function patchOwnerApp(html){
           .then(function (result) {
             if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
               fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' :
-              fnName.startsWith('getPurchase') ? 'Purchase data is unavailable.' : 'Owner session is unavailable.');
+              fnName.startsWith('getPurchase') ? 'Purchase data is unavailable.' :
+              fnName==='getPosBootstrap'||fnName==='getSalesDraftList'||fnName==='findInvoice' ? 'POS data is unavailable.' : 'Owner session is unavailable.');
             if (fnName === 'getProductsBootstrap') {
               var operational = result.mode === 'operational';
               var products = result.data.map(function (row) {
