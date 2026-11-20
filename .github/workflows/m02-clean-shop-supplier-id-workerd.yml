@@ -1,0 +1,35 @@
+name: M02 two-Shop Supplier receipt readback (disposable local D1)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  supplier-two-d1:
+    name: Verify two independent Shop D1 Supplier receipts, replay and fail-closed links
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned local-only Wrangler test harness
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify immutable original source
+        run: npm run verify:source
+      - name: Existing M02 Supplier shape acceptance
+        run: node --test tests/m02-clean-shop-supplier-identity.test.mjs
+      - name: RED/GREEN two distinct D1 Supplier ID and Party identity proof
+        run: node --test tests/integration/m02-clean-shop-supplier-id-workerd.spec.mjs
+      - name: Check production Worker preview stays D1-free
+        run: node scripts/check-cloudflare-preview.mjs wrangler.preview.jsonc
