@@ -24,6 +24,10 @@ jobs:
       - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
       - name: Original POS to actual Purchase FIFO/Cash Book, concurrency/rollback/two Shop D1
         run: node --test tests/integration/m03-mvp-cash-sale-workerd.spec.mjs
+      - name: Install Chromium for preserved POS browser QA
+        run: npx playwright install --with-deps chromium
+      - name: Original confirmed POS browser → real D1 invoice and print renderer
+        run: node --test qa/m03-mvp-cash-sale-browser.spec.mjs
       - name: Existing operational Purchase real Shop D1 regression
         run: node --test tests/integration/m03-mvp-operational-purchase-workerd.spec.mjs
       - name: Original POS source adapter regressions
