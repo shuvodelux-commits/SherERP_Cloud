@@ -992,3 +992,153 @@ test('M01 original POS V2 keyboard product picker creates, edits and clears synt
     });
   }
 });
+
+test('M01 original POS V2 pointer reorder keeps product quantity, unit, pricing and totals',async t=>{
+  // #754: real Chromium pointer dispatch to existing drag handle, no mock writer.
+  const {installM01SyntheticNavigation,captureM01NavEvidence}=
+    await import('./m01-auth-nav-fixture.mjs');
+  const navItems=[
+    {key:'dashboard',label:'Dashboard',sidebarGroup:0,sidebarOrder:10},
+    {key:'pos',label:'POS',sidebarGroup:0,sidebarOrder:20,landingKey:'posv2',
+      children:[{key:'posv2',label:'POS V2',permKey:'pos'}]}
+  ];
+  for(const {name,width,height,phone} of [
+    {name:'phone-390x844',width:390,height:844,phone:true},
+    {name:'desktop-1280x800',width:1280,height:800,phone:false}
+  ]){
+    await t.test(name,async()=>{
+      const page=await browser.newPage({
+        viewport:{width,height},isMobile:phone,hasTouch:phone
+      });
+      try{
+        const {calls}=await installM01SyntheticNavigation(page,{
+          allowedModules:['dashboard','pos'],
+          permissions:{dashboard:{view:true},pos:{view:true}},
+          navItems
+        });
+        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.locator('#loginOverlay:not([hidden])').waitFor();
+        await page.locator('#loginMobile').fill('01710000001');
+        await page.locator('#loginPassword').fill('m01-synthetic-only');
+        const login=page.waitForResponse(response=>
+          response.url().endsWith('/api/rpc') &&
+          response.request().postDataJSON()?.fnName==='login');
+        await page.locator('#loginSubmitBtn').click();
+        assert.equal((await login).status(),200);
+        await page.waitForFunction(()=>
+          document.getElementById('loginOverlay')?.hidden===true);
+        if(phone){
+          await page.locator('#mobileBottomNav [data-mobile-page="pos"]').tap();
+        }else{
+          await page.evaluate(()=>goToPage('pos'));
+        }
+        await page.waitForFunction(()=>
+          currentPage==='posv2' &&
+          document.body.classList.contains('pos-v2-active'));
+        if(phone){
+          await page.locator('#page-pos [data-pos-v2-tab="cart"]').tap();
+        }
+        await page.evaluate(()=>{
+          // Product data exists ONLY in this Chromium tab; getPosBootstrap is
+          // deliberately not served by the inert production Worker.
+          posState.products=[
+            {id:'M01-DRAG-HAMMER',name:'M01 Drag Hammer',productType:'Standard',
+              unit:'Pcs',brand:'M01',category:'Tools',sellingPrice:20,
+              fallbackSellPrice:20,stock:50,lotPricing:[]},
+            {id:'M01-DRAG-WIRE',name:'M01 Drag Wire',productType:'Standard',
+              unit:'Feet',brand:'M01',category:'Electrical',sellingPrice:15,
+              fallbackSellPrice:15,stock:50,lotPricing:[]}
+          ];
+          posState.productStockById={
+            'M01-DRAG-HAMMER':50,'M01-DRAG-WIRE':50
+          };
+          smartIndexProducts_(posState.products);
+          posState.cart=posState.products.map((p,i)=>{
+            const line=posCreateCartLine_(p);
+            line.qty=i===0?2:3;
+            return line;
+          });
+          posState.cartEntryIndex=null;
+          posState.cartEditIndex=null;
+          posRenderCart_();
+          posV2EnhanceCartRows_();
+        });
+        const rows=page.locator('#posCartList .cart-row.pos-v2-reorderable');
+        const handles=rows.locator('.pos-v2-reorder-handle');
+        await handles.first().waitFor({state:'visible'});
+        assert.equal(await rows.count(),2);
+        assert.equal(await handles.count(),2,
+          'each populated row gets exactly one original drag handle');
+        assert.equal(await handles.first().getAttribute('aria-label'),'Reorder product line');
+        assert.deepEqual(await rows.locator('.pos-v2-line-no').allTextContents(),['1','2']);
+        const before=await page.evaluate(()=>({
+          items:posState.cart.map(x=>({
+            productId:x.productId,qty:x.qty,unit:x.unit,
+            unitPrice:x.unitPrice,lineTotal:x.lineTotal,priceMode:x.priceMode
+          })),
+          subtotal:document.getElementById('posSubtotal').textContent,
+          total:document.getElementById('posGrandTotal').textContent
+        }));
+        assert.deepEqual(before.items.map(x=>[x.productId,x.qty,x.unitPrice,x.lineTotal]),[
+          ['M01-DRAG-HAMMER',2,20,40],
+          ['M01-DRAG-WIRE',3,15,45]
+        ]);
+        assert.equal(await page.locator('#posCartCount').innerText(),'2');
+
+        const first=handles.first();
+        const secondRow=rows.last();
+        await secondRow.scrollIntoViewIfNeeded();
+        await first.scrollIntoViewIfNeeded();
+        const from=await first.boundingBox();
+        const to=await secondRow.boundingBox();
+        assert.ok(from&&to&&from.width>0&&to.height>0,'both source drag rows are laid out');
+        assert.ok(from.y+from.height/2>=0&&from.y+from.height/2<=height,
+          'source drag handle must be within '+name+' viewport');
+        assert.ok(to.y+to.height*.75>=0&&to.y+to.height*.75<=height,
+          'source drop target must be within '+name+' viewport');
+        await page.mouse.move(from.x+from.width/2,from.y+from.height/2);
+        await page.mouse.down();
+        await page.mouse.move(
+          to.x+Math.min(to.width*.4,65),to.y+to.height*.75,{steps:8});
+        await page.mouse.up();
+        await page.waitForFunction(()=>
+          posState.cart[0]?.productId==='M01-DRAG-WIRE' &&
+          posState.cart[1]?.productId==='M01-DRAG-HAMMER');
+        const after=await page.evaluate(()=>({
+          items:posState.cart.map(x=>({
+            productId:x.productId,qty:x.qty,unit:x.unit,
+            unitPrice:x.unitPrice,lineTotal:x.lineTotal,priceMode:x.priceMode
+          })),
+          subtotal:document.getElementById('posSubtotal').textContent,
+          total:document.getElementById('posGrandTotal').textContent
+        }));
+        assert.deepEqual(after.items,[before.items[1],before.items[0]],
+          'pointer reorder must only move rows, not reprice or change quantities');
+        assert.equal(after.subtotal,before.subtotal,'reorder cannot change subtotal');
+        assert.equal(after.total,before.total,'reorder cannot change grand total');
+        assert.equal(await page.locator('#posCartCount').innerText(),'2');
+        assert.deepEqual(await rows.locator('.pos-v2-line-no').allTextContents(),['1','2']);
+        assert.deepEqual(await rows.locator('.c-unit').allTextContents(),['Feet','Pcs']);
+        assert.equal(await handles.count(),2,'reorder does not duplicate handles');
+        const evidence=await captureM01NavEvidence(page,'posv2-pointer-reordered-'+name);
+        assert.ok(evidence.screenshotBytes>1500);
+
+        // The original mutation observer must not accumulate controls on rerender.
+        await page.evaluate(()=>{
+          posRenderCart_();
+          posV2EnhanceCartRows_();
+        });
+        assert.equal(await handles.count(),2,'rerender retains one handle per row');
+        assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),[
+          'M01-DRAG-WIRE','M01-DRAG-HAMMER'
+        ]);
+        assert.equal(calls.some(x=>
+          /^(?:saveSalesDraft|deleteSalesDraft|saveSale|createSale|completeSale|postSale|submitSale|saveSalePayment|postLedger|createPayment)$/i
+            .test(x.fnName||'')),false,
+          'pointer reorder is strictly client-side and must not post finances');
+      }finally{
+        await page.close();
+      }
+    });
+  }
+});
