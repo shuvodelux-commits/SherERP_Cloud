@@ -27,7 +27,7 @@
 
 - Repository: `shuvodelux-commits/SherERP_Cloud`, branch `m03/control-center-minimal-directory-mvp-20261120`, source baseline `main@9591444b105af09487fc251a583b0f007bf74645`.
 - Frozen original `Mohim_ERP@29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2` unchanged.
-- Only owned files: `frontend/platform-auth/index.html`, `frontend/platform-auth/platform-auth.css`, `frontend/platform-auth/platform-auth.js`, `qa/m03-control-center-provisioning-page.spec.mjs`, this plan.
+- Only owned files: `frontend/platform-auth/index.html`, `frontend/platform-auth/platform-auth.css`, `frontend/platform-auth/platform-auth.js`, `qa/m03-control-center-provisioning-page.spec.mjs`, NEW `.github/workflows/m03-control-center-directory-browser.yml` (PR-only, M11 review required), and this plan.
 - M03 #752 local Cash Session, #757 hosted read-only preflight, M02 #748, M01 #755, M05 #756 and M10 #753 own disjoint files.
 - No new API route, D1 binding, DDL, public RPC, financial posting, owner impersonation, tenant ERP opener, or remote deployment.
 - Preserve original Create Business/Resume/Owner logic; 100% business calculations are outside and must not be touched.
@@ -71,3 +71,12 @@
 - [ ] Perform an independent `/super qa → /super review` before owner-approved merge; no hidden automatic launch.
 - [ ] Keep a reviewable PR, with no permission to deploy admin-hisabiq until a separate Admin Worker deployment review.
 - [ ] Follow-on milestone: secure tenant ERP support access with explicit Admin identity, Shop-scoped grant, expiry, audit, revocation and permission-reviewed financial mutations; **NOT IMPLEMENTED HERE**.
+
+## Execution evidence (Run 1)
+
+- **RED test-first commit:** `7c4fb03d67cac730c970cea9d89ef9cafc09e6f6`.
+- **RED hosted real Chromium/Workerd D1:** [run 44689079478](https://github.com/shuvodelux-commits/SherERP_Cloud/actions/runs/44689079478), 0/1 test passing, exact expected Playwright locator timeout on missing `#business-recent-count`, after executing the original local Create/Resume flow.
+- **GREEN files committed:** HTML `ba95fe3`, CSS `1cf9696`, JS `d550f5a`.
+- **GREEN hosted real Chromium/Workerd D1:** [run 44689705724](https://github.com/shuvodelux-commits/SherERP_Cloud/actions/runs/44689705724), success.
+- **Exact GREEN code-head checks:** 52/53 succeeded at `d550f5a`; Cloudflare `Workers Builds: hisabiq` failed. Other simultaneous M02/M03/M10 PRs have independently failing Cloudflare build checks; do not assume cause or waive. This plan-only commit requires fresh final-head verification.
+- **Review hold:** PR remains draft; independent /super QA → /super review, M11 CI ownership/security review and explicit human merge approval required. Nothing deployed to Admin Worker and no production database modified.
