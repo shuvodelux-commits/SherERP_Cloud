@@ -892,6 +892,9 @@ test('M01 original POS V2 keyboard product picker creates, edits and clears synt
           document.body.classList.contains('pos-v2-active'));
         assert.equal(await page.locator('#page-pos').isVisible(),true);
         assert.equal(await page.evaluate(()=>posState.cart.length),0);
+        // Without a real getPosBootstrap, source posLoad() intentionally cannot
+        // initialize empty-state button flags; render the synthetic empty cart.
+        await page.evaluate(()=>posRenderCart_());
         assert.equal(await page.locator('#posClearCartBtn').isDisabled(),true);
         assert.equal(await page.locator('#posSaveDraftBtn').isDisabled(),true);
 
