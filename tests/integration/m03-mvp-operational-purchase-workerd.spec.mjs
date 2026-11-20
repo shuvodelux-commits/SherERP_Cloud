@@ -133,3 +133,60 @@ test('MVP close day denies subsequent credit Purchase even if previous session I
     assert.equal((await a.prepare('SELECT COUNT(*) AS n FROM owner_mvp_purchase_receipts').first()).n,0);
   }finally{await close();}
 });
+
+test('private Owner HTTP API posts original Purchase intent; stock appears in operational Products and two Shops stay isolated',async()=>{
+  const {ownerA,ownerB,SHOP_A_DB:a,SHOP_B_DB:b,close}=await startCleanShopHarness();
+  try{
+    await install(a);await install(b);
+    await ready(ownerA);await ready(ownerB);
+    const {default:ownerWorker}=await import('../../src/m03-owner-redemption-worker.js');
+    const origin='https://owner.example.test';
+    const env=owner=>({...owner.env,
+      OWNER_LOGIN_ENABLED:'true',OWNER_CLEAN_PRODUCTS_ENABLED:'true',
+      OWNER_WRITE_GRANTS_ENABLED:'true',OWNER_MVP_PURCHASE_ENABLED:'true',
+      OWNER_CATALOG_ENABLED:'true',
+      OWNER_AUTH_ORIGIN:origin,PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
+      PLATFORM_OWNER_CLIENT_ID:'fixture.apps.googleusercontent.com',
+      OWNER_INGRESS:{limit:async()=>({success:true})}
+    });
+    const request=(ctx,path,{input,enabled=true,token=ctx.token}={})=>
+      ownerWorker.request(origin+path,{
+        method:input?'POST':'GET',
+        headers:{Cookie:'__Host-shererp-owner-session='+token,
+          ...(input?{Origin:origin,'Content-Type':'application/json'}:{})},
+        ...(input?{body:JSON.stringify(input)}:{})
+      },{...env(ctx),OWNER_MVP_PURCHASE_ENABLED:String(enabled)});
+    assert.equal((await request(ownerA,'/api/owner/purchase/bootstrap',{enabled:false})).status,404);
+    assert.equal((await request(ownerA,'/api/owner/purchase/bootstrap',{token:ownerB.token})).status,401);
+    const before=await (await request(ownerA,'/api/owner/purchase/bootstrap')).json();
+    assert.deepEqual(before.data.suppliers.map(x=>x.id),['SUP-000001']);
+    assert.equal(before.data.products[0].stock,0);
+    assert.equal(before.data.cashSession,null);
+    const session=await request(ownerA,'/api/owner/cash-session/start',{input:{
+      operationId:crypto.randomUUID(),openingCash:'0',notes:'Start Day'
+    }});
+    assert.equal(session.status,201);
+    assert.equal((await session.json()).data.sessionId,'CS-000001');
+    const input={operationId:crypto.randomUUID(),payload:purchase()};
+    const posted=await request(ownerA,'/api/owner/purchases',{input});
+    assert.equal(posted.status,201);
+    assert.deepEqual((await posted.json()).data,{purchaseId:'PUR-000001',
+      grandTotal:600,dueAmount:600});
+    assert.equal((await request(ownerA,'/api/owner/purchases',{input})).status,200);
+    assert.equal((await request(ownerA,'/api/owner/purchases',{input:{
+      operationId:crypto.randomUUID(),payload:purchase({paidAmount:'100.00'})
+    }})).status,422);
+    const after=await (await request(ownerA,'/api/owner/purchase/bootstrap')).json();
+    assert.equal(after.data.products[0].stock,10);
+    assert.equal(after.data.suppliers[0].currentDue,600);
+    assert.equal(after.data.cashSession.status,'Open');
+    assert.equal((await (await request(ownerA,'/api/owner/purchases')).json()).data.length,1);
+    const detail=await (await request(ownerA,'/api/owner/purchases/PUR-000001')).json();
+    assert.equal(detail.data.items[0].lineTotal,600);
+    const catalog=await (await request(ownerA,'/api/owner/catalog')).json();
+    assert.equal(catalog.data[0].stock,10);
+    assert.equal(catalog.data[0].listedPrice,'75.00');
+    assert.equal((await (await request(ownerB,'/api/owner/purchases')).json()).data.length,0);
+    assert.equal((await b.prepare('SELECT count(*) AS n FROM owner_mvp_supplier_ledger').first()).n,0);
+  }finally{await close();}
+});
