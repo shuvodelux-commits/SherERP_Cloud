@@ -81,7 +81,7 @@ async function ownerPage({enabled=false,response={events},status=200,width=1280}
   });
   await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
   await page.locator('#owner-data-notice').waitFor();
-  await page.locator('#navList .nav-item[aria-label="Sales"]').waitFor();
+  await page.locator('#navList .nav-item[aria-label="Sales"]').waitFor({state:'attached'});
   return {page,errors,counts:()=>({auditCount,apiUnexpected,logoutCount})};
 }
 
