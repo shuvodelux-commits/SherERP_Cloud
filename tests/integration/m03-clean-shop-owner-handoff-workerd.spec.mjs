@@ -7,6 +7,7 @@ import platform from '../../src/m03-private-platform-auth-worker.js';
 import owner from '../../src/m03-owner-redemption-worker.js';
 import {beginFirstOwnerGmailLogin,loginFirstOwnerWithGmail} from '../../src/auth/platform-owner-gmail-login.js';
 import {validateOwnerSession} from '../../src/auth/platform-owner-sessions.js';
+import {publishCurrentOwnerWriteSession} from '../../src/auth/platform-owner-write-session.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 import {applyLocalShopMigrations,ownerReadyShopMigrationPlan} from '../fixtures/port-p2-local-shop-migrations.mjs';
 import {makeSignedGmailOwnerToken,ownerJwk} from '../fixtures/m03-clean-shop-owner-jwt.mjs';
@@ -219,4 +220,28 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
   await env.SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
   assert.equal((await writeProduct(a.env,a.token,makeProduct('After revoke'))).status,403);
   assert.equal((await writeProduct(b.env,b.token,makeProduct('Unrelated Owner still active'))).status,201);
+
+  // RED security regression: a valid token must not survive the server-side
+  // absolute deadline even while an older Shop grant remains enabled.
+  await db.prepare('UPDATE platform_shop_owner_sessions SET issued_at_ms=? WHERE shop_id=?')
+    .bind(Date.now()-12*60*60*1000-60_000,b.env.PLATFORM_PILOT_SHOP_ID).run();
+  assert.equal(await validateOwnerSession(b.env,b.token),null,
+    'expired Owner session must fail Control D1 validation');
+  assert.equal((await owner.request(ownerOrigin+'/api/owner/auth/session',{
+    headers:{Cookie:'__Host-shererp-owner-session='+b.token}
+  },b.env)).status,401,'expired session API must deny');
+  assert.equal((await catalog(b.env,b.token)).status,401,'expired catalog read must deny');
+  assert.equal((await writeProduct(b.env,b.token,makeProduct('Expired Owner write'))).status,401,
+    'expired Owner must not submit a Product save');
+  assert.equal(await publishCurrentOwnerWriteSession(b.env,b.token),false,
+    'an expired Control session must not reissue a Shop write grant');
+  assert.equal((await env.SHOP_B_DB.prepare('SELECT count(*) AS n FROM products').first()).n,2,
+    'expired writes must not change Shop products');
+  assert.equal((await env.SHOP_B_DB.prepare('SELECT count(*) AS n FROM owner_product_create_receipts').first()).n,2,
+    'expired writes must not create receipts');
+
+  await db.prepare('UPDATE platform_shop_owner_sessions SET issued_at_ms=? WHERE shop_id=?')
+    .bind(Date.now()+60_000,b.env.PLATFORM_PILOT_SHOP_ID).run();
+  assert.equal(await validateOwnerSession(b.env,b.token),null,
+    'future-dated sessions cannot be treated as current');
 });
