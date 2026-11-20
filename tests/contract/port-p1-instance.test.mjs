@@ -104,6 +104,27 @@ test('private profile generation rejects the public preview Worker in either rol
   }
 });
 
+test('explicit Google/TOTP selects the merged Admin Worker and preserves the isolated draft',()=>{
+  const instance={...sample(),adminAuthMode:'google-totp-without-access'};
+  assert.deepEqual(validatePortableInstance(instance),instance);
+  const legacy=buildPortableProfiles(sample());
+  const {admin,owner}=buildPortableProfiles(instance);
+  assert.equal(admin.main,'../../src/auth/m04-accessless-platform-admin-worker.js');
+  assert.equal(admin.vars.PLATFORM_AUTH_MODE,'google-totp-without-access');
+  assert.deepEqual(admin.d1_databases,legacy.admin.d1_databases);
+  assert.deepEqual(admin.ratelimits,legacy.admin.ratelimits);
+  assert.equal(admin.workers_dev,false);
+  assert.equal(admin.preview_urls,false);
+  assert.deepEqual(admin.vars,{
+    ...legacy.admin.vars,PLATFORM_AUTH_MODE:'google-totp-without-access'
+  });
+  assert.deepEqual(owner,legacy.owner);
+  assert.deepEqual(buildPortableProfiles({...sample(),adminAuthMode:'cloudflare-access'}),legacy);
+  for(const adminAuthMode of ['',null,'google-only','GOOGLE-TOTP-WITHOUT-ACCESS']){
+    assert.throws(()=>buildPortableProfiles({...sample(),adminAuthMode}),/Invalid portable instance/);
+  }
+});
+
 test('ingress namespaces use distinct positive integer identities',()=>{
   for(const [adminNamespaceId,ownerNamespaceId] of [['0','2'],['1','01']]){
     const instance=sample();
