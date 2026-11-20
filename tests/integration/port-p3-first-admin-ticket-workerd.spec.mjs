@@ -54,7 +54,7 @@ test('accepts opaque Google subject values permitted by the existing verified id
 test('rejects unapproved identity shapes before any database query or token issuance',async()=>{
   let queries=0;
   const controlDb={prepare(){queries++;throw Error('SENSITIVE_VALUE');}};
-  for(const googleSubject of ['', ' test', 'name@gmail.com', '123 abc', '123', 123, null, {}, '9'.repeat(256)]){
+  for(const googleSubject of ['', ' test', '123 abc', 'hello\nworld', 123, null, {}, '9'.repeat(256)]){
     assert.equal(await issueFirstPlatformSetupTicket({controlDb,googleSubject}),null);
   }
   assert.equal(queries,0);
