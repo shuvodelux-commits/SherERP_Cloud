@@ -105,8 +105,10 @@ test('stale bank account or stale Cash Session denies synthetic D1 posting after
   await withDb(async DB=>{
     const raw={...cash(),paymentMethod:'Bank',bankAccountId:'BANK-1'};
     const candidate=normalize(raw,context('BANK'));
-    await DB.prepare("UPDATE m06_bank_accounts SET active=0 WHERE account_id='BANK-1'").run();
-    assert.equal((await createSyntheticD1SalePostingContract(DB).post(candidate)).status,'DECLINED');
+    const posting=createSyntheticD1SalePostingContract(DB,{
+      beforeBatch:async()=>DB.prepare("UPDATE m06_bank_accounts SET active=0 WHERE account_id='BANK-1'").run(),
+    });
+    assert.equal((await posting.post(candidate)).status,'DECLINED');
     assert.equal((await first(DB,"SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,2);
     assert.equal((await first(DB,'SELECT COUNT(*) AS n FROM m06_invoices')).n,0);
   });
