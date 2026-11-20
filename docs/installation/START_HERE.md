@@ -318,6 +318,59 @@ Cloudflare's generic syntax is `wrangler d1 migrations apply <DATABASE> --remote
 3. Open the Admin URL, enter the Admin Gmail address and bootstrap code, and complete Google sign-in. Scan the QR code or enter the manual key, then enter the current six-digit code. The dashboard opens after activation. Subsequent logins require Google and the authenticator.
 4. Confirm setup is closed after activation and verify sign-in and logout. If setup expires before activation, return to the Admin URL and start again. An existing first-Admin record, including an interrupted legacy enrollment, requires the established recovery procedure.
 
+**New-account hosted Admin handoff (20 November 2026, release `0b12f021`):**
+
+The new-account Admin Worker `admin` was deployed at
+`https://admin.hisab.workers.dev` with a **separate, new, empty**
+`shererp-admin-control-v2` Control D1, the four numbered platform-auth
+migrations, and a 20-request/minute ingress limit. The earlier
+`shererp-control` D1 was **not** modified or deleted. This is a staging
+bootstrap, not a production ERP/tenant-onboarding release.
+
+**Verified live state (20 November 2026):** Both required secrets have now
+been installed by the operator. Google/TOTP activation succeeded: the new
+Control D1 has **one immutable first Admin and one active MFA factor**, and
+`GET /api/platform/wizard` returns `{"setup":false}`. The private Admin
+page returns HTTP 200, while an unauthenticated session returns 401.
+The minimal Control Center overview fix from PR #817 was also deployed
+as Worker version `bfe01332-5177-428c-8cfc-51031dbd4bd6`.
+Business directory and hosted shop provisioning remain disabled.
+
+**For future fresh Cloudflare-account installations, complete these same
+Cloudflare Dashboard steps, without SQL:**
+
+1. In the correct Cloudflare account, open **Workers & Pages → admin →
+   Settings → Variables and Secrets**. Add **Secret**
+   `PLATFORM_BOOTSTRAP_CODE`, using the privately generated, 64-character
+   code kept on the authorized operator computer.
+2. Add a second **Secret** named `PLATFORM_FACTOR_ENCRYPTION_KEY`,
+   using its separate, 64-character locally generated key. Do not expose
+   either value in GitHub, chat, browser URLs, or Worker logs. Retain
+   secure off-site custody of the encryption key so future MFA can be
+   decrypted after a restore.
+3. Verify `PLATFORM_BROWSER_SETUP=true`, the exact Admin
+   `PLATFORM_AUTH_ORIGIN`, and the **Control D1 binding** to
+   `shererp-admin-control-v2`. Do not point this Worker at the older
+   partially enrolled Control D1.
+4. Ensure Google Cloud **Authorized JavaScript origins** includes exactly
+   `https://admin.hisab.workers.dev`.
+5. Open the Admin URL. It should present the one-time first-Admin wizard
+   with Admin Gmail and bootstrap code. Continue with Google, scan the
+   authenticator QR or use its manual key, verify the six-digit code and
+   confirm the Control Center opens. Do not submit credential or OTP
+   material to a support chat.
+6. On refresh, `GET /api/platform/wizard` must return `{"setup":false}`;
+   subsequent sessions must require Google plus current TOTP. Verify
+   sign-out, wrong-account denial and old-session revocation.
+
+**Release boundary:** The Super Admin identity and MFA are active in this
+new account; their setup wizard is permanently closed for this D1. However,
+this does **not** make the platform's business onboarding operational.
+Shop D1 creation, Owner setup and ERP transaction APIs remain separate
+integration gates, and no tenant-provisioning or financial write feature
+was enabled by the authentication rollout. The one-time bootstrap secret
+prevents an arbitrary Gmail visitor from claiming the first Admin.
+
 **Existing ticket-based installation:**
 
 **What exists in code:**
