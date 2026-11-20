@@ -162,7 +162,16 @@ export async function readOwnerCashSession(DB){
   // present, summarize persisted cash entries for this exact open session.
   const hasCash=await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
     WHERE type='table' AND name='owner_mvp_sale_cash_book'`).first();
-  const row=hasCash?await DB.prepare(`SELECT s.sequence,s.status,
+  const hasRefund=hasCash && await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
+    WHERE type='table' AND name='owner_mvp_return_cash_book'`).first();
+  const row=hasRefund?await DB.prepare(`SELECT s.sequence,s.status,
+    COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
+      WHERE b.cash_sequence=s.sequence),0) -
+    COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
+      WHERE r.cash_sequence=s.sequence),0) AS cashPaisa
+    FROM owner_mvp_cash_sessions s WHERE s.status='Open'
+    ORDER BY s.sequence DESC LIMIT 1`).first():
+    hasCash?await DB.prepare(`SELECT s.sequence,s.status,
     COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
       WHERE b.cash_sequence=s.sequence),0) AS cashPaisa
     FROM owner_mvp_cash_sessions s WHERE s.status='Open'

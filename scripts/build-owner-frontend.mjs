@@ -304,7 +304,7 @@ export function patchOwnerApp(html){
       :'Start Day before purchasing. Unpaid purchases only; payments, returns and Tiles are not connected.';
     document.getElementById('owner-purchase-start-day').hidden=active;
     document.getElementById('owner-data-notice').textContent=
-      'Shop D1 supports credit Purchase and one-product Cash POS. Split payments, due sales, returns and full ledgers remain unavailable.';
+      'Shop D1 supports credit Purchase, one-product Cash POS and opt-in original Cash Returns. Split payments, Customer Due, Store Credit and full ledgers are not connected.';
   }
 
   // Source POS still calls completeSale(authToken,payload). Only this
@@ -337,11 +337,40 @@ export function patchOwnerApp(html){
       }).finally(function(){ownerSaleSaveInProgress=false;});
   }
 
+  var ownerReturnPendingSave = null;
+  var ownerReturnSaveInProgress = false;
+
+  function saveOwnerCashReturn_(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+      return Promise.reject(new Error('Invalid Sales Return.'));
+    if (ownerReturnSaveInProgress)
+      return Promise.reject(new Error('Return already saving.'));
+    var fingerprint=JSON.stringify(payload);
+    if (ownerReturnPendingSave && ownerReturnPendingSave.fingerprint!==fingerprint)
+      return Promise.reject(new Error('Previous refund changed. Reload the original invoice before posting again.'));
+    if (!ownerReturnPendingSave) {
+      ownerReturnPendingSave={fingerprint:fingerprint,body:JSON.stringify({
+        operationId:payload.operationId || crypto.randomUUID(),payload:payload
+      })};
+    }
+    ownerReturnSaveInProgress=true;
+    return ownerPurchasePost_('/api/owner/returns',ownerReturnPendingSave.body,
+      'Could not confirm the Return. Retry Complete Return unchanged to check the same transaction.')
+      .then(function(result){
+        if (!result || typeof result.returnId!=='string' ||
+            !Number.isFinite(Number(result.totalReturnAmount)))
+          throw new Error('Could not confirm saved Return. Retry unchanged.');
+        ownerReturnPendingSave=null;
+        return result;
+      }).finally(function(){ownerReturnSaveInProgress=false;});
+  }
+
   function serverCall(fnName) {
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
     if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
     if (fnName === 'createPurchase') return saveOwnerCreditPurchase_(arguments[2]);
     if (fnName === 'completeSale') return saveOwnerCashSale_(arguments[2]);
+    if (fnName === 'completeReturn') return saveOwnerCashReturn_(arguments[2]);
     if (fnName === 'startCashSession'||fnName === 'closeCashSession')
       return ownerCashAction_(fnName,arguments[2],arguments[3]);
     var path, method = 'GET';
@@ -351,6 +380,18 @@ export function patchOwnerApp(html){
     else if (fnName === 'getPurchaseBootstrap') path = '/api/owner/purchase/bootstrap';
     else if (fnName === 'getPosBootstrap') path = '/api/owner/pos/bootstrap';
     else if (fnName === 'getSalesDraftList') path = '/api/owner/pos/drafts';
+    else if (fnName === 'searchInvoicesForReturn') {
+      var search=arguments[2];
+      if(typeof search!=='string'||!search.trim()||search.length>80)
+        return Promise.reject(new Error('Enter an invoice ID or phone number.'));
+      path='/api/owner/returns/search/'+encodeURIComponent(search.trim());
+    }
+    else if (fnName === 'getInvoiceForReturn') {
+      var returnInvoice=arguments[2];
+      if(typeof returnInvoice!=='string'||!/^INV-[0-9]{6,}$/.test(returnInvoice))
+        return Promise.reject(new Error('Invalid Return invoice ID.'));
+      path='/api/owner/returns/invoices/'+returnInvoice;
+    }
     else if (fnName === 'findInvoice') {
       var invoiceId=arguments[2];
       if(typeof invoiceId!=='string'||!/^INV-[0-9]{6,}$/.test(invoiceId))
@@ -374,7 +415,8 @@ export function patchOwnerApp(html){
             if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
               fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' :
               fnName.startsWith('getPurchase') ? 'Purchase data is unavailable.' :
-              fnName==='getPosBootstrap'||fnName==='getSalesDraftList'||fnName==='findInvoice' ? 'POS data is unavailable.' : 'Owner session is unavailable.');
+              fnName==='getPosBootstrap'||fnName==='getSalesDraftList'||fnName==='findInvoice' ? 'POS data is unavailable.' :
+              fnName==='searchInvoicesForReturn'||fnName==='getInvoiceForReturn' ? 'Returns data is unavailable.' : 'Owner session is unavailable.');
             if (fnName === 'getProductsBootstrap') {
               var operational = result.mode === 'operational';
               var products = result.data.map(function (row) {

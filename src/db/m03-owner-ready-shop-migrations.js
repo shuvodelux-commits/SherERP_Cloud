@@ -12,7 +12,8 @@ export const OWNER_READY_SHOP_MIGRATION_PLAN=Object.freeze([
   ['migrations/0002_party_identity.sql','9ea71c03a06ba7a5b0325e5aed9ed16dd3f78eb63719c3ed05d074b55b27b3e3'],
   ['staging-migrations/shop-owner-write/0005_owner_supplier_master.sql','416d898fe6f40f619fb87e646a20ca20b653b47e144d7e93e17be6c0de410330'],
   ['staging-migrations/shop-owner-write/0006_owner_mvp_credit_purchase.sql','28d7f21535e3244737555fe075d4d61af2bb65996622e5ee9337408644f59020'],
-  ['staging-migrations/shop-owner-write/0007_owner_mvp_cash_sale.sql','bf3e8934fc2329f3bd91bc34f54e73044b69eb734597e10505f5ad9d393f9e62']
+  ['staging-migrations/shop-owner-write/0007_owner_mvp_cash_sale.sql','bf3e8934fc2329f3bd91bc34f54e73044b69eb734597e10505f5ad9d393f9e62'],
+  ['staging-migrations/shop-owner-write/0008_owner_mvp_cash_return.sql','cfc500c17508efeb6e9dd5f30559686c46de87617293f073863c793a28f19f77']
 ].map(([name,checksum])=>Object.freeze({name,checksum})));
 
 export function isOwnerReadyShopMigrationPlan(plan){
