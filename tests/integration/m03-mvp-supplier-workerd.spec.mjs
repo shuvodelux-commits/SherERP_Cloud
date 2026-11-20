@@ -90,7 +90,7 @@ test('the existing private Owner Worker exposes source-shaped Supplier read and 
     const {default:worker}=await import('../../src/m03-owner-redemption-worker.js');
     const origin='https://owner.example.test';
     const config=owner=>({
-      ...owner.env,OWNER_LOGIN_ENABLED:'true',OWNER_SUPPLIERS_ENABLED:'true',
+      ...owner.env,OWNER_LOGIN_ENABLED:'true',OWNER_CLEAN_PRODUCTS_ENABLED:'true',
       OWNER_AUTH_ORIGIN:origin,PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
       PLATFORM_OWNER_CLIENT_ID:'fixture.apps.googleusercontent.com',
       OWNER_INGRESS:{limit:async()=>({success:true})},
@@ -102,7 +102,7 @@ test('the existing private Owner Worker exposes source-shaped Supplier read and 
       ...(body?{body:JSON.stringify(body)}:{}),
     },bindings);
     const path='/api/owner/suppliers',input=draft('Original UI Supplier');
-    assert.equal((await request(path,ownerA.token,{bindings:{...env,OWNER_SUPPLIERS_ENABLED:'false'}})).status,404);
+    assert.equal((await request(path,ownerA.token,{bindings:{...env,OWNER_CLEAN_PRODUCTS_ENABLED:'false'}})).status,404);
     assert.equal((await request(path,ownerB.token)).status,401);
     assert.deepEqual((await (await request(path,ownerA.token)).json()).suppliers,[]);
     const first=await request(path,ownerA.token,{body:input});
