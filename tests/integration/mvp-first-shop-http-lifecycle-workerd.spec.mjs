@@ -201,8 +201,7 @@ test('isolated first-Shop Owner HTTP lifecycle: product → supplier → purchas
     assert.equal(otherCash.data.entries.length,0);
     assert.equal(otherCash.data.receivedPaisa,0);
     assert.equal(otherCash.data.paidPaisa,0);
-    const otherSupplier=await expectJson(ownerB,'/api/owner/suppliers/SUP-000001/ledger',404);
-    assert.equal(otherSupplier.success,false);
+    assert.equal((await request(ownerB,'/api/owner/suppliers/SUP-000001/ledger')).status,404);
     assert.equal((await first(b,'SELECT COUNT(*) AS n FROM owner_mvp_sale_receipts')).n,0);
     assert.equal((await first(b,'SELECT COUNT(*) AS n FROM owner_mvp_sale_return_receipts')).n,0);
   }finally{await close();}
