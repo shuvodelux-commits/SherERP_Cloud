@@ -2,9 +2,9 @@
  * M08/M03: read-only projections over the EXISTING, narrow first-Shop MVP.
  *
  * This is not the full Cash/Bank/Party ledger: the current pilot has only
- * unpaid supplier Purchases, cash-only POS Sales and cash-only Returns.
- * Never invent an opening Cash Book entry, bank transfer, expense,
- * customer due, supplier payment or historical opening amount.
+ * unpaid supplier Purchases, cash POS Sales, cash Returns and (after 0010)
+ * Supplier cash payments. Never invent an opening Cash Book entry, bank
+ * transfer, expense, customer due or historical opening amount.
  *
  * Caller MUST validate the current Owner session and immutable Shop D1
  * identity before passing the Shop D1 binding. No writes or migrations here.
@@ -20,10 +20,24 @@ const checkedRows=rows=>{
 };
 
 export async function readOwnerPilotCashBook(db){
+  const hasSupplierCash=await db.prepare(`SELECT 1 AS present FROM sqlite_schema
+    WHERE type='table' AND name='owner_mvp_supplier_payment_cash_book'`).first();
+  const supplierTotal=hasSupplierCash?
+    '(SELECT COALESCE(SUM(paid_paisa),0) FROM owner_mvp_supplier_payment_cash_book)':'0';
+  const supplierRows=hasSupplierCash?`
+    UNION ALL
+    SELECT 'Supplier Payment' AS kind,
+      'SPY-'||printf('%06d',r.sequence) AS reference,
+      r.created_at_ms AS occurredAtMs,b.cash_sequence AS sessionId,
+      0 AS receivedPaisa,b.paid_paisa AS paidPaisa,r.sequence AS recordSequence
+    FROM owner_mvp_supplier_payment_cash_book b
+    JOIN owner_mvp_supplier_cash_payment_receipts r
+      ON r.sequence=b.payment_sequence`:'';
   const [totals,entries]=await db.batch([
     db.prepare(`SELECT
       (SELECT COALESCE(SUM(received_paisa),0) FROM owner_mvp_sale_cash_book) AS receivedPaisa,
-      (SELECT COALESCE(SUM(debit_paisa),0) FROM owner_mvp_return_cash_book) AS paidPaisa`),
+      ((SELECT COALESCE(SUM(debit_paisa),0) FROM owner_mvp_return_cash_book)
+        +${supplierTotal}) AS paidPaisa`),
     db.prepare(`SELECT kind,reference,occurredAtMs,sessionId,receivedPaisa,paidPaisa FROM (
       SELECT 'Cash Sale' AS kind,'INV-'||printf('%06d',s.sequence) AS reference,
         s.created_at_ms AS occurredAtMs,b.cash_sequence AS sessionId,
@@ -36,6 +50,7 @@ export async function readOwnerPilotCashBook(db){
         0 AS receivedPaisa,b.debit_paisa AS paidPaisa,r.sequence AS recordSequence
       FROM owner_mvp_return_cash_book b
       JOIN owner_mvp_sale_return_receipts r ON r.sequence=b.return_sequence
+      ${supplierRows}
     ) ORDER BY occurredAtMs DESC,recordSequence DESC,kind DESC LIMIT 51`)
   ]);
   if(!totals.success||!entries.success||totals.results.length!==1)
@@ -51,7 +66,7 @@ export async function readOwnerPilotCashBook(db){
       throw Error('Cash Book row unavailable');
   }
   return {
-    scope:'cash-sale-and-cash-return-only',
+    scope:hasSupplierCash?'cash-sale-return-and-supplier-pay-only':'cash-sale-and-cash-return-only',
     receivedPaisa,paidPaisa,netPaisa,
     entries:records.slice(0,PAGE_SIZE),
     hasMore:records.length>PAGE_SIZE
