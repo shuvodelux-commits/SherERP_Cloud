@@ -58,12 +58,19 @@ export function reviewM02PurchaseReferences({schema,pinnedSourceCommit,sourceExp
  const returnItemProducts=field(sourceExport,'PURCHASE_RETURN_ITEMS','Product ID');
  const returnById=new Map(returnIds.map((id,i)=>[id,returnPurchaseIds[i]]));
  const returnLineCounts=new Map(returnIds.map(id=>[id,0]));
+ const returnedProductsById=new Map(returnIds.map(id=>[id,new Set()]));
  // Stock Lots can be purchased, internal, or created during Sales Return
  // restoration; not all original Lot Purchase IDs are Purchase documents.
  const lotProductIds=field(sourceExport,'STOCK_LOTS','Product ID');
  const lotOrigins=field(sourceExport,'STOCK_LOTS','Purchase ID');
  const lotSupplierIds=field(sourceExport,'STOCK_LOTS','Supplier ID');
  const saleReturnIdSet=new Set(field(sourceExport,'SALES_RETURN','Return ID'));
+ // These are the two original Purchase.gs / PurchaseReturn.gs stock writers;
+ // all other Stock Movement types belong to other workstreams.
+ const movementTypes=field(sourceExport,'STOCK_MOVEMENT','Type');
+ const movementRefs=field(sourceExport,'STOCK_MOVEMENT','Reference');
+ const movementProductIds=field(sourceExport,'STOCK_MOVEMENT','Product ID');
+ const movementLotIds=field(sourceExport,'STOCK_MOVEMENT','Lot ID');
  const counts={
   PURCHASE_SUPPLIER_ID_BLANK:0,
   PURCHASE_SUPPLIER_NOT_FOUND:0,
@@ -89,7 +96,19 @@ export function reviewM02PurchaseReferences({schema,pinnedSourceCommit,sourceExp
   LOT_ORIGIN_UNREVIEWED:0,
   LOT_PURCHASE_PRODUCT_NOT_IN_ITEMS:0,
   LOT_PURCHASE_SUPPLIER_ID_BLANK:0,
-  LOT_PURCHASE_SUPPLIER_MISMATCH:0
+  LOT_PURCHASE_SUPPLIER_MISMATCH:0,
+  MOVEMENT_PURCHASE_REF_BLANK:0,
+  MOVEMENT_PURCHASE_REF_NOT_FOUND:0,
+  MOVEMENT_PURCHASE_PRODUCT_NOT_IN_ITEMS:0,
+  MOVEMENT_RETURN_REF_BLANK:0,
+  MOVEMENT_RETURN_REF_NOT_FOUND:0,
+  MOVEMENT_RETURN_PRODUCT_NOT_IN_ITEMS:0,
+  MOVEMENT_PRODUCT_ID_BLANK:0,
+  MOVEMENT_PRODUCT_NOT_FOUND:0,
+  MOVEMENT_LOT_ID_BLANK:0,
+  MOVEMENT_LOT_NOT_FOUND:0,
+  MOVEMENT_LOT_PRODUCT_MISMATCH:0,
+  MOVEMENT_PURCHASE_LOT_ORIGIN_MISMATCH:0
  };
  for(const id of purchaseSupplierIds){
   if(!id.trim())counts.PURCHASE_SUPPLIER_ID_BLANK++;
@@ -125,7 +144,10 @@ export function reviewM02PurchaseReferences({schema,pinnedSourceCommit,sourceExp
   const productId=returnItemProducts[i];
   if(!returnId.trim())counts.PURCHASE_RETURN_ITEM_PARENT_ID_BLANK++;
   else if(!returnById.has(returnId))counts.PURCHASE_RETURN_ITEM_PARENT_NOT_FOUND++;
-  else returnLineCounts.set(returnId,returnLineCounts.get(returnId)+1);
+  else {
+   returnLineCounts.set(returnId,returnLineCounts.get(returnId)+1);
+   if(productId.trim())returnedProductsById.get(returnId).add(productId);
+  }
   if(!purchaseId.trim())counts.PURCHASE_RETURN_ITEM_PURCHASE_ID_BLANK++;
   else if(returnById.has(returnId)&&purchaseId!==returnById.get(returnId))
    counts.PURCHASE_RETURN_ITEM_PURCHASE_MISMATCH++;
@@ -168,6 +190,45 @@ export function reviewM02PurchaseReferences({schema,pinnedSourceCommit,sourceExp
    counts.LOT_ORIGIN_UNREVIEWED++;
  }
 
+ // Purchase and Purchase Return Stock Movement IDs are individual source
+ // rows, not unique per Purchase; multiple FIFO lots are normal. A Purchase
+ // Return can consume a lot from another purchase when original data predates
+ // lot tracking, so never require the Return movement lot's purchase origin
+ // to equal the returned Purchase's origin.
+ const lotIds=field(sourceExport,'STOCK_LOTS','Lot ID');
+ const lotById=new Map(lotIds.map((id,i)=>[id,{
+  productId:lotProductIds[i],purchaseId:lotOrigins[i]
+ }]));
+ for(let i=0;i<movementTypes.length;i++){
+  const type=movementTypes[i];
+  if(type!=='Purchase'&&type!=='Purchase Return')continue;
+  const reference=movementRefs[i];
+  const productId=movementProductIds[i];
+  const lotId=movementLotIds[i];
+  if(type==='Purchase'){
+   if(!reference.trim())counts.MOVEMENT_PURCHASE_REF_BLANK++;
+   else if(!purchaseSet.has(reference))counts.MOVEMENT_PURCHASE_REF_NOT_FOUND++;
+   else if(productId.trim()&&!purchasedProductsById.get(reference).has(productId))
+    counts.MOVEMENT_PURCHASE_PRODUCT_NOT_IN_ITEMS++;
+  }else{
+   if(!reference.trim())counts.MOVEMENT_RETURN_REF_BLANK++;
+   else if(!returnById.has(reference))counts.MOVEMENT_RETURN_REF_NOT_FOUND++;
+   else if(productId.trim()&&!returnedProductsById.get(reference).has(productId))
+    counts.MOVEMENT_RETURN_PRODUCT_NOT_IN_ITEMS++;
+  }
+  if(!productId.trim())counts.MOVEMENT_PRODUCT_ID_BLANK++;
+  else if(!productSet.has(productId))counts.MOVEMENT_PRODUCT_NOT_FOUND++;
+  if(!lotId.trim())counts.MOVEMENT_LOT_ID_BLANK++;
+  else if(!lotById.has(lotId))counts.MOVEMENT_LOT_NOT_FOUND++;
+  else{
+   const lot=lotById.get(lotId);
+   if(productId.trim()&&lot.productId!==productId)
+    counts.MOVEMENT_LOT_PRODUCT_MISMATCH++;
+   if(type==='Purchase'&&reference.trim()&&purchaseSet.has(reference)&&lot.purchaseId!==reference)
+    counts.MOVEMENT_PURCHASE_LOT_ORIGIN_MISMATCH++;
+  }
+ }
+
  const sourceGroupFor={
   PURCHASE_SUPPLIER_ID_BLANK:'PURCHASES',
   PURCHASE_SUPPLIER_NOT_FOUND:'PURCHASES',
@@ -193,7 +254,19 @@ export function reviewM02PurchaseReferences({schema,pinnedSourceCommit,sourceExp
   LOT_ORIGIN_UNREVIEWED:'STOCK_LOTS',
   LOT_PURCHASE_PRODUCT_NOT_IN_ITEMS:'STOCK_LOTS',
   LOT_PURCHASE_SUPPLIER_ID_BLANK:'STOCK_LOTS',
-  LOT_PURCHASE_SUPPLIER_MISMATCH:'STOCK_LOTS'
+  LOT_PURCHASE_SUPPLIER_MISMATCH:'STOCK_LOTS',
+  MOVEMENT_PURCHASE_REF_BLANK:'STOCK_MOVEMENT',
+  MOVEMENT_PURCHASE_REF_NOT_FOUND:'STOCK_MOVEMENT',
+  MOVEMENT_PURCHASE_PRODUCT_NOT_IN_ITEMS:'STOCK_MOVEMENT',
+  MOVEMENT_RETURN_REF_BLANK:'STOCK_MOVEMENT',
+  MOVEMENT_RETURN_REF_NOT_FOUND:'STOCK_MOVEMENT',
+  MOVEMENT_RETURN_PRODUCT_NOT_IN_ITEMS:'STOCK_MOVEMENT',
+  MOVEMENT_PRODUCT_ID_BLANK:'STOCK_MOVEMENT',
+  MOVEMENT_PRODUCT_NOT_FOUND:'STOCK_MOVEMENT',
+  MOVEMENT_LOT_ID_BLANK:'STOCK_MOVEMENT',
+  MOVEMENT_LOT_NOT_FOUND:'STOCK_MOVEMENT',
+  MOVEMENT_LOT_PRODUCT_MISMATCH:'STOCK_MOVEMENT',
+  MOVEMENT_PURCHASE_LOT_ORIGIN_MISMATCH:'STOCK_MOVEMENT'
  };
  const issues=Object.entries(counts)
   .filter(([,count])=>count>0)
@@ -209,7 +282,8 @@ export function reviewM02PurchaseReferences({schema,pinnedSourceCommit,sourceExp
    products:products.length,
    purchaseReturns:returnIds.length,
    purchaseReturnItems:returnItemIds.length,
-   stockLots:lotOrigins.length
+   stockLots:lotOrigins.length,
+   stockMovements:movementTypes.length
   },
   candidateReady:issues.length===0,
   issues,
