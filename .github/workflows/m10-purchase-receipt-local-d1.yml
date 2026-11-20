@@ -1,0 +1,31 @@
+name: M10 synthetic purchase receipt local D1 audit
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  m10-purchase-receipt-local-d1:
+    name: Independently reconcile synthetic Shop purchase and receipt on Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout immutable PR head
+        uses: actions/checkout@v4
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler only in temporary GitHub runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Audit local-only receipt stock, Supplier Ledger and Cash/Bank conservation
+        run: node --test tests/integration/m10-purchase-receipt-workerd.spec.mjs
