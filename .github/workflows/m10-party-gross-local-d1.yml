@@ -1,0 +1,31 @@
+name: M10 Party identity and gross account local D1 audit
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  m10-party-gross-local-d1:
+    name: Prove independent Party identity and gross current/opening gate on local Workerd D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out reviewed migration branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install project dependencies from lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler only in disposable CI runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Exercise source identity, no-netting and historical basis on local D1
+        run: node --test tests/integration/m10-party-gross-gate-workerd.spec.mjs
