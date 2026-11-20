@@ -81,3 +81,43 @@ test('MVP Supplier D1 migration fails on existing Party history rather than gues
 async function supplierReadyLater(db){
   await apply(db,'staging-migrations/shop-owner-write/0005_owner_supplier_master.sql');
 }
+
+test('the existing private Owner Worker exposes source-shaped Supplier read and idempotent Quick Add',async()=>{
+  const {ownerA,ownerB,SHOP_A_DB:a,SHOP_B_DB:b,close}=await startCleanShopHarness();
+  try{
+    await supplierReady(a);
+    await supplierReady(b);
+    const {default:worker}=await import('../../src/m03-owner-redemption-worker.js');
+    const origin='https://owner.example.test';
+    const config=owner=>({
+      ...owner.env,OWNER_LOGIN_ENABLED:'true',OWNER_SUPPLIERS_ENABLED:'true',
+      OWNER_AUTH_ORIGIN:origin,PLATFORM_AUTH_ORIGIN:'https://admin.example.test',
+      PLATFORM_OWNER_CLIENT_ID:'fixture.apps.googleusercontent.com',
+      OWNER_INGRESS:{limit:async()=>({success:true})},
+    });
+    const env=config(ownerA);
+    const request=(path,token,{body,bindings=env}={})=>worker.request(origin+path,{
+      method:body?'POST':'GET',headers:{Cookie:'__Host-shererp-owner-session='+token,
+        ...(body?{Origin:origin,'Content-Type':'application/json'}:{})},
+      ...(body?{body:JSON.stringify(body)}:{}),
+    },bindings);
+    const path='/api/owner/suppliers',input=draft('Original UI Supplier');
+    assert.equal((await request(path,ownerA.token,{bindings:{...env,OWNER_SUPPLIERS_ENABLED:'false'}})).status,404);
+    assert.equal((await request(path,ownerB.token)).status,401);
+    assert.deepEqual((await (await request(path,ownerA.token)).json()).suppliers,[]);
+    const first=await request(path,ownerA.token,{body:input});
+    assert.equal(first.status,201);
+    assert.deepEqual(await first.json(),{success:true,data:{id:'SUP-000001'}});
+    assert.equal((await request(path,ownerA.token,{body:input})).status,200);
+    assert.equal((await request(path,ownerA.token,{body:{...input,name:'Different'}})).status,409);
+    assert.equal((await request(path,ownerA.token,{body:draft('Opening without ledger',{openingBalance:'10'})})).status,400);
+    const saved=await (await request(path,ownerA.token)).json();
+    assert.equal(saved.suppliers.length,1);
+    assert.equal(saved.suppliers[0]['Supplier Name'],'Original UI Supplier');
+    assert.equal(saved.suppliers[0]['Current Due'],0);
+    await a.prepare('UPDATE shop_owner_write_grant SET expires_at_ms=? WHERE singleton=1')
+      .bind(Date.now()-1000).run();
+    assert.equal((await request(path,ownerA.token,{body:draft('Expired session')})).status,403);
+    assert.equal((await request(path,ownerB.token,{bindings:config(ownerB),body:draft('Shop B works')})).status,201);
+  }finally{await close();}
+});
