@@ -120,6 +120,8 @@ export async function postOwnerSupplierCashPayment(scope,{
       db.prepare(read).bind(...identity,quote.supplierId,quote.supplierId,operationId)
     ]);
   }catch(error){
+    if(/MVP_SUPPLIER_CASH_INSUFFICIENT_DRAWER/.test(String(error?.message??'')))
+      return {status:'insufficient-cash'};
     if(isExpectedDenial(error))return {status:'denied'};
     throw error; // Unknown errors are not successful payments.
   }
