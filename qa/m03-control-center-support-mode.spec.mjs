@@ -176,7 +176,7 @@ test('trusted local Worker exposes read-only Support Mode, two-Shop denial and r
   const bad=await x.call('/api/platform/support/diagnostics',{
     shopId:x.shops[1].shopId,eventId:crypto.randomUUID(),supportToken:'f'.repeat(64),
   });
-  assert.equal(bad.status,403);
+  assert.equal(bad.status,401,'pending Shop is rejected by the private Hono readiness gate');
   assert.equal((await x.call('/api/platform/support/start',{
     shopId:x.shops[0].shopId,operationId:crypto.randomUUID(),reason,
   },x.enabledEnv,{origin:'https://other.example.test'})).status,403);
