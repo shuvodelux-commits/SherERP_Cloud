@@ -261,3 +261,41 @@ export async function readOwnerPurchaseHistory(DB){
     editable:false,deletable:false
   }));
 }
+
+/** Original Purchase Management view contract backed by sealed D1 line rows. */
+export async function readOwnerPurchaseDetail(DB,purchaseId){
+  if(typeof purchaseId!=='string'||!/^PUR-[0-9]{6,}$/.test(purchaseId))return null;
+  const seq=Number(purchaseId.slice(4));
+  if(!Number.isSafeInteger(seq)||seq<1)return null;
+  const [header,lines]=await DB.batch([
+    DB.prepare(`SELECT r.sequence,r.purchase_date AS date,
+      r.supplier_id AS supplierId,p.display_name AS supplierName,
+      r.subtotal_paisa AS total,r.actor_id AS actorId,
+      json_extract(r.payload,'$.notes') AS notes
+      FROM owner_mvp_purchase_receipts r
+      JOIN owner_supplier_master s ON s.supplier_id=r.supplier_id
+      JOIN parties p ON p.party_id=s.party_id
+      JOIN owner_mvp_purchase_seals seal ON seal.purchase_sequence=r.sequence
+      WHERE r.sequence=?`).bind(seq),
+    DB.prepare(`SELECT product_id AS productId,product_name AS name,
+      quantity_micro AS qtyMicro,unit_cost_paisa AS unitCost,
+      unit_sell_paisa AS unitSell,line_total_paisa AS lineTotal
+      FROM owner_mvp_purchase_lines WHERE purchase_sequence=?
+      ORDER BY line_number`).bind(seq),
+  ]);
+  checkResult([header,lines]);
+  const row=header.results[0];
+  if(!row)return null;
+  return {
+    purchaseId,date:row.date,supplierId:row.supplierId,
+    supplierName:row.supplierName,subtotal:row.total/100,discount:0,
+    grandTotal:row.total/100,paidAmount:0,dueAmount:row.total/100,
+    paymentStatus:'Due',paymentMethod:'',bankAccountName:'',
+    notes:row.notes||'',createdBy:row.actorId,returnedAmount:0,
+    netPurchase:row.total/100,items:lines.results.map(l=>({
+      productId:l.productId,name:l.name,qty:l.qtyMicro/1_000_000,
+      unitPrice:l.unitCost/100,sellingPrice:l.unitSell/100,
+      lineTotal:l.lineTotal/100,
+    }))
+  };
+}
