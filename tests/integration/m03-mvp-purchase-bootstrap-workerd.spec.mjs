@@ -118,9 +118,13 @@ test('uninitialized Supplier master, legacy Product snapshot, or missing Shop id
     await assert.rejects(readMvpOwnerPurchaseBootstrap(pilotShopConfiguration(ownerA.env)),
       /unavailable|incomplete|source/i);
     await a.prepare('DELETE FROM legacy_product_snapshots').run();
-    await a.prepare('UPDATE shop_identity SET database_marker=? WHERE singleton=1')
-      .bind(crypto.randomUUID()).run();
-    const response=await request('/api/owner/purchases/bootstrap',ownerA.token,bindings(ownerA));
-    assert.notEqual(response.status,200);
+    // The Shop identity has an immutable SQL trigger: never bypass it just
+    // to manufacture a cross-Shop read. Swap the expected binding instead.
+    const wrongScope={...pilotShopConfiguration(ownerA.env),databaseMarker:crypto.randomUUID()};
+    await assert.rejects(readMvpOwnerPurchaseBootstrap(wrongScope),/identity|unavailable/i);
+    const response=await request('/api/owner/purchases/bootstrap',ownerA.token,{
+      ...bindings(ownerA),PLATFORM_PILOT_MARKER:wrongScope.databaseMarker,
+    });
+    assert.equal(response.status,401);
   }finally{await close();}
 });
