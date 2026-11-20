@@ -1,0 +1,40 @@
+name: M03 Owner Supplier Cash Pay bridge (private Workerd D1 and Chromium)
+
+on:
+  pull_request:
+    paths:
+      - "src/m03-owner-redemption-worker.js"
+      - "src/db/m03-owner-pilot-ledger-read.js"
+      - "scripts/build-owner-frontend.mjs"
+      - "qa/m03-owner-erp-browser.spec.mjs"
+      - "tests/integration/m03-supplier-cash-reconciliation-workerd.spec.mjs"
+      - "tests/integration/mvp-first-shop-http-lifecycle-workerd.spec.mjs"
+      - ".github/workflows/m03-owner-supplier-cash-bridge.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  owner-supplier-cash-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Build original Owner ERP with private Supplier Cash adapter
+        run: npm run build:owner-frontend
+      - name: Two-Shop Workerd D1 transaction, ledgers and Close Day
+        run: node --test tests/integration/m03-supplier-cash-reconciliation-workerd.spec.mjs tests/integration/mvp-first-shop-http-lifecycle-workerd.spec.mjs
+      - name: Install Chromium for original Supplier UI
+        run: npx playwright install --with-deps chromium
+      - name: Owner browser cash form, idempotent retry and disabled unsupported options
+        run: node --test qa/m03-owner-erp-browser.spec.mjs

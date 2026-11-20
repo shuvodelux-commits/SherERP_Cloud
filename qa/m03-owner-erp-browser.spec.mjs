@@ -301,3 +301,55 @@ test('Owner session restore opens ERP modules, blocks RPC, and signs out through
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+test('original Supplier screen enables only verified Cash Pay and retries the same operation after an uncertain network error',async()=>{
+  const context=await browser.newContext({viewport:{width:1280,height:900},timezoneId:'Asia/Dhaka'});
+  const page=await context.newPage();
+  const requests=[];
+  try{
+    // The earlier logout test mutates the shared fixture; independently
+    // provision an Owner session for this Supplier-only browser scenario.
+    await page.route('**/api/owner/auth/session',route=>
+      route.fulfill({json:session}));
+    await page.route('**/api/owner/suppliers/SUP-000001/ledger',route=>
+      route.fulfill({json:{success:true,data:{
+        scope:'purchase-and-cash-payment',supplierId:'SUP-000001',
+        supplierName:'Fixture Supplier',phone:'',currentDuePaisa:60000,
+        cashPayAvailable:true,entries:[],hasMore:false
+      }}}));
+    await page.route('**/api/owner/suppliers/SUP-000001/cash-pay',async route=>{
+      const body=route.request().postDataJSON();
+      requests.push(body);
+      if(requests.length===1)return route.abort('failed');
+      return route.fulfill({status:201,json:{success:true,data:{
+        paymentId:'SPY-000001',supplierId:'SUP-000001',amount:100.25,currentDue:499.75
+      }}});
+    });
+    await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
+    await page.locator('#navList .nav-item[aria-label="Suppliers"]').click();
+    await page.evaluate(()=>supOpenDetail_('SUP-000001'));
+    await page.locator('#supDetailModal:not([hidden])').waitFor();
+    await page.waitForFunction(()=>!document.getElementById('owner-supplier-cash-pay')?.disabled);
+    assert.equal(await page.locator('#supPayDiscount').isDisabled(),true);
+    assert.equal(await page.locator('#supPaySettleFullBtn').isDisabled(),true);
+    assert.deepEqual(await page.locator('#supPayMethod option').evaluateAll(options=>options.map(x=>x.value)),['Cash']);
+    assert.equal(await page.locator('#supPayDate').getAttribute('readonly'),'');
+    const payload=()=>page.evaluate(async()=>{
+      const today=new Date(Date.now()+21600000).toISOString().slice(0,10);
+      return serverCall('paySupplier','','SUP-000001','100.25','Cash','','Cash payout',today,'',0,'');
+    });
+    await assert.rejects(payload(),/Could not confirm Cash payment/i);
+    const saved=await payload();
+    assert.equal(saved.paymentId,'SPY-000001');
+    assert.equal(saved.currentDue,499.75);
+    assert.equal(requests.length,2);
+    assert.equal(requests[0].operationId,requests[1].operationId);
+    assert.equal(requests[0].payload.amount,'100.25');
+    assert.equal(requests[0].payload.paymentMethod,'Cash');
+    assert.equal(requests[0].payload.supplierId,'SUP-000001');
+    assert.equal(requests[0].payload.date,new Date(Date.now()+21600000).toISOString().slice(0,10));
+    await assert.rejects(page.evaluate(()=>serverCall('paySupplier','','SUP-000001',
+      '100.25','Bank','BANK-000001','','2026-11-21','',0,'')),/Only Cash supplier payment/);
+    assert.equal(requests.length,2,'unsupported Bank must never contact API');
+  }finally{await context.close();}
+});

@@ -239,3 +239,62 @@ test('first-Shop operational mode never activates from the Owner-login-only prod
     'OWNER_MVP_PURCHASE_ENABLED','OWNER_MVP_POS_CASH_ENABLED',
     'OWNER_MVP_CASH_RETURN_ENABLED'])assert.equal(conf.vars[flag],'false',flag);
 });
+
+test('private Owner Supplier Cash Pay: default off, signed owner, exact D1 close and cross-Shop denial',async()=>{
+  const {ownerA,ownerB,SHOP_A_DB:a,SHOP_B_DB:b,close}=await startCleanShopHarness();
+  try{
+    await installOperations(a);await installOperations(b);
+    for(const db of [a,b]){
+      for(const file of ['0009_owner_mvp_cash_close.sql','0010_owner_supplier_cash_pay.sql',
+        '0011_owner_supplier_cash_reconciliation.sql']){
+        const sql=await readFile('staging-migrations/shop-owner-write/'+file,'utf8');
+        await db.batch(unstable_splitSqlQuery(sql).map(s=>db.prepare(s)));
+      }
+    }
+    await expectJson(ownerA,'/api/owner/catalog',201,product());
+    await expectJson(ownerA,'/api/owner/suppliers',201,supplier());
+    await expectJson(ownerA,'/api/owner/cash-session/start',201,{
+      operationId:crypto.randomUUID(),openingCash:'0',notes:'start'
+    });
+    await expectJson(ownerA,'/api/owner/purchases',201,purchase());
+    await expectJson(ownerA,'/api/owner/pos/sales',201,sale());
+    const path='/api/owner/suppliers/SUP-000001/cash-pay';
+    const body={operationId:crypto.randomUUID(),payload:{
+      supplierId:'SUP-000001',amount:'100.25',paymentMethod:'Cash',
+      bankAccountId:'',notes:'Verified Cash payout',date:day(),backdatedReason:''
+    }};
+    assert.equal((await request(ownerA,path,{body})).status,404,
+      'The existing login-only and default operational profiles never post Supplier Cash');
+    const allowed={...runtime(ownerA),OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED:'true'};
+    assert.equal((await request(ownerA,path,{body,config:allowed,token:ownerB.token})).status,401);
+    assert.equal((await request(ownerA,path,{body,config:{...allowed,OWNER_MVP_PURCHASE_ENABLED:'false'}})).status,404);
+    async function pay(input){
+      const r=await request(ownerA,path,{body:input,config:allowed});
+      return {status:r.status,json:await r.json()};
+    }
+    const posted=await pay(body);
+    assert.equal(posted.status,201,JSON.stringify(posted.json));
+    assert.equal(posted.json.data.paymentId,'SPY-000001');
+    const replay=await pay(body);
+    assert.equal(replay.status,200);
+    assert.equal(replay.json.data.paymentId,'SPY-000001');
+    const conflict=await pay({...body,payload:{...body.payload,amount:'101.00'}});
+    assert.equal(conflict.status,409);
+    const cash=await expectJson(ownerA,'/api/owner/cash-session',200);
+    assert.equal(cash.data.cashOut,100.25);
+    assert.equal(cash.data.expectedCash,49.75);
+    const book=await expectJson(ownerA,'/api/owner/cash-book',200);
+    assert.equal(book.data.paidPaisa,10025);
+    assert.equal(book.data.netPaisa,4975);
+    assert.equal(book.data.entries.filter(e=>e.kind==='Supplier Payment').length,1);
+    const ledger=await expectJson(ownerA,'/api/owner/suppliers/SUP-000001/ledger',200);
+    assert.equal(ledger.data.currentDuePaisa,49975);
+    assert.equal(ledger.data.entries.filter(e=>e.kind==='Supplier Payment').length,1);
+    const closeCash=await expectJson(ownerA,'/api/owner/cash-session/close',200,{
+      operationId:crypto.randomUUID(),countedCash:'49.75',notes:'counted'
+    });
+    assert.equal(closeCash.data.expected,49.75);
+    assert.equal(closeCash.data.variance,0);
+    assert.equal((await first(b,'SELECT COUNT(*) AS n FROM owner_mvp_supplier_cash_payment_receipts')).n,0);
+  }finally{await close();}
+});

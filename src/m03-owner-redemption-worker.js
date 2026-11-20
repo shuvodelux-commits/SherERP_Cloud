@@ -18,6 +18,7 @@ import {postOwnerCashReturn,readOwnerInvoiceForReturn,searchOwnerInvoicesForRetu
   from './db/m03-owner-mvp-cash-return.js';
 import {readOwnerPilotCashBook,readOwnerPilotSupplierPurchaseLedger}
   from './db/m03-owner-pilot-ledger-read.js';
+import {postOwnerSupplierCashPayment} from './db/m08-owner-supplier-cash-pay.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
@@ -189,10 +190,26 @@ app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
 const ownerPurchaseEnabled=env=>cleanProductsEnabled(env)&&env.OWNER_MVP_PURCHASE_ENABLED==='true';
 const ownerCashPosEnabled=env=>ownerPurchaseEnabled(env)&&env.OWNER_MVP_POS_CASH_ENABLED==='true';
 const ownerCashReturnEnabled=env=>ownerCashPosEnabled(env)&&env.OWNER_MVP_CASH_RETURN_ENABLED==='true';
+const ownerSupplierCashPayEnabled=env=>ownerCashReturnEnabled(env)&&
+  env.OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED==='true';
 
-// M08: narrow, read-only first-Shop financial views. Neither endpoint
-// activates financial posting or claims coverage of Bank, Expense,
-// Customer Due, Supplier payments or historical opening balances.
+// Reconciliation migration 0011 must precede any Supplier cash payout.
+// Check SQL-time Close Day, not only JavaScript projections or a feature flag.
+async function supplierCashCloseReady(db){
+  const row=await db.prepare(`SELECT
+    EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table'
+      AND name='owner_mvp_supplier_cash_payment_receipts') AND
+    EXISTS(SELECT 1 FROM sqlite_schema WHERE type='trigger'
+      AND name='owner_mvp_cash_close_guard'
+      AND instr(sql,'owner_mvp_supplier_payment_cash_book')>0) AND
+    NOT EXISTS(SELECT 1 FROM sqlite_schema WHERE type='trigger'
+      AND name='owner_mvp_supplier_cash_pending_close') AS ready`).first();
+  return row?.ready===1;
+}
+
+// M03/M08: scoped first-Shop financial projections. Supplier cash payout
+// remains an independently gated Owner-only operation, disabled by default.
+// These endpoints still do not support Bank, Expense or Customer Due.
 app.get('/api/owner/suppliers/:supplierId/ledger',protectLogin,async c=>{
   if(!ownerPurchaseEnabled(c.env))return c.notFound();
   const ctx=await verifiedOwnerPurchaseContext(c);
@@ -200,7 +217,9 @@ app.get('/api/owner/suppliers/:supplierId/ledger',protectLogin,async c=>{
   try{
     const result=await readOwnerPilotSupplierPurchaseLedger(
       ctx.scope.shopDb,c.req.param('supplierId'));
-    return result?c.json({success:true,data:result}):c.notFound();
+    return result?c.json({success:true,data:{...result,
+      cashPayAvailable:ownerSupplierCashPayEnabled(c.env)&&
+        await supplierCashCloseReady(ctx.scope.shopDb)}}):c.notFound();
   }catch{return c.json({success:false,message:'Supplier purchase ledger unavailable'},503);}
 });
 
@@ -212,6 +231,48 @@ app.get('/api/owner/cash-book',protectLogin,async c=>{
     const data=await readOwnerPilotCashBook(ctx.scope.shopDb);
     return c.json({success:true,data});
   }catch{return c.json({success:false,message:'Cash Book unavailable'},503);}
+});
+
+// Only a reviewed, migrated clean-Shop Owner may post same-day Cash Supplier Pay.
+// This remains OFF in the login-only Cloudflare production profile.
+app.post('/api/owner/suppliers/:supplierId/cash-pay',protectLogin,limitBody,async c=>{
+  if(!ownerSupplierCashPayEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c,true);
+  if(!ctx)return denied(c);
+  const input=await ownerPurchaseJson(c);
+  if(!input||Object.keys(input).length!==2||
+     !Object.hasOwn(input,'operationId')||!Object.hasOwn(input,'payload')||
+     input.payload?.supplierId!==c.req.param('supplierId'))
+    return c.json({success:false,message:'Invalid supplier payment.'},400);
+  try{
+    if(!await supplierCashCloseReady(ctx.scope.shopDb))
+      return c.json({success:false,
+        message:'Supplier cash reconciliation is not available for this Shop.'},503);
+    const result=await postOwnerSupplierCashPayment(ctx.scope,{
+      token:ctx.token,ownerSubject:ctx.ownerSubject,
+      operationId:input.operationId,payload:input.payload
+    });
+    if(result.status==='created'||result.status==='replayed')
+      return c.json({success:true,data:{
+        paymentId:result.paymentId,supplierId:result.supplierId,
+        amount:result.amount,currentDue:result.currentDue
+      }},result.status==='created'?201:200);
+    if(result.status==='denied')return c.json({success:false,
+      message:'Owner or Supplier payment authorization denied.'},403);
+    if(result.status==='session-required')return c.json({success:false,
+      message:'Open a Cash Session before paying a Supplier.'},409);
+    if(result.status==='insufficient-cash')return c.json({success:false,
+      message:'Insufficient verified cash in this Cash Session.'},409);
+    if(result.status==='insufficient-due')return c.json({success:false,
+      message:'Supplier due is insufficient or has changed.'},409);
+    if(result.status==='conflict')return c.json({success:false,
+      message:'Payment operation already exists with different details.'},409);
+    if(result.status==='unsupported')return c.json({success:false,
+      message:'Only a same-day Cash payment without discount or Bank is supported.'},422);
+    if(result.status==='invalid')return c.json({success:false,
+      message:'Invalid supplier Cash payment.'},400);
+    return c.json({success:false,message:'Supplier payment unavailable.'},503);
+  }catch{return c.json({success:false,message:'Supplier payment unavailable.'},503);}
 });
 
 async function verifiedOwnerPurchaseContext(c,subject=false,dashboard=false){
