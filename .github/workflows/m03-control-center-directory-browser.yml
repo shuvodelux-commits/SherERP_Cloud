@@ -29,3 +29,5 @@ jobs:
         run: npm install --no-save --package-lock=false wrangler@4.161.0
       - name: Run private Control Center original browser and disposable Shop D1 regression
         run: node --test qa/m03-control-center-provisioning-page.spec.mjs
+      - name: Verify authenticated Control D1 directory survives unavailable hosted pilot
+        run: node --test tests/integration/m03-hosted-control-directory-readonly-workerd.spec.mjs
