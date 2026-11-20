@@ -78,7 +78,7 @@ function matchBook(row,book,amount,kind,block){
     if(!literal(row['Bank Account ID']))block('BANK_ACCOUNT_ID_REQUIRED');
     if(row.Status==='Reversed'||literal(row['Reversal Of']))
       block('REVERSED_BANK_ENTRY_REQUIRES_REVIEW');
-    else if(row.Status!==undefined&&row.Status!==''&&row.Status!=='Active')
+    else if(row.Status!=='Active')
       block('BANK_ENTRY_STATUS_UNREVIEWED');
   }else if(row['Payment Method']!==undefined&&row['Payment Method']!==''&&
     row['Payment Method']!=='Cash')block('CASH_BOOK_METHOD_UNREVIEWED');
