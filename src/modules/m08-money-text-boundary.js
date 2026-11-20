@@ -93,7 +93,7 @@ export function auditM06MoneyNumbers(input){
     const requested=bdt(row.amount);
     if(typeof row.id!=='string'||!row.id||row.id.trim()!==row.id||
         exactInstructions.has(row.id))
-      throw new TypeError('Canonical unique payment row ID required');
+      throw new TypeError('Missing, duplicate, or noncanonical payment row ID');
     exactInstructions.set(row.id,{method:row.method,tendered:requested});
   }
   const original=normalizeSalePayments_(
