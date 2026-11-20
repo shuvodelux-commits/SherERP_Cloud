@@ -12,7 +12,7 @@
 
 ## Global constraints
 - Base `main@75bc5eda354f47421ec4992b61437897e1c63e05`.
-- Exclusive new files: `src/modules/mvp-pos-v2-sale-intent.js`, `tests/mvp-pos-v2-sale-intent.test.mjs`, `.github/workflows/mvp-pos-v2-sale-intent.yml`, this plan.
+- Exclusive new files: `src/modules/mvp-pos-v2-sale-intent.js`, `tests/mvp-pos-v2-sale-intent.test.mjs`, `tests/integration/mvp-pos-v2-source-to-d1-workerd.spec.mjs`, `.github/workflows/mvp-pos-v2-sale-intent.yml`, this plan.
 - **No** edits to M03 owned `src/db/**`, migrations, RPC, Worker entry/bindings, Owner frontend, original source, or financial/stock kernel. Active Supplier #791 uses disjoint files.
 - This is a **one standard SKU** bridge only, with source-compatible Cash, Bank, Mobile Banking, split payment and Customer due. Reject bundle, vendor sourcing, negative stock, multiple products, fractional units, drafts and invoice updates until the correct full M05–M08 engine can handle them.
 - Buyer-facing full ERP must not be claimed until M03 actually connects Purchase→Sale→Return and reconciles database postings and original invoice print.
@@ -37,6 +37,12 @@
 - [ ] Verify one Standard SKU, positive integer stock units, canonical 2-decimal price/discount, source payment shape, and no unrecognized fields that could alter accounting.
 - [ ] Reuse `salePaymentPaisa_` and `normalizeSalePayments_` for exact allocations; reject unbalanced or customerless due. Return the explicit one-SKU M06 candidate shape and freeze the output/payment arrays.
 - [ ] Run focused green Node tests and full exact-head GitHub Actions; record external Cloudflare Builds status separately.
+
+## Task 2B — Real local Workerd/D1 integration using existing synthetic M06 kernel
+- [ ] Invoke the pure adapter with actual original POS V2-shaped payloads, then the existing **test-only** M06 sale posting contract under disposable Workerd/D1.
+- [ ] Prove cash and split-tender payment movements, exact applied vs tendered change, customer-only Due, Supplier no change, stock movement and same-operation replay.
+- [ ] Simulate trusted Bank deactivation **between** preflight and final SQL, and Cash Session closure; assert no invoice/stock/cash effects.
+- [ ] Never mistake these synthetic M06 tables for the approved M03 Shop D1 production schema; full FIFO/Tiles/returns remain unproven.
 
 ## Task 3 — handoff and release
 - [ ] Verify all changes remain new M06-owned paths; audit current open PRs.
