@@ -60,6 +60,8 @@ test('M03 hosted Admin opens and ends 5-minute read-only Support View for a read
   assert.equal(calls.length,0,'opening the roster does not issue a grant');
   await visit.click();
   assert.equal(await page.getByRole('heading',{name:'Visit Shop for Support'}).isVisible(),true);
+  const openErp=page.getByRole('link',{name:'Open actual Shop ERP · Read only'});
+  assert.equal(await openErp.isVisible(),false,'ERP must not open before an audited grant');
   assert.equal(await page.locator('#support-selected').textContent(),
     'Business: '+shop.displayName+'. Read-only setup inspection.');
   await page.getByRole('textbox',{name:'Reason for read-only support'})
@@ -73,6 +75,9 @@ test('M03 hosted Admin opens and ends 5-minute read-only Support View for a read
   assert.equal(calls[0].body.shopId,shop.shopId);
   assert.equal(calls[1].body.supportToken.length,64);
   assert.equal(await page.getByRole('button',{name:'End support'}).isVisible(),true);
+  assert.equal(await openErp.isVisible(),true,'ready Shop now offers the actual ERP');
+  assert.equal(await openErp.getAttribute('href'),'/support/erp');
+  assert.equal(await openErp.getAttribute('target'),'_blank');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
   await page.getByRole('button',{name:'End support'}).click();
   await page.getByText('Support session ended.').waitFor();
@@ -80,4 +85,5 @@ test('M03 hosted Admin opens and ends 5-minute read-only Support View for a read
   assert.equal(calls[2].path,'/api/platform/support/end');
   assert.equal(calls[2].body.operationId,calls[0].body.operationId);
   assert.equal(await page.getByText('Categories: 3').isVisible(),false);
+  assert.equal(await openErp.isVisible(),false,'End Support must hide ERP access');
 });

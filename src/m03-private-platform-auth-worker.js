@@ -19,6 +19,8 @@ import {listLocalProvisioning,readLocalProvisioning,resumeLocalProvisioning,star
 import {approvePlatformOwnerGmail} from './auth/platform-owner-gmail-approvals.js';
 import {handleLocalSupportHttpRequest} from './modules/m03-local-support-http-contract.js';
 import {hostedSupportRequest} from './auth/m03-hosted-support.js';
+import {activeAdminSupportVisit,readSupportErpData,SUPPORT_ERP_PREFIX}
+  from './auth/m03-hosted-support-erp.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
@@ -428,6 +430,58 @@ app.post('/api/platform/support/:action',async(c,next)=>{
   url.pathname='/__m03_support_local__/'+action;
   const routed=new Request(url.toString(),c.req.raw);
   return handleLocalSupportHttpRequest(routed,env);
+});
+
+const SUPPORT_ERP_ASSETS=new Set([
+  'm01-products-preview-controller.mjs','m05-product-form-stock-preview.js',
+  'm05-product-unit-price-profile.js','m05-tile-stock-view.js',
+  'product-unit-conversions.js','tile-quantity-contract.js',
+]);
+const SUPPORT_ERP_CSP=[
+  "default-src 'self'","base-uri 'self'","frame-ancestors 'none'",
+  "form-action 'none'","object-src 'none'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob:","connect-src 'self'",
+].join('; ');
+
+// View the genuine compiled Owner ERP within the already authenticated
+// Admin origin. No Owner cookie, impersonation or Owner Worker route is used.
+app.get('/support/erp',limitIngress,async c=>{
+  const visit=await activeAdminSupportVisit(c.env,getCookie(c,SESSION_COOKIE));
+  if(!visit)return denied(c);
+  const assets=c.env.ASSETS;
+  if(typeof assets?.fetch!=='function')return unavailable(c);
+  const asset=await assets.fetch(new Request(new URL('/owner-erp.html',c.req.url)));
+  if(asset.status!==200)return unavailable(c);
+  c.header('Content-Security-Policy',SUPPORT_ERP_CSP);
+  c.header('Cache-Control','no-store');
+  return c.body(asset.body,200,{'Content-Type':'text/html; charset=utf-8'});
+});
+
+// Original Owner frontend's small product-preview modules. Only these known
+// files are served, and only during the current five-minute Admin grant.
+app.get('/m05-products/:asset',limitIngress,async c=>{
+  const asset=c.req.param('asset');
+  if(!SUPPORT_ERP_ASSETS.has(asset))return c.notFound();
+  const visit=await activeAdminSupportVisit(c.env,getCookie(c,SESSION_COOKIE));
+  if(!visit)return denied(c);
+  if(typeof c.env.ASSETS?.fetch!=='function')return unavailable(c);
+  const reply=await c.env.ASSETS.fetch(new Request(
+    new URL('/m05-products/'+asset,c.req.url)));
+  if(reply.status!==200)return c.notFound();
+  return c.body(reply.body,200,{'Content-Type':'text/javascript; charset=utf-8'});
+});
+
+// Fixed, GET-only, audited read adapter. All POST/PUT/PATCH/DELETE attempts
+// return 404/405. Only reviewed Owner read functions are imported.
+app.get('/api/platform/support/erp/*',limitIngress,async c=>{
+  const suffix=c.req.path.slice(SUPPORT_ERP_PREFIX.length);
+  if(!suffix||suffix.includes('..'))return c.notFound();
+  const result=await readSupportErpData(
+    c.env,getCookie(c,SESSION_COOKIE),suffix);
+  return c.json(result.body,result.status);
 });
 
 // Dedicated private entry point. The default public Worker does not import it.

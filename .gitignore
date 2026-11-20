@@ -2,6 +2,7 @@
 dist/
 dist-google-staging/
 dist-owner/
+dist-support/
 node_modules/
 .wrangler/
 .superpowers/

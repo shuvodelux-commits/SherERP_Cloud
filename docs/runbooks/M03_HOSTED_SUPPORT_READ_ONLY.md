@@ -92,3 +92,67 @@ gate remains inaccessible in the hosted Worker.
 **Not a production ERP signoff:** Full Owner ERP support browsing,
 sensitive transactional reports, dynamic multitenant D1 routing, and
 financial write access remain independent releases.
+
+## M03 extension: Visit the *actual* ERP, not just setup diagnostics
+
+The original diagnostic panel is retained, but **Visit for Support** now
+adds **Open actual Shop ERP · Read only** while a 5-minute audited grant is
+active. The protected `/support/erp` Admin route serves a fresh build of
+`buildOwnerFrontend` (same legacy HTML, native navigation and dashboards),
+with an explicit read-only banner and **Shop Activity Log** action. There is
+no Owner session, Google impersonation or Owner D1 write permission.
+
+`node scripts/build-support-owner-erp.mjs` is a deterministic packaging
+step. It outputs ignored `dist-support/owner-erp.html` and the same
+allowlisted product-preview assets as the Owner build. The private Admin
+release config must bind these assets with
+`assets: {directory:'../../dist-support', binding:'ASSETS', run_worker_first:true}`
+from the existing `.wrangler/hosted-pilot/` directory. The original login
+page continues to use the imported `frontend/platform-auth` assets.
+Never upload `dist-owner` or the *public* frontend as Admin Worker assets.
+
+The Admin GET API `/api/platform/support/erp/*` is hardcoded to existing
+Shop D1 read adapters for app-shell, Products, Suppliers, Purchases, Cash
+Session, POS and Return lookups. Every read requires the current MFA-backed
+Admin D1 session, active support grant and verified prebound Shop D1, and
+writes an immutable READ audit event. **No business POST route exists**, and
+replay or browser-supplied Shop selection cannot change the D1 binding.
+Requests after End Support, token expiry, or Admin session revocation fail.
+
+**Shop Activity Log** displays real Shop receipt events *only when their
+reviewed operational tables exist* (product creation, credit purchases,
+cash POS sales, cash returns, and Cash Session openings); it also displays
+immutable START/READ/END support events from Control D1. It does not
+fabricate missing history, claim to show all staff actions, or expose Owner
+Google identity. It is a bounded recent-activity view, not a full accounting
+audit export. Untested/unmigrated ERP modules remain unavailable in the
+existing UI, even though the original navigation is present.
+
+### Extra acceptance checks
+
+1. Rebuild `dist-support` from the exact reviewed GitHub revision.
+2. Verify anonymous `GET /support/erp` is denied; no public path can fetch
+   its raw `owner-erp.html` through static assets.
+3. Confirm an authorized Support session opens the *actual* Owner UI with
+   Dashboard/Products navigation and a read-only banner. Click **Shop
+   Activity Log** and verify D1-backed events and timestamps.
+4. Attempt POST to every visible financial/product route and verify 404/405
+   or 403: no purchase, sale, refund, product, supplier, cash or bank write.
+5. End support; reload `/support/erp` and Shop data endpoints, verify access
+   denied. Recheck expiry and MFA rotation. Logs retain START/READ/END.
+6. Verify unchanged Owner `/app` sign-in and Google/OAuth; do not touch the
+   Owner Worker, its compiled `dist-owner`, finance migrations or public RPC.
+
+**Release boundary:** This extension is currently for the *single* immutable
+Shop D1 deployed as the pilot; other tenants require verified D1 routing.
+The existing `verifiedPreboundPilot` helper also checks the exact 13-step
+owner-ready schema snapshot. Additional reviewed operational migrations may
+need a coordinated, safe upgrade of that verification contract **before**
+Support Mode continues to work; do not disable the snapshot check as a
+shortcut or write to financial schemas in this support PR.
+
+The live Admin deployment remains a separate, reviewed action after PR CI,
+Admin D1 backup/restore verification, exact private Cloudflare bindings,
+and signed-in browser acceptance. Any Admin Worker rollback must preserve
+previous audit rows and the Shop Owner login. Never enable financial writes
+in a support release.
