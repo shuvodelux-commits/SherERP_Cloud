@@ -3,6 +3,7 @@ import { CURRENT_PLATFORM_ADMIN_FROM } from './platform-superadmin-session.js';
 import { hashOpaqueSessionToken } from './session-token.js';
 import { pilotShopIdentityMatches } from './platform-shop-binding.js';
 import { matchesPortP2MigrationPrefix, readPortP2ShopCheckpoint } from '../db/port-p2-shop-schema.js';
+import {isOwnerReadyShopMigrationPlan} from '../db/m03-owner-ready-shop-migrations.js';
 import { reconcileCreateAttempt, validatedReceipt } from './port-p2-create-attempt.js';
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -104,7 +105,9 @@ function localScope(env, row) {
 async function verifyPreparedShop(env, scope) {
   const db = env[scope.binding];
   const plan = env.PLATFORM_LOCAL_SHOP_MIGRATIONS;
-  if (!Array.isArray(plan) || !plan.length || !await pilotShopIdentityMatches({ ...scope, shopDb: db })) return false;
+  if (!Array.isArray(plan) || !plan.length ||
+      (env.PLATFORM_LOCAL_OWNER_READY_ENABLED==='true' && !isOwnerReadyShopMigrationPlan(plan)) ||
+      !await pilotShopIdentityMatches({ ...scope, shopDb: db })) return false;
   const { receipts, schema } = await readPortP2ShopCheckpoint(db);
   return receipts.length === plan.length && matchesPortP2MigrationPrefix(receipts, plan) &&
     receipts.at(-1).schema === schema;
@@ -179,6 +182,12 @@ export async function resumeLocalProvisioning(env, token, operationId) {
     return fail('binding-verification', 'allocated');
   }
   if (!(await load())) return { code: 401 };
+  // A new Owner-ready profile is optional and local-only. Reject a three-step
+  // baseline before executing DDL or publishing a Gmail Owner approval.
+  if (env.PLATFORM_LOCAL_OWNER_READY_ENABLED==='true' &&
+      !isOwnerReadyShopMigrationPlan(env.PLATFORM_LOCAL_SHOP_MIGRATIONS)) {
+    return fail('schema-migrations', 'allocated');
+  }
   try {
     await provider.prepareShop(scope);
   } catch {
