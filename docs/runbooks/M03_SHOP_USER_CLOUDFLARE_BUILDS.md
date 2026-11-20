@@ -172,8 +172,10 @@ requirements.
    still match the read-only evidence. Backup **both** live D1 databases,
    restore both exports into isolated SQLite and require
    `PRAGMA integrity_check=ok`. Confirm existing Owner access and an
-   exact 13-step Shop migration receipt/snapshot. No live 0010/0011 SQL
-   is required for this restricted core mode.
+   exact 13-step Shop migration receipt/snapshot. The already-reviewed M08 Shop D1
+   Supplier Cash 0010+0011 is now installed and the exact approved SQL overlay
+   must verify; **do not rerun either migration**. The core release still
+   keeps Cash Returns and Supplier Cash Pay OFF.
 2. Merge the reviewed release PR with green tests. Before the next
    production build, add these three **production Builds-only** variables
    in Cloudflare Workers → `shererp` → Settings → Builds:
@@ -184,8 +186,12 @@ requirements.
    - `SHERERP_FIRST_SHOP_CORE_READINESS_JSON` = the exact, identity-
      verified read-only report from
      `scripts/m03-live-owner-readiness.mjs`. This report intentionally
-     has exactly nine expected `BLOCKED` reasons (six core flags, two
-     missing Supplier migration phases, Supplier Pay disabled).
+     now has exactly seven expected `BLOCKED` reasons (six core flags,
+     Supplier Pay disabled), `approvedSupplierOverlayVerified:true`, correct
+     immutable 13 receipts and verified exact SQL extension. For a genuinely
+     unmigrated Shop the original nine-blocker baseline remains a distinct
+     compatible report, but the migrated live Shop must use seven. Never
+     copy the former report after a database migration.
    The report must not contain credentials, personal data or raw D1 IDs.
    These are **Build-time settings**, not Worker runtime secrets.
 3. Trigger an approved **production** Cloudflare Build for that exact
@@ -207,8 +213,9 @@ requirements.
    Product stock, Supplier Purchase ledger, Invoice and Cash Book.
    Verify exact FIFO/cash/stock amounts and reload persistence. Test
    changed payment/return and negative paths. Do **not** test Cash Return
-   or Supplier Cash Pay on this core profile — they remain OFF until the
-   separately verified 0010+0011 schema extension is deployed.
+   or Supplier Cash Pay on this core profile — they remain OFF until their
+   separate financial-feature release is approved and live tested, even
+   though the reviewed SQL overlay is installed.
 7. Preserve before/after D1 exports, active Worker version and CI SHA.
    On a validation failure roll the Worker **back** to the captured
    login-only version using Cloudflare's version rollback controls,
@@ -261,4 +268,57 @@ this Control grant-schema step.
 
 **Do not rerun 0009 or 0010** against this Control D1: they are installed.
 These are *Control D1* migrations, **not** the separate M08 *Shop D1*
-Supplier Cash Pay 0010/0011 schema; Shop payment extension remains pending.
+Supplier Cash Pay 0010/0011 schema. That Shop extension has since been
+installed and independently verified with the exact reviewed SQL overlay
+on the first Shop (PR #843); do **not** apply either migration again.
+
+### Reviewed Supplier SQL overlay and existing Builds permission — 2026-11-21
+
+**The remote Shop schema has changed since the original nine-blocker
+login-only preflight.** PR #843 was merged and its read-only verifier now
+returns `approvedSupplierOverlayVerified:true` and exactly seven blocked
+flags for the correctly migrated live Shop. The original 13 baseline
+receipts remain immutable. The release builder accepts this seven-blocker
+profile only when the cryptographic SQL overlay verification is true; it
+rejects missing, unreviewed, partial and tampered evidence. This is still a
+*core-only* release: Owner Cash Returns and Supplier Cash Pay remain OFF.
+
+The 2026-11-21 read-only Cloudflare release rehearsal:
+
+```sh
+# Private files were created on the authorized operator PC using the
+# active Wrangler Worker version and the read-only Shop D1 audit.
+export SHERERP_FIRST_SHOP_CORE_APPROVAL=FIRST_SHOP_CORE_MVP_TEST_ONLY
+# SHERERP_ACCOUNT_ID must match the already-authenticated Cloudflare account.
+node scripts/m03-first-shop-core-activation.mjs --check-from-version \
+  <private-active-worker-version.json> <private-readiness-report.json>
+node scripts/m03-first-shop-core-activation.mjs --prepare-from-version \
+  <private-active-worker-version.json> <private-readiness-report.json>
+npm run build:owner-frontend
+npx wrangler versions upload --dry-run --strict --keep-vars \
+  --config .wrangler/first-shop-activation/owner.core-only.candidate.jsonc
+```
+
+The actual first-Shop overlay passed both the **check** and **prepare**
+forms and compiled successfully with a Wrangler dry-run. The check mode
+runs no D1 mutations, no Worker upload and no output config. It also
+guards against ES module import cycles in the source CLI.
+
+**Builds API access was explicitly checked:** the existing Wrangler OAuth
+credential could read Worker and D1 metadata but received HTTP **403** on
+the Builds configuration API. No permission elevation or token export
+was attempted. Cloudflare requires a separate **user-scoped** API token
+with **Workers Builds Configuration — Edit** (and Workers Scripts Read
+for Worker-tag lookup) for API updates; see:
+https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/
+
+Until that permission is supplied, an account owner must set the three
+protected production **Build-time** variables via Cloudflare Dashboard
+under Workers & Pages → `shererp` → Settings → Builds. Do **not**
+place a privileged token in GitHub, a public Worker var or a chat.
+The `SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT` value must be the exact
+merged, approved 40-character `main` SHA of the release and match the
+automatically injected `WORKERS_CI_COMMIT_SHA`. The readiness JSON must
+be refreshed against the currently active Worker and Shop D1 before
+the production Build. Never bypass this SHA gate by running a separate
+`wrangler deploy` while automatic Builds remains the release owner.

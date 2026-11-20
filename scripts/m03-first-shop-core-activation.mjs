@@ -7,6 +7,7 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {buildLoginOnlyProfileFromLiveVersion} from './m03-first-shop-live-base.mjs';
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url));
 const APPROVAL='FIRST_SHOP_CORE_MVP_TEST_ONLY';
@@ -133,20 +134,25 @@ export async function prepareFirstShopCoreCandidate(base,evidence,approval,root=
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2);
-  if(args.length!==3||!['--prepare','--prepare-from-version'].includes(args[0])){
+  if(args.length!==3||!['--prepare','--prepare-from-version','--check-from-version'].includes(args[0])){
     console.error('Usage: node scripts/m03-first-shop-core-activation.mjs --prepare-from-version <private-wrangler-version.json> <read-only-live-readiness.json>');
     process.exitCode=1;
   }else{
     try{
       const [source,evidence]=await Promise.all(args.slice(1).map(async path=>
         JSON.parse(await readFile(resolve(path),'utf8'))));
-      const base=args[0]==='--prepare-from-version'
-        ?(await import('./m03-first-shop-live-base.mjs'))
-          .buildLoginOnlyProfileFromLiveVersion(source,process.env.SHERERP_ACCOUNT_ID)
+      const base=args[0]!=='--prepare'
+        ?buildLoginOnlyProfileFromLiveVersion(source,process.env.SHERERP_ACCOUNT_ID)
         :source;
-      await prepareFirstShopCoreCandidate(base,evidence,
-        process.env.SHERERP_FIRST_SHOP_CORE_APPROVAL);
-      console.log('Private first-Shop core-only candidate prepared (NOT deployed).');
+      if(args[0]==='--check-from-version'){
+        buildFirstShopCoreCandidate(base,evidence,
+          process.env.SHERERP_FIRST_SHOP_CORE_APPROVAL);
+        console.log('First-Shop core-only release evidence verified (NOT deployed).');
+      }else{
+        await prepareFirstShopCoreCandidate(base,evidence,
+          process.env.SHERERP_FIRST_SHOP_CORE_APPROVAL);
+        console.log('Private first-Shop core-only candidate prepared (NOT deployed).');
+      }
     }catch{
       console.error('First-Shop candidate refused. No D1 or Worker changed.');
       process.exitCode=1;
