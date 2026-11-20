@@ -131,7 +131,7 @@ test('BASE_SCHEMA audit reads only fixed five SELECTs in one actual D1 batch',as
   assert.equal(batches,1);
   assert.equal(queries.length,5);
   assert.ok(queries.every(x=>/^SELECT\s/i.test(x.trim())));
-  assert.ok(queries.every(x=>!\b(?:INSERT|UPDATE|DELETE|DROP|CREATE|PRAGMA|ATTACH|DETACH)\b/i.test(x)));
+  assert.ok(queries.every(x=>!/\b(?:INSERT|UPDATE|DELETE|DROP|CREATE|PRAGMA|ATTACH|DETACH)\b/i.test(x)));
 });
 
 test('test-only approval_ref extension can create internal synthetic joint parity, never production GO',async()=>{
