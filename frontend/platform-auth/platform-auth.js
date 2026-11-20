@@ -33,6 +33,7 @@ const supportDiagnostics=byId('support-diagnostics');
 const supportCategories=byId('support-categories');
 const supportUnits=byId('support-units');
 const supportEnd=byId('support-end');
+const supportOpenErp=byId('support-open-erp');
 const supportClose=byId('support-close');
 const signOut=byId('sign-out');
 const inviteForm=byId('owner-invitation-form');
@@ -77,6 +78,7 @@ function clearSupport(){
   supportDiagnostics.hidden=true;
   supportStart.disabled=false;
   supportEnd.hidden=true;
+  supportOpenErp.hidden=true;
   supportEnd.disabled=false;
   supportClose.disabled=false;
 }
@@ -217,6 +219,7 @@ async function endSupportSession(){
     if(result.status!=='revoked')throw new Error('Invalid support end result');
     supportGrant=null;
     supportReason.value='';
+    supportOpenErp.hidden=true;
     supportForm.hidden=false;
     supportEnd.hidden=true;
     supportDiagnostics.hidden=true;
@@ -273,6 +276,7 @@ supportForm.addEventListener('submit',async event=>{
     }
     supportGrant={shopId,operationId,token:result.supportToken};
     supportForm.hidden=true;
+    supportOpenErp.hidden=false;
     supportEnd.hidden=false;
     const inspected=await api('/support/diagnostics','POST',{
       shopId,eventId:crypto.randomUUID(),supportToken:supportGrant.token,
