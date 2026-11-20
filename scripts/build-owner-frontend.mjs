@@ -187,18 +187,52 @@ export function patchOwnerApp(html){
       : 'Purchase price and stock are from the backup. Stock value and saves are unavailable.';
   }
 
+  var ownerSupplierSaveInProgress = false;
+  var ownerSupplierPendingSave = null;
+
+  function saveOwnerSupplier_(payload) {
+    if (!payload || typeof payload !== 'object') return Promise.reject(new Error('Supplier is required.'));
+    if (ownerSupplierSaveInProgress) return Promise.reject(new Error('Supplier save is in progress.'));
+    var fingerprint = JSON.stringify(payload);
+    if (ownerSupplierPendingSave?.fingerprint !== fingerprint) {
+      ownerSupplierPendingSave = {fingerprint:fingerprint,body:JSON.stringify({
+        ...payload,operationId:crypto.randomUUID()
+      })};
+    }
+    ownerSupplierSaveInProgress = true;
+    var saveButton = document.getElementById('supSaveBtn');
+    if (saveButton) saveButton.disabled = true;
+    var uncertain = 'Could not confirm supplier save. Retry Save Supplier.';
+    return fetch('/api/owner/suppliers',{method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json'},body:ownerSupplierPendingSave.body
+    }).catch(function () { throw new Error(uncertain); }).then(async function (response) {
+      var result = await response.json().catch(function () { throw new Error(uncertain); });
+      if (response.status >= 500) throw new Error(uncertain);
+      if (!response.ok) throw new Error(result.message || 'Supplier save is unavailable.');
+      if (result.success !== true || typeof result.data?.id !== 'string') throw new Error(uncertain);
+      ownerSupplierPendingSave = null;
+      return result.data;
+    }).finally(function () {
+      ownerSupplierSaveInProgress = false;
+      if (saveButton) saveButton.disabled = false;
+    });
+  }
+
   function serverCall(fnName) {
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
+    if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
     var path, method = 'GET';
     if (fnName === 'getAppShellData') path = '/api/owner/app-shell';
     else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
+    else if (fnName === 'getSuppliersBootstrap') path = '/api/owner/suppliers';
     else if (fnName === 'logout') { path = '/api/owner/auth/logout'; method = 'POST'; }
     else return Promise.reject(new Error('Shop business data is not connected yet.'));
     return fetch(path, {method:method,credentials:'same-origin',cache:'no-store'})
       .then(function (response) {
         return response.json().catch(function () { throw new Error('Owner request failed.'); })
           .then(function (result) {
-            if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' : 'Owner session is unavailable.');
+            if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
+              fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' : 'Owner session is unavailable.');
             if (fnName === 'getProductsBootstrap') {
               var operational = result.mode === 'operational';
               var products = result.data.map(function (row) {
