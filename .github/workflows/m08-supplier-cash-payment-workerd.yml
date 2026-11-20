@@ -1,0 +1,31 @@
+name: M08 Supplier Cash Pay Workerd D1
+
+on:
+  pull_request:
+    paths:
+      - "src/db/m08-owner-supplier-cash-pay.js"
+      - "staging-migrations/shop-owner-write/0010_owner_supplier_cash_pay.sql"
+      - "tests/integration/m08-owner-supplier-cash-payment-workerd.spec.mjs"
+      - ".github/workflows/m08-supplier-cash-payment-workerd.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  supplier-cash-payment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: SQL-atomic Counter Supplier Pay with two-shop isolation and rollback
+        run: node --test tests/integration/m08-owner-supplier-cash-payment-workerd.spec.mjs
