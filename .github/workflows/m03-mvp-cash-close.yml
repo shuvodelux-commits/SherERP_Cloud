@@ -1,0 +1,38 @@
+name: M03 MVP Cash Session Close Day — real Shop D1 and original UI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cash-close-workerd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Two-Shop real Workerd D1 Cash Sale, Return, Close and next-day carry
+        run: node --test tests/integration/m03-mvp-cash-session-close-workerd.spec.mjs
+      - name: Original immutable FIFO Sale regression
+        run: node --test tests/integration/m03-mvp-cash-sale-workerd.spec.mjs
+      - name: Original Cash Return and two-Shop isolation regression
+        run: node --test tests/integration/m03-mvp-cash-return-workerd.spec.mjs
+      - name: Original operational credit Purchase regression
+        run: node --test tests/integration/m03-mvp-operational-purchase-workerd.spec.mjs
+      - name: Install Chromium for preserved original Cash Session browser QA
+        run: npx playwright install --with-deps chromium
+      - name: Original Cash Session topbar Close/Start Day real Workerd D1
+        run: node --test qa/m03-mvp-cash-session-close-browser.spec.mjs
+      - name: Build source-preserved Owner frontend
+        run: npm run build:owner-frontend
