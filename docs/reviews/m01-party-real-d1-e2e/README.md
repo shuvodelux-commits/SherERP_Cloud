@@ -2,6 +2,13 @@
 
 **Date:** 21 November 2026. **Parent:** PR #854, source UI pinned at `hisabiq_ui@e42a00a9f48ffc1f5c4ec10083e36d9eb4686484`. **Purpose:** prove the actual compiled Owner Party screen can submit the reviewed Supplier-only payload to the already-existing private Worker and persist it in an isolated Shop D1.
 
+## Verified local results
+
+- `node --test qa/m01-party-supplier-real-d1-browser.spec.mjs` — **PASS 1/1** against two disposable local Workerd/D1 Shops, including same-name Shop B independence, cross-Shop read/write denial and nonzero historical-opening rejection. The final committed-file run completed in approximately 11 seconds.
+- `node --test tests/contract/m01-hisabiq-party-workspace.test.mjs tests/hisabiq-design-system.test.mjs` — **PASS 15/15**.
+- `node --test qa/m01-hisabiq-party-browser.spec.mjs qa/m03-owner-erp-browser.spec.mjs` — **PASS 20/20**, preserving original Owner Supplier, Purchase and session flows.
+- `git diff --check` — clean. These are local results on the authorized CachyOS device. GitHub CI, production Worker/D1 and real Google OAuth browser verification are separate gates. The screenshot-backed parent UI implementation is PR #854; this is its stacked integration test, not a second Party UI implementation.
+
 ## Evidence and test setup
 
 Run from the repository root after installing test dependencies and Chromium:
