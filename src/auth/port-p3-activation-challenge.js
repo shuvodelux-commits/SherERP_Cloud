@@ -1,15 +1,17 @@
 /**
  * PORT-P3 Run 3 — local-only, separately nonce-bound Google identity challenge.
  *
- * This internal helper does NOT activate MFA, grant a platform role, mint a
- * session, approve a trusted operator, or recover an account. Do not expose
- * it via HTTP or import it from a deployed Worker. The challenge table exists
- * ONLY in a disposable test fixture pending M03 schema/release approval.
+ * Internal challenge and first-factor activation proofs for disposable D1.
+ * Calls require a separately authorized operator and protected configuration.
+ * The challenge table is test-only pending M03 schema and release approval.
  */
 import {verifyGoogleLoginIdToken} from './google-id-token.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './session-token.js';
+import {proveTotpStep,validFirstFactorTotp} from './port-p3-first-factor-activation.js';
+import {createD1ExactlyOneBatchGuard} from '../db/exactly-one-batch.js';
 
 const NOW="CAST(unixepoch('subsec')*1000 AS INTEGER)";
+const CURRENT_STEP=`CAST(${NOW}/30000 AS INTEGER)`;
 const ISSUER='https://accounts.google.com';
 const MAX_ATTEMPTS=5;
 const CHALLENGE_MS=120_000;
@@ -32,6 +34,16 @@ const ELIGIBLE=`EXISTS (
       AND t.revoked_at_ms IS NULL
       AND NOT EXISTS(SELECT 1 FROM platform_admin_auth WHERE singleton=1)
   )`;
+const TICKET_ATTEMPTS=`COALESCE((SELECT SUM(prev.attempt_count) FROM ${TABLE} prev
+  WHERE prev.ticket_hash=${TABLE}.ticket_hash),0)`;
+const CONSUME=`UPDATE ${TABLE}
+  SET consumed_at_ms=${NOW}
+  WHERE challenge_hash=? AND ticket_hash=? AND nonce=?
+    AND issuer=? AND subject=?
+    AND issued_at_ms<=${NOW} AND expires_at_ms>${NOW}
+    AND consumed_at_ms IS NULL AND revoked_at_ms IS NULL
+    AND attempt_count BETWEEN 1 AND ? AND ${TICKET_ATTEMPTS}<=?
+    AND ${ELIGIBLE}`;
 
 /**
  * A separately authorized Control D1 operator creates a new Google nonce.
@@ -74,54 +86,74 @@ export async function issueFirstPlatformActivationChallenge({controlDb,setupToke
   }
 }
 
-/**
- * Count EVERY Google verification attempt with an atomic SQL allowance.
- * Return true once only after signed Google issuer/audience/nonce/subject
- * verification and a second SQL-time challenge+ticket check.
- *
- * A positive boolean is ONLY a local identity-challenge proof, never a
- * privileged capability. Live MFA activation must consume the challenge
- * in the SAME reviewed SQL mutation that changes platform_admin_auth.
- */
-export async function verifyAndConsumeFirstPlatformActivationChallenge({
+async function verifyActivationAttempt({
   controlDb,setupToken,challengeToken,clientId,credential,
-}={}){
-  if(typeof controlDb?.prepare!=='function')return false;
+}){
   const [ticketHash,challengeHash]=await Promise.all([
     hashOpaqueSessionToken(setupToken),hashOpaqueSessionToken(challengeToken),
   ]);
-  if(!ticketHash || !challengeHash)return false;
+  if(!ticketHash || !challengeHash)return null;
 
+  const attempt=await controlDb.prepare(`UPDATE ${TABLE}
+    SET attempt_count=attempt_count+1
+    WHERE challenge_hash=? AND ticket_hash=?
+      AND issued_at_ms<=${NOW} AND expires_at_ms>${NOW}
+      AND consumed_at_ms IS NULL AND revoked_at_ms IS NULL
+      AND attempt_count<? AND ${TICKET_ATTEMPTS}<?
+      AND ${ELIGIBLE}
+    RETURNING nonce,issuer,subject,${CURRENT_STEP} AS step`)
+    .bind(challengeHash,ticketHash,MAX_ATTEMPTS,MAX_ATTEMPTS).first();
+  if(!attempt)return null;
+
+  const identity=await verifyGoogleLoginIdToken({
+    token:credential,clientId,expectedNonce:attempt.nonce,
+  });
+  if(!identity || identity.issuer!==attempt.issuer || identity.subject!==attempt.subject)return null;
+  return {...attempt,ticketHash,challengeHash};
+}
+
+function prepareConsumption(controlDb,proof,matchedStep){
+  const values=[proof.challengeHash,proof.ticketHash,proof.nonce,proof.issuer,
+    proof.subject,MAX_ATTEMPTS,MAX_ATTEMPTS];
+  if(matchedStep===undefined)return controlDb.prepare(CONSUME).bind(...values);
+  return controlDb.prepare(`${CONSUME} AND ? BETWEEN ${CURRENT_STEP}-1 AND ${CURRENT_STEP}`)
+    .bind(...values,matchedStep);
+}
+
+/** Consume a local Google proof without enabling MFA or issuing a session. */
+export async function verifyAndConsumeFirstPlatformActivationChallenge(input={}){
+  const {controlDb}=input;
+  if(typeof controlDb?.prepare!=='function')return false;
   try{
-    const attempt=await controlDb.prepare(`UPDATE ${TABLE}
-      SET attempt_count=attempt_count+1
-      WHERE challenge_hash=? AND ticket_hash=?
-        AND issued_at_ms<=${NOW} AND expires_at_ms>${NOW}
-        AND consumed_at_ms IS NULL AND revoked_at_ms IS NULL
-        AND attempt_count<?
-        AND COALESCE((SELECT SUM(prev.attempt_count) FROM ${TABLE} prev
-          WHERE prev.ticket_hash=${TABLE}.ticket_hash),0)<?
-        AND ${ELIGIBLE}
-      RETURNING nonce,issuer,subject`)
-      .bind(challengeHash,ticketHash,MAX_ATTEMPTS,MAX_ATTEMPTS).first();
-    if(!attempt)return false;
-
-    const identity=await verifyGoogleLoginIdToken({
-      token:credential,clientId,expectedNonce:attempt.nonce,
-    });
-    if(!identity || identity.issuer!==attempt.issuer || identity.subject!==attempt.subject)return false;
-
-    const result=await controlDb.prepare(`UPDATE ${TABLE}
-      SET consumed_at_ms=${NOW}
-      WHERE challenge_hash=? AND ticket_hash=? AND nonce=?
-        AND issuer=? AND subject=?
-        AND issued_at_ms<=${NOW} AND expires_at_ms>${NOW}
-        AND consumed_at_ms IS NULL AND revoked_at_ms IS NULL
-        AND attempt_count BETWEEN 1 AND ?
-        AND ${ELIGIBLE}`)
-      .bind(challengeHash,ticketHash,attempt.nonce,identity.issuer,identity.subject,
-        MAX_ATTEMPTS).run();
+    const proof=await verifyActivationAttempt(input);
+    if(!proof)return false;
+    const result=await prepareConsumption(controlDb,proof).run();
     return result.success===true && result.meta?.changes===1;
+  }catch{
+    return false;
+  }
+}
+
+/**
+ * Disposable D1 first-factor proof. Google and TOTP share one ticket attempt
+ * budget. On an ambiguous D1 response an operator must read the challenge and
+ * factor state before retrying.
+ */
+export async function activateFirstPlatformFactorFromChallenge(input={}){
+  const {controlDb,totpSecret,code}=input;
+  if(typeof controlDb?.prepare!=='function' || typeof controlDb.batch!=='function' ||
+     !validFirstFactorTotp(totpSecret,code))return false;
+  try{
+    const proof=await verifyActivationAttempt(input);
+    if(!proof || !Number.isSafeInteger(proof.step) || proof.step<1)return false;
+    const step=await proveTotpStep(totpSecret,code,proof.step);
+    if(step===null)return false;
+
+    await createD1ExactlyOneBatchGuard({DB:controlDb}).execute_([
+      prepareConsumption(controlDb,proof,step),
+      controlDb.prepare('INSERT INTO platform_admin_auth (singleton,enabled,factor_version) VALUES (1,1,1)'),
+    ]);
+    return true;
   }catch{
     return false;
   }

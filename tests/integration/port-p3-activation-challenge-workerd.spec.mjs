@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import {createHash,generateKeyPairSync,randomBytes,sign} from 'node:crypto';
+import {createHash,createHmac,generateKeyPairSync,randomBytes,sign} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import {createTestHarness} from 'wrangler';
 import {issueFirstPlatformSetupTicket} from '../../src/auth/port-p3-first-admin-ticket.js';
 import {bootstrapPlatformSuperAdmin,readPlatformSetupNonce} from '../../src/auth/platform-superadmin-bootstrap.js';
 import {
+  activateFirstPlatformFactorFromChallenge,
   issueFirstPlatformActivationChallenge,
   verifyAndConsumeFirstPlatformActivationChallenge,
   revokeFirstPlatformActivationChallenge,
@@ -266,5 +267,110 @@ test('D1 final consumption rechecks expiry even if ticket changes during Google 
     assert.equal(await verify(db,setupToken,challenge),false);
     assert.equal(triggered,true);
     assert.equal((await challengeRow(db,challenge.challengeToken)).consumed_at_ms,null);
+  });
+});
+
+const factorSecret=randomBytes(20).toString('hex');
+function otp(step=Math.floor(Date.now()/30_000)){
+  const counter=Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(step));
+  const mac=createHmac('sha1',Buffer.from(factorSecret,'hex')).update(counter).digest();
+  return String((mac.readUInt32BE(mac.at(-1)&15)&0x7fffffff)%1_000_000).padStart(6,'0');
+}
+function wrongOtp(){
+  const current=Math.floor(Date.now()/30_000);
+  const expected=[otp(current-1),otp(current),otp(current+1)];
+  return ['000000','111111','222222','333333'].find(code=>!expected.includes(code));
+}
+const activate=(controlDb,setupToken,challenge,settings={})=>
+  activateFirstPlatformFactorFromChallenge({
+    controlDb,setupToken,challengeToken:challenge.challengeToken,clientId,
+    credential:googleCredential(challenge.nonce),totpSecret:factorSecret,code:otp(),...settings,
+  });
+const factor=db=>db.prepare('SELECT enabled,factor_version FROM platform_admin_auth').first();
+
+test('fresh activation nonce and TOTP share the ticket budget, and enable MFA together on the fifth attempt',async t=>{
+  mockGoogleKeys(t);
+  await withD1(async db=>{
+    const {setupToken,setupNonce}=await enroll(db);
+    const challenge=await issue(db,setupToken);
+    assert.equal(await activate(db,setupToken,challenge,{credential:googleCredential(setupNonce)}),false);
+    assert.equal(await activate(db,setupToken,challenge,{
+      credential:googleCredential(challenge.nonce,{sub:anotherSubject}),
+    }),false);
+    assert.equal(await activate(db,setupToken,challenge,{
+      credential:googleCredential(challenge.nonce,{aud:'999-other.apps.googleusercontent.com'}),
+    }),false);
+    assert.equal(await activate(db,setupToken,challenge,{code:wrongOtp()}),false);
+    assert.equal(await factor(db),null);
+    const pending=await challengeRow(db,challenge.challengeToken);
+    assert.equal(pending.attempt_count,4);
+    assert.equal(pending.consumed_at_ms,null);
+
+    assert.equal(await activate(db,setupToken,challenge),true);
+    assert.deepEqual(await factor(db),{enabled:1,factor_version:1});
+    const consumed=await challengeRow(db,challenge.challengeToken);
+    assert.equal(consumed.attempt_count,5);
+    assert.ok(Number.isSafeInteger(consumed.consumed_at_ms));
+    assert.equal(await activate(db,setupToken,challenge),false);
+    assert.deepEqual(await challengeRow(db,challenge.challengeToken),consumed);
+  });
+});
+
+test('concurrent valid activation has one winner and issues no sessions',async t=>{
+  mockGoogleKeys(t);
+  await withD1(async db=>{
+    const {setupToken}=await enroll(db);
+    const challenge=await issue(db,setupToken);
+    const attempts=await Promise.all(Array.from({length:8},()=>activate(db,setupToken,challenge)));
+    assert.equal(attempts.filter(Boolean).length,1);
+    assert.deepEqual(await factor(db),{enabled:1,factor_version:1});
+    const row=await challengeRow(db,challenge.challengeToken);
+    assert.ok(row.attempt_count>=1 && row.attempt_count<=5);
+    assert.ok(Number.isSafeInteger(row.consumed_at_ms));
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM platform_admin_sessions').first()).n,0);
+  });
+});
+
+test('a setup ticket expiring immediately before the batch cannot consume the challenge or enable MFA',async t=>{
+  mockGoogleKeys(t);
+  await withD1(async db=>{
+    const {setupToken}=await enroll(db);
+    const challenge=await issue(db,setupToken);
+    let reachedCommit=false;
+    const controlDb={
+      prepare:db.prepare.bind(db),
+      async batch(statements){
+        reachedCommit=true;
+        await db.prepare('UPDATE platform_setup_tickets SET expires_at_ms=issued_at_ms+1 WHERE token_hash=?')
+          .bind(hash(setupToken)).run();
+        return db.batch(statements);
+      },
+    };
+    assert.equal(await activate(controlDb,setupToken,challenge),false);
+    assert.equal(reachedCommit,true);
+    assert.equal(await factor(db),null);
+    const row=await challengeRow(db,challenge.challengeToken);
+    assert.equal(row.attempt_count,1);
+    assert.equal(row.consumed_at_ms,null);
+  });
+});
+
+test('a zero-row factor write rolls back challenge consumption and permits a bounded retry',async t=>{
+  mockGoogleKeys(t);
+  await withD1(async db=>{
+    const {setupToken}=await enroll(db);
+    const challenge=await issue(db,setupToken);
+    await db.prepare(`CREATE TRIGGER fixture_ignore_factor BEFORE INSERT ON platform_admin_auth
+      BEGIN SELECT RAISE(IGNORE); END`).run();
+    assert.equal(await activate(db,setupToken,challenge),false);
+    assert.equal(await factor(db),null);
+    const pending=await challengeRow(db,challenge.challengeToken);
+    assert.equal(pending.attempt_count,1);
+    assert.equal(pending.consumed_at_ms,null);
+    await db.prepare('DROP TRIGGER fixture_ignore_factor').run();
+    assert.equal(await activate(db,setupToken,challenge),true);
+    assert.deepEqual(await factor(db),{enabled:1,factor_version:1});
+    assert.ok(Number.isSafeInteger((await challengeRow(db,challenge.challengeToken)).consumed_at_ms));
   });
 });
