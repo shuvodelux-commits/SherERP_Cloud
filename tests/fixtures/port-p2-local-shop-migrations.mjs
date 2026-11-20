@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { unstable_splitSqlQuery } from 'wrangler';
 import { pilotShopIdentityMatches } from '../../src/auth/platform-shop-binding.js';
+import { OWNER_READY_SHOP_MIGRATION_PLAN, isOwnerReadyShopMigrationPlan } from '../../src/db/m03-owner-ready-shop-migrations.js';
 import {
   PORT_P2_SHOP_SCHEMA, matchesPortP2MigrationPrefix, readPortP2ShopCheckpoint
 } from '../../src/db/port-p2-shop-schema.js';
@@ -14,8 +15,10 @@ export const shopMigrationPlan = Object.freeze([
   ['migrations/0012_legacy_product_snapshots.sql', '4391153e107b9ea2b2b1fcc2084f359ea9c7f957510794ba12e3b27170c603c7']
 ].map(([name, checksum]) => Object.freeze({ name, checksum })));
 
-export function loadLocalShopMigrations() {
-  return Promise.all(shopMigrationPlan.map(async ({ name }) => ({
+export const ownerReadyShopMigrationPlan=OWNER_READY_SHOP_MIGRATION_PLAN;
+
+export function loadLocalShopMigrations(plan=shopMigrationPlan) {
+  return Promise.all(plan.map(async ({ name }) => ({
     name, sql: await readFile(new URL('../../' + name, import.meta.url), 'utf8')
   })));
 }
@@ -27,12 +30,15 @@ const createLedger = `CREATE TABLE port_p2_shop_migrations (
   schema_snapshot TEXT NOT NULL
 ) STRICT`;
 
-export async function applyLocalShopMigrations(db, shop, { through = shopMigrationPlan.length, files } = {}) {
-  const sources = files ?? await loadLocalShopMigrations();
-  if (sources.length !== shopMigrationPlan.length || shopMigrationPlan.some(({ name, checksum }, index) =>
+export async function applyLocalShopMigrations(db, shop, { plan=shopMigrationPlan, through=plan.length, files } = {}) {
+  if (plan!==shopMigrationPlan && !isOwnerReadyShopMigrationPlan(plan)) {
+    throw new Error('UNREVIEWED_MIGRATION_PLAN');
+  }
+  const sources = files ?? await loadLocalShopMigrations(plan);
+  if (sources.length !== plan.length || plan.some(({ name, checksum }, index) =>
     sources[index]?.name !== name || createHash('sha256').update(sources[index].sql).digest('hex') !== checksum
   )) throw new Error('MIGRATION_CHECKSUM_MISMATCH');
-  if (!Number.isSafeInteger(through) || through < 1 || through > shopMigrationPlan.length) {
+  if (!Number.isSafeInteger(through) || through < 1 || through > plan.length) {
     throw new Error('INVALID_MIGRATION_TARGET');
   }
 
@@ -43,7 +49,7 @@ export async function applyLocalShopMigrations(db, shop, { through = shopMigrati
   if (ledger) {
     if (!await pilotShopIdentityMatches({ ...shop, shopDb: db })) throw new Error('SHOP_IDENTITY_MISMATCH');
     const { receipts, schema } = await readPortP2ShopCheckpoint(db);
-    if (!matchesPortP2MigrationPrefix(receipts, shopMigrationPlan)) throw new Error('MIGRATION_CHECKSUM_MISMATCH');
+    if (!matchesPortP2MigrationPrefix(receipts, plan)) throw new Error('MIGRATION_CHECKSUM_MISMATCH');
     if (receipts.at(-1)?.schema !== schema) throw new Error('MIGRATION_SCHEMA_DRIFT');
     priorSchema = schema;
     applied = receipts.length;
@@ -54,7 +60,7 @@ export async function applyLocalShopMigrations(db, shop, { through = shopMigrati
 
   if (through < applied) throw new Error('INVALID_MIGRATION_TARGET');
   for (let index = applied; index < through; index++) {
-    priorSchema = await applyMigration(db, shop, index, sources[index].sql, priorSchema);
+    priorSchema = await applyMigration(db, shop, index, sources[index].sql, priorSchema, plan);
   }
   return { applied: through - applied };
 }
@@ -65,10 +71,10 @@ const receiptPrefixSql = `(
   )
 )`;
 
-async function applyMigration(db, shop, index, sql, priorSchema) {
+async function applyMigration(db, shop, index, sql, priorSchema, plan) {
   const position = index + 1;
-  const { name, checksum } = shopMigrationPlan[index];
-  const prefix = JSON.stringify(shopMigrationPlan.slice(0, index).map((item, prior) =>
+  const { name, checksum } = plan[index];
+  const prefix = JSON.stringify(plan.slice(0, index).map((item, prior) =>
     [prior + 1, item.name, item.checksum]
   ));
   const identity = [shop.shopId, shop.databaseId, shop.databaseMarker];
