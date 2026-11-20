@@ -2,7 +2,7 @@
 
 > **Single operational entry point for the active project.** This is a dated status snapshot and handoff, not permission to deploy or change data. For the latest truth, re-check GitHub main, open PRs, issues, checks and the authoritative architecture/release documents linked below.
 >
-> **Snapshot:** 2026-11-20 (Asia/Dhaka) · GitHub main `e23c80a17d34bd9d1633ee28ba019ae0819f0911` · **MVP: IN PROGRESS** · **Production: NO-GO**.
+> **Snapshot:** 2026-11-20 (Asia/Dhaka) · GitHub main `e81e243b94ff7712ae6c42392ae4fc4c763faf8d` · **MVP: IN PROGRESS** · **Production: NO-GO**.
 >
 > **Original source of business truth:** [Mohim_ERP](https://github.com/shuvodelux-commits/Mohim_ERP) at pinned `29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`. Do not modify legacy GAS or its source data without a separate approved migration/cutover.
 
@@ -31,7 +31,7 @@ Three coordinated objectives:
 | M09 reports/settings | Internal read contracts/projections and browser QA | Full authenticated, source-faithful production report values not accepted |
 | M10 migration/recovery | Synthetic/local SQLite/Workerd checks; issue [#312](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/312) **0/9 signed acceptance items** | Real private staging import/reconciliation/restore still **NOT VERIFIED** |
 | M11 production | Runbooks and preflight/preview safeguards; issue [#306](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/306) **0/10 release items** | **NO-GO**, no production D1 cutover authorization |
-| PORT-00 / tenants | Portable P1 drafts, P2 read-only preflight [#757](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/757), local Create/Resume/roster [#722](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/722)/[#735](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/735) | Hosted automatic provisioner, second-account installation and delegated ERP Support Access **not ready** |
+| PORT-00 / tenants | Portable P1 drafts, P2 hosted read-only preflight [#757](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/757), local Create/Resume/roster [#722](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/722)/[#735](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/735), minimal tenant directory UI/search [#759](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/759) merged | Hosted automatic provisioner, second-account installation and delegated ERP Support Access **not ready** |
 
 The **public** `src/index.js` still declares `database: 'not-connected'`; `src/rpc/registry.js` is intentionally empty. Public PR previews are D1-free. Do **not** mistake preview/health/green isolated tests for a live ERP.
 
@@ -39,14 +39,16 @@ The **public** `src/index.js` still declares `database: 'not-connected'`; `src/r
 
 ## 3. Live coordination and next safe work
 
-**At this snapshot, open PRs (statuses can change):** [#759](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/759) M03 tenant directory/search, [#761](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/761) M01 POS price QA, [#762](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/762) M02 Supplier gross ledger, [#763](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/763) M03 Cash Session races, [#764](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/764) M10 Party/opening reconciliation. **Check their current merge state, reservations and exact-head CI before touching shared files.**
+**Open PRs are live, not stored here:** use the [GitHub open PR queue](https://github.com/shuvodelux-commits/SherERP_Cloud/pulls?q=is%3Apr+is%3Aopen), [parallel ownership board #456](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456) and the specific module issues. Do not reuse an older open-PR list without refreshing exact-head CI, merge state and file reservations.
+
+**Recent milestones verified merged by this checkpoint:** [#759](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/759) minimal tenant directory UI/search; [#761](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/761) POS price browser QA; [#762](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/762) Supplier gross-ledger proof; [#763](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/763) Cash Session race proof; [#764](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/764) Party/opening reconciliation proof; [#766](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/766) initial project documentation cleanup. None of these individually authorizes production financial posting.
 
 | Priority | Task / owner lane | Blockers and completion evidence |
 | --- | --- | --- |
 | **P0** | **M02 + M03 + M04: one real authenticated Shop D1 transaction boundary** | Approved Party/source IDs; current server-side session/role/tenant/Cash Session; SQL-atomic idempotent single-writer kernel and negative/replay/concurrency/rollback tests. M03 owns shared schema, migrations, RPC and posting. |
 | **P0** | **M05/M06/M07/M08: first clean-shop financial loop** | Real Product → Purchase → FIFO → POS split tender → Return/reversal → Cash/Bank/Party/stock reconciliation against exact golden amounts. Block activation on differences. |
 | **P0** | **M01/M09: original ERP UI ↔ authenticated API parity** | Browser desktop/mobile/POS/invoice/print flows on approved real endpoints; no silent dummy data/saves. |
-| **P1** | **M03 + M04: minimal tenant directory and Owner onboarding** | Complete/merge approved #759 only after review; verify hosted Control D1/resource binding; two separate Shop D1s and correct Owner access. See [#690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690). |
+| **P1** | **M03 + M04: minimal tenant directory and Owner onboarding** | #759 is merged; now verify the actual hosted Control D1/resource binding, two distinct Shop D1s and current Owner access. Do not claim a local directory test is a hosted tenant management system. See [#690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690). |
 | **P1** | **M03 + M04: delegated tenant ERP support** | Only after trusted ERP routing/session boundary. Add Open ERP → tenant-scoped, revocable, read-only by default; show Support Mode, attribute authorized edits to Super Admin; cross-tenant denial and audit tests. No Owner impersonation. |
 | **P1** | **PORT-00: install on new Cloudflare account without source edits** | Config validator/generator, account preflight, secure Admin bootstrap, D1/binding provisioning, no-secrets setup, second-account evidence. See [#699](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/699). |
 | **P0 release** | **M10 + M11: recovery and GO/no-GO** | Approved real private import of all 49 groups, source-ID/stock/FIFO/gross-ledger precision reconciliation, backup/restore and acknowledged-write replay, security/performance, owner-approved single-writer cutover. |
@@ -93,19 +95,20 @@ The **public** `src/index.js` still declares `database: 'not-connected'`; `src/r
 - **Agent rules:** [AGENTS.md](AGENTS.md) — mandatory safety, Superpowers TDD, source fidelity.
 - **Architecture and original migration scope:** [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md), [docs/WORKSTREAMS.md](docs/WORKSTREAMS.md), [ADR-007](docs/architecture/ADR-007-unified-party-relationships.md).
 - **Ownership and integration gates:** [docs/PARALLEL_EXECUTION.md](docs/PARALLEL_EXECUTION.md), [docs/M03_PARALLEL_READINESS.md](docs/M03_PARALLEL_READINESS.md), [docs/M03_G1_INTEGRATION_HANDOFF.md](docs/M03_G1_INTEGRATION_HANDOFF.md), [board #456](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456).
-- **Tenant provisioning:** [clean-shop issue #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690), [docs/CLEAN_SHOP_HANDOFF.md](docs/CLEAN_SHOP_HANDOFF.md) (historical detail), [PORT-00 #699](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/699).
+- **Tenant provisioning:** [clean-shop issue #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690), historical provisioning evidence in [#720](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/720), [#722](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/722), [#735](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/735) and [#742](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/742), [PORT-00 #699](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/699).
 - **Portable installation:** [docs/installation/START_HERE.md](docs/installation/START_HERE.md) (**planned; not yet fully executable**), [docs/installation/PORTABILITY_ROADMAP.md](docs/installation/PORTABILITY_ROADMAP.md).
 - **Release:** [docs/runbooks/M11_RELEASE_READINESS_MATRIX.md](docs/runbooks/M11_RELEASE_READINESS_MATRIX.md), [M10 #312](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/312), [M11 #306](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/306).
 
 ## 8. Markdown cleanup policy and historical evidence
 
-Repository inventory at the snapshot: **961 tracked .md files** — **562** under docs/superpowers/plans and **259** under docs/superpowers/specs; no empty or byte-identical .md files were found. Many old plans/specs contain unique TDD decisions cited by PRs or mandatory architecture documents. **Do not bulk delete those based only on filenames.** Git history alone is not a substitute for deliberately preserving linked reviewer evidence while workstreams are active.
+Repository inventory at this checkpoint: **965 tracked .md files** — **567** under docs/superpowers/plans and **259** under docs/superpowers/specs. These totals may change as concurrent PRs merge. The earlier inspection of 961 files found no empty or byte-identical duplicates; a full reference audit is still required before large-scale pruning. Many old plans/specs contain unique TDD decisions cited by PRs or mandatory architecture documents. **Do not bulk delete those based only on filenames.** Git history alone is not a substitute for deliberately preserving linked reviewer evidence while workstreams are active.
 
-This documentation cleanup retires just two clearly superseded one-off notes:
+The first cleanup (#766) retired two superseded one-off notes; this continuation also retires the dated clean-shop handoff in favor of this central file and the source PRs:
 - **docs/continuation/M02_CONTINUE.md** — a paused 17 November #438/#439 checkpoint; [#438](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/438) and [#439](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/439) subsequently merged.
 - **docs/CLOUDFLARE_PREVIEW_SMOKE_TEST.md** — instructions solely for already-merged one-time [PR #14](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/14); the maintained [Cloudflare GitHub setup](docs/CLOUDFLARE_GITHUB_SETUP.md) remains.
+- **docs/CLEAN_SHOP_HANDOFF.md** — dated checkpoints superseded by this current task board and [clean-shop issue #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690). Provenance remains in merged [#720](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/720), [#722](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/722), [#735](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/735), and [#742](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/742).
 
-Future cleanup may retire more generated documents only after scanning incoming file links, CI/script references, active issue/PR citations, and verifying preservation of audit-relevant evidence. Keep this file as the **one** current progress/handoff/task board; keep detailed specialist contracts and runbooks only as reference documents.
+Future cleanup may retire more generated documents only after scanning incoming file links, CI/script references, active issue/PR citations, and verifying preservation of audit-relevant evidence. Keep this file as the **one** current progress/handoff/task board; keep detailed specialist contracts and runbooks only as reference documents. Run `node scripts/check-project-docs.mjs` (also included in Node test discovery) before PR review: it checks local Markdown links in PROJECT, README and AGENTS against tracked files without network access.
 
 ## 9. Update template for future merges
 
