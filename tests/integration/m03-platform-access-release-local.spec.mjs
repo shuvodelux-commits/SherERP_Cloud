@@ -7,6 +7,7 @@ import './m03-owner-erp-frontend-workerd.spec.mjs';
 import './m03-clean-shop-product-workerd.spec.mjs';
 import './port-p2-shop-bindings-workerd.spec.mjs';
 import './port-p4-control-center-provisioning-workerd.spec.mjs';
+import './m03-clean-shop-owner-handoff-workerd.spec.mjs';
 
 test('bundled assets and API fail closed without native Access in local Workerd',async()=>{
   const configPath='./wrangler.m03-platform-auth-access-staging.jsonc';
