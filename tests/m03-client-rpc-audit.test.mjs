@@ -98,3 +98,27 @@ test('rejects invalid filenames, content, and untrusted closure shapes',()=>{
     htmlFiles:{'index.html':'<script></script>'},closure:{affected:[]}
   }));
 });
+
+test('scans all checked-in frozen HTML with the pinned GAS closure, without silently dropping parse failures',async()=>{
+  const {readFile,readdir}=await import('node:fs/promises');
+  const root=new URL('../',import.meta.url);
+  const original=JSON.parse(await readFile(new URL('docs/baseline/m03-async-caller-closure.json',root),'utf8'));
+  const manifest=JSON.parse(await readFile(new URL('docs/baseline/source-manifest.json',root),'utf8'));
+  assert.equal(original.sourceCommit,manifest.source.commit);
+  const sourceDir=new URL('legacy/source/',root);
+  const names=(await readdir(sourceDir)).filter(name=>name.endsWith('.html'));
+  const htmlFiles=Object.fromEntries(await Promise.all(names.map(async name=>[
+    name,await readFile(new URL('legacy/source/'+name,root),'utf8')
+  ])));
+  const audit=auditInlineRpcCallsites({htmlFiles,closure:original});
+  assert.ok(audit.counts.htmlFiles>=30,'expected preserved original HTML files');
+  assert.ok(audit.counts.scriptBlocks>0,'expected original executable inline scripts');
+  assert.ok(audit.counts.staticSites+audit.counts.dynamicSites>0,
+    'expected real source client RPC callsites');
+  assert.equal(audit.counts.staticSites,audit.staticCalls.length);
+  assert.equal(audit.counts.dynamicSites,audit.dynamicCalls.length);
+  assert.equal(audit.counts.parseFailures,audit.parseFailures.length);
+  assert.equal(audit.counts.affectedSites+audit.counts.notInAffectedClosure,
+    audit.counts.staticSites);
+  assert.equal(audit.sourceCommit,original.sourceCommit);
+});
