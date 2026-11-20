@@ -142,6 +142,38 @@ test('isolated first-Shop Owner HTTP lifecycle: product → supplier → purchas
     assert.equal(returned.data.totalReturnAmount,75);
     assert.equal((await expectJson(ownerA,'/api/owner/returns',200,returnReceipt)).data.returnId,'SRT-000001');
 
+    const cashBook=await expectJson(ownerA,'/api/owner/cash-book',200);
+    assert.equal(cashBook.data.scope,'cash-sale-and-cash-return-only');
+    assert.equal(cashBook.data.receivedPaisa,15000);
+    assert.equal(cashBook.data.paidPaisa,7500);
+    assert.equal(cashBook.data.netPaisa,7500);
+    assert.equal(cashBook.data.entries.length,2);
+    assert.deepEqual(
+      cashBook.data.entries.map(row=>[row.kind,row.reference,row.receivedPaisa,row.paidPaisa]).sort((a,b)=>a[0].localeCompare(b[0])),
+      [['Cash Sale','INV-000001',15000,0],['Cash Return','SRT-000001',0,7500]]
+    );
+    assert.equal(cashBook.data.hasMore,false);
+    const ledger=await expectJson(ownerA,'/api/owner/suppliers/SUP-000001/ledger',200);
+    assert.equal(ledger.data.scope,'purchase-credit-only');
+    assert.equal(ledger.data.supplierId,'SUP-000001');
+    assert.equal(ledger.data.currentDuePaisa,60000);
+    assert.equal(ledger.data.entries.length,1);
+    assert.equal(ledger.data.entries[0].reference,'PUR-000001');
+    assert.equal(ledger.data.entries[0].debitPaisa,60000);
+    assert.equal(ledger.data.hasMore,false);
+    assert.equal((await request(ownerA,'/api/owner/suppliers/SUP-999999/ledger')).status,404);
+    assert.equal((await request(ownerA,'/api/owner/suppliers/INVALID/ledger')).status,404);
+    assert.equal((await request(ownerA,'/api/owner/cash-book',{token:ownerB.token})).status,401);
+    assert.equal((await request(ownerA,'/api/owner/suppliers/SUP-000001/ledger',{
+      token:ownerB.token
+    })).status,401);
+    assert.equal((await request(ownerA,'/api/owner/cash-book',{
+      config:{...runtime(ownerA),OWNER_MVP_CASH_RETURN_ENABLED:'false'}
+    })).status,404);
+    assert.equal((await request(ownerA,'/api/owner/suppliers/SUP-000001/ledger',{
+      config:{...runtime(ownerA),OWNER_MVP_PURCHASE_ENABLED:'false'}
+    })).status,404);
+
     const catalog=await expectJson(ownerA,'/api/owner/catalog',200);
     assert.equal(catalog.data[0].stock,9);
     const after=await expectJson(ownerA,'/api/owner/cash-session',200);
@@ -165,6 +197,12 @@ test('isolated first-Shop Owner HTTP lifecycle: product → supplier → purchas
     assert.equal((await request(ownerA,'/api/owner/pos/invoices/INV-000001',{
       token:ownerB.token
     })).status,401);
+    const otherCash=await expectJson(ownerB,'/api/owner/cash-book',200);
+    assert.equal(otherCash.data.entries.length,0);
+    assert.equal(otherCash.data.receivedPaisa,0);
+    assert.equal(otherCash.data.paidPaisa,0);
+    const otherSupplier=await expectJson(ownerB,'/api/owner/suppliers/SUP-000001/ledger',404);
+    assert.equal(otherSupplier.success,false);
     assert.equal((await first(b,'SELECT COUNT(*) AS n FROM owner_mvp_sale_receipts')).n,0);
     assert.equal((await first(b,'SELECT COUNT(*) AS n FROM owner_mvp_sale_return_receipts')).n,0);
   }finally{await close();}
