@@ -34,7 +34,7 @@ test('immediate paid amount is capped; nonpaid bank selection produces blank met
   assert.equal(unpaid.paymentStatus,'Due');
 });
 
-test('purchase source preserves fractional quantity times sub-paisa unit cost before storage',()=>{
+test('source purchase arithmetic retains a supplied fractional sub-paisa subtotal',()=>{
   const subtotal=0.5*10.005;
   const result=sourcePurchaseAmounts({
     subtotal,discount:0,paidAmount:0,paymentMethod:''
