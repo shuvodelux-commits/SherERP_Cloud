@@ -219,3 +219,33 @@ test('the clean-shop receipt migration rolls back when a historical catalog alre
     assert.equal((await SHOP_A_DB.prepare('SELECT product_id FROM legacy_product_snapshots').first()).product_id,'PRD-001000');
   }finally{await close();}
 });
+
+test('a live Owner must have a Shop SQL-time lease; old enabled grants cannot post after expiry',async()=>{
+  const {worker,ownerA,ownerB,SHOP_A_DB,SHOP_B_DB,close}=await startCleanShopHarness();
+  try{
+    const active=await SHOP_A_DB.prepare('SELECT expires_at_ms AS expiresAtMs,enabled FROM shop_owner_write_grant').first();
+    assert.equal(active.enabled,1);
+    assert.ok(Number.isSafeInteger(active.expiresAtMs)&&active.expiresAtMs>Date.now(),
+      'a current Control session must grant only a bounded Shop write lease');
+    const second=await SHOP_B_DB.prepare('SELECT expires_at_ms AS expiresAtMs FROM shop_owner_write_grant').first();
+    assert.ok(second.expiresAtMs>Date.now(),'other Shop has its own lease');
+    const draft=(name)=>({operationId:crypto.randomUUID(),name,unit:'pcs',
+      purchasePrice:'5.00',sellingPrice:'8.00'});
+    const post=(shop,token,input)=>worker.fetch('https://'+shop+'.example.test/__clean_shop__/products',{
+      method:'POST',headers:{Origin:'https://'+shop+'.example.test',
+        'Content-Type':'application/json',Cookie:'__Host-shererp-owner-session='+token},
+      body:JSON.stringify(input),
+    });
+    assert.equal((await post('a',ownerA.token,draft('Before lease expiry'))).status,201);
+    // Simulate the passage of server time by shortening only this Shop lease.
+    // An active Control cookie must not silently re-authorize Shop SQL writes.
+    await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET expires_at_ms=? WHERE singleton=1')
+      .bind(Date.now()-1000).run();
+    assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
+    assert.equal((await post('a',ownerA.token,draft('After lease expiry'))).status,409);
+    assert.equal(await publishCurrentOwnerWriteSession(ownerA.env,ownerA.token),false,
+      'publishing the same session may not extend an expired lease');
+    assert.equal((await SHOP_A_DB.prepare('SELECT COUNT(*) AS n FROM products').first()).n,1);
+    assert.equal((await post('b',ownerB.token,draft('Independent Shop still works'))).status,201);
+  }finally{await close();}
+});
