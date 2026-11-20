@@ -26,7 +26,34 @@ const bankAccounts=[{
   'Bank Account ID':'BANK-A','Account Name':'Synthetic Bank',
   'Account Type':'Bank',Status:'Active','Is Deleted':'FALSE'
 }];
-const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// Canonical field order prevents false changed-intent conflicts after JSON
+// serialization, without sorting arrays (invoice line/tender order is intent).
+function canonicalRecord(value){
+  if(Array.isArray(value)){
+    if(Object.getPrototypeOf(value)!==Array.prototype||
+      Array.from({length:value.length},(_,i)=>Object.hasOwn(value,i)).some(x=>!x))
+      throw new TypeError('Canonical dense array required');
+    return value.map(canonicalRecord);
+  }
+  if(value!==null&&typeof value==='object'){
+    if(![Object.prototype,null].includes(Object.getPrototypeOf(value)))
+      throw new TypeError('Canonical plain record required');
+    const sorted=Reflect.ownKeys(value).sort();
+    const descriptors=Object.getOwnPropertyDescriptors(value);
+    return Object.fromEntries(sorted.map(key=>{
+      const desc=descriptors[key];
+      if(typeof key!=='string'||!desc.enumerable||!Object.hasOwn(desc,'value'))
+        throw new TypeError('Canonical data-only record required');
+      return [key,canonicalRecord(desc.value)];
+    }));
+  }
+  if(value===undefined||typeof value==='function'||typeof value==='symbol'||
+      typeof value==='bigint'||(typeof value==='number'&&!Number.isFinite(value)))
+    throw new TypeError('Canonical JSON scalar required');
+  return value;
+}
+const hash=value=>createHash('sha256').update(
+  JSON.stringify(canonicalRecord(value))).digest('hex');
 const first=async(DB,sql,...args)=>DB.prepare(sql).bind(...args).first();
 const all=async(DB,sql,...args)=>(await DB.prepare(sql).bind(...args).all()).results;
 const DDL=[

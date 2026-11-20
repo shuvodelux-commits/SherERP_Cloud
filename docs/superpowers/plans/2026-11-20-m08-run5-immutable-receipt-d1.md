@@ -48,6 +48,7 @@
 | R5-12 | Direct SQL UPDATE/DELETE/late INSERT cannot mutate sealed headers, lines, tenders, seals or return records |
 | R5-13 | Concurrent identical operation attempts produce one inserted record and one replay |
 | R5-14 | Concurrent independent returns cannot both spend the same verified funds |
+| R5-15 | Reordered JSON object keys preserve a canonical same-intent fingerprint without changing array order |
 
 ## Implementation proof and limitations
 
@@ -55,7 +56,7 @@
 
 **GREEN:** The narrow fixture creates disposable `m08_r5_*` tables and additive triggers inside a local Workerd D1 test. Actual invoice quote calculation calls the merged `allocateInvoicePaisa`; tenders call the merged source-faithful `normalizeSalePayments_`. No second operational calculator or live D1 schema exists.
 
-**Safety review:** The synthetic invoice due field is immutable evidence, **not** Customer AR: a future new-shop Store Credit refund must adjust real Customer ledger balances through a separately approved M03/M08 atomic posting. The test intentionally does not attempt that. The D1 quote fixture uses a deliberately small **1-billion-paisa per-value test bound**, not the business's unapproved actual amount maximum. The SHA-256 fingerprint is test-side operation evidence, not authenticated caller/session proof. The fixture's payment rows are synthetic verified incoming legs, not a substitute for proof of reversal/chargeback/settlement in the operational financial source. A Cash Session check is still required at the eventual M03/M04 financial SQL boundary.
+**Safety review:** The synthetic invoice due field is immutable evidence, **not** Customer AR: a future new-shop Store Credit refund must adjust real Customer ledger balances through a separately approved M03/M08 atomic posting. The test intentionally does not attempt that. The D1 quote fixture uses a deliberately small **1-billion-paisa per-value test bound**, not the business's unapproved actual amount maximum. The SHA-256 fingerprint uses sorted, data-only object keys while retaining array order; it is test-side operation evidence, not authenticated caller/session proof. The fixture's payment rows are synthetic verified incoming legs, not a substitute for proof of reversal/chargeback/settlement in the operational financial source. A Cash Session check is still required at the eventual M03/M04 financial SQL boundary.
 
 **Owner sign-off STILL OPEN:** HALF_UP vs HALF_EVEN, source-vs-header rounding strategy, 12/12 decimal scale, 36-digit ratios, 100-vs-200 POS max lines, refund/correction limits and real inventory/accounting classification. M02 historical Supplier source provenance reconciliation remains independently required. An isolated green suite and merge of this PR cannot approve any of them by implication.
 

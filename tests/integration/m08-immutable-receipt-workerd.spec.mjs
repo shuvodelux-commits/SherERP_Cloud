@@ -221,3 +221,16 @@ test('concurrent Cash returns cannot spend the same verified money backing twice
   assert.equal(s.returns[0].cash_refund_paisa,20);
   assert.equal(s.header.due_paisa,42);
 });
+
+test('reordered JSON object fields replay the same synthetic intent fingerprint',async()=>{
+  await booked();
+  const before=await receiptSnapshot(DB,'SHOP-A','INV-1');
+  const equivalentLines=lines.map(x=>({
+    unitPrice:x.unitPrice,id:x.id,quantity:x.quantity
+  }));
+  const equivalentPayments=payments.map(x=>
+    Object.fromEntries(Object.entries(x).reverse()));
+  const replay=await booked({lines:equivalentLines,payments:equivalentPayments});
+  assert.equal(replay.state,'replay');
+  assert.deepEqual(await receiptSnapshot(DB,'SHOP-A','INV-1'),before);
+});
