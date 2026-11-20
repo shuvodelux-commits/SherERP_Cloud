@@ -8,7 +8,8 @@ import {chromium} from 'playwright';
 import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js';
 import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 
-let outputDir,server,browser,url,logoutCount=0,rpcCount=0;
+let outputDir,server,browser,url,logoutCount=0,rpcCount=0,supplierCreates=0;
+const supplierRows=[];
 const shopId='22222222-2222-4222-8222-222222222222';
 const session={role:'Owner',shopId,dashboard:{displayName:'Fixture Machinery',dataAvailable:false}};
 const appShell=buildSourceAppShellData({shopName:'Fixture Machinery',currencySymbol:''}).data;
@@ -34,6 +35,27 @@ before(async()=>{
       if(path==='/api/owner/catalog'){
         response.writeHead(200,{'Content-Type':'application/json'});
         response.end(JSON.stringify({data:[{productId:'P1',name:'Fixture Drill',category:'Tools',brand:'Maker',unit:'Each',listedPrice:'12.50',savedPurchasePrice:'8.25',stockAtBackup:'19.125'}]}));
+        return;
+      }
+      if(path==='/api/owner/suppliers'){
+        let status=200,body;
+        if(request.method==='POST'){
+          const chunks=[];
+          for await(const part of request)chunks.push(part);
+          const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          assert.match(input.operationId,/^[a-f0-9-]{36}$/);
+          assert.equal(input.name,'Fixture Supplier');
+          assert.equal(Number(input.openingBalance||0),0);
+          supplierCreates++;
+          if(!supplierRows.length)supplierRows.push({
+            'Supplier ID':'SUP-000001','Supplier Name':input.name,
+            Phone:input.phone||'',Address:input.address||'',Notes:input.notes||'',
+            'Opening Balance':0,'Current Due':0,Status:'Active'
+          });
+          status=201;body={success:true,data:{id:'SUP-000001'}};
+        }else body={suppliers:supplierRows,bankAccounts:[],currencySymbol:''};
+        response.writeHead(status,{'Content-Type':'application/json'});
+        response.end(JSON.stringify(body));
         return;
       }
       if(path==='/api/owner/auth/logout'&&request.method==='POST'){
@@ -73,6 +95,26 @@ after(async()=>{
   await browser?.close();
   if(server?.listening)await new Promise(resolvePromise=>server.close(resolvePromise));
   if(outputDir)await rm(outputDir,{recursive:true,force:true});
+});
+
+test('Owner Supplier screen lists and saves through the private API without public RPC',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try{
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await page.goto(url+'/',{waitUntil:'domcontentloaded'});
+    await page.waitForURL(url+'/app');
+    await page.locator('#navList .nav-item[aria-label="Suppliers"]').click();
+    await page.locator('#supAddBtn').click();
+    await page.locator('#supName').fill('Fixture Supplier');
+    await page.locator('#supSaveBtn').click();
+    await page.locator('#supTableBody').getByText('Fixture Supplier').waitFor({timeout:7000});
+    assert.equal(supplierCreates,1,'one confirmed Shop Supplier save');
+    assert.equal(await page.locator('#supTableBody tr').count(),1);
+    assert.equal(rpcCount,0,'Supplier must use private Owner API, not public RPC');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
 });
 
 test('Owner session restore opens ERP modules, blocks RPC, and signs out through Owner auth',async()=>{
