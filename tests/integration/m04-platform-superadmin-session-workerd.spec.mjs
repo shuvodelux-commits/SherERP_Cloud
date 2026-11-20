@@ -116,6 +116,8 @@ test('allows one session across concurrent uses of the same OTP and stops replay
   const [session]=results.filter(Boolean);
   assert.equal(results.filter(Boolean).length,1);
   assert.match(session.token,/^[0-9a-f]{64}$/);
+  assert.ok(Math.abs(session.expiresAtMs-Date.now()-15*24*60*60_000)<30_000,
+    'a device completes Google+MFA once and remains authenticated for 15 days');
   assert.equal(await issue(await challenge(),{code}),null);
   assert.equal((await db.prepare('SELECT token_hash FROM platform_admin_sessions').first()).token_hash,hash(session.token));
   assert.deepEqual(await validatePlatformSuperAdminSession(db,session.token),{issuer,subject,role:'PlatformSuperAdmin'});

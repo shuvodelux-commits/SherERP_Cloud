@@ -11,6 +11,7 @@ import {
   validatePlatformSuperAdminSession,
 } from './auth/platform-superadmin-session.js';
 import {createOpaqueSessionToken,hashOpaqueSessionToken} from './auth/session-token.js';
+import {PLATFORM_ADMIN_TRUSTED_SESSION_SECONDS} from './auth/platform-admin-trusted-session.js';
 import {reservePlatformShop} from './auth/platform-shop-reservations.js';
 import {pilotShopConfiguration,verifyPlatformShopBinding} from './auth/platform-shop-binding.js';
 import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js';
@@ -137,7 +138,7 @@ app.post('/api/platform/wizard/finish',limitIngress,limitBody,async c=>{
   const token=body&&await finishBrowserSetup(c.env,getCookie(c,WIZARD_COOKIE),body.code);
   if(!token)return denied(c);
   setCookie(c,WIZARD_COOKIE,'',{...COOKIE,maxAge:0});
-  setCookie(c,SESSION_COOKIE,token,{...COOKIE,maxAge:900});
+  setCookie(c,SESSION_COOKIE,token,{...COOKIE,maxAge:PLATFORM_ADMIN_TRUSTED_SESSION_SECONDS});
   return signedIn(c);
 });
 

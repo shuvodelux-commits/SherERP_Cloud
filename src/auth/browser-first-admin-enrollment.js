@@ -1,3 +1,5 @@
+import {PLATFORM_ADMIN_TRUSTED_SESSION_MS} from './platform-admin-trusted-session.js';
+
 const NOW="CAST(unixepoch('subsec') * 1000 AS INTEGER)";
 const UNENROLLED='NOT EXISTS(SELECT 1 FROM platform_first_superadmin WHERE singleton=1)';
 
@@ -39,7 +41,7 @@ export async function commitFirstAdminEnrollment(db,{subject,enrollmentHash,nonc
         .bind(enrollmentHash,enrollmentHash),
       db.prepare(`INSERT INTO platform_admin_sessions
         (token_hash,binding_hash,singleton,factor_version,otp_step,issued_at_ms,expires_at_ms)
-        SELECT ?,binding_hash,1,1,?,${NOW},${NOW}+900000 FROM platform_login_attempts
+        SELECT ?,binding_hash,1,1,?,${NOW},${NOW}+${PLATFORM_ADMIN_TRUSTED_SESSION_MS} FROM platform_login_attempts
         WHERE binding_hash=? AND NOT EXISTS(SELECT 1 FROM platform_admin_sessions WHERE binding_hash=?)`)
         .bind(sessionHash,otpStep,enrollmentHash,enrollmentHash),
     ]:[]),
