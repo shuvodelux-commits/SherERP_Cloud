@@ -225,6 +225,8 @@ export function patchOwnerApp(html){
     if (fnName === 'getAppShellData') path = '/api/owner/app-shell';
     else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
     else if (fnName === 'getSuppliersBootstrap') path = '/api/owner/suppliers';
+    else if (fnName === 'getPurchaseBootstrap') path = '/api/owner/purchases/bootstrap';
+    else if (fnName === 'getPurchaseManagementList') path = '/api/owner/purchases/history';
     else if (fnName === 'logout') { path = '/api/owner/auth/logout'; method = 'POST'; }
     else return Promise.reject(new Error('Shop business data is not connected yet.'));
     return fetch(path, {method:method,credentials:'same-origin',cache:'no-store'})
@@ -232,7 +234,8 @@ export function patchOwnerApp(html){
         return response.json().catch(function () { throw new Error('Owner request failed.'); })
           .then(function (result) {
             if (!response.ok) throw new Error(fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
-              fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' : 'Owner session is unavailable.');
+              fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' :
+              fnName === 'getPurchaseBootstrap' || fnName === 'getPurchaseManagementList' ? 'Purchase data is unavailable.' : 'Owner session is unavailable.');
             if (fnName === 'getProductsBootstrap') {
               var operational = result.mode === 'operational';
               var products = result.data.map(function (row) {
