@@ -52,6 +52,7 @@ These owner-mandated rules apply to **every coding agent and every M00–M11 wor
 - **TDD evidence is required, not just a final green test.** For bug fixes reproduce the bug in a failing test first; for features cover acceptance behavior and relevant failure paths. Never misrepresent skipped, mocked or unavailable tests as real integration passes.
 - **KISS is mandatory.** Favor a minimal, readable solution that preserves the original ERP behavior and contracts. Do not redesign the UI, introduce frameworks/abstractions, expand dependencies or build speculative functionality without a demonstrated requirement. Avoid unrelated refactors; minimize changed files and make review easy.
 - **Parallel changes require boundaries.** Respect single ownership of shared schema, posting kernel and common files; use reviewed contracts and independent branches. Recheck CI and merge conflicts against the latest `main` before merging. Production deployment and financial migration approvals remain separate gated decisions.
+- **One active project handoff.** Use root `PROJECT.md` for current module progress, blockers, next tasks and operator continuity. Before writing a new standalone pause/resume/status `.md`, update the existing central handoff or its GitHub issue instead; preserve unique architecture, source-contract, test, review and recovery evidence in specialist files. For significant milestone PRs, state whether `PROJECT.md` needs updating. A dated snapshot never grants deployment or accounting permissions.
 
 ## Mandatory migration workflow
 
