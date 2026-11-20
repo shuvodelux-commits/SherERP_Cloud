@@ -9,6 +9,8 @@ import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js
 import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 
 let outputDir,server,browser,url,logoutCount=0,rpcCount=0,supplierCreates=0;
+let cashOpen=false,ownerPurchaseSaves=0;
+const ownerPurchaseHistory=[];
 const supplierRows=[];
 const shopId='22222222-2222-4222-8222-222222222222';
 const session={role:'Owner',shopId,dashboard:{displayName:'Fixture Machinery',dataAvailable:false}};
@@ -54,6 +56,53 @@ before(async()=>{
           });
           status=201;body={success:true,data:{id:'SUP-000001'}};
         }else body={suppliers:supplierRows,bankAccounts:[],currencySymbol:''};
+        response.writeHead(status,{'Content-Type':'application/json'});
+        response.end(JSON.stringify(body));
+        return;
+      }
+      if(path==='/api/owner/purchase/bootstrap'&&request.method==='GET'){
+        const data={products:[{id:'PRD-000001',name:'MVP Drill',brand:'',
+          category:'Tools',unit:'pcs',barcode:'',stock:ownerPurchaseSaves?10:0,
+          purchasePrice:'60.00',sellingPrice:'75.00'}],
+          suppliers:[{id:'SUP-000001',name:'Fixture Supplier',phone:'',
+            currentDue:ownerPurchaseSaves?600:0}],
+          categories:[],bankAccounts:[],currencySymbol:'',
+          cashSession:cashOpen?{sessionId:'CS-000001',status:'Open'}:null};
+        response.writeHead(200,{'Content-Type':'application/json'});
+        response.end(JSON.stringify({success:true,data}));
+        return;
+      }
+      if(path==='/api/owner/cash-session/start'&&request.method==='POST'){
+        const chunks=[];
+        for await(const part of request)chunks.push(part);
+        const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        assert.equal(input.openingCash,'0');
+        assert.match(input.operationId,/^[a-f0-9-]{36}$/);
+        cashOpen=true;
+        response.writeHead(201,{'Content-Type':'application/json'});
+        response.end(JSON.stringify({success:true,
+          data:{sessionId:'CS-000001',status:'started'}}));
+        return;
+      }
+      if(path==='/api/owner/purchases'){
+        let status=200,body;
+        if(request.method==='POST'){
+          const chunks=[];
+          for await(const part of request)chunks.push(part);
+          const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          assert.match(input.operationId,/^[a-f0-9-]{36}$/);
+          assert.equal(input.payload.supplierId,'SUP-000001');
+          assert.equal(input.payload.paidAmount,'0');
+          assert.equal(input.payload.items.length,1);
+          ownerPurchaseSaves++;
+          if(!ownerPurchaseHistory.length)ownerPurchaseHistory.push({
+            purchaseId:'PUR-000001',date:'2026-11-20',supplierName:'Fixture Supplier',
+            grandTotal:600,paidAmount:0,dueAmount:600,returnedAmount:0,
+            paymentStatus:'Due',returnStatus:'No Return',editable:false,deletable:false
+          });
+          status=201;body={success:true,data:{
+            purchaseId:'PUR-000001',grandTotal:600,dueAmount:600}};
+        }else body={success:true,data:ownerPurchaseHistory};
         response.writeHead(status,{'Content-Type':'application/json'});
         response.end(JSON.stringify(body));
         return;
@@ -113,6 +162,37 @@ test('Owner Supplier screen lists and saves through the private API without publ
     assert.equal(supplierCreates,1,'one confirmed Shop Supplier save');
     assert.equal(await page.locator('#supTableBody tr').count(),1);
     assert.equal(rpcCount,0,'Supplier must use private Owner API, not public RPC');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('Original Purchases page offers Start Day and sends one real Owner Purchase operation without public RPC',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try{
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await page.goto(url+'/',{waitUntil:'domcontentloaded'});
+    await page.waitForURL(url+'/app');
+    await page.locator('#navList .nav-item[aria-label="Purchases"]').click();
+    await page.locator('#owner-purchase-day-bar').waitFor({timeout:10000});
+    assert.match(await page.locator('#owner-purchase-day-state').textContent(),/Start Day/);
+    await page.locator('#owner-purchase-start-day').click();
+    await page.waitForFunction(()=>document.getElementById('owner-purchase-day-state')?.textContent?.includes('Day Open'));
+    const saved=await page.evaluate(async()=>{
+      return serverCall('createPurchase','',{
+        supplierId:'SUP-000001',items:[{productId:'PRD-000001',name:'MVP Drill',
+          qty:'10',unitPrice:'60.00',sellingPrice:'75.00'}],
+        discount:'0',paidAmount:'0',paymentMethod:'Cash',bankAccountId:'',
+        notes:'MVP Purchase browser',date:new Date().toISOString().slice(0,10),
+        backdatedReason:''
+      });
+    });
+    assert.equal(saved.purchaseId,'PUR-000001');
+    assert.equal(ownerPurchaseSaves,1);
+    await page.locator('#purHistRefreshBtn').click();
+    await page.locator('#purHistoryBody').getByText('PUR-000001').waitFor();
+    assert.equal(rpcCount,0);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
