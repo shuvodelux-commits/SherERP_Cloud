@@ -122,8 +122,16 @@ test('original Cash Session topbar closes counted Sale–Return cash and reopens
     await page.locator('#posCloseNote').fill('Original drawer count for MVP');
     await page.locator('#posCloseConfirmBtn').click();
     await page.locator('#confirmActionModal:not([hidden])').waitFor();
+    // The static page starts with a Closed label before Owner bootstrap.
+    // Wait for the actual completed POST, not merely the initial label.
+    const closeResponsePromise=page.waitForResponse(response=>
+      new URL(response.url()).pathname==='/api/owner/cash-session/close' &&
+      response.request().method()==='POST');
     await page.locator('#confirmActionConfirm').click();
-    await page.waitForFunction(()=>document.getElementById('cashSessionTopbarStatus')?.textContent==='Closed');
+    const closeResponse=await closeResponsePromise;
+    assert.equal(closeResponse.status(),200,JSON.stringify(await closeResponse.json()));
+    await page.waitForFunction(()=>document.getElementById('cashSessionTopbarStatus')?.textContent==='Closed' &&
+      posState.activeSession===null);
     const closeCalls=requests.filter(x=>x.path==='/api/owner/cash-session/close'&&x.method==='POST');
     assert.equal(closeCalls.length,1);
     assert.equal(closeCalls[0].status,200);
@@ -137,8 +145,14 @@ test('original Cash Session topbar closes counted Sale–Return cash and reopens
     await page.waitForFunction(()=>Number(document.getElementById('posOpeningCash')?.value)===74.5);
     await page.locator('#posStartSessionBtn').click();
     await page.locator('#confirmActionModal:not([hidden])').waitFor();
+    const startResponsePromise=page.waitForResponse(response=>
+      new URL(response.url()).pathname==='/api/owner/cash-session/start' &&
+      response.request().method()==='POST');
     await page.locator('#confirmActionConfirm').click();
-    await page.waitForFunction(()=>document.getElementById('cashSessionTopbarStatus')?.textContent==='Open');
+    const startResponse=await startResponsePromise;
+    assert.equal(startResponse.status(),201,JSON.stringify(await startResponse.json()));
+    await page.waitForFunction(()=>document.getElementById('cashSessionTopbarStatus')?.textContent==='Open' &&
+      posState.activeSession?.Status==='Open');
     assert.equal((await a.prepare('SELECT COUNT(*) AS n FROM owner_mvp_cash_sessions').first()).n,2);
     assert.equal((await readOwnerCashSession(a)).openingCash,74.5);
     assert.equal((await readOwnerCashSession(a)).expectedCash,74.5);
@@ -150,7 +164,7 @@ test('original Cash Session topbar closes counted Sale–Return cash and reopens
     assert.equal(restored.status,'Open');
     assert.equal(restored.openingCash,74.5);
     assert.equal(restored.expectedCash,74.5);
-    assert.equal(errors.length,0,'Original Returns browser errors: '+errors.join(' | '));
+    assert.equal(errors.length,0,'Original Cash Session browser errors: '+errors.join(' | '));
   }finally{
     try{await browser?.close();}finally{
       try{await harness?.close();}finally{await rm(dir,{recursive:true,force:true});}
