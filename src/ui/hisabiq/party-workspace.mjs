@@ -376,6 +376,9 @@ export function mountOwnerParties(){
     if(p.roles.length>1){
       const label=create('label','hparty-role-choice','Relationship · সম্পর্ক');
       const select=create('select','hds-select');
+      // Preserve the scoped HisabIQ control: the legacy Owner shell wraps all
+      // other SELECTs in a proxy and hides the original, breaking role switching.
+      select.dataset.touchSelectSkip='true';
       select.setAttribute('aria-label','Selected Party relationship');
       for(const role of p.roles){const o=create('option','',labelFor(role));o.value=role;select.append(o);}
       select.value=state.relationship;
