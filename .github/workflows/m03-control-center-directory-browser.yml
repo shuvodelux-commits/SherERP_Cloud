@@ -1,0 +1,31 @@
+name: M03 private Control Center directory Chromium (local D1)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  private-directory:
+    name: Browser Create, Resume and recent-business directory on disposable D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install isolated Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Install pinned local-only Workerd runtime
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Run private Control Center original browser and disposable Shop D1 regression
+        run: node --test qa/m03-control-center-provisioning-page.spec.mjs
