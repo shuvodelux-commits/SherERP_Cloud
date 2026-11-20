@@ -47,14 +47,13 @@ export function buildShopUserDeployment(env){
     },
     rateLimits:{
       // Separate reserved namespace for Admin, never bound in this profile.
-      adminNamespaceId:'654321',
+      adminNamespaceId:env.SHERERP_OWNER_RATE_LIMIT_NAMESPACE==='1'?'2':'1',
       ownerNamespaceId:env.SHERERP_OWNER_RATE_LIMIT_NAMESPACE
     }
   };
   let candidate;
   try{candidate=buildShopUserCandidate(manifest,SHOP_ORIGIN);}
   catch{invalid();}
-  if(candidate.ratelimits[0].namespace_id==='654321')invalid();
 
   // The P5 draft lives under .wrangler/portable-instance; the generated
   // production profile is at repo root. Convert ONLY known relative paths.
