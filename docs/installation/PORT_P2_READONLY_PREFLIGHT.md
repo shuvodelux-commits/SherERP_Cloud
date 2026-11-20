@@ -18,7 +18,7 @@ P1 already validates the manifest and creates inactive, Git-ignored local Wrangl
 
        node scripts/port-p2-bootstrap-preflight.mjs --dry-run .wrangler/instance.json
 
-3. The output contains only predetermined status codes and remaining-gate labels, never account IDs, database UUIDs, origins, OAuth ID, token or customer data. It explicitly prohibits deployment and remote migrations.
+3. The output contains only predetermined status codes and remaining-gate labels, never account IDs, database UUIDs, origins, OAuth ID, token or customer data. With `adminAuthMode` set to `google-totp-without-access`, the preflight lists first-Admin bootstrap in place of the Cloudflare Access gate. It explicitly prohibits deployment and remote migrations.
 
 ## Optional GET-only verification (after a separate read-only token is available)
 
@@ -36,7 +36,7 @@ P1 already validates the manifest and creates inactive, Git-ignored local Wrangl
 | Gate | Run 1 evidence | Release owner |
 | --- | --- | --- |
 | Account, namespace, D1 identities | Pure mock/API contract and optional real read-only check; no live account checked in the PR | Operator / M03 |
-| Cloudflare Access on whole Admin and Owner host | Not checked | M04 security/Owner |
+| Selected Admin boundary at the exact Admin origin | Access policy or Google/TOTP bootstrap remains unverified | M04 security/Owner |
 | Google OAuth authorized origins, session/MFA | Not checked | M04 and Google Cloud Console |
 | Secrets, token scoping, first Super Admin and recovery | Never configured by this script | M04/operator |
 | Versioned D1 migrations, backup, restore and rollback | Not performed | M03/M10 |

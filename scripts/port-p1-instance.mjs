@@ -3,7 +3,7 @@
  * PORT-00 P1 — local, fail-closed instance validation and profile drafts.
  * No Cloudflare API, authentication, deployment, migration or remote writes.
  * Generated local files are under the existing gitignored .wrangler/ folder.
- * P2/M11 must verify actual resource ownership, secrets, Access and rollback.
+ * P2/M11 must verify actual resource ownership, authentication and rollback.
  */
 import {readFile,mkdir,writeFile,lstat} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
@@ -17,6 +17,7 @@ const SLUG=/^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const DB_NAME=/^[a-z](?:[a-z0-9_-]{0,61}[a-z0-9])?$/;
 const GOOGLE_CLIENT=/^[a-zA-Z0-9-]{1,218}\.apps\.googleusercontent\.com$/;
 const NAMESPACE=/^[1-9][0-9]{0,15}$/;
+export const GOOGLE_TOTP_ADMIN_MODE='google-totp-without-access';
 const invalid=()=>{throw new TypeError('Invalid portable instance manifest (no values printed)');};
 
 function record(x,keys){
@@ -37,9 +38,14 @@ function distinct(strings){
 const expectedOrigin=(name,namespace)=>'https://'+name+'.'+namespace+'.workers.dev';
 
 export function validatePortableInstance(input){
-  const p=record(input,['formatVersion','accountId','workersSubdomain','workers','origins',
-    'googleClientId','d1','rateLimits']);
+  const keys=['formatVersion','accountId','workersSubdomain','workers','origins',
+    'googleClientId','d1','rateLimits'];
+  const hasAuthMode=Object.hasOwn(input??{},'adminAuthMode');
+  if(hasAuthMode)keys.push('adminAuthMode');
+  const p=record(input,keys);
   if(p.formatVersion!==1)invalid();
+  if(hasAuthMode && p.adminAuthMode!=='cloudflare-access' &&
+    p.adminAuthMode!==GOOGLE_TOTP_ADMIN_MODE)invalid();
   testStr(p.accountId,ACCOUNT);
   if(/^0+$/.test(p.accountId))invalid();
   const subdomain=testStr(p.workersSubdomain,SLUG);
@@ -65,6 +71,7 @@ export function validatePortableInstance(input){
   // Return an own-data-only structural copy. Keep the source object unmodified.
   return {
     formatVersion:1,accountId:p.accountId,workersSubdomain:subdomain,
+    ...(hasAuthMode?{adminAuthMode:p.adminAuthMode}:{}),
     workers:{admin:w.admin,owner:w.owner},
     origins:{admin:o.admin,owner:o.owner},
     googleClientId:p.googleClientId,
@@ -88,11 +95,12 @@ const rateLimit=(name,id)=>({
 
 /**
  * Explicitly disabled drafts. workers_dev:false / preview_urls:false keep the
- * private Workers unserved until separately reviewed Access + release setup.
+ * private Workers unserved until separately reviewed auth + release setup.
  * No API tokens, TOTP seeds, signing keys, audience/operator ID or live data.
  */
 export function buildPortableProfiles(input){
   const p=validatePortableInstance(input);
+  const googleTotp=p.adminAuthMode===GOOGLE_TOTP_ADMIN_MODE;
   const base={
     account_id:p.accountId,
     compatibility_date:'2026-11-14',
@@ -103,8 +111,11 @@ export function buildPortableProfiles(input){
   const admin={
     ...base,
     name:p.workers.admin,
-    main:fromGeneratedConfig('src/m03-access-platform-auth-worker.js'),
+    main:fromGeneratedConfig(googleTotp
+      ?'src/auth/m04-accessless-platform-admin-worker.js'
+      :'src/m03-access-platform-auth-worker.js'),
     vars:{
+      ...(googleTotp?{PLATFORM_AUTH_MODE:GOOGLE_TOTP_ADMIN_MODE}:{}),
       PLATFORM_AUTH_SCOPE:'private-platform-auth',
       PLATFORM_AUTH_ORIGIN:p.origins.admin,
       PLATFORM_CLIENT_ID:p.googleClientId,
@@ -202,7 +213,7 @@ async function main(){
   const preview=await readFile(join(ROOT,'wrangler.preview.jsonc'),'utf8');
   verifyPublicPreviewIsUnbound(preview);
   if(args[0]==='--check'){
-    process.stdout.write('P1 local manifest valid; deploy/Access/Cloudflare account verification NOT performed\n');
+    process.stdout.write('P1 local manifest valid; deployment, authentication and Cloudflare account verification pending\n');
   }else{
     await writePortableInstanceConfigs(manifest,ROOT);
     process.stdout.write('P1 ignored local config drafts generated; no deploy or resource changes\n');

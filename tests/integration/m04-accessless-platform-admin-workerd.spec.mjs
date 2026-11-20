@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {test} from 'node:test';
 import {createTestHarness} from 'wrangler';
+import {buildPortableProfiles} from '../../scripts/port-p1-instance.mjs';
+import instance from '../fixtures/portable-instance.json' with {type:'json'};
 
-const origin='https://admin.hisab.workers.dev';
+const origin=instance.origins.admin;
 const issuer='https://accounts.google.com';
 const subject='123456789012345678901';
 const clientId='123-fixture.apps.googleusercontent.com';
@@ -17,31 +19,20 @@ const hash=token=>createHash('sha256').update(Buffer.from(token,'hex')).digest('
 test('local Workerd/D1: Accessless Admin requires approved setup and real authenticated sessions',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'shererp-m04-accessless-'));
   const configPath=join(directory,'wrangler.json');
+  const {admin}=buildPortableProfiles({...instance,adminAuthMode:'google-totp-without-access'});
+  const generatedDir=resolve('.wrangler/portable-instance');
+  const [control]=admin.d1_databases;
   const config={
-    name:'shererp-m04-accessless-local-test',
-    main:resolve('src/auth/m04-accessless-platform-admin-worker.js'),
-    compatibility_date:'2026-11-14',
-    workers_dev:false,preview_urls:false,
+    ...admin,
+    main:resolve(generatedDir,admin.main),
     vars:{
-      PLATFORM_AUTH_MODE:'google-totp-without-access',
-      PLATFORM_AUTH_SCOPE:'private-platform-auth',
-      PLATFORM_AUTH_ORIGIN:origin,
-      PLATFORM_CLIENT_ID:clientId,
+      ...admin.vars,
       PLATFORM_OPERATOR_GOOGLE_SUBJECT:subject,
       PLATFORM_TOTP_SECRET:'f'.repeat(40),
       PLATFORM_FACTOR_VERSION:'1',
     },
-    rules:[{
-      type:'Text',
-      globs:['**/platform-auth/index.html','**/platform-auth/platform-auth.css','**/platform-auth/platform-auth.js'],
-      fallthrough:true,
-    }],
     d1_databases:[{
-      binding:'CONTROL_DB',database_name:'m04-accessless-synthetic',database_id:randomUUID(),
-      migrations_dir:resolve('staging-migrations/platform-auth'),remote:false,
-    }],
-    ratelimits:[{
-      name:'PLATFORM_INGRESS',namespace_id:'100003',simple:{limit:50,period:60},
+      ...control,migrations_dir:resolve(generatedDir,control.migrations_dir),
     }],
   };
   await writeFile(configPath,JSON.stringify(config),{mode:0o600});
@@ -106,7 +97,7 @@ test('local Workerd/D1: Accessless Admin requires approved setup and real authen
       Cookie:browserCookie,
     })).status,401);
     assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_admin_sessions').first()).n,0);
-    assert.equal((await worker.fetch('https://shererp.hisab.workers.dev/')).status,403);
+    assert.equal((await worker.fetch(instance.origins.owner+'/')).status,403);
     assert.equal((await post('/api/platform/auth/challenge',{},{
       Origin:'https://attacker.example.test',
     })).status,403);

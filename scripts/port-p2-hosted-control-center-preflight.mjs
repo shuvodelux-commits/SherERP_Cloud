@@ -13,7 +13,7 @@ import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {buildPortableProfiles,validatePortableInstance} from './port-p1-instance.mjs';
+import {buildPortableProfiles,GOOGLE_TOTP_ADMIN_MODE,validatePortableInstance} from './port-p1-instance.mjs';
 import {verifyBootstrapReadOnly} from './port-p2-bootstrap-preflight.mjs';
 import {
   OWNER_READY_SHOP_MIGRATION_PLAN,isOwnerReadyShopMigrationPlan
@@ -24,9 +24,11 @@ const TOKEN=/^[A-Za-z0-9._~-]{10,512}$/;
 const denied=()=>new Error('Hosted Control Center preflight denied');
 const readySteps=()=>isOwnerReadyShopMigrationPlan(OWNER_READY_SHOP_MIGRATION_PLAN)
   ?OWNER_READY_SHOP_MIGRATION_PLAN:undefined;
-const remainingGates=Object.freeze([
+const remainingGates=adminAuthMode=>[
   'independent-security-review',
-  'cloudflare-access-and-google-origin-review',
+  adminAuthMode===GOOGLE_TOTP_ADMIN_MODE
+    ?'google-origin-and-platform-admin-bootstrap-review'
+    :'cloudflare-access-and-google-origin-review',
   'private-installer-operation-journal',
   'new-shop-d1-create-and-recovery-approval',
   'owner-ready-migration-d1-remote-execution-approval',
@@ -35,7 +37,7 @@ const remainingGates=Object.freeze([
   'm11-private-worker-release',
   'owner-deployment-approval',
   'hosted-owner-login-and-product-smoke'
-]);
+];
 const permissions=Object.freeze({
   allowCreateDatabase:false,
   allowRemoteWrites:false,
@@ -46,13 +48,13 @@ const permissions=Object.freeze({
 
 /** Sanitized, deterministic offline draft; does not touch Cloudflare. */
 export function planHostedControlCenterDryRun(instance){
-  validatePortableInstance(instance);
+  const p=validatePortableInstance(instance);
   const steps=readySteps();
   if(!steps)throw denied();
   return {
     formatVersion:1,mode:'offline-dry-run',resourceVerification:'not-checked',
     migrationFilesVerified:false,ownerReadyMigrationCount:steps.length,remoteQueries:0,
-    ...permissions,remainingGates:[...remainingGates]
+    ...permissions,remainingGates:remainingGates(p.adminAuthMode)
   };
 }
 
@@ -136,7 +138,7 @@ export async function verifyHostedControlCenterReadOnly(instance,{token,fetchFn=
     remoteQueries:6,verified:[
       'cloudflare-account','workers-subdomain','control-d1','pilot-d1',
       'admin-worker-d1-bindings','owner-worker-d1-bindings','private-worker-ingress-limits','owner-ready-migration-files'
-    ],...permissions,remainingGates:[...remainingGates]
+    ],...permissions,remainingGates:remainingGates(p.adminAuthMode)
   };
 }
 

@@ -7,7 +7,7 @@
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {validatePortableInstance} from './port-p1-instance.mjs';
+import {GOOGLE_TOTP_ADMIN_MODE,validatePortableInstance} from './port-p1-instance.mjs';
 import {verifyPublicPreviewIsUnbound} from './port-p0-inventory.mjs';
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url));
@@ -18,10 +18,14 @@ const tasks=Object.freeze([
   'cloudflare-identity','shop-binding-topology','cloudflare-access',
   'google-oauth','secrets','migration-backup','worker-builds','release-review'
 ]);
+const gates=googleTotp=>tasks.map(task=>
+  googleTotp && task==='cloudflare-access'?'platform-admin-bootstrap':task
+);
 
 /** No user-supplied ID, hostname, email or token is included in this report. */
 export function planBootstrapDryRun(instance){
-  validatePortableInstance(instance);
+  const p=validatePortableInstance(instance);
+  const googleTotp=p.adminAuthMode===GOOGLE_TOTP_ADMIN_MODE;
   return {
     formatVersion:1,
     mode:'offline-dry-run',
@@ -30,14 +34,15 @@ export function planBootstrapDryRun(instance){
     verified:[],
     allowDeploy:false,
     allowRemoteMigrations:false,
-    remainingGates:[...tasks],
+    remainingGates:gates(googleTotp),
     requiredOrder:[
       'validate-instance',
       'verify-cloudflare-readonly',
       'review-shop-binding-topology',
-      'configure-access-and-google',
+      googleTotp?'configure-google':'configure-access-and-google',
       'configure-protected-secrets',
       'review-backups-and-migration-plan',
+      ...(googleTotp?['review-platform-admin-bootstrap']:[]),
       'review-worker-builds-and-github-deploy-owner',
       'obtain-m10-m11-owner-release-approval'
     ]
@@ -86,7 +91,8 @@ export async function verifyBootstrapReadOnly(instance,{token,fetchFn=globalThis
     verified:resourceChecks.map(c=>c.kind),
     allowDeploy:false,
     allowRemoteMigrations:false,
-    remainingGates:tasks.filter(x=>x!=='cloudflare-identity')
+    remainingGates:gates(p.adminAuthMode===GOOGLE_TOTP_ADMIN_MODE)
+      .filter(x=>x!=='cloudflare-identity')
   };
 }
 

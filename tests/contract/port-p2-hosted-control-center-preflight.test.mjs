@@ -109,6 +109,23 @@ test('Owner-ready source preflight verifies every SHA-pinned SQL file before HTT
   }
 });
 
+test('hosted preflight carries the selected Admin mode into both release reports',async()=>{
+  const instance={...fixture(),adminAuthMode:'google-totp-without-access'};
+  const {fetchFn,calls}=simulatedCloudflare();
+  const plan=planHostedControlCenterDryRun(instance);
+  const evidence=await verifyHostedControlCenterReadOnly(instance,{token:secret,fetchFn});
+  for(const report of [plan,evidence]){
+    assert.ok(report.remainingGates.includes('google-origin-and-platform-admin-bootstrap-review'));
+    assert.ok(!report.remainingGates.includes('cloudflare-access-and-google-origin-review'));
+    assert.equal(report.allowDeploy,false);
+    assert.equal(report.allowRemoteMigrations,false);
+  }
+  assert.ok(planHostedControlCenterDryRun(fixture()).remainingGates
+    .includes('cloudflare-access-and-google-origin-review'));
+  assert.equal(calls.length,6);
+  assert.ok(calls.every(call=>call.init.method==='GET'));
+});
+
 test('hosted preflight makes six Cloudflare GETs, proves exact Worker D1 bindings and redacts results',async()=>{
   const {fetchFn,calls}=simulatedCloudflare();
   const output=await verifyHostedControlCenterReadOnly(fixture(),{token:secret,fetchFn});

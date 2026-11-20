@@ -152,6 +152,26 @@ test('untrusted manifest is rejected before any remote API is called',async()=>{
   assert.equal(fake.calls.length,0);
 });
 
+test('Google/TOTP preflight requires protected Admin bootstrap without requiring Cloudflare Access',async()=>{
+  const instance={...manifest(),adminAuthMode:'google-totp-without-access'};
+  const plan=planBootstrapDryRun(instance);
+  const {fetchFn,calls}=spy();
+  const evidence=await verifyBootstrapReadOnly(instance,{token:secret,fetchFn});
+  for(const report of [plan,evidence]){
+    assert.equal(report.allowDeploy,false);
+    assert.equal(report.allowRemoteMigrations,false);
+    assert.ok(report.remainingGates.includes('platform-admin-bootstrap'));
+    assert.ok(report.remainingGates.includes('google-oauth'));
+    assert.ok(report.remainingGates.includes('secrets'));
+    assert.ok(!report.remainingGates.includes('cloudflare-access'));
+  }
+  assert.ok(!plan.requiredOrder.includes('configure-access-and-google'));
+  assert.ok(plan.requiredOrder.indexOf('review-platform-admin-bootstrap')>
+    plan.requiredOrder.indexOf('configure-protected-secrets'));
+  assert.equal(calls.length,4);
+  assert.ok(calls.every(c=>c.init.method==='GET'));
+});
+
 test('public preview remains unbound and cannot acquire secrets via P2 plan',()=>{
   const preview=readFileSync(new URL('../../wrangler.preview.jsonc',import.meta.url),'utf8');
   assert.match(preview,/"previews"\s*:\s*\{\s*\}/);
