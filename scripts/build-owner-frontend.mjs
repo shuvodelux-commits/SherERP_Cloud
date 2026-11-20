@@ -275,6 +275,26 @@ export function patchOwnerApp(html){
     });
   }
 
+  // The original Cash Session topbar opens a dialog without a new RPC
+  // method. Add one private, read-only count suggestion on that same click,
+  // instead of depending on a separate asynchronous summary response path.
+  // This preserves the legacy event handlers and never overwrites edits.
+  document.addEventListener('DOMContentLoaded',function(){
+    var toggle=document.getElementById('cashSessionToggleBtn');
+    if(!toggle)return;
+    toggle.addEventListener('click',function(){
+      if(typeof posState==='undefined'||posState.activeSession)return;
+      var field=document.getElementById('posOpeningCash');
+      if(!field)return;
+      var before=field.value;
+      ownerNextOpeningCash_().then(function(opening){
+        if(field.value===before)field.value=opening.toFixed(2);
+      }).catch(function(error){
+        showToast(error.message||'Unable to verify previous drawer cash.','error');
+      });
+    });
+  });
+
   function ownerCashAction_(type,amount,notes) {
     var path=type==='startCashSession'?'/api/owner/cash-session/start':'/api/owner/cash-session/close';
     var intent={operationId:crypto.randomUUID(),notes:notes||''};
@@ -459,18 +479,6 @@ export function patchOwnerApp(html){
             }
             if (fnName === 'getPurchaseBootstrap' && result?.success===true) {
               ownerPurchaseDayBar_(result.data.cashSession);
-            }
-            if(fnName === 'getCashSessionSummary' && result?.data==null){
-              // Suggest the persisted physical closing count even if the
-              // Start Day input has focus. Never clobber any later typing.
-              var panel=document.getElementById('posSessionModal');
-              var fld=document.getElementById('posOpeningCash');
-              if(panel && !panel.hidden && fld){
-                var before=fld.value;
-                ownerNextOpeningCash_().then(function(value){
-                  if(fld.value===before)fld.value=value.toFixed(2);
-                }).catch(function(){});
-              }
             }
             return result && result.data !== undefined ? result.data : result;
           });
