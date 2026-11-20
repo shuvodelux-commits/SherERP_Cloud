@@ -23,10 +23,15 @@ test('private platform assets and isolated Control D1 migrations run together in
     const {results}=await db.prepare('SELECT name FROM d1_migrations ORDER BY id').all();
     assert.deepEqual(results.map(row=>row.name),[
       '0001_platform_bootstrap.sql','0002_platform_sessions.sql','0003_platform_first_mfa_activation.sql',
+      '0004_platform_browser_first_factor.sql',
     ]);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM platform_first_mfa_activation_audit').first()).n,0);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM platform_first_superadmin').first()).n,0);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM platform_admin_sessions').first()).n,0);
+
+    for(const table of ['platform_browser_setup','platform_browser_first_factor']){
+      assert.equal((await db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first()).n,0);
+    }
 
     const origin=config.vars.PLATFORM_AUTH_ORIGIN;
     const page=await worker.fetch(origin+'/');
