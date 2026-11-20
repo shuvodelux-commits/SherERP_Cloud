@@ -191,12 +191,23 @@ export function patchOwnerApp(html){
   var ownerSupplierPendingSave = null;
 
   function saveOwnerSupplier_(payload) {
-    if (!payload || typeof payload !== 'object') return Promise.reject(new Error('Supplier is required.'));
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+      return Promise.reject(new Error('Supplier is required.'));
+    // The preserved Supplier form includes an opening-balance edit reason,
+    // which is not part of the clean-Shop create contract. Do not pass it to
+    // the strict D1 endpoint or silently drop a nonempty historical reason.
+    if (Object.keys(payload).some(function (key) {
+      return !['name','phone','address','notes','openingBalance','openingBalanceReason'].includes(key);
+    }) || (payload.openingBalanceReason != null &&
+      (typeof payload.openingBalanceReason !== 'string' || payload.openingBalanceReason.trim())))
+      return Promise.reject(new Error('Historical opening balances are not connected.'));
     if (ownerSupplierSaveInProgress) return Promise.reject(new Error('Supplier save is in progress.'));
     var fingerprint = JSON.stringify(payload);
     if (ownerSupplierPendingSave?.fingerprint !== fingerprint) {
       ownerSupplierPendingSave = {fingerprint:fingerprint,body:JSON.stringify({
-        ...payload,operationId:crypto.randomUUID()
+        name:payload.name,phone:payload.phone,address:payload.address,
+        notes:payload.notes,openingBalance:payload.openingBalance,
+        operationId:crypto.randomUUID()
       })};
     }
     ownerSupplierSaveInProgress = true;
