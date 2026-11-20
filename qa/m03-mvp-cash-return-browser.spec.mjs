@@ -84,7 +84,12 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
       }}
     };
     browser=await chromium.launch();
-    const context=await browser.newContext({viewport:{width:1280,height:900}});
+    // Fixture invoices use the Bangladesh business date (UTC+6). GitHub
+    // runners are UTC; without an explicit browser timezone, a refund near
+    // Dhaka midnight is rejected as earlier than the saved invoice date.
+    const context=await browser.newContext({
+      viewport:{width:1280,height:900},timezoneId:'Asia/Dhaka'
+    });
     await context.addCookies([{name:cookie,value:ownerA.token,url:origin,
       secure:true,httpOnly:true,sameSite:'Strict'}]);
     const page=await context.newPage();
@@ -111,6 +116,8 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
     await page.locator('#rtSearchInput').fill('INV-000001');
     await page.locator('#rtSearchInput').press('Enter');
     await page.locator('#rtInvoiceArea:not([hidden])').waitFor();
+    assert.equal(await page.locator('#rtDate').inputValue(),today(),
+      'Browser return date must match the Bangladesh-dated invoice fixture');
     const before=await page.evaluate(()=>rtState.invoice);
     assert.equal(before.invoiceId,'INV-000001');
     assert.equal(before.items[0].availableQty,2);
