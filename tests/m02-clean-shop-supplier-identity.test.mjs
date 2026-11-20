@@ -120,7 +120,7 @@ test('malformed inputs and sensitive text are not disclosed in errors or reports
     {shops:[{shopId:'SHOP-A',receipts:[null],links:[]}]}]){
     assert.throws(()=>audit(x),err=>err.message==='Supplier receipt shape unavailable');
   }
-  const x=sample();x.shops[0].receipts[0].operationId='SECRET_PHONE_01799999999';
+  const x=sample();x.shops[0].receipts[0].operationId='SECRET PHONE 01799999999';
   const r=audit(x);
   assert.equal(r.syntheticReceiptShapeValid,false);
   assert.doesNotMatch(JSON.stringify(r),/SECRET_PHONE|01799999999|SHOP-A|PT-SUP|SUP-000001/);
