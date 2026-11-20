@@ -20,6 +20,17 @@ const businessFilterSummary=byId('business-filter-summary');
 const businessRecentCount=byId('business-recent-count');
 const businessReadyCount=byId('business-ready-count');
 const businessPendingCount=byId('business-pending-count');
+const supportMode=byId('support-mode');
+const supportForm=byId('support-form');
+const supportReason=byId('support-reason');
+const supportStart=byId('support-start');
+const supportStatus=byId('support-status');
+const supportSelected=byId('support-selected');
+const supportDiagnostics=byId('support-diagnostics');
+const supportCategories=byId('support-categories');
+const supportUnits=byId('support-units');
+const supportEnd=byId('support-end');
+const supportClose=byId('support-close');
 const signOut=byId('sign-out');
 const inviteForm=byId('owner-invitation-form');
 const inviteSubject=byId('owner-google-subject');
@@ -36,6 +47,9 @@ const setupFailures={
   'owner-readiness':'Owner readiness',
 };
 let localProvisioning=false;
+let supportEnabled=false;
+let supportSelection=null;
+let supportGrant=null;
 let businessShops=[];
 let generation=0;
 let credential;
@@ -46,7 +60,27 @@ function clearInviteCode(){
   inviteResult.hidden=true;
 }
 
-window.addEventListener('pagehide',clearInviteCode);
+function clearSupport(){
+  supportGrant=null;
+  supportSelection=null;
+  supportMode.hidden=true;
+  supportForm.hidden=false;
+  supportReason.value='';
+  supportStatus.textContent='';
+  supportSelected.textContent='';
+  supportCategories.textContent='';
+  supportUnits.textContent='';
+  supportDiagnostics.hidden=true;
+  supportStart.disabled=false;
+  supportEnd.hidden=true;
+  supportEnd.disabled=false;
+  supportClose.disabled=false;
+}
+window.addEventListener('pagehide',()=>{
+  clearInviteCode();
+  // A page close drops the opaque bearer; it is never persisted.
+  clearSupport();
+});
 
 function clearBusinessDirectory(){
   businessShops=[];
@@ -71,6 +105,8 @@ function show(view,message=''){
   mount.replaceChildren();
   cancelGoogle.disabled=false;
   status.textContent=message;
+  clearSupport();
+  supportEnabled=false;
   clearBusinessDirectory();
   document.body.classList.toggle('platform-signed-in',view==='signed-in');
   if(view!=='signed-in')businessRoster.hidden=true;
@@ -161,6 +197,112 @@ async function resumeRosterShop(shop,button){
   }
 }
 
+async function endSupportSession(){
+  if(!supportGrant)return true;
+  const current=supportGrant;
+  supportEnd.disabled=true;
+  supportStatus.textContent='Ending read-only support…';
+  try{
+    const result=await api('/support/end','POST',{
+      shopId:current.shopId,operationId:current.operationId,
+    });
+    if(result.status!=='revoked')throw new Error('Invalid support end result');
+    supportGrant=null;
+    supportReason.value='';
+    supportForm.hidden=false;
+    supportEnd.hidden=true;
+    supportDiagnostics.hidden=true;
+    supportCategories.textContent='';
+    supportUnits.textContent='';
+    supportStatus.textContent='Support session ended.';
+    return true;
+  }catch(error){
+    if(error.message==='401'||error.message==='403'){
+      show('login','Sign in again to use Support Mode.');
+    }else{
+      supportStatus.textContent='Could not confirm support end. Retry or sign out.';
+    }
+    return false;
+  }finally{
+    supportEnd.disabled=false;
+  }
+}
+
+async function selectSupportShop(shop){
+  if(!supportEnabled||shop.status!=='ready')return;
+  if(supportGrant && !await endSupportSession())return;
+  supportSelection={shopId:shop.shopId,displayName:shop.displayName};
+  supportMode.hidden=false;
+  supportForm.hidden=false;
+  supportSelected.textContent='Business: '+shop.displayName+'. Read-only setup inspection.';
+  supportStatus.textContent='';
+  supportDiagnostics.hidden=true;
+  supportReason.value='';
+  supportEnd.hidden=true;
+  supportReason.focus();
+}
+
+supportForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(supportMode.hidden||!supportEnabled||!supportSelection||supportGrant)return;
+  const reason=supportReason.value.trim();
+  if(reason.length<12||reason.length>180){
+    supportStatus.textContent='Describe the reason in at least 12 characters.';
+    supportReason.focus();
+    return;
+  }
+  const shopId=supportSelection.shopId;
+  const view=generation;
+  supportStart.disabled=true;
+  supportStatus.textContent='Starting audited, read-only support…';
+  try{
+    const operationId=crypto.randomUUID();
+    const result=await api('/support/start','POST',{shopId,operationId,reason});
+    if(view!==generation)return;
+    if(result.status!=='created'||result.operationId!==operationId||
+       !/^[a-f0-9]{64}$/.test(result.supportToken)){
+      throw new Error('Unexpected support grant');
+    }
+    supportGrant={shopId,operationId,token:result.supportToken};
+    supportForm.hidden=true;
+    supportEnd.hidden=false;
+    const inspected=await api('/support/diagnostics','POST',{
+      shopId,eventId:crypto.randomUUID(),supportToken:supportGrant.token,
+    });
+    if(view!==generation)return;
+    if(inspected.shopId!==shopId)throw new Error('Wrong Shop diagnostics');
+    if(inspected.status==='ok'&&inspected.catalog?.status==='available'&&
+       Number.isSafeInteger(inspected.catalog.categories)&&
+       Number.isSafeInteger(inspected.catalog.units)){
+      supportCategories.textContent='Categories: '+inspected.catalog.categories;
+      supportUnits.textContent='Units: '+inspected.catalog.units;
+      supportDiagnostics.hidden=false;
+      supportStatus.textContent='Read-only setup diagnostics. ERP operations are not enabled.';
+    }else if(inspected.status==='schema-incomplete'){
+      supportDiagnostics.hidden=true;
+      supportStatus.textContent='Catalog schema incomplete. No ERP readiness claim is possible.';
+    }else{
+      throw new Error('Unsupported diagnostic response');
+    }
+  }catch(error){
+    if(view!==generation)return;
+    if(error.message==='401'||error.message==='403'){
+      show('login','Sign in again to use Support Mode.');
+    }else{
+      supportStatus.textContent=supportGrant
+        ?'Could not read diagnostics. End support and retry.'
+        :'Could not start Support Mode. Check permissions and retry.';
+    }
+  }finally{
+    supportStart.disabled=false;
+  }
+});
+supportEnd.addEventListener('click',()=>void endSupportSession());
+supportClose.addEventListener('click',async()=>{
+  if(supportGrant && !await endSupportSession())return;
+  clearSupport();
+});
+
 function renderBusinessRoster(){
   const ready=businessShops.filter(shop=>shop.status==='ready').length;
   businessRecentCount.textContent=String(businessShops.length);
@@ -191,6 +333,14 @@ function renderBusinessRoster(){
       button.textContent='Resume setup';
       button.setAttribute('aria-label','Resume setup for '+shop.displayName);
       button.addEventListener('click',()=>resumeRosterShop(shop,button));
+      row.append(button);
+    else if(supportEnabled){
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='secondary';
+      button.textContent='Inspect setup';
+      button.setAttribute('aria-label','Inspect setup for '+shop.displayName);
+      button.addEventListener('click',()=>void selectSupportShop(shop));
       row.append(button);
     }
     businessRosterList.append(row);
@@ -242,6 +392,7 @@ async function restoreLocalSetup(draft,view){
 function showSignedIn(session){
   const view=show('signed-in');
   localProvisioning=session.localProvisioningEnabled===true;
+  supportEnabled=session.supportDiagnosticsEnabled===true;
   businessRoster.hidden=!localProvisioning;
   if(localProvisioning)void loadBusinessRoster(view);
   businessForm.hidden=session.shopReservationEnabled!==true;
@@ -534,6 +685,16 @@ byId('sign-out').addEventListener('click',async event=>{
   const button=event.currentTarget;
   button.disabled=true;
   try{
+    // Best effort: sign-out revokes the Admin session even if support END fails.
+    // This blocks future support reads and the bearer expires after 5 minutes.
+    if(supportGrant){
+      try{
+        await api('/support/end','POST',{
+          shopId:supportGrant.shopId,operationId:supportGrant.operationId,
+        });
+      }catch{}
+      supportGrant=null;
+    }
     const reply=await api('/auth/logout');
     if(reply.signedOut!==true)throw new Error('Sign-out missing');
     sessionStorage.removeItem(RESERVATION_DRAFT);
