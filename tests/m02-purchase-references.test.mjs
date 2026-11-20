@@ -53,7 +53,7 @@ test('pinned 49-group synthetic purchase chain passes as an offline candidate, n
  assert.equal(r.formatVersion,1);
  assert.equal(r.sourceCommit,pin);
  assert.equal(r.sourceGroups,49);
- assert.deepEqual(r.totals,{purchases:1,purchaseItems:2,suppliers:1,products:1});
+ assert.deepEqual(r.totals,{purchases:1,purchaseItems:2,suppliers:1,products:1,purchaseReturns:0,purchaseReturnItems:0,stockLots:1});
  assert.equal(r.candidateReady,true);
  assert.deepEqual(r.issues,[]);
  for(const flag of ['independentSourceExportVerified','d1ReadbackVerified',
