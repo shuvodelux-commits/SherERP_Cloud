@@ -65,7 +65,7 @@ before(async()=>{
   await worker.applyD1Migrations('DB');
   ({DB}=await worker.getEnv());
   await DB.prepare(
-    "INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules) VALUES('M10Cashier','Active','{\"pos\":{\"add\":true}}','')"
+    "INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules) VALUES('M10Cashier','Active','{\"pos\":{\"add\":true},\"purchase\":{\"add\":true}}','')"
   ).run();
 });
 beforeEach(async()=>{await createPurchaseTestSchema(DB);});
