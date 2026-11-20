@@ -139,7 +139,8 @@ app.post('/api/owner/catalog',protectLogin,limitBody,async c=>{
   return c.json({success:false,message:'A product with this name already exists or the original save details changed.'},409);
 });
 
-const supplierApiEnabled=env=>env.OWNER_SUPPLIERS_ENABLED==='true'&&env.OWNER_WRITE_GRANTS_ENABLED==='true';
+// Reuse the already reviewed clean-Products Shop gate; no extra MVP feature toggle.
+const supplierApiEnabled=cleanProductsEnabled;
 
 // Actual private clean-Shop Supplier master; no financial balances are posted.
 app.get('/api/owner/suppliers',protectLogin,async c=>{
