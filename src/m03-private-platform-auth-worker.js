@@ -1,6 +1,8 @@
 import qr from 'qrcode/lib/browser.js';
+import {issueAdminRecoveryCodes,beginAdminMfaRecovery,finishAdminMfaRecovery}
+  from './auth/platform-admin-recovery.js';
 import {beginBrowserSetup,browserSetupConfigured,finishBrowserSetup,
-  readBrowserAdminFactor,verifyBrowserSetupGoogle} from './auth/browser-first-admin-setup.js';
+  readBrowserAdminFactorRecord,verifyBrowserSetupGoogle} from './auth/browser-first-admin-setup.js';
 import {disablePlatformShopOwner} from './auth/platform-owner-write-session.js';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
@@ -28,6 +30,7 @@ import {activeAdminSupportVisit,readSupportErpData,SUPPORT_ERP_PREFIX}
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
 const SESSION_COOKIE='__Host-shererp-platform-session';
+const RECOVERY_COOKIE='__Host-shererp-platform-recovery';
 const COOKIE={path:'/',secure:true,httpOnly:true,sameSite:'Strict'};
 const CHALLENGE_SECONDS=120;
 const MAX_CHALLENGES=8;
@@ -112,7 +115,9 @@ const wizardEnabled=env=>env.PLATFORM_BROWSER_SETUP==='true';
 app.get('/api/platform/wizard',limitIngress,async c=>{
   if(!wizardEnabled(c.env)||!browserSetupConfigured(c.env))return c.notFound();
   const enrolled=await c.env.CONTROL_DB.prepare('SELECT 1 FROM platform_first_superadmin').first();
-  return c.json({setup:!enrolled});
+  return c.json({setup:!enrolled,
+    ...(enrolled&&c.env.PLATFORM_ADMIN_RECOVERY_ENABLED==='true'&&
+       browserSetupConfigured(c.env)?{recoveryEnabled:true}:{})});
 });
 app.post('/api/platform/wizard/start',limitIngress,limitBody,async c=>{
   if(!wizardEnabled(c.env))return c.notFound();
@@ -235,6 +240,8 @@ function signedIn(c){
       ?{localProvisioningEnabled:true}:{}),
     ...(hostedShopServiceEnabled(c.env)
       ?{hostedProvisioningEnabled:true}:{}),
+    ...(c.env.PLATFORM_ADMIN_RECOVERY_ENABLED==='true'&&wizardEnabled(c.env)&&
+      browserSetupConfigured(c.env)?{adminRecoveryEnabled:true}:{}),
     ...(localProvisioningEnabled(c.env)||hostedDirectoryEnabled(c.env)||
         hostedShopServiceEnabled(c.env)
       ?{shopDirectoryEnabled:true}:{}),
@@ -253,9 +260,10 @@ app.post('/api/platform/auth/login',limitIngress,limitBody,async c=>{
   if(!body)return denied(c);
   const {CONTROL_DB:db,PLATFORM_CLIENT_ID:clientId,PLATFORM_TOTP_SECRET:totpSecret,
     PLATFORM_FACTOR_VERSION:rawVersion}=c.env;
-  const browserFactor=wizardEnabled(c.env)?await readBrowserAdminFactor(c.env):null;
+  const browserFactor=wizardEnabled(c.env)?await readBrowserAdminFactorRecord(c.env):null;
   const session=await issuePlatformSuperAdminSession({
-    controlDb:db,clientId,totpSecret:wizardEnabled(c.env)?browserFactor:totpSecret,factorVersion:browserFactor?1:Number(rawVersion),
+    controlDb:db,clientId,totpSecret:browserFactor?.secret??totpSecret,
+    factorVersion:browserFactor?.factorVersion??Number(rawVersion),
     browserToken:getCookie(c,CHALLENGE_COOKIE),credential:body.credential,code:body.code,
   });
   setCookie(c,CHALLENGE_COOKIE,'',{...COOKIE,maxAge:0});
@@ -264,6 +272,53 @@ app.post('/api/platform/auth/login',limitIngress,limitBody,async c=>{
   const maxAge=Math.max(0,Math.floor((session.expiresAtMs-Date.now())/1000));
   setCookie(c,SESSION_COOKIE,session.token,{...COOKIE,maxAge});
   return signedIn(c);
+});
+
+const recoveryEnabled=env=>wizardEnabled(env)&&
+  env.PLATFORM_ADMIN_RECOVERY_ENABLED==='true'&&browserSetupConfigured(env);
+
+app.post('/api/platform/auth/recovery/codes',limitIngress,limitBody,async c=>{
+  if(!recoveryEnabled(c.env))return c.notFound();
+  const body=await expectedJson(c,['code']);
+  if(!body)return c.json({error:'Invalid request'},400);
+  const codes=await issueAdminRecoveryCodes(
+    c.env,getCookie(c,SESSION_COOKIE),body.code);
+  return codes?c.json({codes}):denied(c);
+});
+
+app.post('/api/platform/auth/recovery/start',limitIngress,limitBody,async c=>{
+  if(!recoveryEnabled(c.env))return c.notFound();
+  const body=await expectedJson(c,['credential','recoveryCode']);
+  if(!body)return c.json({error:'Invalid request'},400);
+  const verified=await beginAdminMfaRecovery(c.env,{
+    browserToken:getCookie(c,CHALLENGE_COOKIE),
+    credential:body.credential,recoveryCode:body.recoveryCode
+  });
+  setCookie(c,CHALLENGE_COOKIE,'',{...COOKIE,maxAge:0});
+  if(!verified)return denied(c);
+  setCookie(c,RECOVERY_COOKIE,verified.recoveryToken,{...COOKIE,maxAge:600});
+  const label=encodeURIComponent('SherERP:Super Admin recovery');
+  const uri=`otpauth://totp/${label}?secret=${verified.manualKey}&issuer=SherERP&algorithm=SHA1&digits=6&period=30`;
+  const svg=await qr.toString(uri,{width:240,margin:4});
+  return c.json({
+    manualKey:verified.manualKey,
+    qr:'data:image/svg+xml;base64,'+btoa(svg)
+  });
+});
+
+app.post('/api/platform/auth/recovery/finish',limitIngress,limitBody,async c=>{
+  if(!recoveryEnabled(c.env))return c.notFound();
+  const body=await expectedJson(c,['code']);
+  if(!body)return c.json({error:'Invalid request'},400);
+  const result=await finishAdminMfaRecovery(c.env,{
+    recoveryToken:getCookie(c,RECOVERY_COOKIE),code:body.code
+  });
+  if(!result)return denied(c);
+  setCookie(c,RECOVERY_COOKIE,'',{...COOKIE,maxAge:0});
+  setCookie(c,SESSION_COOKIE,result.sessionToken,{
+    ...COOKIE,maxAge:PLATFORM_ADMIN_TRUSTED_SESSION_SECONDS
+  });
+  return c.json({recoveryCompleted:true,codes:result.codes});
 });
 
 app.get('/api/platform/auth/session',async c=>{

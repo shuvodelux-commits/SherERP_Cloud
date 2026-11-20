@@ -104,9 +104,29 @@ export async function finishBrowserSetup(env,token,code){
   return enrolled?sessionToken:null;
 }
 
-export async function readBrowserAdminFactor(env){
+export async function readBrowserAdminFactorRecord(env){
   if(!HEX_KEY.test(env.PLATFORM_FACTOR_ENCRYPTION_KEY??''))return null;
-  const row=await env.CONTROL_DB.prepare(`SELECT encrypted_secret FROM platform_browser_first_factor
-    JOIN platform_admin_auth USING(singleton) WHERE enabled=1 AND factor_version=1`).first();
-  return row?decryptFactor(env,row.encrypted_secret):null;
+  const row=await env.CONTROL_DB.prepare(`SELECT encrypted_secret,factor_version FROM platform_browser_first_factor
+    JOIN platform_admin_auth USING(singleton) WHERE enabled=1`).first();
+  return row?{secret:await decryptFactor(env,row.encrypted_secret),factorVersion:row.factor_version}:null;
+}
+
+export async function readBrowserAdminFactor(env){
+  return (await readBrowserAdminFactorRecord(env))?.secret??null;
+}
+
+/** New factor is never stored in plaintext; only an AES-GCM encrypted copy is persisted. */
+export async function generateEncryptedBrowserAdminFactor(env){
+  if(!HEX_KEY.test(env.PLATFORM_FACTOR_ENCRYPTION_KEY??''))return null;
+  const secret=crypto.getRandomValues(new Uint8Array(20));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},
+    await key(env.PLATFORM_FACTOR_ENCRYPTION_KEY),secret);
+  return {manualKey:base32(secret),encryptedSecret:encode(iv)+'.'+encode(new Uint8Array(encrypted))};
+}
+
+export async function decryptBrowserAdminFactor(env,encryptedSecret){
+  if(!HEX_KEY.test(env.PLATFORM_FACTOR_ENCRYPTION_KEY??'')||
+    typeof encryptedSecret!=='string')return null;
+  return decryptFactor(env,encryptedSecret);
 }
