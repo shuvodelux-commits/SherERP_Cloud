@@ -119,7 +119,7 @@ test('Control Center browser resumes the same lost-response operation against di
   assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_reservations').first()).n,0);
   await owner.fill('fixture.owner@gmail.com');
   await owner.press('Enter');
-  await page.getByRole('button',{name:'Resume setup'}).waitFor();
+  await page.getByRole('button',{name:'Resume setup',exact:true}).waitFor();
   await mkdir('test-results/m01-browser',{recursive:true});
   await page.screenshot({path:'test-results/m01-browser/m03-local-recovery-mobile.png'});
   assert.equal(creates,1,'first allocation happened and response was lost');
@@ -132,10 +132,10 @@ test('Control Center browser resumes the same lost-response operation against di
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
 
   await page.reload();
-  await page.getByRole('button',{name:'Resume setup'}).waitFor();
+  await page.getByRole('button',{name:'Resume setup',exact:true}).waitFor();
   assert.equal(await owner.inputValue(),'fixture.owner@gmail.com');
   assert.equal(await page.getByRole('textbox',{name:'Business name'}).inputValue(),'টুলস ও হার্ডওয়্যার');
-  await page.getByRole('button',{name:'Resume setup'}).click();
+  await page.getByRole('button',{name:'Resume setup',exact:true}).click();
   await page.getByText(/ready/i).waitFor();
   assert.equal(creates,1,'Resume never creates a second D1');
   assert.equal(prepares,1);
@@ -146,7 +146,7 @@ test('Control Center browser resumes the same lost-response operation against di
   assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_owner_gmail_approvals').first()).n,1);
   assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_bindings').first()).n,1);
   assert.equal(await page.evaluate(()=>sessionStorage.length),0);
-  assert.equal(await page.getByRole('button',{name:'Resume setup'}).isVisible(),false);
+  assert.equal(await page.getByRole('button',{name:'Resume setup',exact:true}).isVisible(),false);
   await page.setViewportSize({width:1440,height:900});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),1440);
   await page.screenshot({path:'test-results/m01-browser/m03-local-ready-desktop.png'});
