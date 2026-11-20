@@ -1,7 +1,8 @@
 /**
  * M01 Owner Party workspace: source-faithful HisabIQ visual adapter.
- * Uses ONLY authenticated read endpoints. No Party creation, payment or D1
- * posting is faked. Supplier fallback is identified as a source record and
+ * Uses authenticated Shop reads and existing restricted clean-Shop Supplier
+ * creation. No generic multi-role Party or financial posting is fabricated.
+ * Supplier fallback is identified as a source record and
  * NEVER treated as a reviewed unified Party identity.
  */
 export const ROLES=Object.freeze(['Customer','Supplier','Vendor','Lender','Borrower','Payee','Owner']);
@@ -157,6 +158,29 @@ export function projectSupplierStatement(raw,expectedSourceId){
     cashPayAvailable:row.cashPayAvailable===true};
 }
 
+export function sourceSupplierCreatePayload(values,operationId){
+  if(!plainObject(values)||typeof operationId!=='string'||
+     !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(operationId))
+    throw new Error('Invalid Supplier operation ID.');
+  if(Object.keys(values).some(k=>!['name','phone','address','notes','openingBalance'].includes(k)))
+    throw new Error('Unknown Supplier field.');
+  const fields={name:120,phone:40,address:250,notes:500};
+  const record={operationId};
+  for(const [key,max] of Object.entries(fields)){
+    const value=values[key]??'';
+    if(typeof value!=='string'||value.length>max||!value.isWellFormed()||
+       /[\u0000-\u001f\u007f]/.test(value))
+      throw new Error('Invalid Supplier '+key+'.');
+    record[key]=value.trim();
+  }
+  if(!record.name)throw new Error('Supplier name is required.');
+  if(values.openingBalance!==undefined&&
+     !['0','0.0','0.00'].includes(String(values.openingBalance)))
+    throw new Error('Nonzero Supplier opening balances are not connected.');
+  record.openingBalance='0';
+  return record;
+}
+
 const create=(tag,className,textValue)=>{
   const node=document.createElement(tag);
   if(className)node.className=className;
@@ -209,7 +233,7 @@ export function mountOwnerParties(){
         <p id="hparty-summary" role="status">Role-specific accounts · সম্পর্কভিত্তিক হিসাব</p></div>
       <div class="hparty-head-actions">
         <button type="button" class="hds-button" id="hparty-refresh">Refresh · নতুন করে দেখুন</button>
-        <button type="button" class="hds-button" disabled title="The reviewed Party writer is not connected">+ Add Party</button>
+        <button type="button" class="hds-button" id="hparty-add-party" disabled title="The reviewed Party writer is not connected">+ Add Party</button>
         <button type="button" class="hds-button" id="hparty-change">Change Party</button>
       </div>
     </div>
@@ -239,6 +263,32 @@ export function mountOwnerParties(){
         <ul class="hparty-list" id="hparty-picker-list" role="listbox" aria-label="Choose Party"></ul>
       </section>
     </div>
+    <div class="hparty-supplier-modal" id="hparty-supplier-modal" hidden data-open="false">
+      <button type="button" class="hparty-supplier-backdrop" aria-label="Close Add Supplier"></button>
+      <section class="hparty-supplier-panel" role="dialog" aria-modal="true" aria-labelledby="hparty-supplier-title">
+        <header class="hparty-supplier-head">
+          <div><h2 id="hparty-supplier-title">Add Supplier <span lang="bn">নতুন সাপ্লায়ার</span></h2>
+            <p>Clean Shop, zero historical opening balance only.</p></div>
+          <button type="button" class="hds-button" id="hparty-supplier-close" aria-label="Close Add Supplier">×</button>
+        </header>
+        <form id="hparty-supplier-form">
+          <label for="hparty-supplier-name">Supplier name <span lang="bn">নাম</span> *</label>
+          <input class="hds-input" id="hparty-supplier-name" name="name" required maxlength="120" autocomplete="organization"/>
+          <label for="hparty-supplier-phone">Phone <span lang="bn">ফোন</span></label>
+          <input class="hds-input" id="hparty-supplier-phone" name="phone" maxlength="40" type="tel" autocomplete="tel"/>
+          <label for="hparty-supplier-address">Address <span lang="bn">ঠিকানা</span></label>
+          <input class="hds-input" id="hparty-supplier-address" name="address" maxlength="250" autocomplete="street-address"/>
+          <label for="hparty-supplier-notes">Notes <span lang="bn">নোট</span></label>
+          <textarea class="hds-input" id="hparty-supplier-notes" name="notes" maxlength="500" rows="2"></textarea>
+          <p class="hparty-opening-rule">Opening balance: ৳0.00. Historical payable or supplier advance requires a separately verified ledger migration.</p>
+          <p id="hparty-supplier-status" role="alert" aria-live="assertive"></p>
+          <footer>
+            <button class="hds-button" id="hparty-supplier-cancel" type="button" data-variant="outline">Cancel</button>
+            <button class="hds-button" id="hparty-supplier-save" type="submit">Save Supplier</button>
+          </footer>
+        </form>
+      </section>
+    </div>
   `;
   const pick=sel=>root.querySelector(sel);
   const state={items:[],selectionId:null,roleFilter:'All',query:'',relationship:null,
@@ -247,6 +297,10 @@ export function mountOwnerParties(){
   const search=pick('#hparty-search'),pickerSearch=pick('#hparty-picker-search');
   const header=pick('#hparty-summary'),banner=pick('#hparty-source-mode');
   const detail=pick('#hparty-detail'),picker=pick('#hparty-picker');
+  const supplierModal=pick('#hparty-supplier-modal');
+  const supplierForm=pick('#hparty-supplier-form');
+  const supplierStatus=pick('#hparty-supplier-status');
+  let supplierIntent=null,supplierSaving=false,supplierOpener=null,supplierCloseTimer=null;
   const getSelected=()=>state.items.find(p=>p.id===state.selectionId)||null;
   const isVisible=()=>!page.hidden;
   const updateUrl=()=>{
@@ -472,6 +526,12 @@ export function mountOwnerParties(){
     header.textContent='Parties '+state.items.length+' · '+(state.mode==='supplier-source'?
       'Supplier source only; Customer/Owner/Loan totals unavailable':
       'Independent role balances; no cross-role offset');
+    const add=pick('#hparty-add-party');
+    add.disabled=state.mode!=='supplier-source';
+    add.textContent=state.mode==='supplier-source'?'+ Add Supplier':'+ Add Party';
+    add.title=state.mode==='supplier-source'
+      ?'Create a clean-Shop Supplier with zero opening balance'
+      :'The unified Party writer is not connected';
     banner.textContent=state.error||(
       state.mode==='supplier-source'
         ? 'Supplier-only D1 source view. Multi-role Party linking and Customer ledgers are not connected. Existing Supplier controls remain available.'
@@ -509,7 +569,7 @@ export function mountOwnerParties(){
     if(!res.ok)throw new Error('Verified Party source unavailable. No cached balances are shown.');
     return {body:await res.json()};
   }
-  async function loadDirectory(){
+  async function loadDirectory(selectSourceId=null){
     state.request?.abort();
     const controller=new AbortController();
     state.request=controller;state.error='';
@@ -531,7 +591,10 @@ export function mountOwnerParties(){
       const wantedId=new URL(location.href).searchParams.get('id');
       const previous=data.find(p=>p.id===state.selectionId);
       const fromUrl=data.find(p=>p.partyId===wantedId);
-      const selected=fromUrl||previous||data[0]||null;
+      const newlyCreated=selectSourceId
+        ?data.find(p=>p.sourceIds.Supplier===selectSourceId):null;
+      if(selectSourceId){state.query='';state.roleFilter='Supplier';}
+      const selected=newlyCreated||fromUrl||previous||data[0]||null;
       state.selectionId=selected?.id||null;
       state.relationship=selected?.roles.includes(new URL(location.href).searchParams.get('role'))
         ?new URL(location.href).searchParams.get('role')
@@ -573,6 +636,91 @@ export function mountOwnerParties(){
       }
     }
   }
+  function openSupplierModal(){
+    if(state.mode!=='supplier-source'||supplierSaving)return;
+    clearTimeout(supplierCloseTimer);
+    supplierOpener=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    supplierModal.hidden=false;
+    supplierStatus.textContent=supplierIntent
+      ?'Previous save is unconfirmed. Retry unchanged to verify the same operation.':'';
+    requestAnimationFrame(()=>supplierModal.dataset.open='true');
+    pick('#hparty-supplier-name').focus();
+  }
+  function closeSupplierModal(force=false){
+    if((supplierSaving&&!force)||supplierModal.hidden)return;
+    supplierModal.dataset.open='false';
+    clearTimeout(supplierCloseTimer);
+    supplierCloseTimer=setTimeout(()=>{
+      if(supplierModal.dataset.open==='false')supplierModal.hidden=true;
+    },matchMedia('(prefers-reduced-motion: reduce)').matches?0:90);
+    if(supplierOpener?.isConnected)supplierOpener.focus({preventScroll:true});
+    supplierOpener=null;
+  }
+  supplierForm.addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(supplierSaving||state.mode!=='supplier-source'||!supplierForm.reportValidity())return;
+    const fields={
+      name:pick('#hparty-supplier-name').value,
+      phone:pick('#hparty-supplier-phone').value,
+      address:pick('#hparty-supplier-address').value,
+      notes:pick('#hparty-supplier-notes').value
+    };
+    try{
+      const fingerprint=JSON.stringify(fields);
+      if(supplierIntent&&supplierIntent.fingerprint!==fingerprint)
+        throw new Error('Previous save is unconfirmed. Retry unchanged or reload the Shop before changing this Supplier.');
+      if(!supplierIntent){
+        const record=sourceSupplierCreatePayload(fields,crypto.randomUUID());
+        supplierIntent={fingerprint,body:JSON.stringify(record)};
+      }
+      supplierSaving=true;pick('#hparty-supplier-save').disabled=true;
+      supplierStatus.textContent='Saving Supplier to authenticated Shop D1…';
+      const response=await fetch('/api/owner/suppliers',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json'},body:supplierIntent.body
+      });
+      const result=await response.json().catch(()=>null);
+      if(response.status===401||response.status===403){
+        supplierIntent=null;
+        throw new Error('Supplier save access denied or session expired. Check Owner permissions.');
+      }
+      if(!response.ok){
+        if(response.status<500){
+          supplierIntent=null;
+          throw new Error(result?.message||'Supplier input was rejected. Check the original record.');
+        }
+        throw new Error('Could not confirm Supplier save. Retry unchanged to verify the same operation.');
+      }
+      const id=result?.data?.id;
+      if(result?.success!==true||typeof id!=='string'||!SUPPLIER_ID.test(id))
+        throw new Error('Could not confirm Supplier save. Retry unchanged to verify the same operation.');
+      supplierIntent=null;
+      supplierForm.reset();
+      closeSupplierModal(true);
+      await loadDirectory(id);
+    }catch(error){
+      supplierStatus.textContent=error instanceof Error?error.message:'Could not confirm Supplier save. Retry unchanged.';
+    }finally{
+      supplierSaving=false;pick('#hparty-supplier-save').disabled=false;
+    }
+  });
+  pick('#hparty-add-party').addEventListener('click',openSupplierModal);
+  pick('#hparty-supplier-close').addEventListener('click',()=>closeSupplierModal());
+  pick('#hparty-supplier-cancel').addEventListener('click',()=>closeSupplierModal());
+  pick('.hparty-supplier-backdrop').addEventListener('click',()=>closeSupplierModal());
+  supplierModal.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closeSupplierModal();}
+    if(event.key!=='Tab')return;
+    const focusable=Array.from(supplierModal.querySelectorAll(
+      'button:not([disabled]),input:not([disabled]),textarea:not([disabled])'
+    )).filter(el=>el.getClientRects().length);
+    if(!focusable.length)return;
+    if(event.shiftKey&&document.activeElement===focusable[0]){
+      event.preventDefault();focusable.at(-1).focus();
+    }else if(!event.shiftKey&&document.activeElement===focusable.at(-1)){
+      event.preventDefault();focusable[0].focus();
+    }
+  });
   const onSearch=event=>{
     state.query=event.target.value;
     search.value=state.query;pickerSearch.value=state.query;

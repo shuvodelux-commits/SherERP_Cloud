@@ -372,3 +372,99 @@
   #page-hisabiqParties .hparty-table {min-width:0;}
   #page-hisabiqParties .hparty-picker {display:none!important;}
 }
+
+/* Party has a verified Supplier-only view; do not duplicate the stale global
+   "all business reads unavailable" warning on this page. Other pages retain it. */
+body:has(#page-hisabiqParties:not([hidden])) #owner-data-notice {
+  display:none!important;
+}
+
+/* Source-only Supplier quick-add: deliberately not a generic multi-role writer. */
+#page-hisabiqParties .hparty-supplier-modal {
+  position:fixed;inset:0;z-index:5100;isolation:isolate;
+  display:grid;place-items:center;
+}
+#page-hisabiqParties .hparty-supplier-modal[hidden] {display:none!important;}
+#page-hisabiqParties .hparty-supplier-backdrop {
+  position:absolute;inset:0;width:100%;height:100%;
+  background:rgba(11,26,44,.48);border:0;cursor:pointer;opacity:0;
+  transition:opacity var(--hds-dialog-veil) ease;
+}
+#page-hisabiqParties .hparty-supplier-panel {
+  position:relative;z-index:1;
+  width:min(480px,calc(100vw - 24px));
+  max-height:min(88dvh,740px);overflow-y:auto;
+  border-radius:12px;border:1px solid var(--hds-border);
+  background:var(--hds-card);color:var(--hds-foreground);
+  box-shadow:var(--hds-shadow-pop);
+  opacity:0;transform:translateY(8px) scale(.96);
+  transition:opacity var(--hds-dialog-entry) var(--hds-ease-pop),
+    transform var(--hds-dialog-entry) var(--hds-ease-pop);
+}
+#page-hisabiqParties .hparty-supplier-modal[data-open="true"] .hparty-supplier-backdrop {opacity:1;}
+#page-hisabiqParties .hparty-supplier-modal[data-open="true"] .hparty-supplier-panel {
+  opacity:1;transform:translateY(0) scale(1);
+}
+#page-hisabiqParties .hparty-supplier-head {
+  display:flex;justify-content:space-between;align-items:flex-start;gap:8px;
+  padding:16px;border-bottom:1px solid var(--hds-border);
+}
+#page-hisabiqParties .hparty-supplier-head h2 {font-size:16px;line-height:24px;font-weight:600;margin:0;}
+#page-hisabiqParties .hparty-supplier-head h2 span {font:400 12px/20px 'Hind Siliguri',sans-serif;color:var(--hds-muted-foreground);}
+#page-hisabiqParties .hparty-supplier-head p {
+  font-size:12px;line-height:18px;color:var(--hds-muted-foreground);margin:4px 0 0;
+}
+#page-hisabiqParties #hparty-supplier-close {width:36px;flex:0 0 36px;font-size:22px;padding:0;}
+#page-hisabiqParties #hparty-supplier-form {
+  display:flex;flex-direction:column;gap:6px;padding:16px;
+}
+#page-hisabiqParties #hparty-supplier-form label {
+  font-size:12px;line-height:18px;font-weight:500;margin-top:6px;
+}
+#page-hisabiqParties #hparty-supplier-form label span {
+  font:400 11px/18px 'Hind Siliguri',sans-serif;color:var(--hds-muted-foreground);
+}
+#page-hisabiqParties #hparty-supplier-form .hds-input {
+  width:100%;min-height:36px;height:36px;font-size:13px;
+}
+#page-hisabiqParties #hparty-supplier-notes {
+  min-height:66px;height:auto;resize:vertical;
+}
+#page-hisabiqParties .hparty-opening-rule {
+  font-size:12px;line-height:18px;
+  color:var(--hds-warning);background:var(--hds-warning-bg);
+  padding:8px 10px;margin:10px 0 0;border-radius:6px;
+}
+#page-hisabiqParties #hparty-supplier-status {
+  font-size:12px;line-height:18px;min-height:0;margin:0;
+  color:var(--hds-danger);overflow-wrap:anywhere;
+}
+#page-hisabiqParties #hparty-supplier-status:empty {display:none;}
+#page-hisabiqParties #hparty-supplier-form footer {
+  display:flex;justify-content:flex-end;gap:8px;padding-top:6px;
+}
+#page-hisabiqParties #hparty-supplier-save {background:var(--hds-primary);color:var(--hds-primary-foreground);}
+#page-hisabiqParties #hparty-supplier-save:disabled {opacity:.6;}
+@media (max-width:767px){
+  #page-hisabiqParties .hparty-supplier-modal {display:block;}
+  #page-hisabiqParties .hparty-supplier-panel {
+    position:absolute;bottom:0;left:0;width:100%;
+    max-height:88dvh;border-radius:12px 12px 0 0;
+    transform:translateY(100%) scale(1);
+  }
+  #page-hisabiqParties .hparty-supplier-panel[data-open="true"] {transform:translateY(0);}
+  #page-hisabiqParties .hparty-supplier-modal[data-open="true"] .hparty-supplier-panel {
+    transform:translateY(0) scale(1);
+  }
+  #page-hisabiqParties .hparty-supplier-head,
+  #page-hisabiqParties #hparty-supplier-form {padding:12px 16px;}
+}
+@media (prefers-reduced-motion:reduce){
+  #page-hisabiqParties .hparty-supplier-panel,
+  #page-hisabiqParties .hparty-supplier-backdrop {transition:none!important;}
+}
+
+/* Complete the scoped dark surface without recoloring the legacy app shell. */
+#content:has(#page-hisabiqParties[data-theme="dark"]:not([hidden])) {
+  background-color:#0b1a2c;
+}

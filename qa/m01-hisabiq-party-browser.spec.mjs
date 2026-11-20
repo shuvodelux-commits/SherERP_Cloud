@@ -9,8 +9,8 @@ import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js';
 
 let browser,server,url,outputDir;
-const audit={posts:0,supplierReads:0,partyReads:0};
-let genericMode='source-only';
+const audit={financialPosts:0,supplierReads:0,partyReads:0,supplierCreateBodies:[]};
+let genericMode='source-only',failSupplierCreateOnce=false,denySupplierCreate=false;
 const shopId='22222222-2222-4222-8222-222222222222';
 const session={role:'Owner',shopId,dashboard:{displayName:'HisabIQ Fixture Shop',dataAvailable:false}};
 const shell=buildSourceAppShellData({shopName:'HisabIQ Fixture Shop',currencySymbol:''}).data;
@@ -19,6 +19,7 @@ const supplier={
   Phone:'01912000000',Address:'Dhaka','Opening Balance':0,
   'Current Due':1200.55,Status:'Active'
 };
+const supplierRows=[supplier];
 const send=(res,status,body)=>{
   res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});
   res.end(JSON.stringify(body));
@@ -29,7 +30,31 @@ before(async()=>{
   server=createServer((req,res)=>{
     void (async()=>{
       const path=new URL(req.url,'http://localhost').pathname;
-      if(req.method==='POST') {audit.posts++;send(res,403,{error:'No Party writes'});return;}
+      if(req.method==='POST'&&path==='/api/owner/suppliers'){
+        const chunks=[];for await(const c of req)chunks.push(c);
+        const payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        audit.supplierCreateBodies.push(payload);
+        if(denySupplierCreate){
+          send(res,403,{success:false,message:'Supplier access denied'});return;
+        }
+        if(failSupplierCreateOnce){
+          failSupplierCreateOnce=false;
+          send(res,503,{success:false,message:'Unconfirmed Supplier save'});return;
+        }
+        if(!payload.name||payload.openingBalance!=='0'){
+          send(res,400,{success:false,message:'Invalid Supplier'});return;
+        }
+        let row=supplierRows.find(x=>x['Supplier Name']===payload.name);
+        if(!row){
+          row={'Supplier ID':'SUP-'+String(7+supplierRows.length).padStart(6,'0'),
+            'Supplier Name':payload.name,Phone:payload.phone||'',
+            Address:payload.address||'','Current Due':0,
+            'Opening Balance':0,Status:'Active'};
+          supplierRows.push(row);
+        }
+        send(res,201,{success:true,data:{id:row['Supplier ID']}});return;
+      }
+      if(req.method==='POST') {audit.financialPosts++;send(res,403,{error:'No financial writes'});return;}
       if(path==='/api/owner/auth/session'){send(res,200,session);return;}
       if(path==='/api/owner/app-shell'){send(res,200,{success:true,data:shell});return;}
       if(path==='/api/owner/parties'){
@@ -50,7 +75,7 @@ before(async()=>{
         }
         send(res,404,{error:'Not yet connected'});return;
       }
-      if(path==='/api/owner/suppliers'){audit.supplierReads++;send(res,200,{suppliers:[supplier],bankAccounts:[],currencySymbol:''});return;}
+      if(path==='/api/owner/suppliers'){audit.supplierReads++;send(res,200,{suppliers:supplierRows,bankAccounts:[],currencySymbol:''});return;}
       if(path==='/api/owner/suppliers/SUP-000007/ledger'){
         send(res,200,{success:true,data:{
           scope:'purchase-credit-only',supplierId:'SUP-000007',
@@ -152,6 +177,7 @@ test('dark system theme and reduced motion keep role selection and source truth'
     await page.emulateMedia({colorScheme:'dark',reducedMotion:'reduce'});
     await openParty(page);
     assert.equal(await page.locator('#page-hisabiqParties').getAttribute('data-theme'),'dark');
+    assert.equal(await page.locator('#content').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(11, 26, 44)');
     await page.locator('#hparty-change').click();
     await page.locator('#hparty-picker').waitFor({state:'visible'});
     const transition=await page.locator('.hparty-picker-panel').evaluate(node=>getComputedStyle(node).transitionDuration);
@@ -198,8 +224,83 @@ test('401 on unified Party endpoint fails closed instead of silently showing unr
   }finally{genericMode='source-only';await page.close();}
 });
 
+
+test('source-only Add Supplier posts zero-opening authorized intent and selects saved source ID',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844}});
+  try {
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await openParty(page);
+    const button=page.locator('#hparty-add-party');
+    assert.equal(await button.isEnabled(),true);
+    assert.match(await button.innerText(),/Add Supplier/);
+    assert.equal(await page.locator('#owner-data-notice').evaluate(x=>getComputedStyle(x).display),'none');
+    await button.click();
+    await page.locator('#hparty-supplier-name').fill('New Hardware');
+    await page.locator('#hparty-supplier-phone').fill('01888000111');
+    await page.locator('#hparty-supplier-address').fill('Khulna');
+    await page.locator('#hparty-supplier-save').click();
+    await page.locator('#hparty-detail h2').getByText('New Hardware').waitFor();
+    await page.locator('#hparty-supplier-modal').waitFor({state:'hidden'});
+    assert.equal(await page.locator('#hparty-supplier-modal').isVisible(),false);
+    const body=audit.supplierCreateBodies.at(-1);
+    assert.equal(body.name,'New Hardware');
+    assert.equal(body.openingBalance,'0');
+    assert.match(body.operationId,/^[0-9a-f-]{36}$/);
+    assert.equal(await page.locator('.hparty-balance-card[data-kind="Payable"]').innerText().then(s=>s.includes('0.00')),true);
+    assert.equal(audit.financialPosts,0);
+  }finally{await page.close();}
+});
+
+test('Supplier timeout retry reuses exact payload and operationId',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  failSupplierCreateOnce=true;
+  try{
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await openParty(page);
+    await page.locator('#hparty-add-party').click();
+    await page.locator('#hparty-supplier-name').fill('Retry Electric');
+    await page.locator('#hparty-supplier-save').click();
+    await page.locator('#hparty-supplier-status').getByText('Retry unchanged').waitFor();
+    const previous=audit.supplierCreateBodies.at(-1);
+    await page.locator('#hparty-supplier-save').click();
+    await page.locator('#hparty-detail h2').getByText('Retry Electric').waitFor();
+    assert.deepEqual(audit.supplierCreateBodies.at(-1),previous);
+    assert.equal(audit.financialPosts,0);
+  }finally{failSupplierCreateOnce=false;await page.close();}
+});
+
+test('403 Supplier save stays denied without adding a client-side Party',async()=>{
+  denySupplierCreate=true;
+  const page=await browser.newPage({viewport:{width:1024,height:900}});
+  try {
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await openParty(page);
+    const count=await page.locator('#hparty-list [role="option"]').count();
+    await page.locator('#hparty-add-party').click();
+    await page.locator('#hparty-supplier-name').fill('Blocked Supplier');
+    await page.locator('#hparty-supplier-save').click();
+    await page.locator('#hparty-supplier-status').getByText('access denied').waitFor();
+    assert.equal(await page.locator('#hparty-list [role="option"]').count(),count);
+    assert.equal(await page.locator('#hparty-supplier-modal').isVisible(),true);
+    assert.equal(audit.financialPosts,0);
+  } finally {denySupplierCreate=false;await page.close();}
+});
+
+test('unified three-role directory never exposes the source-only Supplier writer',async()=>{
+  genericMode='unified';
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
+    await page.locator('#navList [data-page="hisabiqParties"]').click();
+    await page.locator('#hparty-source-mode').getByText('Unified Party identities').waitFor();
+    assert.equal(await page.locator('#hparty-add-party').isEnabled(),false);
+    assert.match(await page.locator('#hparty-add-party').innerText(),/Add Party/);
+  }finally{genericMode='source-only';await page.close();}
+});
+
 test('read-only Party never triggers a new financial POST or clones missing Customer dues',()=>{
-  assert.equal(audit.posts,0);
+  assert.equal(audit.financialPosts,0);
   assert.ok(audit.partyReads>=1,'Attempted only approved Party read route');
   assert.ok(audit.supplierReads>=1,'Fallback from explicit 404 reads existing Supplier source');
 });
