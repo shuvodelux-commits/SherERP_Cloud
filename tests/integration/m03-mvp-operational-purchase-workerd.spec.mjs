@@ -162,6 +162,10 @@ test('private Owner HTTP API posts original Purchase intent; stock appears in op
     assert.deepEqual(before.data.suppliers.map(x=>x.id),['SUP-000001']);
     assert.equal(before.data.products[0].stock,0);
     assert.equal(before.data.cashSession,null);
+    assert.equal((await request(ownerA,'/api/owner/cash-session/start',{input:{
+      operationId:crypto.randomUUID(),openingCash:'0',notes:'spoof',
+      ownerSubject:'forged-owner',token:ownerB.token
+    }})).status,400,'client actor/token fields cannot be accepted by Cash Session route');
     const session=await request(ownerA,'/api/owner/cash-session/start',{input:{
       operationId:crypto.randomUUID(),openingCash:'0',notes:'Start Day'
     }});
