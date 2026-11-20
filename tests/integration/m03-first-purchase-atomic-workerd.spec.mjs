@@ -50,8 +50,8 @@ before(async()=>{
   await worker.applyD1Migrations('DB');
   ({DB}=await worker.getEnv());
   await DB.prepare(`INSERT INTO auth_roles(role_name,status,permissions_json,allowed_modules)
-    VALUES ('CashierAdd','Active','{"pos":{"add":true}}',''),
-           ('CashierNoAdd','Active','{"pos":{"add":false}}','')`).run();
+    VALUES ('CashierAdd','Active','{"purchase":{"add":true}}',''),
+           ('CashierNoAdd','Active','{"purchase":{"add":false}}','')`).run();
 });
 after(async()=>harness.close());
 beforeEach(async()=>createPurchaseTestSchema(DB));
@@ -110,7 +110,7 @@ test('closed Cash Session refuses all stock, Supplier and Bank/Cash writes',asyn
   assert.deepEqual(await snapshot(ctx),before);
 });
 
-test('non-privileged role missing literal pos.add refuses first purchase',async()=>{
+test('non-privileged role missing literal purchase.add refuses first purchase',async()=>{
   const ctx=await shop({userRole:'CashierNoAdd'});
   const before=await snapshot(ctx);
   await assert.rejects(()=>post(ctx),/denied|permission|refused/i);
