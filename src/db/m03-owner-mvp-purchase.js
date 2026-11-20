@@ -213,11 +213,19 @@ export async function closeOwnerCashSession(scope,{token,ownerSubject,operationI
       return {status:'conflict'};
     return closeResult(replay,'replayed');
   }
+  // 0010 adds Supplier Cash Out; 0011 updates the SQL Close guard to use
+  // the same sources. On pre-0011 Shops the old guarded Close still rejects
+  // sessions containing Supplier Pay rather than accepting false totals.
+  const supplierCashTable=await DB.prepare(`SELECT 1 FROM sqlite_schema
+    WHERE type='table' AND name='owner_mvp_supplier_payment_cash_book'`).first();
+  const supplierCashLeg=supplierCashTable?` -
+    COALESCE((SELECT SUM(p.paid_paisa) FROM owner_mvp_supplier_payment_cash_book p
+      WHERE p.cash_sequence=owner_mvp_cash_sessions.sequence),0)`:'';
   const expected=`(opening_paisa + carried_opening_paisa +
     COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
       WHERE b.cash_sequence=owner_mvp_cash_sessions.sequence),0) -
     COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
-      WHERE r.cash_sequence=owner_mvp_cash_sessions.sequence),0))`;
+      WHERE r.cash_sequence=owner_mvp_cash_sessions.sequence),0)${supplierCashLeg})`;
   let written,read;
   try{
     [written,read]=await DB.batch([
@@ -261,34 +269,37 @@ export async function closeOwnerCashSession(scope,{token,ownerSubject,operationI
 
 /** Existing source-shaped Cash Session summary: opening+current session cash in−out. */
 export async function readOwnerCashSession(DB){
-  // 0006 Shops may lack Sale Cash Book; 0007 Shops may lack Return Book.
-  const hasCash=await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
-    WHERE type='table' AND name='owner_mvp_sale_cash_book'`).first();
-  const hasRefund=hasCash && await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
-    WHERE type='table' AND name='owner_mvp_return_cash_book'`).first();
+  // Older Shops may predate Sale, Return, Supplier Pay and carried-count
+  // migrations. Read only the installed cash sources; never fabricate a
+  // historical cash receipt from an opening/Party/lender balance.
+  const sourceNames=[
+    'owner_mvp_sale_cash_book','owner_mvp_return_cash_book',
+    'owner_mvp_supplier_payment_cash_book'
+  ];
+  const present=await DB.prepare(`SELECT name FROM sqlite_schema
+    WHERE type='table' AND name IN (?,?,?)`).bind(...sourceNames).all();
+  if(present?.success!==true)throw Error('Cash Session source check unavailable');
+  const installed=new Set(present.results.map(row=>row.name));
   const hasCarry=await DB.prepare(`SELECT 1 AS present FROM pragma_table_info('owner_mvp_cash_sessions')
     WHERE name='carried_opening_paisa'`).first();
   const carryColumn=hasCarry?'s.carried_opening_paisa':'0';
-  const row=hasRefund?await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
+  const inSql=installed.has('owner_mvp_sale_cash_book')?
+    `COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
+      WHERE b.cash_sequence=s.sequence),0)`:'0';
+  const returnedSql=installed.has('owner_mvp_return_cash_book')?
+    `COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
+      WHERE r.cash_sequence=s.sequence),0)`:'0';
+  const supplierSql=installed.has('owner_mvp_supplier_payment_cash_book')?
+    `COALESCE((SELECT SUM(p.paid_paisa) FROM owner_mvp_supplier_payment_cash_book p
+      WHERE p.cash_sequence=s.sequence),0)`:'0';
+  const row=await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
     s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
-    COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
-      WHERE b.cash_sequence=s.sequence),0) AS inPaisa,
-    COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
-      WHERE r.cash_sequence=s.sequence),0) AS outPaisa
+    ${inSql} AS inPaisa,(${returnedSql}+${supplierSql}) AS outPaisa
     FROM owner_mvp_cash_sessions s WHERE s.status='Open'
-    ORDER BY s.sequence DESC LIMIT 1`).first():
-    hasCash?await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
-    s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
-    COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
-      WHERE b.cash_sequence=s.sequence),0) AS inPaisa,
-    0 AS outPaisa
-    FROM owner_mvp_cash_sessions s WHERE s.status='Open'
-    ORDER BY s.sequence DESC LIMIT 1`).first():
-    await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
-      s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
-      0 AS inPaisa,0 AS outPaisa
-      FROM owner_mvp_cash_sessions s WHERE s.status='Open'
-      ORDER BY sequence DESC LIMIT 1`).first();
+    ORDER BY s.sequence DESC LIMIT 1`).first();
+  if(row&&[row.openingPaisa,row.carriedPaisa,row.inPaisa,row.outPaisa]
+    .some(n=>!Number.isSafeInteger(n)||n<0))
+    throw Error('Cash Session money snapshot unavailable');
   return row?{
     sessionId:sourceId('CASH_SESSIONS',row.sequence),status:row.status,
     openedAt:new Date(row.startedMs).toISOString(),
