@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {OWNER_READY_SHOP_MIGRATION_PLAN} from '../../src/db/m03-owner-ready-shop-migrations.js';
-import {assessLiveOwnerPilot} from '../../scripts/m03-live-owner-readiness.mjs';
+import {assessLiveOwnerPilot,parseLiveOwnerArgs,extractShopEvidence} from '../../scripts/m03-live-owner-readiness.mjs';
 
 const dbId='00000000-0000-4000-8000-000000000201';
 const shopId='00000000-0000-4000-8000-000000000101';
@@ -92,4 +92,47 @@ test('a verified additive Supplier Cash schema is recognized but still needs hum
  assert.equal(report.productionReady,false);
  assert.ok(report.releaseChecks.includes('M10_M11_RESTORE_REHEARSAL_REQUIRED'));
  assert.ok(report.releaseChecks.includes('AUTHENTICATED_TWO_SHOP_E2E_REQUIRED'));
+});
+
+test('even a complete 0010/0011 overlay cannot silently invalidate the pinned 13-step seal',()=>{
+ const b=inputs();
+ const report=assessLiveOwnerPilot(inputs({shopChange:{
+   tables:[...b.shop.tables,'owner_mvp_supplier_cash_payment_receipts',
+     'owner_mvp_supplier_payment_cash_book'],
+   supplierCloseIncludesPayments:true,
+   baselineSealMatches:false
+ }}));
+ assert.equal(report.baseline13Verified,false);
+ assert.ok(report.blockers.includes('BASELINE_13_SCHEMA_SEAL_DRIFT'));
+ assert.equal(report.productionReady,false);
+});
+test('strict live arguments never permit user-provided SQL, shell options or a guessed Worker version',()=>{
+ assert.deepEqual(parseLiveOwnerArgs([
+   '--version','00000000-0000-4000-8000-000000000501',
+   '--shop-db','shererp-shop-001'
+ ]),{versionId:'00000000-0000-4000-8000-000000000501',
+   shopDbName:'shererp-shop-001'});
+ for(const args of [
+   ['--version','bad','--shop-db','shererp-shop-001'],
+   ['--version','00000000-0000-4000-8000-000000000501',
+     '--shop-db','shererp-shop-001;DROP TABLE shop_identity'],
+   ['--shop-db','shererp-shop-001'],
+   ['--version','00000000-0000-4000-8000-000000000501',
+     '--shop-db','--remote']
+ ])assert.throws(()=>parseLiveOwnerArgs(args));
+});
+test('ambiguous remote D1 reads fail closed, source SQL stays internal to the checker',()=>{
+ assert.throws(()=>extractShopEvidence({identity:[],receipts:[],seal:[],schema:[]}));
+ const evidence=extractShopEvidence({
+   identity:[inputs().shop.identity],receipts:inputs().shop.receipts,
+   seal:[{matches:1}],
+   schema:[
+     {name:'owner_mvp_supplier_cash_payment_receipts',type:'table',sql:'CREATE TABLE x'},
+     {name:'owner_mvp_cash_close_guard',type:'trigger',
+       sql:'CREATE TRIGGER owner_mvp_cash_close_guard ... owner_mvp_supplier_payment_cash_book'}
+   ]
+ });
+ assert.equal(evidence.supplierCloseIncludesPayments,true);
+ assert.equal(evidence.baselineSealMatches,true);
+ assert.ok(!('schema' in evidence));
 });
