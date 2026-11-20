@@ -107,6 +107,9 @@ button:disabled { opacity: .68; cursor: wait; }
   padding: 16px 0;
 }
 .support-mode h2 { margin: 0 0 8px; font-size: 17px; }
+.support-erp-open { display:block; padding:11px 12px; margin:12px 0 6px; border:1px solid var(--primary); border-radius:var(--control-radius); background:var(--primary); color:white; font-weight:600; text-align:center; text-decoration:none; }
+.support-erp-open[hidden] { display:none!important; }
+.support-erp-open:focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
 .support-mode p { overflow-wrap: anywhere; }
 #support-status { margin: 12px 0; font-size: 13px; }
 #support-diagnostics {
