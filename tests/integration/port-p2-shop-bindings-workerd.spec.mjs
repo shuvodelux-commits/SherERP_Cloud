@@ -198,6 +198,13 @@ test('interrupted migrations roll back late failure and resume exactly once on t
   assert.deepEqual(await readSentinel(a), aData);
   await a.prepare('DROP TRIGGER fixture_stop_receipt').run();
 
+  await a.prepare(`CREATE TRIGGER fixture_ignore_receipt BEFORE UPDATE OF schema_snapshot ON port_p2_shop_migrations
+    WHEN NEW.position=3 BEGIN SELECT RAISE(IGNORE); END`).run();
+  await assert.rejects(applyLocalShopMigrations(a, shops[0]), /MIGRATION_RECEIPT_NOT_SEALED/);
+  assert.deepEqual(await readReceipts(a), prefix);
+  assert.equal(await a.prepare("SELECT name FROM sqlite_schema WHERE name='legacy_product_snapshots'").first(), null);
+  await a.prepare('DROP TRIGGER fixture_ignore_receipt').run();
+
   await assert.rejects(applyLocalShopMigrations(a, shops[1]), /SHOP_IDENTITY_MISMATCH/);
   assert.deepEqual(await applyLocalShopMigrations(a, shops[0]), { applied: 1 });
   assert.deepEqual(await applyLocalShopMigrations(a, shops[0]), { applied: 0 });
