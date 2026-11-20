@@ -1,9 +1,9 @@
 # M02/M08 Financial Contract Run 1 — decisions and golden acceptance cases
 
-**Review date:** 2026-11-20 (Asia/Dhaka)  
-**Status:** **PROPOSAL FOR OWNER, M02 AND M08 SIGN-OFF — NOT APPROVED.**  
-**Base:** SherERP_Cloud `main@30d1020453046bbee0f195ad1691f8bee3e5eb00`; frozen Mohim_ERP `29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`.  
-**Issues:** [M02 #24](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/24), [M08 #66](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/66), [M03 #22](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/22), [Clean Shop #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690), [Coordination #456](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456).  
+**Review date:** 2026-11-20 (Asia/Dhaka)
+**Status:** **PROPOSAL FOR OWNER, M02 AND M08 SIGN-OFF — NOT APPROVED.**
+**Base:** SherERP_Cloud `main@30d1020453046bbee0f195ad1691f8bee3e5eb00`; frozen Mohim_ERP `29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`.
+**Issues:** [M02 #24](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/24), [M08 #66](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/66), [M03 #22](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/22), [Clean Shop #690](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/690), [Coordination #456](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456).
 **Scope:** Review frozen source and already-merged tests; give implementers unambiguous decision options and test vectors. **No operational decision, production SQL, permission or deployment is approved by this document.** Codex independently owns Tenant Control Center MVP Run 1.
 
 ## 1. Source evidence and limits (Super QA)
