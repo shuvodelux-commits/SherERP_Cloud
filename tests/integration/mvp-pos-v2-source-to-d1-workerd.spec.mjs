@@ -120,3 +120,45 @@ test('stale bank account or stale Cash Session denies synthetic D1 posting after
     assert.equal((await first(DB,'SELECT COUNT(*) AS n FROM m06_cash_book')).n,0);
   });
 });
+
+test('original default auto/negative one-unit cart posts against current synthetic D1 stock with trusted FIFO quote',async()=>{
+  await withDb(async DB=>{
+    const observed=await first(DB,"SELECT available FROM m06_owned_stock WHERE tenant_id='SHOP-A' AND sku='PIPE'");
+    assert.equal(observed.available,2);
+    const raw=cash();
+    raw.items=[{...item(),priceMode:'auto',shortageResolution:'negative'}];
+    // The effective quote below is fixture-provided. The eventual M03 Owner
+    // posting kernel must compute it from real source purchase lots, not UI.
+    const normalized=normalizeMvpPosV2SaleIntent({
+      context:context('DEFAULT'),payload:raw,accountRows,
+      trustedProduct:{productId:'PIPE',effectiveUnitPrice:'100.00',
+        effectiveLineTotal:'100.00',availableUnits:observed.available},
+    });
+    const posted=await createSyntheticD1SalePostingContract(DB).post(normalized);
+    assert.equal(posted.status,'COMMITTED');
+    assert.equal((await first(DB,"SELECT available FROM m06_owned_stock WHERE sku='PIPE'")).available,1);
+    assert.deepEqual(await all(DB,'SELECT credit_paisa FROM m06_cash_book'),[{credit_paisa:10000}]);
+  });
+});
+
+test('source default negative shortage cannot oversell on stale SQL state or spoof a FIFO quote',async()=>{
+  await withDb(async DB=>{
+    const raw=cash();
+    raw.items=[{...item(),priceMode:'auto',shortageResolution:'negative'}];
+    const trustedProduct={productId:'PIPE',effectiveUnitPrice:'100.00',
+      effectiveLineTotal:'100.00',availableUnits:2};
+    const normalized=normalizeMvpPosV2SaleIntent({
+      context:context('RACE'),payload:raw,accountRows,trustedProduct,
+    });
+    const engine=createSyntheticD1SalePostingContract(DB,{
+      beforeBatch:async()=>DB.prepare("UPDATE m06_owned_stock SET available=0 WHERE tenant_id='SHOP-A' AND sku='PIPE'").run(),
+    });
+    assert.equal((await engine.post(normalized)).status,'DECLINED');
+    assert.equal((await first(DB,'SELECT COUNT(*) AS n FROM m06_invoices')).n,0);
+    assert.equal((await first(DB,'SELECT COUNT(*) AS n FROM m06_cash_book')).n,0);
+    assert.throws(()=>normalizeMvpPosV2SaleIntent({
+      context:context('MISMATCH'),payload:raw,accountRows,
+      trustedProduct:{...trustedProduct,effectiveLineTotal:'100.01'},
+    }),/FIFO|line|price|mismatch/i);
+  });
+});
