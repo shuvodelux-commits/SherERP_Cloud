@@ -41,10 +41,10 @@ export async function readCleanOwnerCatalog(DB,{withMvpStock=false}={}){
   const stockJoin=withMvpStock?'LEFT JOIN owner_mvp_product_stock st ON st.product_id=products.product_id':'';
   const [scope,products,units,categories]=await DB.batch([
     DB.prepare(`SELECT (${CLEAN_PRODUCT_SOURCE}) AS clean, EXISTS(SELECT 1 FROM owner_product_create_receipts) AS hasReceipts`),
-    DB.prepare(`SELECT product_id AS productId,product_name AS name,brand_text AS brand,
+    DB.prepare(`SELECT products.product_id AS productId,product_name AS name,brand_text AS brand,
       category_name AS category,base_unit_name AS unit,selling_price_text AS listedPrice,
       purchase_price_text AS savedPurchasePrice,NULL AS stockAtBackup,${stockField}
-      FROM products ${stockJoin} WHERE is_deleted=0 ORDER BY product_name COLLATE NOCASE,product_id`),
+      FROM products ${stockJoin} WHERE products.is_deleted=0 ORDER BY products.product_name COLLATE NOCASE,products.product_id`),
     DB.prepare("SELECT DISTINCT unit_name AS name FROM product_units WHERE status='Active' ORDER BY name"),
     DB.prepare("SELECT DISTINCT category_name AS name FROM product_categories WHERE status='Active' ORDER BY name"),
   ]);
