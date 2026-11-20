@@ -283,7 +283,7 @@ const CURRENT_AUTH=`SELECT u.user_id FROM auth_sessions AS ses
      (u.role_name='Administrator' AND ses.role_auth_version IS NULL)
      OR (role.status='Active' AND role.auth_version=ses.role_auth_version
        AND CASE WHEN json_valid(role.permissions_json)
-         THEN json_type(role.permissions_json,'$.pos.add') END='true')
+         THEN json_type(role.permissions_json,'$.purchase.add') END='true')
    )`;
 const authorized=async(DB,shopId,cashSessionId,tokenHash,now)=>
   first(DB,CURRENT_AUTH+' LIMIT 1',shopId,cashSessionId,tokenHash,
