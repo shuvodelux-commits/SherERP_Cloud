@@ -141,7 +141,16 @@ test('original Cash Session topbar closes counted Sale–Return cash and reopens
     assert.equal(await readOwnerCashSession(a),null);
     assert.equal((await b.prepare('SELECT COUNT(*) AS n FROM owner_mvp_cash_sessions').first()).n,0);
 
+    // The original topbar calls GET summary first and only then the
+    // authorized opening suggestion. Prove both the real HTTP contract and
+    // the value eventually displayed in the existing editable input.
+    const openingResponsePromise=page.waitForResponse(response=>
+      new URL(response.url()).pathname==='/api/owner/cash-session/next-opening' &&
+      response.request().method()==='GET');
     await page.locator('#cashSessionToggleBtn').click();
+    const openingResponse=await openingResponsePromise;
+    assert.equal(openingResponse.status(),200);
+    assert.equal((await openingResponse.json()).data.openingCash,74.5);
     await page.waitForFunction(()=>Number(document.getElementById('posOpeningCash')?.value)===74.5);
     await page.locator('#posStartSessionBtn').click();
     await page.locator('#confirmActionModal:not([hidden])').waitFor();
