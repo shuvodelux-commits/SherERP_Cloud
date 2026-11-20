@@ -156,10 +156,12 @@ test('isolated first-Shop Owner HTTP lifecycle: product → supplier → purchas
     const ledger=await expectJson(ownerA,'/api/owner/suppliers/SUP-000001/ledger',200);
     assert.equal(ledger.data.scope,'purchase-credit-only');
     assert.equal(ledger.data.supplierId,'SUP-000001');
+    assert.equal(ledger.data.phone,'01712345678');
     assert.equal(ledger.data.currentDuePaisa,60000);
     assert.equal(ledger.data.entries.length,1);
     assert.equal(ledger.data.entries[0].reference,'PUR-000001');
     assert.equal(ledger.data.entries[0].debitPaisa,60000);
+    assert.equal(ledger.data.entries[0].balancePaisa,60000);
     assert.equal(ledger.data.hasMore,false);
     assert.equal((await request(ownerA,'/api/owner/suppliers/SUP-999999/ledger')).status,404);
     assert.equal((await request(ownerA,'/api/owner/suppliers/INVALID/ledger')).status,404);
@@ -204,6 +206,16 @@ test('isolated first-Shop Owner HTTP lifecycle: product → supplier → purchas
     assert.equal((await request(ownerB,'/api/owner/suppliers/SUP-000001/ledger')).status,404);
     assert.equal((await first(b,'SELECT COUNT(*) AS n FROM owner_mvp_sale_receipts')).n,0);
     assert.equal((await first(b,'SELECT COUNT(*) AS n FROM owner_mvp_sale_return_receipts')).n,0);
+    // The oldest displayed balance includes earlier purchases outside this page.
+    for(let i=0;i<50;i++){
+      await expectJson(ownerA,'/api/owner/purchases',201,purchase());
+    }
+    const page=(await expectJson(ownerA,'/api/owner/suppliers/SUP-000001/ledger',200)).data;
+    assert.equal(page.hasMore,true);
+    assert.equal(page.entries.length,50);
+    assert.equal(page.currentDuePaisa,51*60000);
+    assert.deepEqual(page.entries.map(row=>[row.reference,row.balancePaisa]),
+      Array.from({length:50},(_,i)=>['PUR-'+String(51-i).padStart(6,'0'),(51-i)*60000]));
   }finally{await close();}
 });
 

@@ -136,6 +136,23 @@ test('original POS checkout button and invoice renderer post ONE real saved D1 c
     assert.equal(restored.invoiceId,'INV-000001');
     assert.equal(restored.customerName,'Counter Buyer');
     assert.match(await page.evaluate(invoice=>renderInvoiceHtml_(invoice),restored),/INV-000001/);
+    // Reopen the supplier through the original action menu after reloading the Shop.
+    await page.locator('#navList .nav-item[aria-label="Suppliers"]').click();
+    const supplierRow=page.locator('#supTableBody tr').filter({hasText:'MVP Supplier'});
+    await supplierRow.getByRole('button',{name:/Actions/}).click();
+    await page.getByRole('menuitem',{name:'View',exact:true}).click();
+    await page.locator('#supDetailModal').waitFor({state:'visible'});
+    assert.match(await page.locator('#supDetailName').innerText(),/MVP Supplier/);
+    assert.equal(await page.locator('#supPaySaveBtn').isDisabled(),true);
+    assert.match(await page.locator('#supDetailModal').innerText(),/credit purchases only|purchase[- ]only|unpaid purchases only|purchase ledger only/i);
+    assert.match(await page.locator('#supDetailDue').innerText(),/600/);
+    const ledgerRow=page.locator('#supLedgerBody tr');
+    assert.equal(await ledgerRow.count(),1);
+    assert.equal(await ledgerRow.locator('td').nth(1).innerText(),'Purchase');
+    assert.equal(await ledgerRow.locator('td').nth(2).innerText(),'PUR-000001');
+    assert.match(await ledgerRow.locator('td').nth(3).innerText(),/600/);
+    assert.equal(await ledgerRow.locator('td').nth(4).innerText(),'');
+    assert.match(await ledgerRow.locator('td').nth(5).innerText(),/600/);
     assert.equal(errors.length,0,'original browser JS errors: '+errors.join(' | '));
   }finally{
     try{await browser?.close();}finally{

@@ -154,6 +154,22 @@ after(async()=>{
   if(outputDir)await rm(outputDir,{recursive:true,force:true});
 });
 
+test('Purchase screen reports unavailable data on a disabled route and an expired session on 401',async()=>{
+  const page=await browser.newPage();
+  try{
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
+    await page.locator('#navList .nav-item[aria-label="Purchases"]').waitFor();
+    for(const [status,message] of [[404,'Purchase data is unavailable.'],[401,'Your session expired. Sign in again.']]){
+      await page.route('**/api/owner/purchase/bootstrap',route=>
+        route.fulfill({status,contentType:'text/plain',body:'Not Found'}));
+      const error=await page.evaluate(()=>serverCall('getPurchaseBootstrap','').then(()=>null,e=>e.message));
+      assert.equal(error,message);
+      await page.unroute('**/api/owner/purchase/bootstrap');
+    }
+  }finally{await page.close();}
+});
+
 test('Owner Supplier screen lists and saves through the private API without public RPC',async()=>{
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];
