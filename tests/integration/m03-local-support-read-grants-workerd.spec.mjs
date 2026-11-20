@@ -45,7 +45,7 @@ async function localContext(t){
   const ONE_HASH=await hashOpaqueSessionToken(OTHER_SESSION);
   await db.batch([
     db.prepare('INSERT INTO platform_setup_tickets VALUES (?,?,?,?,?,?,NULL)')
-      .bind('a'.repeat(64),'b'.repeat(43),issuer,'fixture-admin',now-2000,now+600000),
+      .bind('a'.repeat(64),'b'.repeat(43),issuer,'fixture-admin',now-2000,now+598000),
     db.prepare('INSERT INTO platform_first_superadmin VALUES (1,?,?,?,?)')
       .bind(issuer,'fixture-admin','a'.repeat(64),now-1500),
     db.prepare('INSERT INTO platform_admin_auth VALUES (1,1,1)'),
