@@ -170,6 +170,44 @@ test('Purchase screen reports unavailable data on a disabled route and an expire
   }finally{await page.close();}
 });
 
+test('late supplier read cannot overwrite the selected supplier or enable settlement',async()=>{
+  const page=await browser.newPage();
+  try{
+    let firstRequest;
+    const pending=new Promise(resolve=>{firstRequest=resolve;});
+    const ledger=(id,name)=>({success:true,data:{scope:'purchase-credit-only',supplierId:id,
+      supplierName:name,phone:'',currentDuePaisa:1000,entries:[],hasMore:false}});
+    await page.route('**/SUP-000001/ledger',route=>firstRequest(route));
+    await page.route('**/SUP-000002/ledger',route=>route.fulfill({json:ledger('SUP-000002','Supplier B')}));
+    await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
+    await page.locator('#navList .nav-item[aria-label="Suppliers"]').click();
+    await page.evaluate(()=>supOpenDetail_('SUP-000001'));
+    const delayed=await pending;
+    await page.evaluate(()=>supOpenDetail_('SUP-000002'));
+    await page.locator('#supDetailModal:not([hidden])').waitFor();
+    await delayed.fulfill({json:ledger('SUP-000001','Supplier A')});
+    await page.waitForLoadState('networkidle');
+    assert.match(await page.locator('#supDetailName').innerText(),/Supplier B/);
+    await page.locator('#supPayAmount').evaluate(input=>{
+      input.value='1';
+      input.dispatchEvent(new Event('input'));
+    });
+    assert.ok(await page.locator('#supPaySettleFullBtn').isDisabled());
+  }finally{await page.close();}
+});
+
+test('supplier ledger rejects an amount the original currency formatter would round incorrectly',async()=>{
+  const page=await browser.newPage();
+  try{
+    await page.route('**/SUP-000001/ledger',route=>route.fulfill({json:{success:true,data:{
+      scope:'purchase-credit-only',supplierId:'SUP-000001',supplierName:'Test',phone:'',
+      currentDuePaisa:Number.MAX_SAFE_INTEGER,entries:[],hasMore:false
+    }}}));
+    await page.goto(url+'/app',{waitUntil:'domcontentloaded'});
+    await assert.rejects(page.evaluate(()=>serverCall('getSupplierDetail','','SUP-000001')),/cannot display/i);
+  }finally{await page.close();}
+});
+
 test('Owner Supplier screen lists and saves through the private API without public RPC',async()=>{
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];

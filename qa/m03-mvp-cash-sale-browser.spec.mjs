@@ -142,17 +142,21 @@ test('original POS checkout button and invoice renderer post ONE real saved D1 c
     await supplierRow.getByRole('button',{name:/Actions/}).click();
     await page.getByRole('menuitem',{name:'View',exact:true}).click();
     await page.locator('#supDetailModal').waitFor({state:'visible'});
-    assert.match(await page.locator('#supDetailName').innerText(),/MVP Supplier/);
+    assert.match(await page.locator('#supDetailName').innerText(),/MVP Supplier.*01712345678/);
+    const payAmount=page.locator('#supPayAmount');
+    if(await payAmount.isEnabled())await payAmount.fill('1');
     assert.equal(await page.locator('#supPaySaveBtn').isDisabled(),true);
+    assert.equal(await page.locator('#supPaySettleFullBtn').isDisabled(),true);
     assert.match(await page.locator('#supDetailModal').innerText(),/credit purchases only|purchase[- ]only|unpaid purchases only|purchase ledger only/i);
-    assert.match(await page.locator('#supDetailDue').innerText(),/600/);
+    const purchaseAmount=await page.evaluate(()=>formatMoney(600));
+    assert.equal(await page.locator('#supDetailDue').innerText(),'Credit '+purchaseAmount);
     const ledgerRow=page.locator('#supLedgerBody tr');
     assert.equal(await ledgerRow.count(),1);
     assert.equal(await ledgerRow.locator('td').nth(1).innerText(),'Purchase');
     assert.equal(await ledgerRow.locator('td').nth(2).innerText(),'PUR-000001');
-    assert.match(await ledgerRow.locator('td').nth(3).innerText(),/600/);
+    assert.equal(await ledgerRow.locator('td').nth(3).innerText(),purchaseAmount);
     assert.equal(await ledgerRow.locator('td').nth(4).innerText(),'');
-    assert.match(await ledgerRow.locator('td').nth(5).innerText(),/600/);
+    assert.equal(await ledgerRow.locator('td').nth(5).innerText(),purchaseAmount);
     assert.equal(errors.length,0,'original browser JS errors: '+errors.join(' | '));
   }finally{
     try{await browser?.close();}finally{

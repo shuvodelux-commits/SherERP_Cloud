@@ -6,6 +6,10 @@
 >
 > **Original source of business truth:** [Mohim_ERP](https://github.com/shuvodelux-commits/Mohim_ERP) at pinned `29aa4a5c7a7062a49e6bf4758beda3a8d62d9ff2`. Do not modify legacy GAS or its source data without a separate approved migration/cutover.
 
+## Issue #690 Owner ERP integration
+
+The [RPC inventory](docs/owner-mvp-rpc-matrix.md) covers the original screens and the Owner routes at the audit baseline. This batch connects Suppliers → Actions → View to the existing Shop-scoped purchase ledger. Its balance includes all posted credit purchases, and the modal displays up to 50 recent entries. Counter payments, broader Party statements, staff access and automatic multi-shop readiness still require integration and release verification.
+
 ## 20 November 2026 — hosted Admin first-run deployment handoff (newest)
 
 **Verified GitHub source:** `main@0b12f021fa3024ff09feff0aa82a63e62232b806`, including first-Admin browser setup PR #814 and hosted directory PR #813. Local Workerd/D1 first-run and Accessless auth regressions passed. These are **not** real Google/browser activation evidence.
