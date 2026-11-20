@@ -138,6 +138,26 @@ test('nondeployable Worker has no public RPC, Supplier creation or owner login',
   assert.equal(new Set(cfg.d1_databases.map(x=>x.database_id)).size,2);
   assert.equal(cfg.routes,undefined);
 });
+test('foreign Shop counter and Party master alone each reject D1 readback',async()=>{
+  // These independent cases did not appear in the original receipt/link-only audit.
+  await A.prepare('INSERT INTO synthetic_m03_id_counters(tenant_id,id_key,prefix,current_sequence) VALUES(?,?,?,?)')
+    .bind('SHOP-FOREIGN','SUPPLIERS','SUP',0).run();
+  try{
+    blocked(await inspect(),'FOREIGN_SHOP_D1_ROW');
+  }finally{
+    await A.prepare("DELETE FROM synthetic_m03_id_counters WHERE tenant_id='SHOP-FOREIGN'").run();
+  }
+  await A.prepare('INSERT INTO m02_test_supplier_parties(tenant_id,party_id,name) VALUES(?,?,?)')
+    .bind('SHOP-FOREIGN','PT-FOREIGN','TEST-ONLY PRIVATE').run();
+  try{
+    const report=await inspect();
+    blocked(report,'FOREIGN_SHOP_D1_ROW');
+    assert.doesNotMatch(JSON.stringify(report),/SHOP-FOREIGN|PT-FOREIGN|TEST-ONLY PRIVATE/);
+  }finally{
+    await A.prepare("DELETE FROM m02_test_supplier_parties WHERE tenant_id='SHOP-FOREIGN'").run();
+  }
+  assert.equal((await inspect()).syntheticReceiptShapeValid,true);
+});
 test('foreign-tenant receipt physically present in Shop A D1 blocks audit without leaking identity',async()=>{
   // Last test deliberately contaminates this disposable DB with an alien tenant.
   await A.prepare('INSERT INTO synthetic_m03_id_counters(tenant_id,id_key,prefix,current_sequence) VALUES (?,?,?,?)')
