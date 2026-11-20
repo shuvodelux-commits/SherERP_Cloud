@@ -4,10 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const installer = await import('../../scripts/port-p2-provisioning.mjs').catch(error => {
-  if (error.code !== 'ERR_MODULE_NOT_FOUND' || !error.url?.endsWith('/scripts/port-p2-provisioning.mjs')) throw error;
-  return {};
-});
+import { applyProvisioning, planProvisioning } from '../../scripts/port-p2-provisioning.mjs';
 
 const intent = {
   formatVersion: 1,
@@ -25,7 +22,6 @@ const initial = {
 };
 
 async function harness(t) {
-  assert.equal(typeof installer.planProvisioning, 'function', 'offline provisioning planner is missing');
   const journalDirectory = await mkdtemp(join(tmpdir(), 'shererp-port-journal-'));
   t.after(() => rm(journalDirectory, { recursive: true, force: true }));
   const snapshot = structuredClone(initial);
@@ -44,20 +40,20 @@ async function harness(t) {
     },
     async findCreation(action) { return receipts.get(action.attemptId); }
   };
-  const plan = installer.planProvisioning(intent, initial);
+  const plan = planProvisioning(intent, initial);
   const options = {
     journalDirectory, provider, approval: { digest: plan.digest, reference: 'fixture-approval' }
   };
   return {
     plan, provider, snapshot, creates, journalDirectory,
     apply: (override = {}, candidate = plan) =>
-      installer.applyProvisioning(candidate, { ...options, ...override })
+      applyProvisioning(candidate, { ...options, ...override })
   };
 }
 
 test('plans three distinct D1 creates and persists a no-op replay across invocations', async t => {
   const h = await harness(t);
-  assert.deepEqual(h.plan, installer.planProvisioning(structuredClone(intent), initial));
+  assert.deepEqual(h.plan, planProvisioning(structuredClone(intent), initial));
   assert.deepEqual(h.plan.actions.map(action => action.role), ['control', 'shop-a', 'shop-b']);
   assert.equal(new Set(h.plan.actions.map(action => action.name)).size, 3);
   const result = await h.apply();
@@ -70,7 +66,7 @@ test('plans three distinct D1 creates and persists a no-op replay across invocat
 
 test('checks approval, target, inventory and quota before a create', async t => {
   const h = await harness(t);
-  assert.throws(() => installer.planProvisioning(intent, { ...initial, complete: false }), /TARGET_MISMATCH/);
+  assert.throws(() => planProvisioning(intent, { ...initial, complete: false }), /TARGET_MISMATCH/);
   const tampered = structuredClone(h.plan);
   tampered.actions[0].name = 'foreign';
   await assert.rejects(h.apply({}, tampered), /INVALID_PLAN/);
@@ -137,7 +133,7 @@ test('blocks a duplicate invocation while the original outcome is unresolved', a
 test('refuses a different approved intent and detects drift after completion', async t => {
   const h = await harness(t);
   await h.apply();
-  const other = installer.planProvisioning({ ...intent, releaseSha: 'b'.repeat(40) }, initial);
+  const other = planProvisioning({ ...intent, releaseSha: 'b'.repeat(40) }, initial);
   await assert.rejects(h.apply({
     approval: { digest: other.digest, reference: 'second-approval' }
   }, other), /JOURNAL_CONFLICT/);
