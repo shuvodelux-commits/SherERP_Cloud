@@ -28,9 +28,9 @@ const fixture=()=>({
 });
 const adminD1=()=>({name:'CONTROL_DB',type:'d1',database_id:fixture().d1.control.id});
 const pilotD1=()=>({name:'PLATFORM_PILOT_DB',type:'d1',database_id:fixture().d1.pilot.id});
-const normalBinding=()=>({name:'OWNER_INGRESS',type:'ratelimit',namespace_id:'657080'});
+const normalBinding=()=>({name:'OWNER_INGRESS',type:'ratelimit',namespace_id:fixture().rateLimits.ownerNamespaceId,simple:{limit:20,period:60}});
 const goodWorkers=()=>({
-  admin:{bindings:[adminD1(),{name:'PLATFORM_INGRESS',type:'ratelimit',namespace_id:'657081'}]},
+  admin:{bindings:[adminD1(),{name:'PLATFORM_INGRESS',type:'ratelimit',namespace_id:fixture().rateLimits.adminNamespaceId,simple:{limit:20,period:60}}]},
   owner:{bindings:[adminD1(),pilotD1(),normalBinding()]}
 });
 const resources=()=>({
@@ -100,7 +100,7 @@ test('hosted preflight makes six Cloudflare GETs, proves exact Worker D1 binding
   assert.equal(output.migrationFilesVerified,true);
   assert.deepEqual(output.verified,[
     'cloudflare-account','workers-subdomain','control-d1','pilot-d1',
-    'admin-worker-d1-bindings','owner-worker-d1-bindings','owner-ready-migration-files'
+    'admin-worker-d1-bindings','owner-worker-d1-bindings','private-worker-ingress-limits','owner-ready-migration-files'
   ]);
   assert.equal(output.resourceVerification,'verified');
   for(const flag of ['allowCreateDatabase','allowRemoteWrites','allowRemoteMigrations','allowDeploy','allowOwnerActivation'])
@@ -161,6 +161,19 @@ test('invalid portable instance and token stop before HTTP; failure never leaks 
       assert.match(error.message,/Hosted Control Center preflight denied/);
       assert.doesNotMatch(error.message,/private network failure|DO_NOT_PRINT|0123456789abcdef/);
       assert.ok(fake.calls.every(x=>x.init.method==='GET'));
+    }
+  }
+});
+
+test('hosted preflight requires the configured ingress limiter on each private Worker',async()=>{
+  for(const role of ['admin','owner']){
+    for(const change of [null,{type:'plain_text'},{namespace_id:'999'},{simple:{limit:2000,period:60}},{simple:{limit:20,period:10}}]){
+      const values=resources();
+      const limiter=values[role].bindings.pop();
+      if(change)values[role].bindings.push({...limiter,...change});
+      const {fetchFn}=simulatedCloudflare(values);
+      await assert.rejects(()=>verifyHostedControlCenterReadOnly(fixture(),{token:secret,fetchFn}),
+        /Hosted Control Center preflight denied/);
     }
   }
 });

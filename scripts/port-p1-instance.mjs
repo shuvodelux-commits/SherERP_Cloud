@@ -16,7 +16,7 @@ const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}
 const SLUG=/^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const DB_NAME=/^[a-z](?:[a-z0-9_-]{0,61}[a-z0-9])?$/;
 const GOOGLE_CLIENT=/^[a-zA-Z0-9-]{1,218}\.apps\.googleusercontent\.com$/;
-const NAMESPACE=/^[0-9]{1,16}$/;
+const NAMESPACE=/^[1-9][0-9]{0,15}$/;
 const invalid=()=>{throw new TypeError('Invalid portable instance manifest (no values printed)');};
 
 function record(x,keys){
@@ -46,6 +46,7 @@ export function validatePortableInstance(input){
   const w=record(p.workers,['admin','owner']);
   const names=[testStr(w.admin,SLUG),testStr(w.owner,SLUG)];
   distinct(names);
+  if(names.includes('hisabiq'))invalid();
   const o=record(p.origins,['admin','owner']);
   if(o.admin!==expectedOrigin(w.admin,subdomain) ||
     o.owner!==expectedOrigin(w.owner,subdomain))invalid();

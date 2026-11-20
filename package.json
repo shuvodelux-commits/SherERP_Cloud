@@ -12,6 +12,7 @@
     "docs:check": "node scripts/check-project-docs.mjs",
     "build:frontend:raw": "node scripts/build-frontend.mjs legacy/source dist",
     "build:frontend": "npm run build:frontend:raw && node scripts/patch-rpc.mjs dist/index.html && node scripts/patch-auth-shell.mjs dist/index.html && node scripts/patch-posv2-visibility.mjs dist/index.html && node scripts/patch-m01-a11y.mjs dist/index.html && node scripts/patch-m01-products-preview.mjs dist/index.html",
+    "rehearse:private-bundles": "node scripts/port-p1-instance.mjs --generate tests/fixtures/portable-instance.json && npm run build:owner-frontend && npx --yes wrangler@4.161.0 deploy --dry-run --config .wrangler/portable-instance/admin.generated.jsonc && npx --yes wrangler@4.161.0 deploy --dry-run --config .wrangler/portable-instance/owner.generated.jsonc",
     "build:owner-frontend": "node scripts/build-owner-frontend.mjs",
     "inventory:schema": "node scripts/inventory-schema.mjs legacy/source/Config.gs",
     "catalog:dry-run": "node scripts/dry-run-catalog.mjs",
