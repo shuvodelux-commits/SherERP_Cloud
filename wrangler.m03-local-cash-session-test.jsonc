@@ -1,0 +1,12 @@
+{
+  "name": "shererp-m03-cash-session-local-only",
+  "main": "tests/fixtures/m03-local-cash-session-worker.mjs",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shererp-m03-cash-session-disposable",
+    "database_id": "00000000-0000-0000-0000-000000000083",
+    "migrations_dir": "tests/fixtures/m04-auth-migrations"
+  }]
+}
