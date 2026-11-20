@@ -2,26 +2,36 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { createTestHarness, unstable_splitSqlQuery } from 'wrangler';
+import platform from '../../src/m03-private-platform-auth-worker.js';
+import { applyLocalShopMigrations, shopMigrationPlan } from '../fixtures/port-p2-local-shop-migrations.mjs';
 import { hashOpaqueSessionToken } from '../../src/auth/session-token.js';
 
 const origin = 'https://platform.example.test';
 const issuer = 'https://accounts.google.com';
 
 async function startControlCenter(t) {
+  const config = JSON.parse(await readFile('wrangler.m03-platform-auth-local-test.jsonc', 'utf8'));
+  const inventory = ['SHOP_A_DB', 'SHOP_B_DB'].map(binding => ({ binding, id: crypto.randomUUID() }));
+  for (const { binding, id } of inventory) {
+    config.d1_databases.push({ binding, database_id: id, database_name: binding.toLowerCase(), remote: false });
+  }
   const server = createTestHarness({ workers: [{
-    configPath: './wrangler.m03-platform-auth-local-test.jsonc',
-    vars: {
+    config: { ...config, vars: { ...config.vars,
       PLATFORM_SHOP_RESERVATION_ENABLED: 'true',
-      PLATFORM_LOCAL_PROVISIONING_ENABLED: 'true',
-    },
+      PLATFORM_LOCAL_PROVISIONING_ENABLED: 'true', PLATFORM_LOCAL_SHOP_INVENTORY: inventory,
+    } },
   }] });
   t.after(() => server.close());
   await server.listen();
   const worker = server.getWorker('shererp-m03-platform-auth-local-test');
   await worker.applyD1Migrations('CONTROL_DB');
-  const { CONTROL_DB: db } = await worker.getEnv();
-  const sql = await readFile('staging-migrations/platform-onboarding/0001_shop_reservations.sql', 'utf8');
-  await db.batch(unstable_splitSqlQuery(sql).map(statement => db.prepare(statement)));
+  const env = await worker.getEnv();
+  const db = env.CONTROL_DB;
+  for (const name of ['0001_shop_reservations', '0002_shop_bindings', '0003_owner_invitations', '0004_first_shop_owner', '0007_owner_gmail_approvals',
+    '0011_control_center_provisioning']) {
+    const sql = await readFile(`staging-migrations/platform-onboarding/${name}.sql`, 'utf8');
+    await db.batch(unstable_splitSqlQuery(sql).map(statement => db.prepare(statement)));
+  }
 
   const token = '1'.repeat(64);
   const setupHash = 'a'.repeat(64);
@@ -41,15 +51,17 @@ async function startControlCenter(t) {
       VALUES (?,?,1,1,1,?,?)`).bind(await hashOpaqueSessionToken(token), browserHash, now - 100, now + 60000),
   ]);
 
-  async function request(path, body) {
-    const headers = { Cookie: '__Host-shererp-platform-session=' + token };
-    return worker.fetch(origin + '/api/platform' + path, body ? {
+  function request(path, body, bindings, session = token) {
+    const headers = { Cookie: '__Host-shererp-platform-session=' + session };
+    const url = origin + '/api/platform' + path;
+    const init = body ? {
       method: 'POST',
       headers: { ...headers, Origin: origin, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    } : { headers });
+    } : { headers };
+    return bindings ? platform.request(url, init, { ...env, ...bindings }) : worker.fetch(url, init);
   }
-  return { request, db };
+  return { request, db, env, inventory };
 }
 
 test('Create Business accepts the Owner Gmail and keeps one operation across retries', async t => {
@@ -63,10 +75,12 @@ test('Create Business accepts the Owner Gmail and keeps one operation across ret
     displayName: 'Paper & Tools',
     ownerEmail: 'fixture.owner@gmail.com',
   };
-  const response = await request('/shops', input);
+  const [response, concurrent] = await Promise.all([request('/shops', input), request('/shops', input)]);
   assert.ok([200, 201, 202].includes(response.status),
     `a valid business name and Gmail must start durable setup, got ${response.status}`);
   const first = await response.json();
+  assert.ok(concurrent.ok);
+  assert.equal((await concurrent.json()).shopId, first.shopId);
   assert.equal(first.operationId, input.operationId);
   assert.equal(typeof first.shopId, 'string');
   assert.equal(typeof first.status, 'string');
@@ -77,4 +91,107 @@ test('Create Business accepts the Owner Gmail and keeps one operation across ret
   assert.equal(conflict.status, 409);
   const { count } = await db.prepare('SELECT count(*) AS count FROM platform_shop_reservations').first();
   assert.equal(count, 1);
+  await assert.rejects(db.prepare(`INSERT OR REPLACE INTO platform_shop_provisioning
+    (shop_id,owner_email,database_marker,stage) VALUES (?,?,?,'reserved')`)
+    .bind(first.shopId, 'other.owner@gmail.com', crypto.randomUUID()).run(), /already exists/);
+});
+
+
+test('Resume reconciles an interrupted create and verifies two disposable Shop databases', async t => {
+  const { request, db, env, inventory } = await startControlCenter(t);
+  const receipts = new Map();
+  const calls = { create: 0, migrate: 0 };
+  let revokeBeforeReady = false;
+  const createStarted = Promise.withResolvers();
+  const releaseCreate = Promise.withResolvers();
+  const bindings = {
+    PLATFORM_LOCAL_SHOP_INVENTORY: inventory,
+    PLATFORM_LOCAL_SHOP_MIGRATIONS: shopMigrationPlan,
+    PLATFORM_LOCAL_SHOP_PROVIDER: {
+      async createDatabase(action) {
+        const target = inventory[calls.create++];
+        const first = calls.create === 1;
+        if (first) {
+          createStarted.resolve();
+          await releaseCreate.promise;
+        }
+        const receipt = { ...action, id: target.id, binding: target.binding, evidenceRef: 'fixture-allocated' };
+        receipts.set(action.attemptId, receipt);
+        if (first) throw new Error('response lost after allocation');
+        return receipt;
+      },
+      async findCreation(action) { return receipts.get(action.attemptId); },
+      async verifyTarget(scope, candidate) {
+        return inventory.some(item => item.id === scope.databaseId && item.binding === scope.binding) &&
+          candidate === env[scope.binding];
+      },
+      async prepareShop(scope) {
+        calls.migrate++;
+        await applyLocalShopMigrations(env[scope.binding], scope);
+        if (revokeBeforeReady) await db.prepare('UPDATE platform_admin_sessions SET revoked_at_ms=?').bind(Date.now()).run();
+      },
+    },
+  };
+  const start = async (displayName, ownerEmail) => {
+    const input = { operationId: crypto.randomUUID(), displayName, ownerEmail };
+    const result = await request('/shops', input, bindings);
+    assert.equal(result.status, 202);
+    return input;
+  };
+  const resume = (input, envBindings = bindings, token) => request('/shops/resume',
+    { operationId: input.operationId }, envBindings, token);
+  const approvals = async () => (await db.prepare('SELECT * FROM platform_owner_gmail_approvals ORDER BY shop_id').all()).results;
+
+  const bad = await request('/shops', { operationId: crypto.randomUUID(), displayName: 'Invalid',
+    ownerEmail: 'fixture@example.com' }, bindings);
+  assert.equal(bad.status, 400);
+
+  const a = await start('Shop A', 'fixture.a@gmail.com');
+  assert.equal((await resume(a, bindings, '0'.repeat(64))).status, 401);
+  assert.deepEqual(calls, { create: 0, migrate: 0 });
+  const creating = resume(a);
+  await Promise.race([creating, createStarted.promise]);
+  try {
+    const pending = await (await resume(a)).json();
+    assert.equal(pending.failedStage, 'database-creation');
+    assert.equal(calls.create, 1);
+  } finally {
+    releaseCreate.resolve();
+  }
+  const interrupted = await (await creating).json();
+  assert.equal(interrupted.failedStage, 'database-creation');
+  const status = await (await request('/shops/setup/' + a.operationId, null, bindings)).json();
+  assert.deepEqual(status, interrupted);
+  assert.equal((await approvals()).length, 0);
+  const swapped = { ...bindings, PLATFORM_LOCAL_SHOP_INVENTORY: inventory.map((item, index) =>
+    ({ binding: item.binding, id: inventory[1 - index].id })),
+    SHOP_A_DB: env.SHOP_B_DB, SHOP_B_DB: env.SHOP_A_DB };
+  const mismatch = await (await resume(a, swapped)).json();
+  assert.equal(mismatch.failedStage, 'binding-verification');
+  assert.equal(calls.migrate, 0);
+  const wrongBlank = { ...bindings, SHOP_A_DB: env.SHOP_B_DB };
+  assert.equal((await (await resume(a, wrongBlank)).json()).failedStage, 'binding-verification');
+  assert.equal(calls.migrate, 0, 'no DDL should run when only the actual blank binding is swapped');
+  await db.prepare(`CREATE TRIGGER fixture_skip_ready BEFORE UPDATE OF stage ON platform_shop_provisioning
+    WHEN NEW.stage='ready' BEGIN SELECT RAISE(IGNORE); END`).run();
+  assert.equal((await (await resume(a)).json()).failedStage, 'owner-readiness');
+  assert.equal((await approvals()).length, 0);
+  assert.equal(await db.prepare('SELECT count(*) AS n FROM platform_shop_bindings').first('n'), 0);
+  await db.prepare('DROP TRIGGER fixture_skip_ready').run();
+  const readyA = await (await resume(a)).json();
+  assert.equal(readyA.status, 'ready');
+  const once = await approvals();
+  assert.equal(once.length, 1);
+  assert.deepEqual(await (await resume(a)).json(), readyA);
+  assert.deepEqual(await approvals(), once);
+  assert.deepEqual(calls, { create: 1, migrate: 2 });
+
+  const b = await start('Shop B', 'fixture.b@gmail.com');
+  revokeBeforeReady = true;
+  assert.equal((await resume(b)).status, 401);
+  assert.deepEqual(await approvals(), once);
+  const aIdentity = await env.SHOP_A_DB.prepare('SELECT shop_id FROM shop_identity').first('shop_id');
+  const bIdentity = await env.SHOP_B_DB.prepare('SELECT shop_id FROM shop_identity').first('shop_id');
+  assert.equal(aIdentity, readyA.shopId);
+  assert.notEqual(aIdentity, bIdentity);
 });

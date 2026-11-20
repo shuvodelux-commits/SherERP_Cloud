@@ -12,6 +12,7 @@ import {reservePlatformShop} from './auth/platform-shop-reservations.js';
 import {pilotShopConfiguration,verifyPlatformShopBinding} from './auth/platform-shop-binding.js';
 import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js';
 
+import {readLocalProvisioning,resumeLocalProvisioning,startLocalProvisioning} from './auth/port-p4-local-provisioning.js';
 import {approvePlatformOwnerGmail} from './auth/platform-owner-gmail-approvals.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
@@ -133,12 +134,22 @@ app.post('/api/platform/auth/challenge',limitIngress,async c=>{
   return c.json({clientId:c.env.PLATFORM_CLIENT_ID,nonce});
 });
 
+function localProvisioningEnabled(env){
+  return env.PLATFORM_SHOP_RESERVATION_ENABLED==='true' &&
+    env.PLATFORM_LOCAL_PROVISIONING_ENABLED==='true' &&
+    Array.isArray(env.PLATFORM_LOCAL_SHOP_INVENTORY) &&
+    env.PLATFORM_LOCAL_SHOP_INVENTORY.length>0 &&
+    env.PLATFORM_LOCAL_SHOP_INVENTORY.every(item=>typeof env[item.binding]?.prepare==='function');
+}
+
 function signedIn(c){
   const gmailMode=c.env.PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED==='true';
   const gmailShop=gmailMode?pilotShopConfiguration(c.env):null;
   const invitationShop=!gmailMode&&c.env.PLATFORM_OWNER_INVITATION_ENABLED==='true'?pilotShopConfiguration(c.env):null;
   return c.json({
     role:'PlatformSuperAdmin',
+    ...(localProvisioningEnabled(c.env)
+      ?{localProvisioningEnabled:true}:{}),
     ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'?{shopReservationEnabled:true}:{}),
     ...(invitationShop?{ownerInvitationShopId:invitationShop.shopId}:{}),
     ...(gmailShop?{ownerGmailApprovalShopId:gmailShop.shopId}:{}),
@@ -180,6 +191,11 @@ app.post('/api/platform/shops',async(c,next)=>{
   if(c.env.PLATFORM_SHOP_RESERVATION_ENABLED!=='true')return c.notFound();
   await next();
 },limitIngress,limitBody,async c=>{
+  if(localProvisioningEnabled(c.env)){
+    const body=await expectedJson(c,['operationId','displayName','ownerEmail']);
+    if(!body)return c.json({error:'Enter a business name and Owner Gmail'},400);
+    return localProvisioningResponse(c,await startLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),body));
+  }
   const body=await expectedJson(c,['operationId','displayName']);
   if(!body)return c.json({error:'Invalid business reservation'},400);
   const result=await reservePlatformShop(c.env.CONTROL_DB,{
@@ -189,6 +205,30 @@ app.post('/api/platform/shops',async(c,next)=>{
   if(result.status==='denied')return denied(c);
   if(result.status==='conflict')return c.json({error:'Reservation request conflicts'},409);
   return c.json(result.reservation,result.status==='created'?201:200);
+});
+
+function localProvisioningResponse(c,result){
+  if(result.body)return c.json(result.body,result.code);
+  if(result.code===401)return denied(c);
+  if(result.code===409)return c.json({error:'Business setup request conflicts'},409);
+  if(result.code===400)return c.json({error:'Check the business name, Gmail, or setup request'},400);
+  return unavailable(c);
+}
+
+async function localProvisioningGate(c,next){
+  if(!localProvisioningEnabled(c.env)){
+    return c.notFound();
+  }
+  await next();
+}
+
+app.get('/api/platform/shops/setup/:operationId',localProvisioningGate,async c=>
+  localProvisioningResponse(c,await readLocalProvisioning(c.env.CONTROL_DB,getCookie(c,SESSION_COOKIE),
+    c.req.param('operationId'))));
+app.post('/api/platform/shops/resume',localProvisioningGate,limitIngress,limitBody,async c=>{
+  const body=await expectedJson(c,['operationId']);
+  if(!body)return c.json({error:'Invalid setup request'},400);
+  return localProvisioningResponse(c,await resumeLocalProvisioning(c.env,getCookie(c,SESSION_COOKIE),body.operationId));
 });
 
 app.post('/api/platform/shops/verify-binding',async(c,next)=>{
