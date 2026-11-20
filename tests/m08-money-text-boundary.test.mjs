@@ -163,3 +163,16 @@ test('300 deterministic split-payment cases conserve exact integer paisa and rem
       s+BigInt(p.tenderedPaisa)-BigInt(p.appliedPaisa),0n),expectedChange);
   }
 });
+
+test('every accepted tender leg retains its exact original instruction after source normalization',()=>{
+  const intents=Object.freeze([
+    Object.freeze({id:'BANK-1',method:'Bank',amount:'0.25',accountId:'BANK-A'}),
+    Object.freeze({id:'CASH-1',method:'Cash',amount:'0.50'})
+  ]);
+  const result=check('67',intents);
+  const sourceById=new Map(intents.map(row=>[row.id,bdtTextToMinorPaisa(row.amount)]));
+  for(const leg of result.legs){
+    assert.equal(leg.tenderedPaisa,sourceById.get(leg.rowId));
+  }
+  assert.equal(result.cashChangePaisa,'8');
+});
