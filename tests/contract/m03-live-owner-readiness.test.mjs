@@ -94,6 +94,47 @@ test('a verified additive Supplier Cash schema is recognized but still needs hum
  assert.ok(report.releaseChecks.includes('AUTHENTICATED_TWO_SHOP_E2E_REQUIRED'));
 });
 
+test('complete independently pinned Supplier Cash overlay preserves the 13 original receipts',()=>{
+ const configured=Object.fromEntries(Object.keys(flags).map(k=>[k,'true']));
+ const baseline=inputs();
+ const report=assessLiveOwnerPilot(inputs({
+   change:{...configured,OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED:'true'},
+   shopChange:{
+     baselineSealMatches:false,approvedSupplierOverlayVerified:true,
+     tables:[...baseline.shop.tables,'owner_mvp_supplier_cash_payment_receipts',
+       'owner_mvp_supplier_payment_cash_book'],
+     triggers:['owner_mvp_cash_close_guard','owner_mvp_cash_return_drawer_guard'],
+     supplierCloseIncludesPayments:true
+   }
+ }));
+ assert.equal(report.baseline13Verified,true,
+   'a cryptographically pinned additive overlay must not invalidate all 13 receipts');
+ assert.equal(report.approvedSupplierOverlayVerified,true);
+ assert.ok(!report.blockers.includes('BASELINE_13_SCHEMA_SEAL_DRIFT'));
+ assert.equal(report.supplierCashConfigured,true);
+ assert.equal(report.productionReady,false,'diagnostics never grant release approval');
+});
+
+test('an unverified, partial or missing Supplier Cash overlay cannot bypass baseline drift',()=>{
+ const baseline=inputs();
+ for(const sample of [
+   {approvedSupplierOverlayVerified:false,baselineSealMatches:false,
+     supplierCloseIncludesPayments:true},
+   {approvedSupplierOverlayVerified:true,baselineSealMatches:false,
+     supplierCloseIncludesPayments:false},
+   {approvedSupplierOverlayVerified:true,baselineSealMatches:false,
+     supplierCloseIncludesPayments:true,triggers:['owner_mvp_supplier_cash_pending_close']}
+ ]){
+   const report=assessLiveOwnerPilot(inputs({shopChange:{
+     ...sample,tables:[...baseline.shop.tables,'owner_mvp_supplier_cash_payment_receipts',
+       'owner_mvp_supplier_payment_cash_book']
+   }}));
+   assert.equal(report.baseline13Verified,false);
+   assert.ok(report.blockers.includes('BASELINE_13_SCHEMA_SEAL_DRIFT'));
+   assert.equal(report.productionReady,false);
+ }
+});
+
 test('even a complete 0010/0011 overlay cannot silently invalidate the pinned 13-step seal',()=>{
  const b=inputs();
  const report=assessLiveOwnerPilot(inputs({shopChange:{

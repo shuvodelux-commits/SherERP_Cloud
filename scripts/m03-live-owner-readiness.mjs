@@ -7,6 +7,8 @@ import {execFileSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {OWNER_READY_SHOP_MIGRATION_PLAN} from '../src/db/m03-owner-ready-shop-migrations.js';
+import {matchesApprovedSupplierCashSchemaOverlay}
+  from '../src/db/m03-approved-supplier-overlay.js';
 
 const requiredFlags=[
   'OWNER_CATALOG_ENABLED','OWNER_CLEAN_PRODUCTS_ENABLED',
@@ -68,9 +70,7 @@ export function assessLiveOwnerPilot({version,shop}={}){
     str(tuple.database_id)===str(db?.id)&&
     new Set([tuple.shop_id,tuple.database_id,tuple.database_marker]).size===3;
   mark(!shopIdentityVerified,'SHOP_IDENTITY_MISMATCH');
-  const baseline13Verified=checkReceipts(shop?.receipts)&&shop?.baselineSealMatches===true;
-  mark(!checkReceipts(shop?.receipts),'BASELINE_13_RECEIPTS_INVALID');
-  mark(shop?.baselineSealMatches!==true,'BASELINE_13_SCHEMA_SEAL_DRIFT');
+  const receiptsVerified=checkReceipts(shop?.receipts);
   const tables=new Set(Array.isArray(shop?.tables)?shop.tables:[]);
   const allCoreTables=coreTables.every(table=>tables.has(table));
   mark(!allCoreTables,'CORE_SHOP_SCHEMA_INCOMPLETE');
@@ -83,6 +83,16 @@ export function assessLiveOwnerPilot({version,shop}={}){
     shop.triggers.includes('owner_mvp_cash_close_guard') &&
     !shop.triggers.includes('owner_mvp_supplier_cash_pending_close');
   mark(!supplierSqlReady,'SUPPLIER_CASH_RECONCILIATION_0011_MISSING');
+  // Keep the 13 receipts immutable. The separately reviewed Supplier Cash
+  // 0010+0011 overlay is allowed only after an exact pinned-SQL verifier
+  // has checked every schema object against the original receipt snapshot.
+  const approvedSupplierOverlayVerified=
+    shop?.approvedSupplierOverlayVerified===true && supplierSqlReady;
+  const sealVerified=shop?.baselineSealMatches===true||
+    approvedSupplierOverlayVerified;
+  const baseline13Verified=receiptsVerified&&sealVerified;
+  mark(!receiptsVerified,'BASELINE_13_RECEIPTS_INVALID');
+  mark(!sealVerified,'BASELINE_13_SCHEMA_SEAL_DRIFT');
   mark(!hasFlag(b,'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED'),
     'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED_DISABLED');
   const base=ownerEnabled&&dashboardEnabled&&shopIdentityVerified&&
@@ -100,7 +110,7 @@ export function assessLiveOwnerPilot({version,shop}={}){
     productionReady:false,
     authConfigured:ownerEnabled&&dashboardEnabled,
     shopIdentityVerified,
-    baseline13Verified,
+    baseline13Verified,approvedSupplierOverlayVerified,
     coreReadConfigured,coreWriteConfigured,supplierCashConfigured,
     blockers:Object.freeze(blockers),
     releaseChecks:Object.freeze([...releaseChecks])
@@ -117,6 +127,15 @@ const SQL=Object.freeze({
        WHERE name NOT GLOB 'sqlite_*' AND tbl_name<>'port_p2_shop_migrations'
        ORDER BY type,name)) THEN 1 ELSE 0 END AS matches`,
  schema:"SELECT name,type,sql FROM sqlite_schema WHERE type IN ('table','trigger')"
+});
+// Snapshot queries are SELECT-only and called only after the pinned
+// baseline seal differs. Never upload SQL text or identity into the report.
+const OVERLAY_SQL=Object.freeze({
+ baseline:"SELECT schema_snapshot FROM port_p2_shop_migrations WHERE position=13",
+ current:`SELECT json_group_array(json_array(type,name,tbl_name,sql)) AS schema_snapshot
+   FROM (SELECT type,name,tbl_name,sql FROM sqlite_schema
+     WHERE name NOT GLOB 'sqlite_*' AND tbl_name<>'port_p2_shop_migrations'
+     ORDER BY type,name)`
 });
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const namePattern=/^[a-z0-9][a-z0-9_-]{0,62}$/;
@@ -159,9 +178,18 @@ async function main(){
   const evidence=Object.fromEntries(Object.entries(SQL).map(([key,sql])=>[
     key,d1Read(shopDbName,sql)
   ]));
-  const report=assessLiveOwnerPilot({
-    version,shop:extractShopEvidence(evidence)
-  });
+  const shop=extractShopEvidence(evidence);
+  if(!shop.baselineSealMatches&&shop.supplierCloseIncludesPayments&&
+    shop.tables.includes('owner_mvp_supplier_cash_payment_receipts')&&
+    shop.tables.includes('owner_mvp_supplier_payment_cash_book')){
+    const before=d1Read(shopDbName,OVERLAY_SQL.baseline);
+    const after=d1Read(shopDbName,OVERLAY_SQL.current);
+    if(before.length!==1||after.length!==1)
+      throw Error('Shop schema overlay snapshot unavailable');
+    shop.approvedSupplierOverlayVerified=await matchesApprovedSupplierCashSchemaOverlay(
+      before[0].schema_snapshot,after[0].schema_snapshot);
+  }
+  const report=assessLiveOwnerPilot({version,shop});
   process.stdout.write(JSON.stringify(report,null,2)+'\n');
   if(report.status==='BLOCKED')process.exitCode=2;
 }
