@@ -43,7 +43,8 @@ test('all actual Cash In/Cash Out categories contribute exactly once, with exact
   assert.equal(result.actualCashEntries,14);
   assert.equal(result.excludedHistoricalEntries,0);
   assert.equal(result.excludedSyntheticEntries,0);
-  assert.equal(result.closeReady,true);
+  assert.equal(result.closeReady,false);
+  assert.equal(result.arithmeticValidated,true);
   assert.equal(result.productionReady,false);
   assert.equal(result.authorizesPosting,false);
   assert.equal(result.authorizesRemoteD1Write,false);
@@ -162,7 +163,8 @@ test('immutable projection, counted cash optional and no fabricated posting or c
   assert.equal(r.expectedPaisa,10010);
   assert.equal(r.countedPaisa,null);
   assert.equal(r.variancePaisa,null);
-  assert.equal(r.closeReady,true);
+  assert.equal(r.closeReady,false);
+  assert.equal(r.arithmeticValidated,true);
   assert.equal(Object.isFrozen(r),true);
   assert.equal(Object.isFrozen(rows[0]),true);
   assert.doesNotMatch(JSON.stringify(r),/PRD-|SUP-|017\\d+|Customer Name|Owner Subject/);
