@@ -1,0 +1,29 @@
+name: M04 SQL-time Cash Session authority Workerd (local-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  synthetic-cash-session-d1:
+    name: Verify synthetic staff, tenant and Cash Session SQL authority in Workerd
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned disposable Workerd test runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Run M04 isolated authority and Cash Session real local D1 suite
+        run: node --test tests/integration/m04-atomic-authority-workerd.spec.mjs

@@ -1,6 +1,7 @@
 import {before,after,beforeEach,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {createSyntheticM04CashAuthorityProbe} from '../fixtures/m04-cash-session-authority-probe.mjs';
 import {readFileSync} from 'node:fs';
 import {createTestHarness} from 'wrangler';
 import {createSyntheticAuthorizedD1Mutation} from '../fixtures/m04-atomic-authority.mjs';
@@ -218,4 +219,71 @@ test('user status disabled then restored cannot revive an earlier session if wri
   assert.ok(newVersion>originalVersion,'D1 trigger must invalidate previous user authority version on status changes');
   await assert.rejects(()=>writer.decrement_(params()),/refus|denied/i);
   assert.deepEqual(await stock(),original);
+});
+
+
+test('M04 SQL-time Cash Session gate: tenant, actor, role, open session, replay and rollback',async()=>{
+  // Disposable STRICT test schema; never part of ERP D1.
+  const ddl=[
+    "CREATE TABLE synthetic_m04_cash_policy (tenant_id TEXT PRIMARY KEY, session_required INTEGER NOT NULL CHECK(session_required IN (0,1))) STRICT",
+    "CREATE TABLE synthetic_m04_cash_grants (tenant_id TEXT NOT NULL, role_id TEXT NOT NULL, allowed INTEGER NOT NULL CHECK(allowed IN (0,1)), PRIMARY KEY(tenant_id,role_id)) STRICT",
+    "CREATE TABLE synthetic_m04_cash_sessions (tenant_id TEXT NOT NULL, session_id TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('Open','Closed')), PRIMARY KEY(tenant_id,session_id)) STRICT",
+    "CREATE TABLE synthetic_m04_cash_actions (tenant_id TEXT NOT NULL, operation_id TEXT NOT NULL, actor_id TEXT NOT NULL, cash_session_id TEXT, amount_minor INTEGER NOT NULL CHECK(amount_minor>0), PRIMARY KEY(tenant_id,operation_id)) STRICT",
+    "CREATE TABLE synthetic_m04_cash_book (tenant_id TEXT NOT NULL, operation_id TEXT NOT NULL, actor_id TEXT NOT NULL, amount_minor INTEGER NOT NULL, PRIMARY KEY(tenant_id,operation_id)) STRICT",
+    "CREATE TRIGGER synthetic_m04_cash_grant_version AFTER UPDATE OF allowed ON synthetic_m04_cash_grants WHEN NEW.allowed<>OLD.allowed BEGIN UPDATE synthetic_auth_roles SET auth_version=auth_version+1 WHERE tenant_id=NEW.tenant_id AND role_id=NEW.role_id; END",
+    "CREATE TRIGGER synthetic_m04_cash_book_append AFTER INSERT ON synthetic_m04_cash_actions BEGIN INSERT INTO synthetic_m04_cash_book(tenant_id,operation_id,actor_id,amount_minor) VALUES(NEW.tenant_id,NEW.operation_id,NEW.actor_id,NEW.amount_minor); SELECT CASE WHEN NEW.amount_minor=999 THEN RAISE(ABORT,'injected synthetic book failure') ELSE 1 END; END"
+  ];
+  for(const sql of ddl) await DB.prepare(sql).run();
+  await DB.prepare("INSERT INTO synthetic_m04_cash_policy VALUES ('TENANT-A',1),('TENANT-B',1)").run();
+  await DB.prepare("INSERT INTO synthetic_m04_cash_grants VALUES ('TENANT-A','ROLE-A',1),('TENANT-B','ROLE-B',1)").run();
+  await DB.prepare("INSERT INTO synthetic_m04_cash_sessions VALUES ('TENANT-A','CS-A','Open'),('TENANT-B','CS-B','Open')").run();
+  const gate=createSyntheticM04CashAuthorityProbe(DB);
+  const request=(more={})=>({
+    tokenHash,tenantId:'TENANT-A',operationId:'CASH-01',
+    cashSessionId:'CS-A',amountMinor:125,now:1200,...more
+  });
+  const deny=async input=>assert.rejects(()=>gate.record_(input),/Denied|Invalid/i);
+  const count=async table=>(await DB.prepare('SELECT COUNT(*) AS n FROM '+table).first()).n;
+  const actions='synthetic_m04_cash_actions',book='synthetic_m04_cash_book';
+  assert.deepEqual(await gate.record_(request()),
+    {operationId:'CASH-01',actorId:'USER-A',amountMinor:125});
+  assert.deepEqual(await gate.record_(request()),
+    {operationId:'CASH-01',actorId:'USER-A',amountMinor:125});
+  assert.equal(await count(actions),1);
+  assert.equal(await count(book),1);
+  // A replay cannot disclose a prior actor's receipt, even in one tenant.
+  const otherToken=sha('m04-independent-synthetic-cash-actor');
+  await DB.prepare("INSERT INTO synthetic_auth_users VALUES ('TENANT-A','USER-A2','ROLE-A','Active',1)").run();
+  await DB.prepare("INSERT INTO synthetic_auth_sessions VALUES (?,'TENANT-A','USER-A2','ROLE-A',1,1,2000,NULL)").bind(otherToken).run();
+  await deny(request({tokenHash:otherToken}));
+  await deny(request({operationId:'CASH-EXPIRED',now:2000}));
+  assert.equal(await count(actions),1);
+  assert.equal(await count(book),1);
+  await deny(request({amountMinor:126}));
+  await deny(request({operationId:'CASH-MISS',cashSessionId:null}));
+  await deny(request({operationId:'CASH-TENANT',tenantId:'TENANT-B',cashSessionId:'CS-B'}));
+  await DB.prepare("UPDATE synthetic_m04_cash_sessions SET status='Closed' WHERE tenant_id='TENANT-A'").run();
+  await deny(request({operationId:'CASH-CLOSED'}));
+  assert.equal(await count(actions),1);
+  assert.equal(await count(book),1);
+  await DB.prepare("UPDATE synthetic_m04_cash_sessions SET status='Open' WHERE tenant_id='TENANT-A'").run();
+  await deny(request({operationId:'CASH-FAIL',amountMinor:999}));
+  assert.equal(await count(actions),1,'late failure must roll back operation receipt');
+  assert.equal(await count(book),1,'late failure must roll back triggered book row');
+  await DB.prepare("UPDATE synthetic_m04_cash_policy SET session_required=0 WHERE tenant_id='TENANT-A'").run();
+  assert.deepEqual(await gate.record_(request({
+    operationId:'CASH-FEATURE-OFF',cashSessionId:null,amountMinor:200
+  })),{operationId:'CASH-FEATURE-OFF',actorId:'USER-A',amountMinor:200});
+  assert.equal(await count(book),2);
+  await DB.prepare("UPDATE synthetic_m04_cash_grants SET allowed=0 WHERE tenant_id='TENANT-A'").run();
+  await deny(request({operationId:'CASH-DOWNGRADED',cashSessionId:null}));
+  await DB.prepare("UPDATE synthetic_m04_cash_grants SET allowed=1 WHERE tenant_id='TENANT-A'").run();
+  await deny(request({operationId:'CASH-RESTORED',cashSessionId:null}));
+  await DB.prepare("UPDATE synthetic_auth_sessions SET revoked_at=1100 WHERE token_hash=?").bind(tokenHash).run();
+  await deny(request({operationId:'CASH-FEATURE-OFF',cashSessionId:null,amountMinor:200}));
+  assert.equal(await count(actions),2);
+  assert.equal(await count(book),2);
+  await deny(request({tokenHash:'wrong'}));
+  await deny(request({amountMinor:1.25}));
+  await deny({...request(),actorId:'USER-A'});
 });
