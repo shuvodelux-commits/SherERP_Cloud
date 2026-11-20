@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { lstat, open, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { reconcileCreateAttempt, validatedReceipt } from '../src/auth/port-p2-create-attempt.js';
 
 const accountPattern = /^(?!0{32}$)[a-f0-9]{32}$/;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -121,15 +122,6 @@ async function inspect(provider) {
   }
 }
 
-function validatedReceipt(row, action) {
-  if (row?.accountId !== action.accountId || row.name !== action.name ||
-      row.attemptId !== action.attemptId || !matches(uuidPattern, row.id) ||
-      !matches(referencePattern, row.evidenceRef)) {
-    throw new Error('CREATE_OUTCOME_UNKNOWN');
-  }
-  return { ...action, id: row.id, evidenceRef: row.evidenceRef };
-}
-
 /** Calling again with the same plan and journal is the resume operation.
  * findCreation must return independently attributed attempt evidence. An
  * inventory name match alone cannot establish ownership.
@@ -170,15 +162,7 @@ export async function applyProvisioning(candidate, { journalDirectory, provider,
       throw new Error('CREATE_OUTCOME_UNKNOWN');
     }
 
-    let raw;
-    try {
-      raw = pending === undefined
-        ? await provider.createDatabase({ ...action })
-        : await provider.findCreation({ ...action });
-    } catch {
-      throw new Error('CREATE_OUTCOME_UNKNOWN');
-    }
-    const receipt = validatedReceipt(raw, action);
+    const receipt = validatedReceipt(await reconcileCreateAttempt(provider, action, pending !== undefined), action);
     receipts.push(receipt);
     assertTarget(await inspect(provider), plan, receipts);
     if (!await writeRecord(journalDirectory, resultName, receipt)) {

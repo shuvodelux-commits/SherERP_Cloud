@@ -51,8 +51,11 @@
       <form id="business-form" hidden>
         <label for="business-name">Business name</label>
         <input id="business-name" type="text" required maxlength="120" autocomplete="off">
+        <label id="business-owner-email-label" for="business-owner-email" hidden>Owner Gmail</label>
+        <input id="business-owner-email" type="email" maxlength="74" autocomplete="email" hidden>
         <button class="primary" type="submit">Create business</button>
-        <p id="business-receipt" role="status" hidden></p>
+        <p id="business-receipt" role="status" aria-live="polite" hidden></p>
+        <button id="resume-business" class="secondary" type="button" hidden>Resume setup</button>
       </form>
       <form id="owner-invitation-form" hidden>
         <h2>Invite the first Owner</h2>
