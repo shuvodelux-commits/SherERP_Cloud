@@ -147,6 +147,23 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
       browserToken:challenge.browserToken,credential:wrong
     }),null,'same valid Google subject with wrong Gmail cannot claim Owner');
     assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_first_shop_owners').first()).n,index);
+    for(const candidate of [
+      makeSignedGmailOwnerToken({
+        nonce:'x'.repeat(43),clientId,subject:claim.subject,email:claim.email
+      }),
+      makeSignedGmailOwnerToken({
+        nonce:challenge.nonce,clientId:'wrong-client.apps.googleusercontent.com',
+        subject:claim.subject,email:claim.email
+      }),
+      makeSignedGmailOwnerToken({
+        nonce:challenge.nonce,clientId,subject:claim.subject,
+        email:claim.email,emailVerified:false
+      }),
+    ]){
+      assert.equal(await loginFirstOwnerWithGmail(ownerEnv,{
+        browserToken:challenge.browserToken,credential:candidate
+      }),null,'invalid signed Google claims must fail before any Owner claim');
+    }
     const verified=makeSignedGmailOwnerToken({
       nonce:challenge.nonce,clientId,subject:claim.subject,email:claim.email
     });
@@ -159,6 +176,10 @@ test('two newly provisioned local businesses require exact signed Owner Gmail be
     assert.equal(await beginFirstOwnerGmailLogin(ownerEnv),null,
       'first-Owner signup cannot be reopened after successful claim');
   }
+  assert.equal(await validateOwnerSession({
+    ...ownerSessions[0].env,
+    PLATFORM_PILOT_DB:ownerSessions[1].env.PLATFORM_PILOT_DB
+  },ownerSessions[0].token),null,'swapped physical D1 must invalidate a valid Owner cookie');
   const makeProduct=(name)=>({
     operationId:crypto.randomUUID(),name,brand:'',category:'',unit:'pcs',
     purchasePrice:'8.25',sellingPrice:'12.50',stock:'0',
