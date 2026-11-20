@@ -101,16 +101,32 @@ export async function openOwnerCashSession(scope,{token,ownerSubject,operationId
   const auth=await authority(scope,token);
   if(!auth)return {status:'denied'};
   const actorId=asActor(ownerSubject),DB=scope.shopDb;
-  let rows;
-  try{
-    rows=await DB.batch([
-      DB.prepare(`INSERT INTO owner_mvp_cash_sessions
-        (operation_id,actor_id,status,opening_paisa,started_at_ms)
-        SELECT ?,?,'Open',?,CAST(unixepoch('subsec')*1000 AS INTEGER)
+  // The reviewed 0006 cash identity column is CHECK(opening_paisa=0).
+  // From 0009 onward preserve it and carry the prior physical count in an
+  // additive column; this avoids rebuilding an FK-backed financial parent.
+  const carry=await DB.prepare(`SELECT 1 AS present FROM pragma_table_info('owner_mvp_cash_sessions')
+    WHERE name='carried_opening_paisa'`).first();
+  if(!carry&&opening!==0n)return {status:'unsupported'};
+  const openSql=carry?`INSERT INTO owner_mvp_cash_sessions
+        (operation_id,actor_id,status,opening_paisa,carried_opening_paisa,started_at_ms)
+        SELECT ?,?,'Open',0,?,CAST(unixepoch('subsec')*1000 AS INTEGER)
         WHERE ${AUTH} AND (${CLEAN})
         AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE status='Open')
         AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE operation_id=?)
-        RETURNING sequence`).bind(operationId,actorId,Number(opening),...auth,operationId),
+        RETURNING sequence`:
+    `INSERT INTO owner_mvp_cash_sessions
+        (operation_id,actor_id,status,opening_paisa,started_at_ms)
+        SELECT ?,?,'Open',0,CAST(unixepoch('subsec')*1000 AS INTEGER)
+        WHERE ${AUTH} AND (${CLEAN})
+        AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE status='Open')
+        AND NOT EXISTS(SELECT 1 FROM owner_mvp_cash_sessions WHERE operation_id=?)
+        RETURNING sequence`;
+  const openArgs=carry?[operationId,actorId,Number(opening),...auth,operationId]:
+    [operationId,actorId,...auth,operationId];
+  let rows;
+  try{
+    rows=await DB.batch([
+      DB.prepare(openSql).bind(...openArgs),
       DB.prepare(`SELECT ${AUTH} AS allowed,
         (SELECT sequence FROM owner_mvp_cash_sessions WHERE status='Open') AS openSequence,
         (SELECT sequence FROM owner_mvp_cash_sessions WHERE operation_id=? AND actor_id=?) AS sameSequence
@@ -197,7 +213,7 @@ export async function closeOwnerCashSession(scope,{token,ownerSubject,operationI
       return {status:'conflict'};
     return closeResult(replay,'replayed');
   }
-  const expected=`(opening_paisa +
+  const expected=`(opening_paisa + carried_opening_paisa +
     COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
       WHERE b.cash_sequence=owner_mvp_cash_sessions.sequence),0) -
     COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
@@ -250,8 +266,11 @@ export async function readOwnerCashSession(DB){
     WHERE type='table' AND name='owner_mvp_sale_cash_book'`).first();
   const hasRefund=hasCash && await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
     WHERE type='table' AND name='owner_mvp_return_cash_book'`).first();
+  const hasCarry=await DB.prepare(`SELECT 1 AS present FROM pragma_table_info('owner_mvp_cash_sessions')
+    WHERE name='carried_opening_paisa'`).first();
+  const carryColumn=hasCarry?'s.carried_opening_paisa':'0';
   const row=hasRefund?await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
-    s.opening_paisa AS openingPaisa,
+    s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
     COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
       WHERE b.cash_sequence=s.sequence),0) AS inPaisa,
     COALESCE((SELECT SUM(r.debit_paisa) FROM owner_mvp_return_cash_book r
@@ -259,22 +278,23 @@ export async function readOwnerCashSession(DB){
     FROM owner_mvp_cash_sessions s WHERE s.status='Open'
     ORDER BY s.sequence DESC LIMIT 1`).first():
     hasCash?await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
-    s.opening_paisa AS openingPaisa,
+    s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
     COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
       WHERE b.cash_sequence=s.sequence),0) AS inPaisa,
     0 AS outPaisa
     FROM owner_mvp_cash_sessions s WHERE s.status='Open'
     ORDER BY s.sequence DESC LIMIT 1`).first():
-    await DB.prepare(`SELECT sequence,status,started_at_ms AS startedMs,
-      opening_paisa AS openingPaisa,0 AS inPaisa,0 AS outPaisa
-      FROM owner_mvp_cash_sessions WHERE status='Open'
+    await DB.prepare(`SELECT s.sequence,s.status,s.started_at_ms AS startedMs,
+      s.opening_paisa AS openingPaisa,${carryColumn} AS carriedPaisa,
+      0 AS inPaisa,0 AS outPaisa
+      FROM owner_mvp_cash_sessions s WHERE s.status='Open'
       ORDER BY sequence DESC LIMIT 1`).first();
   return row?{
     sessionId:sourceId('CASH_SESSIONS',row.sequence),status:row.status,
     openedAt:new Date(row.startedMs).toISOString(),
-    openingCash:moneyValue(row.openingPaisa),
+    openingCash:moneyValue(row.openingPaisa+row.carriedPaisa),
     cashIn:moneyValue(row.inPaisa),cashOut:moneyValue(row.outPaisa),
-    expectedCash:moneyValue(row.openingPaisa+row.inPaisa-row.outPaisa),
+    expectedCash:moneyValue(row.openingPaisa+row.carriedPaisa+row.inPaisa-row.outPaisa),
     countedCash:'',variance:0,notes:'',cashMismatch:null
   }:null;
 }
