@@ -74,19 +74,32 @@ function basicReport({issues,readbackPerformed=false,sourcePlanValid=false,
 function sourceChecks(preflight,identityPlan,issues){
   // Validate accounting semantics through existing exact-minor-unit M02
   // comparator, not a second arithmetic implementation.
-  const gross=reconcileGrossPartyCheckpoints({
-    preflight,readback:{currentCheckpoints:[],openingCheckpoints:[]}
-  });
+  let gross;
+  try{
+    gross=reconcileGrossPartyCheckpoints({
+      preflight,readback:{currentCheckpoints:[],openingCheckpoints:[]}
+    });
+  }catch{
+    // A contradictory or malformed source plan must block BEFORE D1.
+    addIssue(issues,'SOURCE_PLAN_BLOCKED');
+    return false;
+  }
   if(gross.sourcePlanValid!==true){
     addIssue(issues,'SOURCE_PLAN_BLOCKED');
     return false;
   }
   // Validates original source link review/anchor/role/physical-row graph
   // using the existing M02 pure comparator BEFORE opening a D1 connection.
-  const probe=reconcilePartyImportReadback({
-    plan:identityPlan,
-    readback:{parties:[],party_roles:[],party_legacy_links:[]}
-  });
+  let probe;
+  try{
+    probe=reconcilePartyImportReadback({
+      plan:identityPlan,
+      readback:{parties:[],party_roles:[],party_legacy_links:[]}
+    });
+  }catch{
+    addIssue(issues,'SOURCE_IDENTITY_PLAN_BLOCKED');
+    return false;
+  }
   if(probe.issues.some(issue=>
     ['PLAN_LINKAGE_INVALID','PLAN_COUNT_MISMATCH',
       'QUARANTINED_SOURCE_ROWS','PENDING_IDENTITY_REVIEW'].includes(issue.code))){
