@@ -246,7 +246,7 @@ test('private Owner Supplier Cash Pay: default off, signed owner, exact D1 close
     await installOperations(a);await installOperations(b);
     for(const db of [a,b]){
       for(const file of ['0009_owner_mvp_cash_close.sql','0010_owner_supplier_cash_pay.sql',
-        '0011_owner_mvp_supplier_cash_reconcile.sql']){
+        '0011_owner_supplier_cash_reconciliation.sql']){
         const sql=await readFile('staging-migrations/shop-owner-write/'+file,'utf8');
         await db.batch(unstable_splitSqlQuery(sql).map(s=>db.prepare(s)));
       }
@@ -272,9 +272,9 @@ test('private Owner Supplier Cash Pay: default off, signed owner, exact D1 close
       const r=await request(ownerA,path,{body:input,config:allowed});
       return {status:r.status,json:await r.json()};
     }
-    const first=await pay(body);
-    assert.equal(first.status,201,JSON.stringify(first.json));
-    assert.equal(first.json.data.paymentId,'SPY-000001');
+    const posted=await pay(body);
+    assert.equal(posted.status,201,JSON.stringify(posted.json));
+    assert.equal(posted.json.data.paymentId,'SPY-000001');
     const replay=await pay(body);
     assert.equal(replay.status,200);
     assert.equal(replay.json.data.paymentId,'SPY-000001');

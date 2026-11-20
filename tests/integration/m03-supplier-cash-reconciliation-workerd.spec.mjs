@@ -19,7 +19,8 @@ const files=[
   'staging-migrations/shop-owner-write/0007_owner_mvp_cash_sale.sql',
   'staging-migrations/shop-owner-write/0008_owner_mvp_cash_return.sql',
   'staging-migrations/shop-owner-write/0009_owner_mvp_cash_close.sql',
-  'staging-migrations/shop-owner-write/0010_owner_supplier_cash_pay.sql'
+  'staging-migrations/shop-owner-write/0010_owner_supplier_cash_pay.sql',
+  'staging-migrations/shop-owner-write/0011_owner_supplier_cash_reconciliation.sql'
 ];
 const day=()=>new Date(Date.now()+21600000).toISOString().slice(0,10);
 const ctx=owner=>({token:owner.token,ownerSubject:owner.env.PLATFORM_PILOT_SHOP_ID});
@@ -90,6 +91,16 @@ test('Supplier Cash Pay appears exactly once in Cash Session, Cash Book and Supp
     assert.equal(ledger.entries[0].balancePaisa,49975);
     const other=await readOwnerCashSession(b);
     assert.equal(other.expectedCash,150);
+    // No client-supplied close can claim the drawer still contains all sale
+    // receipts after an immutable Supplier payout has actually left cash.
+    await assert.rejects(()=>a.prepare(`UPDATE owner_mvp_cash_sessions SET
+      expected_paisa=15000,counted_paisa=15000,variance_paisa=0,
+      close_intent_hash=?,close_actor_id='google:forged-owner',
+      close_notes='incorrect gross drawer',
+      closed_operation_id=?,closed_at_ms=CAST(unixepoch('subsec')*1000 AS INTEGER),
+      status='Closed' WHERE status='Open'`).bind('e'.repeat(64),crypto.randomUUID()).run(),
+    /MVP_CLOSE_EXPECTED_CASH_CHANGED/);
+    assert.equal((await a.prepare("SELECT status FROM owner_mvp_cash_sessions WHERE sequence=1").first()).status,'Open');
     const result=await closeOwnerCashSession(scope(ownerA),{...ctx(ownerA),
       operationId:crypto.randomUUID(),countedCash:'49.75',notes:'matched counted cash'});
     assert.equal(result.status,'closed');

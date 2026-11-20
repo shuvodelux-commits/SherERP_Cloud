@@ -218,6 +218,43 @@ export function patchOwnerApp(html){
     });
   }
 
+  // Original paySupplier RPC: bounded same-day Cash only, replay-safe.
+  // Bank, discounts and historical entries stay deliberately unavailable.
+  var ownerSupplierCashPendingSave = null;
+  var ownerSupplierCashSaving = false;
+  function saveOwnerSupplierCash_(supplierId,amount,method,bankId,notes,date,reason,discount,discountReason) {
+    if(typeof supplierId!=='string'||!/^SUP-[0-9]{6,}$/.test(supplierId))
+      return Promise.reject(new Error('Invalid Supplier ID.'));
+    if(method!=='Cash'||bankId||reason||Number(discount)!==0||discountReason)
+      return Promise.reject(new Error('Only Cash supplier payment without a discount or Bank is connected.'));
+    if(typeof amount!=='string'||!/^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$/.test(amount))
+      return Promise.reject(new Error('Enter a valid Cash payment amount.'));
+    if(date!==new Date(Date.now()+21600000).toISOString().slice(0,10))
+      return Promise.reject(new Error('Only today’s Cash supplier payment is connected.'));
+    if(ownerSupplierCashSaving)
+      return Promise.reject(new Error('Supplier payment is already saving.'));
+    var payload={supplierId:supplierId,amount:amount,paymentMethod:'Cash',
+      bankAccountId:'',notes:notes||'',date:date,backdatedReason:''};
+    var fingerprint=JSON.stringify(payload);
+    if(ownerSupplierCashPendingSave?.fingerprint!==undefined &&
+       ownerSupplierCashPendingSave.fingerprint!==fingerprint)
+      return Promise.reject(new Error('Previous payment may have been saved. Reload the Supplier ledger before changing it.'));
+    if(!ownerSupplierCashPendingSave)
+      ownerSupplierCashPendingSave={fingerprint:fingerprint,
+        body:JSON.stringify({operationId:crypto.randomUUID(),payload:payload})};
+    ownerSupplierCashSaving=true;
+    return ownerPurchasePost_('/api/owner/suppliers/'+supplierId+'/cash-pay',
+      ownerSupplierCashPendingSave.body,
+      'Could not confirm Cash payment. Retry Pay unchanged to check the same operation.')
+      .then(function(result){
+        if(!result || typeof result.paymentId!=='string' ||
+           result.supplierId!==supplierId || !Number.isFinite(result.currentDue))
+          throw new Error('Could not verify saved Supplier payment. Retry unchanged.');
+        ownerSupplierCashPendingSave=null;
+        return result;
+      }).finally(function(){ownerSupplierCashSaving=false;});
+  }
+
   var ownerPurchasePendingSave = null;
   var ownerPurchaseSaveInProgress = false;
   var ownerCashPendingAction = null;
@@ -425,6 +462,8 @@ export function patchOwnerApp(html){
   function serverCall(fnName) {
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
     if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
+    if (fnName === 'paySupplier') return saveOwnerSupplierCash_(arguments[2],arguments[3],
+      arguments[4],arguments[5],arguments[6],arguments[7],arguments[8],arguments[9],arguments[10]);
     if (fnName === 'createPurchase') return saveOwnerCreditPurchase_(arguments[2]);
     if (fnName === 'completeSale') return saveOwnerCashSale_(arguments[2]);
     if (fnName === 'completeReturn') return saveOwnerCashReturn_(arguments[2]);
@@ -487,20 +526,21 @@ export function patchOwnerApp(html){
             if (result?.success === false) throw new Error(unavailable);
             if (fnName === 'getSupplierDetail') {
               var detail = result?.data;
-              if (result?.success !== true || detail?.scope !== 'purchase-credit-only' ||
+              if (result?.success !== true || !['purchase-credit-only','purchase-and-cash-payment'].includes(detail?.scope) ||
                   detail.supplierId !== supplierId || !Array.isArray(detail.entries) ||
                   typeof detail.hasMore !== 'boolean') throw new Error(unavailable);
               return {
                 supplier:{'Supplier ID':supplierId,'Supplier Name':detail.supplierName,
                   Phone:detail.phone,'Current Due':supplierDisplayAmount_(detail.currentDuePaisa)},
                 ledger:detail.entries.map(function (entry) {
-                  if (entry.kind !== 'Purchase')
+                  if (!['Purchase','Supplier Payment'].includes(entry.kind))
                     throw new Error(unavailable);
                   return {Type:entry.kind,Date:entry.purchaseDate,Reference:entry.reference,
                     Debit:supplierDisplayAmount_(entry.debitPaisa),Credit:supplierDisplayAmount_(entry.creditPaisa),
                     Balance:supplierDisplayAmount_(entry.balancePaisa)};
                 }),
-                hasMore:detail.hasMore
+                hasMore:detail.hasMore,cashPayAvailable:detail.cashPayAvailable===true,
+                ledgerScope:detail.scope
               };
             }
             if (fnName === 'getProductsBootstrap') {
@@ -530,15 +570,19 @@ export function patchOwnerApp(html){
   html=html.replace('</head>',ownerSupportCss+'</head>');
   const screenReplacements=[
     ['id="supDetailDue"></div></div>\n        <div class="mobile-payment-workspace" style="',
-      'id="supDetailDue"></div></div>\n        <fieldset disabled aria-label="Supplier payments unavailable" class="mobile-payment-workspace" style="border:0;padding:0;margin:0;'],
+      'id="supDetailDue"></div></div>\n        <fieldset id="owner-supplier-cash-pay" disabled aria-label="Cash supplier payment" class="mobile-payment-workspace" style="border:0;padding:0;margin:0;'],
     ['id="supPayError"></div>\n        </div>', 'id="supPayError"></div>\n        </fieldset>'],
     ['<div class="empty-state" id="supLedgerEmpty"', '<p id="ownerSupplierLedgerScope"></p><div class="empty-state" id="supLedgerEmpty"'],
     ["withLoader(serverCall('getSupplierDetail', authToken, id)).then(function (data) {",
       "withLoader(serverCall('getSupplierDetail', authToken, id)).then(function (data) {\n    if (supState.detailId !== id) return;"],
     ['    supState.ledger = data.ledger;', `
+    document.getElementById('owner-supplier-cash-pay').disabled = !data.cashPayAvailable;
     document.getElementById('ownerSupplierLedgerScope').textContent =
-      'Credit purchases only. Supplier payments are unavailable.' +
-      (data.hasMore ? ' Showing the latest 50 purchases.' : '');
+      (data.cashPayAvailable ? 'Cash supplier payments only. No discount, Bank or backdating.' :
+        data.ledgerScope === 'purchase-and-cash-payment'
+          ? 'Credit purchases and recorded Cash payments. New payment entry is not enabled.'
+          : 'Credit purchases only. Supplier payments are unavailable.') +
+      (data.hasMore ? ' Showing the latest 50 ledger entries.' : '');
     supState.ledger = data.ledger;`],
     ["    prodState.addSource = source || 'products';", `    prodState.addSource = source || 'products';
     if (ownerProductsEnabled) {
@@ -563,6 +607,25 @@ export function patchOwnerApp(html){
     if(html.split(original).length!==2)throw new Error('Owner screen boundary changed: '+original);
     html=html.replace(original,replacement);
   }
+  // Cash-only pilot: preserve original Supplier form but do not offer
+  // unsupported Bank, discount, settlement discount or backdating controls.
+  const cashOnlySourceReplacements=[
+    ['<select id="supPayMethod" style="max-width:120px;"><option value="Cash">Cash</option><option value="Bank">Bank</option><option value="Mobile Banking">Mobile Banking</option></select>',
+      '<select id="supPayMethod" style="max-width:120px;"><option value="Cash">Cash</option></select>'],
+    ["document.getElementById('supPayDiscount').disabled = !canDiscount;",
+      "document.getElementById('supPayDiscount').disabled = true;"],
+    ["document.getElementById('supPaySettleFullBtn').disabled = !canDiscount || payment <= 0 || payment > supState.detailDue;",
+      "document.getElementById('supPaySettleFullBtn').disabled = true;"],
+    ['<label>Payment Date</label><input id="supPayDate" type="date">',
+      '<label>Payment Date (today)</label><input id="supPayDate" type="date" readonly>'],
+    ["  function supPayToday_() {\n    var d = new Date();\n    var m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');\n    return d.getFullYear() + '-' + m + '-' + day;\n  }",
+      "  function supPayToday_() {\n    return new Date(Date.now()+21600000).toISOString().slice(0,10);\n  }"]
+  ];
+  for(const [original,replacement] of cashOnlySourceReplacements){
+    if(html.split(original).length!==2)throw new Error('Owner Supplier cash-only boundary changed: '+original);
+    html=html.replace(original,replacement);
+  }
+
   const rowActionStart="        '<td>' + statusBadge + '</td>' +\n        '<td class=\"erp-sticky-action-col\">' +\n          rowActionTriggerHtml_(";
   const rowActionEnd="\n      body.appendChild(tr);";
   const rowStart=html.indexOf(rowActionStart,html.indexOf('  function prodRender() {'));
