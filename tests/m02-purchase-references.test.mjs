@@ -23,6 +23,13 @@ function exportFixture(){
    cells:group.headers.map(h=>Object.hasOwn(entry.values,h)?entry.values[h]:'')
   });
  }
+ // The shared parity fixture intentionally omits optional historical lot fields.
+ // This suite supplies a verified synthetic Purchase origin for reference tests.
+ const lot=groups.STOCK_LOTS;
+ if(lot.rows.length){
+  lot.rows[0].cells[lot.headers.indexOf('Purchase ID')]='PUR-001';
+  lot.rows[0].cells[lot.headers.indexOf('Supplier ID')]='000-S1';
+ }
  return {formatVersion:1,sourceCommit:pin,groups};
 }
 function setCell(data,group,column,value,row=0){
@@ -46,7 +53,7 @@ test('pinned 49-group synthetic purchase chain passes as an offline candidate, n
  assert.equal(r.formatVersion,1);
  assert.equal(r.sourceCommit,pin);
  assert.equal(r.sourceGroups,49);
- assert.deepEqual(r.totals,{purchases:1,purchaseItems:2,suppliers:1,products:1});
+ assert.deepEqual(r.totals,{purchases:1,purchaseItems:2,suppliers:1,products:1,purchaseReturns:0,purchaseReturnItems:0,stockLots:1});
  assert.equal(r.candidateReady,true);
  assert.deepEqual(r.issues,[]);
  for(const flag of ['independentSourceExportVerified','d1ReadbackVerified',
@@ -170,5 +177,175 @@ test('CLI accepts one bounded local JSON input, emits redacted errors, fails on 
   const remote=run('https://example.invalid/secret.json');
   assert.equal(remote.status,2);
   assert.doesNotMatch(remote.stdout+remote.stderr,/example\.invalid|secret\.json/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+
+function appendRow(data,group,values,sheetRow){
+ const table=data.groups[group];
+ assert.ok(table,'source group missing');
+ for(const column of Object.keys(values))assert.ok(table.headers.includes(column),column);
+ table.rows.push({
+  sheetRow,
+  cells:table.headers.map(h=>Object.hasOwn(values,h)?values[h]:'')
+ });
+}
+
+function withReturn(){
+ const data=exportFixture();
+ appendRow(data,'PURCHASE_RETURN',{
+  'Return ID':'RET-001','Purchase ID':'PUR-001',
+  'Supplier ID':'000-S1','Refund Method':'Supplier Credit',
+  'Is Deleted':'TRUE'
+ },2);
+ appendRow(data,'PURCHASE_RETURN_ITEMS',{
+  'Return ID':'RET-001','Purchase ID':'PUR-001',
+  'Product ID':'000P-001','Return Quantity':'1.00'
+ },2);
+ return data;
+}
+
+test('valid historical Purchase Return header and line join by exact source IDs, even if deleted',()=>{
+ const report=review(withReturn());
+ assert.equal(report.candidateReady,true);
+ assert.deepEqual(report.issues,[]);
+ assert.equal(report.totals.purchaseReturns,1);
+ assert.equal(report.totals.purchaseReturnItems,1);
+ assert.equal(report.totals.stockLots,1);
+});
+
+test('a 49-group snapshot with no returns and no lots is a valid empty historical candidate',()=>{
+ const data=exportFixture();
+ data.groups.STOCK_LOTS.rows=[];
+ data.groups.PURCHASE_RETURN.rows=[];
+ data.groups.PURCHASE_RETURN_ITEMS.rows=[];
+ const r=review(data);
+ assert.equal(r.candidateReady,true);
+ assert.deepEqual(r.issues,[]);
+ assert.deepEqual({purchaseReturns:r.totals.purchaseReturns,stockLots:r.totals.stockLots},
+  {purchaseReturns:0,stockLots:0});
+});
+
+test('missing or blank Return purchase link is blocked without inferring Supplier by name',()=>{
+ const data=withReturn();
+ setCell(data,'PURCHASE_RETURN','Purchase ID','PUR-UNKNOWN');
+ assert.equal(count(review(data),'PURCHASE_RETURN_PARENT_NOT_FOUND'),1);
+ setCell(data,'PURCHASE_RETURN','Purchase ID','');
+ assert.equal(count(review(data),'PURCHASE_RETURN_PARENT_ID_BLANK'),1);
+});
+
+test('Return header Supplier must match the original Purchase Supplier ID',()=>{
+ const data=withReturn();
+ setCell(data,'PURCHASE_RETURN','Supplier ID','000-S1 ');
+ assert.equal(count(review(data),'PURCHASE_RETURN_SUPPLIER_MISMATCH'),1);
+ setCell(data,'PURCHASE_RETURN','Supplier ID','');
+ assert.equal(count(review(data),'PURCHASE_RETURN_SUPPLIER_ID_BLANK'),1);
+});
+
+test('Return item requires an actual header and matching Purchase ID',()=>{
+ const data=withReturn();
+ setCell(data,'PURCHASE_RETURN_ITEMS','Return ID','RET-GHOST');
+ assert.equal(count(review(data),'PURCHASE_RETURN_ITEM_PARENT_NOT_FOUND'),1);
+ setCell(data,'PURCHASE_RETURN_ITEMS','Return ID','');
+ assert.equal(count(review(data),'PURCHASE_RETURN_ITEM_PARENT_ID_BLANK'),1);
+ setCell(data,'PURCHASE_RETURN_ITEMS','Return ID','RET-001');
+ setCell(data,'PURCHASE_RETURN_ITEMS','Purchase ID','PUR-OTHER');
+ assert.equal(count(review(data),'PURCHASE_RETURN_ITEM_PURCHASE_MISMATCH'),1);
+ setCell(data,'PURCHASE_RETURN_ITEMS','Purchase ID','');
+ assert.equal(count(review(data),'PURCHASE_RETURN_ITEM_PURCHASE_ID_BLANK'),1);
+});
+
+test('Return Product must be on the original Purchase even if it exists in catalog',()=>{
+ const data=withReturn();
+ appendRow(data,'PRODUCTS',{'Product ID':'000P-OTHER','Product Name':'other'},22);
+ setCell(data,'PURCHASE_RETURN_ITEMS','Product ID','000P-OTHER');
+ assert.equal(count(review(data),'PURCHASE_RETURN_ITEM_NOT_PURCHASED'),1);
+ setCell(data,'PURCHASE_RETURN_ITEMS','Product ID','');
+ assert.equal(count(review(data),'PURCHASE_RETURN_ITEM_PRODUCT_ID_BLANK'),1);
+});
+
+test('every Return header must have at least one source line; duplicate historical lines stay distinct',()=>{
+ const data=withReturn();
+ appendRow(data,'PURCHASE_RETURN_ITEMS',{
+  'Return ID':'RET-001','Purchase ID':'PUR-001','Product ID':'000P-001'
+ },3);
+ assert.equal(review(data).candidateReady,true,'valid duplicate product lines must retain distinct rows');
+ data.groups.PURCHASE_RETURN_ITEMS.rows=[];
+ assert.equal(count(review(data),'PURCHASE_RETURN_WITHOUT_ITEMS'),1);
+});
+
+test('real Purchase-origin Stock Lot requires Product and exact Purchase line',()=>{
+ const data=exportFixture();
+ assert.equal(review(data).candidateReady,true);
+ setCell(data,'STOCK_LOTS','Product ID','');
+ assert.equal(count(review(data),'LOT_PRODUCT_ID_BLANK'),1);
+ setCell(data,'STOCK_LOTS','Product ID','P-MISSING');
+ assert.equal(count(review(data),'LOT_PRODUCT_NOT_FOUND'),1);
+ appendRow(data,'PRODUCTS',{'Product ID':'P-MISSING'},19);
+ assert.equal(count(review(data),'LOT_PURCHASE_PRODUCT_NOT_IN_ITEMS'),1);
+});
+
+test('Purchase-origin Stock Lot must retain Supplier authority and cannot join by name',()=>{
+ const data=exportFixture();
+ setCell(data,'STOCK_LOTS','Supplier ID','000-S1 ');
+ assert.equal(count(review(data),'LOT_PURCHASE_SUPPLIER_MISMATCH'),1);
+ setCell(data,'STOCK_LOTS','Supplier ID','');
+ assert.equal(count(review(data),'LOT_PURCHASE_SUPPLIER_ID_BLANK'),1);
+});
+
+test('missing source Lot origin is review-only, never automatically attached to latest Purchase',()=>{
+ const data=exportFixture();
+ setCell(data,'STOCK_LOTS','Purchase ID','PUR-GHOST');
+ assert.equal(count(review(data),'LOT_ORIGIN_UNREVIEWED'),1);
+ setCell(data,'STOCK_LOTS','Purchase ID','');
+ assert.equal(count(review(data),'LOT_ORIGIN_BLANK'),1);
+});
+
+test('Stock Lot valid non-Purchase origins from frozen source are not falsely treated as purchases',()=>{
+ const data=exportFixture();
+ for(const origin of ['OPENING','OPENING-MIGRATION','OPENING-2025',
+  'ADJUSTMENT','ADJUSTMENT-2','LEGACY','OVERSOLD',
+  'VENDOR-RETURN-RECEIVED','RETURN']){
+  setCell(data,'STOCK_LOTS','Purchase ID',origin);
+  assert.equal(review(data).candidateReady,true,origin);
+ }
+ // Original Sale Return fallback lot can carry its own Return ID.
+ appendRow(data,'SALES_RETURN',{'Return ID':'SRET-001'},6);
+ setCell(data,'STOCK_LOTS','Purchase ID','SRET-001');
+ assert.equal(review(data).candidateReady,true);
+});
+
+test('orphaned Return or Lot errors remain invariant to transport order and do not mutate input',()=>{
+ const data=withReturn(),before=structuredClone(data);
+ setCell(data,'PURCHASE_RETURN_ITEMS','Product ID','NOT-PURCHASED');
+ setCell(data,'STOCK_LOTS','Purchase ID','PUR-LOST');
+ const expected=review(data);
+ data.groups.PURCHASE_ITEMS.rows.reverse();
+ data.groups.PURCHASE_RETURN_ITEMS.rows.reverse();
+ assert.deepEqual(review(data),expected);
+ assert.deepEqual(before.groups.PURCHASES,data.groups.PURCHASES);
+});
+
+test('new lineage report leaks no Supplier, Return, Product, ID, phone or source row values',()=>{
+ const data=withReturn();
+ setCell(data,'PURCHASE_RETURN','Supplier ID','PRIVATE-01711111111');
+ setCell(data,'STOCK_LOTS','Purchase ID','SECRET-LOT-RETURN-777');
+ const out=JSON.stringify(review(data));
+ assert.doesNotMatch(out,/PRIVATE|01711111111|SECRET|RET-001|PUR-001|LOT-001|000-S1|000P-001|sheetRow|Is Deleted/);
+});
+
+test('lineage errors fail CLI with a generic redacted report and do not approve D1 migration',()=>{
+ const data=withReturn();
+ const dir=mkdtempSync(join(tmpdir(),'m02-return-lineage-'));
+ try{
+  const file=join(dir,'private-sensitive-source.json');
+  setCell(data,'PURCHASE_RETURN','Supplier ID','PRIVATE-01722222222');
+  writeFileSync(file,JSON.stringify(data));
+  const result=run(file);
+  assert.equal(result.status,2);
+  assert.equal(count(JSON.parse(result.stdout),'PURCHASE_RETURN_SUPPLIER_MISMATCH'),1);
+  assert.doesNotMatch(result.stdout+result.stderr,/PRIVATE|01722222222|private-sensitive-source/);
+  for(const flag of ['d1ReadbackVerified','sourceToD1Reconciled','postingAuthorized','productionReady'])
+   assert.equal(JSON.parse(result.stdout)[flag],false);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
