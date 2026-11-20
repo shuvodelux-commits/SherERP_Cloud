@@ -1,0 +1,31 @@
+name: M10 three-group real local Workerd D1 reconciliation
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  m10-three-group-d1:
+    name: Verify three independent original-ID/position group readbacks in local D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: '22'
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Wrangler on ephemeral runner only
+        run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Reconcile three fabricated source groups against real local Workerd/D1
+        run: node --test tests/integration/m10-three-group-audit-workerd.spec.mjs
