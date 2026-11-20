@@ -14,6 +14,7 @@ import {issuePlatformOwnerInvitation} from './auth/platform-owner-invitations.js
 
 import {listLocalProvisioning,readLocalProvisioning,resumeLocalProvisioning,startLocalProvisioning} from './auth/port-p4-local-provisioning.js';
 import {approvePlatformOwnerGmail} from './auth/platform-owner-gmail-approvals.js';
+import {handleLocalSupportHttpRequest} from './modules/m03-local-support-http-contract.js';
 
 const SETUP_COOKIE='__Host-shererp-platform-setup';
 const CHALLENGE_COOKIE='__Host-shererp-platform-challenge';
@@ -142,6 +143,38 @@ function localProvisioningEnabled(env){
     env.PLATFORM_LOCAL_SHOP_INVENTORY.every(item=>typeof env[item.binding]?.prepare==='function');
 }
 
+/**
+ * NONDEPLOYABLE Support Mode bridge. Unlike Wrangler JSON env flags, an
+ * in-process function and the exact physical Shop D1 object identity are
+ * mandatory. No string or serialized config can enable the private routes.
+ * Security/deployment approval is required before a real hosted adapter.
+ */
+function localSupportEnvironment(env){
+  if(!localProvisioningEnabled(env))return null;
+  const gate=env.PLATFORM_SUPPORT_LOCAL_GATE;
+  if(gate?.testOnly!==true || typeof gate.resolveShops!=='function' ||
+     gate.supportOrigin!==env.PLATFORM_AUTH_ORIGIN ||
+     typeof env.CONTROL_DB?.prepare!=='function')return null;
+  let scopes;
+  try{scopes=gate.resolveShops(env);}catch{return null;}
+  if(!Array.isArray(scopes)||scopes.length<1||scopes.length>10)return null;
+  const inventory=env.PLATFORM_LOCAL_SHOP_INVENTORY;
+  const seen=new Set();
+  for(const scope of scopes){
+    if(!scope||typeof scope.shopId!=='string'||typeof scope.databaseId!=='string'||
+       typeof scope.databaseMarker!=='string'||typeof scope.binding!=='string'||
+       seen.has(scope.shopId))return null;
+    seen.add(scope.shopId);
+    const matches=inventory.filter(item=>item.binding===scope.binding&&item.id===scope.databaseId);
+    if(matches.length!==1||env[scope.binding]!==scope.shopDb||
+       typeof scope.shopDb?.prepare!=='function')return null;
+  }
+  return {
+    CONTROL_DB:env.CONTROL_DB,SUPPORT_TEST_MODE_ENABLED:true,
+    SUPPORT_TEST_ORIGIN:env.PLATFORM_AUTH_ORIGIN,SUPPORT_TEST_SHOPS:scopes,
+  };
+}
+
 function signedIn(c){
   const gmailMode=c.env.PLATFORM_OWNER_GMAIL_APPROVAL_ENABLED==='true';
   const gmailShop=gmailMode?pilotShopConfiguration(c.env):null;
@@ -150,6 +183,7 @@ function signedIn(c){
     role:'PlatformSuperAdmin',
     ...(localProvisioningEnabled(c.env)
       ?{localProvisioningEnabled:true}:{}),
+    ...(localSupportEnvironment(c.env)?{supportDiagnosticsEnabled:true}:{}),
     ...(c.env.PLATFORM_SHOP_RESERVATION_ENABLED==='true'?{shopReservationEnabled:true}:{}),
     ...(invitationShop?{ownerInvitationShopId:invitationShop.shopId}:{}),
     ...(gmailShop?{ownerGmailApprovalShopId:gmailShop.shopId}:{}),
@@ -287,6 +321,38 @@ app.post('/api/platform/shops/disable-owner',async(c,next)=>{
   if(status==='denied')return denied(c);
   if(status==='mismatch')return c.json({error:'Shop binding mismatch'},409);
   return c.json({shopId:body.shopId,status});
+});
+
+/**
+ * Local Workerd/D1 proof only. A real Cloudflare account cannot turn these
+ * paths on through text environment variables; without a function-bearing
+ * in-process fixture, the endpoint and UI capability are both absent.
+ */
+app.post('/api/platform/support/:action',async(c,next)=>{
+  if(!localSupportEnvironment(c.env))return c.notFound();
+  await next();
+},limitIngress,limitBody,async c=>{
+  const env=localSupportEnvironment(c.env);
+  const action=c.req.param('action');
+  if(!env||!['start','diagnostics','end'].includes(action))return c.notFound();
+  let body;
+  try{body=await c.req.raw.clone().json();}catch{return c.json({error:'Invalid request'},400);}
+  if(!body||typeof body.shopId!=='string')return c.json({error:'Invalid request'},400);
+  const target=env.SUPPORT_TEST_SHOPS.find(s=>s.shopId===body.shopId);
+  if(!target)return denied(c);
+  // A reservation/binding is not by itself a finished shop. Ready is
+  // checked from Control D1 for EVERY action, not from UI state.
+  const ready=await env.CONTROL_DB.prepare(`SELECT 1 FROM platform_shop_provisioning p
+    JOIN platform_shop_bindings b ON b.shop_id=p.shop_id
+    WHERE p.shop_id=? AND p.stage='ready' AND
+      p.database_id=? AND p.database_marker=? AND
+      b.database_id=p.database_id AND b.database_marker=p.database_marker`)
+    .bind(body.shopId,target.databaseId,target.databaseMarker).first();
+  if(!ready)return denied(c);
+  const url=new URL(c.req.url);
+  url.pathname='/__m03_support_local__/'+action;
+  const routed=new Request(url.toString(),c.req.raw);
+  return handleLocalSupportHttpRequest(routed,env);
 });
 
 // Dedicated private entry point. The default public Worker does not import it.
