@@ -28,6 +28,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Original confirmed POS browser → real D1 invoice and print renderer
         run: node --test qa/m03-mvp-cash-sale-browser.spec.mjs
+      - name: Original Add Product and Supplier forms through real D1 Purchase, POS and Return
+        run: node --test qa/m03-first-shop-complete-journey-workerd-browser.spec.mjs
       - name: Existing operational Purchase real Shop D1 regression
         run: node --test tests/integration/m03-mvp-operational-purchase-workerd.spec.mjs
       - name: Original POS source adapter regressions
