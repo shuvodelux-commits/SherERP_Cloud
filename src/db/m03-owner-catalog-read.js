@@ -34,18 +34,24 @@ export async function readOwnerCatalog(DB){
 
 // The clean-shop UI lists the complete operational catalog. A D1 fetch
 // failure returns unavailable rather than a silently truncated list.
-export async function readCleanOwnerCatalog(DB){
+export async function readCleanOwnerCatalog(DB,{withMvpStock=false}={}){
+  // Keep the original nine-migration Shop catalog readable until an
+  // explicitly enabled Purchase pilot has the operational stock tables.
+  const stockField=withMvpStock?'COALESCE(st.quantity_micro,0) AS stockMicro':'opening_stock_text AS stock';
+  const stockJoin=withMvpStock?'LEFT JOIN owner_mvp_product_stock st ON st.product_id=products.product_id':'';
   const [scope,products,units,categories]=await DB.batch([
     DB.prepare(`SELECT (${CLEAN_PRODUCT_SOURCE}) AS clean, EXISTS(SELECT 1 FROM owner_product_create_receipts) AS hasReceipts`),
     DB.prepare(`SELECT product_id AS productId,product_name AS name,brand_text AS brand,
       category_name AS category,base_unit_name AS unit,selling_price_text AS listedPrice,
-      purchase_price_text AS savedPurchasePrice,NULL AS stockAtBackup,opening_stock_text AS stock
-      FROM products WHERE is_deleted=0 ORDER BY product_name COLLATE NOCASE,product_id`),
+      purchase_price_text AS savedPurchasePrice,NULL AS stockAtBackup,${stockField}
+      FROM products ${stockJoin} WHERE is_deleted=0 ORDER BY product_name COLLATE NOCASE,product_id`),
     DB.prepare("SELECT DISTINCT unit_name AS name FROM product_units WHERE status='Active' ORDER BY name"),
     DB.prepare("SELECT DISTINCT category_name AS name FROM product_categories WHERE status='Active' ORDER BY name"),
   ]);
   if(![scope,products,units,categories].every(result=>result.success)||scope.results[0]?.clean!==1)
     throw new Error('Operational catalog unavailable');
-  return {mode:'operational',data:products.results,units:units.results.length?units.results:[{name:'pcs'}],
+  return {mode:'operational',data:withMvpStock?products.results.map(({stockMicro,...row})=>({
+      ...row,stock:stockMicro/1_000_000
+    })):products.results,units:units.results.length?units.results:[{name:'pcs'}],
     categories:categories.results};
 }
