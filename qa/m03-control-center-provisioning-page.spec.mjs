@@ -136,7 +136,7 @@ test('Control Center browser resumes the same lost-response operation against di
   assert.equal(await owner.inputValue(),'fixture.owner@gmail.com');
   assert.equal(await page.getByRole('textbox',{name:'Business name'}).inputValue(),'টুলস ও হার্ডওয়্যার');
   await page.getByRole('button',{name:'Resume setup',exact:true}).click();
-  await page.getByText(/ready/i).waitFor();
+  await page.locator('#business-receipt').filter({hasText:/ready/i}).waitFor();
   assert.equal(creates,1,'Resume never creates a second D1');
   assert.equal(prepares,1);
   await page.screenshot({path:'test-results/m01-browser/m03-local-ready-mobile.png'});
