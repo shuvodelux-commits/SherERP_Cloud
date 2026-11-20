@@ -132,15 +132,22 @@ export async function closeOwnerCashSession(scope,{token,ownerSubject,operationI
   const auth=await authority(scope,token);
   if(!auth)return {status:'denied'};
   const DB=scope.shopDb,actorId=asActor(ownerSubject);
-  const [written,read]=await DB.batch([
-    DB.prepare(`UPDATE owner_mvp_cash_sessions SET status='Closed',
-      closed_operation_id=?,closed_at_ms=CAST(unixepoch('subsec')*1000 AS INTEGER)
-      WHERE status='Open' AND ${AUTH}
-      RETURNING sequence`).bind(operationId,...auth),
-    DB.prepare(`SELECT ${AUTH} AS allowed,
-      (SELECT sequence FROM owner_mvp_cash_sessions
-        WHERE closed_operation_id=?) AS closedSequence`).bind(...auth,operationId),
-  ]);
+  let written,read;
+  try{
+    [written,read]=await DB.batch([
+      DB.prepare(`UPDATE owner_mvp_cash_sessions SET status='Closed',
+        closed_operation_id=?,closed_at_ms=CAST(unixepoch('subsec')*1000 AS INTEGER)
+        WHERE status='Open' AND ${AUTH}
+        RETURNING sequence`).bind(operationId,...auth),
+      DB.prepare(`SELECT ${AUTH} AS allowed,
+        (SELECT sequence FROM owner_mvp_cash_sessions
+          WHERE closed_operation_id=?) AS closedSequence`).bind(...auth,operationId),
+    ]);
+  }catch(error){
+    if(/MVP_CASH_RECONCILIATION_REQUIRED/.test(String(error?.message||'')))
+      return {status:'reconciliation-required'};
+    throw error;
+  }
   checkResult([written,read]);
   if(read.results?.[0]?.allowed!==1)return {status:'denied'};
   const seq=written.results?.[0]?.sequence||read.results?.[0]?.closedSequence;
@@ -150,10 +157,21 @@ export async function closeOwnerCashSession(scope,{token,ownerSubject,operationI
 }
 
 export async function readOwnerCashSession(DB){
-  const row=await DB.prepare(`SELECT sequence,status FROM owner_mvp_cash_sessions
-    WHERE status='Open' ORDER BY sequence DESC LIMIT 1`).first();
+  // Shops previously initialized to 0006 do not yet have a Cash Book table.
+  // Never report a false zero after real Sale cash postings: when 0007 is
+  // present, summarize persisted cash entries for this exact open session.
+  const hasCash=await DB.prepare(`SELECT 1 AS present FROM sqlite_schema
+    WHERE type='table' AND name='owner_mvp_sale_cash_book'`).first();
+  const row=hasCash?await DB.prepare(`SELECT s.sequence,s.status,
+    COALESCE((SELECT SUM(b.received_paisa) FROM owner_mvp_sale_cash_book b
+      WHERE b.cash_sequence=s.sequence),0) AS cashPaisa
+    FROM owner_mvp_cash_sessions s WHERE s.status='Open'
+    ORDER BY s.sequence DESC LIMIT 1`).first():
+    await DB.prepare(`SELECT sequence,status,0 AS cashPaisa
+      FROM owner_mvp_cash_sessions WHERE status='Open'
+      ORDER BY sequence DESC LIMIT 1`).first();
   return row?{sessionId:sourceId('CASH_SESSIONS',row.sequence),
-    status:row.status,openingCash:0,expectedCash:0,variance:0}:null;
+    status:row.status,openingCash:0,expectedCash:row.cashPaisa/100,variance:0}:null;
 }
 
 export async function postOwnerCreditPurchase(scope,{token,ownerSubject,operationId,payload}={}){
