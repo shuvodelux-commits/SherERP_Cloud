@@ -8,7 +8,10 @@ import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
 import {readCleanOwnerCatalog,readOwnerCatalog} from './db/m03-owner-catalog-read.js';
 import {createOwnerProduct} from './db/m03-owner-product-create.js';
 import {createOwnerSupplier,readOwnerSupplierBootstrap} from './db/m03-owner-supplier-create.js';
-import {pilotShopConfiguration} from './auth/platform-shop-binding.js';
+import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,
+  postOwnerCreditPurchase,readOwnerPurchaseBootstrap,readOwnerPurchaseHistory,
+  readOwnerPurchaseDetail} from './db/m03-owner-mvp-purchase.js';
+import {pilotShopConfiguration,pilotShopIdentityMatches} from './auth/platform-shop-binding.js';
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
@@ -174,6 +177,113 @@ app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
     return c.json({success:false,message:'Supplier source history is not verified.'},503);
   return c.json({success:false,message:'Supplier already exists or saved details changed.'},409);
 });
+
+// M03 MVP first operational credit Purchase is private, explicitly opt-in,
+// never included in public Worker RPC or DB-free PR previews.
+const ownerPurchaseEnabled=env=>cleanProductsEnabled(env)&&env.OWNER_MVP_PURCHASE_ENABLED==='true';
+
+async function verifiedOwnerPurchaseContext(c,subject=false){
+  const token=getCookie(c,SESSION_COOKIE);
+  const session=await validateOwnerSession(c.env,token,{includeOwnerSubject:subject});
+  const scope=pilotShopConfiguration(c.env);
+  if(!session||!scope||session.shopId!==scope.shopId||
+     !await pilotShopIdentityMatches(scope))return null;
+  return {token,ownerSubject:session.ownerSubject,scope};
+}
+function purchaseError(c,status){
+  if(status==='denied')return c.json({success:false,message:'Purchase Owner access denied.'},403);
+  if(status==='session-required')return c.json({success:false,
+    message:'Start Day before recording a purchase. The Cash Session must be Open.'},409);
+  if(status==='unsupported')return c.json({success:false,
+    message:'For now only same-day, unpaid, zero-discount purchases in one base unit are supported. Cash, Bank, Tiles and mixed-unit posting are not connected yet.'},422);
+  if(status==='invalid')return c.json({success:false,message:'Invalid purchase or Cash Session input.'},400);
+  if(status==='conflict')return c.json({success:false,
+    message:'Purchase already exists or saved details changed. Refresh and review before retrying.'},409);
+  return c.json({success:false,message:'Purchase request unavailable or not authorized.'},503);
+}
+async function ownerPurchaseJson(c){
+  if(c.req.header('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json')
+    return null;
+  const input=await c.req.json().catch(()=>null);
+  if(!input||typeof input!=='object'||Array.isArray(input))return null;
+  return input;
+}
+
+app.get('/api/owner/purchase/bootstrap',protectLogin,async c=>{
+  if(!ownerPurchaseEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{
+    const data=await readOwnerPurchaseBootstrap(ctx.scope.shopDb);
+    return c.json({success:true,data:{...data,cashSession:await readOwnerCashSession(ctx.scope.shopDb)}});
+  }catch{return c.json({success:false,message:'Purchase bootstrap unavailable'},503);}
+});
+
+app.get('/api/owner/purchases',protectLogin,async c=>{
+  if(!ownerPurchaseEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{return c.json({success:true,data:await readOwnerPurchaseHistory(ctx.scope.shopDb)});}
+  catch{return c.json({success:false,message:'Purchase history unavailable'},503);}
+});
+
+app.get('/api/owner/purchases/:purchaseId',protectLogin,async c=>{
+  if(!ownerPurchaseEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{
+    const data=await readOwnerPurchaseDetail(ctx.scope.shopDb,c.req.param('purchaseId'));
+    return data?c.json({success:true,data}):c.notFound();
+  }catch{return c.json({success:false,message:'Purchase detail unavailable'},503);}
+});
+
+app.post('/api/owner/purchases',protectLogin,limitBody,async c=>{
+  if(!ownerPurchaseEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c,true);
+  if(!ctx)return denied(c);
+  const input=await ownerPurchaseJson(c);
+  if(!input||Object.keys(input).length!==2||!Object.hasOwn(input,'operationId')||
+     !Object.hasOwn(input,'payload'))return purchaseError(c,'invalid');
+  const result=await postOwnerCreditPurchase(ctx.scope,{
+    token:ctx.token,ownerSubject:ctx.ownerSubject,
+    operationId:input.operationId,payload:input.payload
+  });
+  if(result.status==='created'||result.status==='replayed')
+    return c.json({success:true,data:{purchaseId:result.purchaseId,
+      grandTotal:result.grandTotal,dueAmount:result.dueAmount}},
+      result.status==='created'?201:200);
+  return purchaseError(c,result.status);
+});
+
+app.get('/api/owner/cash-session',protectLogin,async c=>{
+  if(!ownerPurchaseEnabled(c.env))return c.notFound();
+  const ctx=await verifiedOwnerPurchaseContext(c);
+  if(!ctx)return denied(c);
+  try{return c.json({success:true,data:await readOwnerCashSession(ctx.scope.shopDb)});}
+  catch{return c.json({success:false,message:'Cash Session unavailable'},503);}
+});
+
+for(const [path,operation] of [
+  ['/api/owner/cash-session/start',openOwnerCashSession],
+  ['/api/owner/cash-session/close',closeOwnerCashSession],
+]){
+  app.post(path,protectLogin,limitBody,async c=>{
+    if(!ownerPurchaseEnabled(c.env))return c.notFound();
+    const ctx=await verifiedOwnerPurchaseContext(c,true);
+    if(!ctx)return denied(c);
+    const input=await ownerPurchaseJson(c);
+    if(!input||typeof input.operationId!=='string')return purchaseError(c,'invalid');
+    const result=await operation(ctx.scope,{
+      token:ctx.token,ownerSubject:ctx.ownerSubject,...input
+    });
+    if(['started','closed','replayed','already-open'].includes(result.status)){
+      return c.json({success:true,data:{sessionId:result.sessionId,
+        ...(result.variance!==undefined?{variance:result.variance}:{}),
+        status:result.status}},result.status==='started'?201:200);
+    }
+    return purchaseError(c,result.status);
+  });
+}
 
 app.post('/api/owner/auth/challenge',protectLogin,async c=>{
   const challenge=await beginOwnerGoogleLogin(c.env)??
