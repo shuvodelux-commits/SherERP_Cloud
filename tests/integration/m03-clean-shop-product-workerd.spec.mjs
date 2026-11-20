@@ -187,6 +187,17 @@ test('private Owner candidate posts a source-ID product once and reads it from t
     const saved=await request(next);
     assert.equal(saved.status,201);
     assert.equal((await saved.json()).data.id,'PRD-000002');
+
+    // The deployed private Owner product handler must enforce the Shop lease in
+    // its D1 insert/receipt SQL, even while Control D1 still accepts this Owner.
+    await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET expires_at_ms=? WHERE singleton=1')
+      .bind(Date.now()-1000).run();
+    assert.equal((await validateOwnerSession(ownerA.env,ownerA.token)).role,'Owner');
+    const afterExpiry={...draft,name:'Expired lease product',operationId:crypto.randomUUID()};
+    assert.equal((await request(afterExpiry)).status,403,'expired Shop lease denies new Product');
+    assert.equal((await request(next)).status,403,'expired Shop lease denies receipt replay');
+    assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM products').first()).n,2);
+    assert.equal((await SHOP_A_DB.prepare('SELECT count(*) AS n FROM owner_product_create_receipts').first()).n,2);
     await SHOP_A_DB.prepare('UPDATE shop_owner_write_grant SET enabled=0').run();
     assert.equal((await request(next)).status,403);
     assert.equal((await request({...next,name:'Spanner',operationId:crypto.randomUUID()})).status,403);
