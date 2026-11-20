@@ -1,0 +1,30 @@
+name: M03 MVP first real Owner POS Cash Sale — PR-only Workerd D1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  owner-pos-cash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.161.0
+      - name: Original POS to actual Purchase FIFO/Cash Book, concurrency/rollback/two Shop D1
+        run: node --test tests/integration/m03-mvp-cash-sale-workerd.spec.mjs
+      - name: Existing operational Purchase real Shop D1 regression
+        run: node --test tests/integration/m03-mvp-operational-purchase-workerd.spec.mjs
+      - name: Original POS source adapter regressions
+        run: node --test tests/mvp-pos-v2-sale-intent.test.mjs
