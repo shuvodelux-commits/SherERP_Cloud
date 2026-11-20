@@ -5,6 +5,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {priceTileQuantity} from '../src/modules/tile-quantity-contract.js';
 import {
   exactDecimal,roundSignedAmountPaisa,quoteExactLine,
   allocateInvoicePaisa,quoteFinalSupplierReturnPaisa,quoteCashRefundPaisa
@@ -58,6 +59,7 @@ test('multi-unit snapshot ratios price by canonical physical quantity without Nu
   }); // two 12x18 inch tiles, each 1.5 Sqft
   assert.deepEqual(c.physicalQuantity,{numerator:'3',denominator:'1'});
   assert.equal(c.amountPaisa,'3002');
+  assert.throws(()=>quoteExactLine({quantity:'2',unitPrice:'10',unitRatio:undefined,roundingMode:'HALF_UP'}),TypeError);
   assert.throws(()=>quoteExactLine({quantity:'2',unitPrice:'10',unitRatio:{numerator:'0',denominator:'1'},roundingMode:'HALF_UP'}));
   assert.throws(()=>quoteExactLine({quantity:'2',unitPrice:'10',unitRatio:{numerator:'2',denominator:'0'},roundingMode:'HALF_UP'}));
 });
@@ -190,5 +192,70 @@ test('deterministic seeded randomized 500 invoice baskets conserve paisa without
     assert.equal(a.lines.reduce((s,x)=>s+BigInt(x.netPaisa),0n),BigInt(a.grandPaisa));
     assert.ok(BigInt(a.grandPaisa)<=BigInt(subtotal.grandPaisa));
     assert.ok(a.lines.every(x=>BigInt(x.netPaisa)>=0n));
+  }
+});
+
+test('source Tiles Pcs/Box/Sqft contract agrees with exact M08 proposed HALF_UP on verified rationals',()=>{
+  const base={productId:'T-8X12',revision:'1',baseUnit:'Pcs',
+    boxConversionId:'BOX-25',length:'12',width:'8',
+    dimensionUnit:'in',piecesPerBox:'25',coveragePolicy:'nominal'};
+  const variants=[
+    base,
+    {...base,length:'304.8',width:'203.2',dimensionUnit:'mm'},
+    {...base,coveragePolicy:'manufacturer',
+      manufacturerSqftPerBox:'16.668',manufacturerEvidence:'synthetic-verified-label'}
+  ];
+  for(const config of variants){
+    for(const pricingUnit of ['Pcs','Box','Sqft']){
+      const m05=priceTileQuantity(config,{mode:'pack',boxes:'2',extraPieces:'3'},
+        pricingUnit,'38.005');
+      const m08=quoteExactLine({quantity:'1',unitPrice:'38.005',
+        unitRatio:m05.billingQuantity,roundingMode:'HALF_UP'});
+      assert.equal(m08.amountPaisa,m05.lineAmountMinor,
+        'M05 Tile source ratio must agree for '+pricingUnit+'/'+config.coveragePolicy+'/'+config.dimensionUnit);
+      assert.deepEqual(m08.physicalQuantity,m05.billingQuantity);
+    }
+  }
+});
+
+test('final refund review gate prevents huge accumulated residual from micro-returns',()=>{
+  // 1000 original units worth ৳1.00, each earlier one-unit return
+  // rounds to 0 paisa; silently paying 100 paisa for the last unit is unsafe.
+  assert.throws(()=>quoteFinalSupplierReturnPaisa({
+    originalQuantity:'1000',allocatedLinePaisa:'100',
+    alreadyReturnedQuantity:'999',returnedQuantity:'1',
+    alreadyCreditedPaisa:'0',roundingMode:'HALF_UP'
+  }),/review required/i);
+});
+
+test('input data must not be mutated; accessor-backed invoice lines fail closed',()=>{
+  const line=Object.freeze({id:'A',quantity:'1.25',unitPrice:'4.005'});
+  const input=Object.freeze({lines:Object.freeze([line]),discount:'0.25',
+    roundingMode:'HALF_UP'});
+  const result=allocateInvoicePaisa(input);
+  assert.equal(result.lines[0].quantitySource,'1.25');
+  assert.equal(line.unitPrice,'4.005');
+  assert.equal(Object.hasOwn(line,'netPaisa'),false);
+  const hidden={id:'B',quantity:'1'};
+  Object.defineProperty(hidden,'unitPrice',{get:()=> '2.00',enumerable:true});
+  assert.throws(()=>allocateInvoicePaisa({lines:[hidden],discount:'0',
+    roundingMode:'HALF_UP'}),TypeError);
+});
+
+test('customer refund cash and store credit conserve return entitlement over 300 deterministic splits',()=>{
+  for(let i=0;i<300;i++){
+    const cashCollected=BigInt(i*17+100),previousRefund=BigInt(i%19);
+    const returnAmount=BigInt(i*11+30);
+    const available=cashCollected-previousRefund;
+    const selected=available<returnAmount?available:returnAmount;
+    const got=quoteCashRefundPaisa({
+      returnPaisa:String(returnAmount),
+      netCashCollectedPaisa:String(cashCollected),
+      priorCashRefundPaisa:String(previousRefund),
+      requestedCashRefundPaisa:String(selected)
+    });
+    assert.equal(BigInt(got.cashRefundPaisa)+BigInt(got.storeCreditPaisa),returnAmount);
+    assert.equal(BigInt(got.remainingCashBackingPaisa)+previousRefund+
+      BigInt(got.cashRefundPaisa),cashCollected);
   }
 });
