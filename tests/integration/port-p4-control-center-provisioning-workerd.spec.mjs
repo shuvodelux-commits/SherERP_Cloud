@@ -245,3 +245,32 @@ test('local Control Center roster lists only current Super Admin operations with
     .bind(Date.now()).run();
   assert.equal((await request('/shops/list')).status,401,'revocation takes effect at SQL read time');
 });
+
+test('Owner-ready local setup refuses baseline-only migrations before publishing Owner approval',async t=>{
+  const {request,db,env,inventory}=await startControlCenter(t);
+  const input={operationId:crypto.randomUUID(),displayName:'Owner Ready Guard',ownerEmail:'guard@gmail.com'};
+  assert.equal((await request('/shops',input)).status,202);
+  const receipt={id:inventory[0].id,binding:inventory[0].binding,evidenceRef:'baseline-only'};
+  const provider={
+    async createDatabase(action){return {...action,...receipt};},
+    async findCreation(action){return {...action,...receipt};},
+    async verifyTarget(scope,candidate){
+      return scope.databaseId===inventory[0].id&&scope.binding===inventory[0].binding&&candidate===env.SHOP_A_DB;
+    },
+    async prepareShop(scope){await applyLocalShopMigrations(env.SHOP_A_DB,scope);}
+  };
+  const result=await request('/shops/resume',{operationId:input.operationId},{
+    PLATFORM_LOCAL_OWNER_READY_ENABLED:'true',
+    PLATFORM_LOCAL_SHOP_PROVIDER:provider,
+    PLATFORM_LOCAL_SHOP_MIGRATIONS:shopMigrationPlan
+  });
+  assert.equal(result.status,200);
+  const setup=await result.json();
+  assert.notEqual(setup.status,'ready',
+    'three baseline SQL migrations cannot attest operational Owner-ready Product schema');
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_owner_gmail_approvals').first()).n,0);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_shop_bindings').first()).n,0);
+  assert.equal((await env.SHOP_A_DB.prepare(
+    "SELECT count(*) AS n FROM sqlite_schema WHERE type='table' AND name='products'"
+  ).first()).n,0);
+});
