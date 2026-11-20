@@ -1,0 +1,117 @@
+import assert from 'node:assert/strict';
+import {createHash,randomUUID} from 'node:crypto';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {test} from 'node:test';
+import {createTestHarness} from 'wrangler';
+
+const origin='https://admin.hisab.workers.dev';
+const issuer='https://accounts.google.com';
+const subject='123456789012345678901';
+const clientId='123-fixture.apps.googleusercontent.com';
+const setupToken='c'.repeat(64);
+const nonce='a'.repeat(43);
+const hash=token=>createHash('sha256').update(Buffer.from(token,'hex')).digest('hex');
+
+test('local Workerd/D1: Accessless Admin requires approved setup and real authenticated sessions',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'shererp-m04-accessless-'));
+  const configPath=join(directory,'wrangler.json');
+  const config={
+    name:'shererp-m04-accessless-local-test',
+    main:resolve('src/auth/m04-accessless-platform-admin-worker.js'),
+    compatibility_date:'2026-11-14',
+    workers_dev:false,preview_urls:false,
+    vars:{
+      PLATFORM_AUTH_MODE:'google-totp-without-access',
+      PLATFORM_AUTH_SCOPE:'private-platform-auth',
+      PLATFORM_AUTH_ORIGIN:origin,
+      PLATFORM_CLIENT_ID:clientId,
+      PLATFORM_OPERATOR_GOOGLE_SUBJECT:subject,
+      PLATFORM_TOTP_SECRET:'f'.repeat(40),
+      PLATFORM_FACTOR_VERSION:'1',
+    },
+    rules:[{
+      type:'Text',
+      globs:['**/platform-auth/index.html','**/platform-auth/platform-auth.css','**/platform-auth/platform-auth.js'],
+      fallthrough:true,
+    }],
+    d1_databases:[{
+      binding:'CONTROL_DB',database_name:'m04-accessless-synthetic',database_id:randomUUID(),
+      migrations_dir:resolve('staging-migrations/platform-auth'),remote:false,
+    }],
+    ratelimits:[{
+      name:'PLATFORM_INGRESS',namespace_id:'100003',simple:{limit:50,period:60},
+    }],
+  };
+  await writeFile(configPath,JSON.stringify(config),{mode:0o600});
+  const harness=createTestHarness({workers:[{configPath}]});
+  try{
+    await harness.listen();
+    const worker=harness.getWorker(config.name);
+    await worker.applyD1Migrations('CONTROL_DB');
+    const {CONTROL_DB:db}=await worker.getEnv();
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_first_superadmin').first()).n,0);
+    const get=(path='/',options={})=>worker.fetch(origin+path,options);
+    const post=(path,payload,extraHeaders={})=>get(path,{
+      method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...extraHeaders},
+      body:JSON.stringify(payload),
+    });
+    const page=await get('/');
+    assert.equal(page.status,200);
+    assert.match(await page.text(),/Platform sign-in/);
+    assert.equal(page.headers.get('Cache-Control'),'no-store');
+    assert.equal((await get('/api/platform/auth/session')).status,403,
+      'before enrollment, no ordinary session can exist');
+    assert.equal((await post('/api/platform/setup/challenge',{setupToken})).status,403,
+      'a random ticket never bootstraps an administrator');
+
+    const now=Date.now();
+    await db.prepare('INSERT INTO platform_setup_tickets VALUES (?,?,?,?,?,?,NULL)')
+      .bind(hash(setupToken),nonce,issuer,subject,now-1000,now+120000).run();
+    const setup=await post('/api/platform/setup/challenge',{setupToken});
+    assert.equal(setup.status,200);
+    assert.deepEqual(await setup.json(),{clientId,nonce});
+    assert.match(setup.headers.get('Set-Cookie'),/HttpOnly/);
+    const cookie=setup.headers.get('Set-Cookie').split(';')[0];
+    assert.equal((await post('/api/platform/setup',{credential:'forged'},{
+      Cookie:cookie,
+    })).status,401,'invalid Google signature does not enroll');
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_first_superadmin').first()).n,0);
+
+    // Insert synthetic authority in the disposable local database ONLY to
+    // probe the runtime boundary. Actual hosted enrollment uses a signed
+    // nonce-bound Google credential and the reviewed one-time ticket issuer.
+    await db.prepare('INSERT INTO platform_first_superadmin VALUES (1,?,?,?,?)')
+      .bind(issuer,subject,hash(setupToken),now).run();
+    await db.prepare('INSERT INTO platform_admin_auth VALUES (1,1,1)').run();
+    const login=await get('/');
+    assert.equal(login.status,200);
+    assert.match(await login.text(),/Platform sign-in/);
+    const notSignedIn=await get('/api/platform/auth/session',{headers:{
+      'CF-Access-Jwt-Assertion':'forged',
+      'CF-Access-Authenticated-User-Email':'admin@example.test',
+      Cookie:'CF_Authorization=forged',
+    }});
+    assert.equal(notSignedIn.status,401);
+    const challenge=await post('/api/platform/auth/challenge');
+    assert.equal(challenge.status,200);
+    const payload=await challenge.json();
+    assert.equal(payload.clientId,clientId);
+    assert.match(payload.nonce,/^[A-Za-z0-9_-]{43}$/);
+    const fresh=await db.prepare('SELECT count(*) AS n FROM platform_login_challenges').first();
+    assert.equal(fresh.n,1);
+    const browserCookie=challenge.headers.get('Set-Cookie').split(';')[0];
+    assert.equal((await post('/api/platform/auth/login',{credential:'forged',code:'123456'},{
+      Cookie:browserCookie,
+    })).status,401);
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM platform_admin_sessions').first()).n,0);
+    assert.equal((await worker.fetch('https://shererp.hisab.workers.dev/')).status,403);
+    assert.equal((await post('/api/platform/auth/challenge',{},{
+      Origin:'https://attacker.example.test',
+    })).status,403);
+  }finally{
+    await harness.close();
+    await rm(directory,{recursive:true,force:true});
+  }
+});
