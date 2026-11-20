@@ -15,6 +15,7 @@ import {createOwnerProduct} from '../../src/db/m03-owner-product-create.js';
 import {createOwnerSupplier} from '../../src/db/m03-owner-supplier-create.js';
 import {openOwnerCashSession,postOwnerCreditPurchase,closeOwnerCashSession}
   from '../../src/db/m03-owner-mvp-purchase.js';
+import {postOwnerCashSale} from '../../src/db/m03-owner-mvp-cash-sale.js';
 import {postOwnerSupplierCashPayment,readOwnerSupplierCashPayments}
   from '../../src/db/m08-owner-supplier-cash-pay.js';
 
@@ -64,6 +65,20 @@ async function purchase(owner){
     }
   });
 }
+async function sale(owner){
+  return postOwnerCashSale(scope(owner),{...actor(owner),
+    operationId:crypto.randomUUID(),shopName:'Cash Test Shop',
+    payload:{
+      customerId:'',customerName:'Walk-in',customerPhone:'01712345678',
+      customerFatherName:'',customerRelationType:'',customerAddress:'',
+      items:[{productId:'PRD-000001',name:'Supplier Pay Pipe',qty:2,
+        unitPrice:75,priceMode:'auto',shortageResolution:'negative',
+        bundleRevision:0,productType:'Standard'}],
+      discount:0,paymentType:'Cash',paidAmount:150,
+      paymentMethod:'Cash',bankAccountId:''
+    }
+  });
+}
 const payment=(patch={})=>({
   supplierId:'SUP-000001',amount:'100.25',paymentMethod:'Cash',
   bankAccountId:'',notes:'Cash to supplier',date:nowDay(),backdatedReason:'',
@@ -79,6 +94,8 @@ test('Counter Supplier Pay: credit purchase then cash payout posts exact due and
     await migrate(a);await migrate(b);
     await init(ownerA);await init(ownerB);
     assert.equal((await purchase(ownerA)).status,'created');
+    assert.equal((await post(ownerA)).status,'insufficient-cash');
+    assert.equal((await sale(ownerA)).status,'created');
     assert.equal((await first(a,'SELECT current_due_paisa AS due FROM owner_supplier_master')).due,60000);
     const operationId=crypto.randomUUID(),input=payment();
     const result=await post(ownerA,input,operationId);
@@ -151,6 +168,7 @@ test('SQL trigger failure rolls back receipt, due, credit ledger and cash leg at
   try{
     await migrate(a);await init(ownerA);
     assert.equal((await purchase(ownerA)).status,'created');
+    assert.equal((await sale(ownerA)).status,'created');
     await a.prepare(`CREATE TRIGGER test_fail_cash BEFORE INSERT ON
       owner_mvp_supplier_payment_cash_book
       BEGIN SELECT RAISE(ABORT,'injected supplier cash failure'); END`).run();
@@ -168,6 +186,7 @@ test('a Cash Session with supplier payout cannot be falsely closed by the older 
   const {ownerA,SHOP_A_DB:a,close}=await startCleanShopHarness();
   try{
     await migrate(a);await init(ownerA);await purchase(ownerA);
+    assert.equal((await sale(ownerA)).status,'created');
     assert.equal((await post(ownerA)).status,'created');
     const closeAttempt=await closeOwnerCashSession(scope(ownerA),{...actor(ownerA),
       operationId:crypto.randomUUID(),countedCash:'0',notes:'Incomplete formula'});
@@ -190,6 +209,7 @@ test('direct D1 spoofed grant cannot bypass SQL-time Owner validation; posted le
         1,100,'forged',nowDay(),Date.now()).run(),/MVP_SUPPLIER_CASH_OWNER_REQUIRED/);
     assert.equal((await first(a,'SELECT current_due_paisa AS due FROM owner_supplier_master')).due,60000);
     assert.equal((await first(a,'SELECT count(*) AS n FROM owner_mvp_supplier_cash_payment_receipts')).n,0);
+    assert.equal((await sale(ownerA)).status,'created');
     assert.equal((await post(ownerA)).status,'created');
     await assert.rejects(()=>a.prepare(
       "UPDATE owner_mvp_supplier_payment_ledger SET credit_paisa=1 WHERE payment_sequence=1"
