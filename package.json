@@ -9,6 +9,7 @@
     "test": "node --test",
     "audit": "node scripts/audit-source.mjs legacy/source",
     "verify:source": "node scripts/verify-source.mjs legacy/source docs/baseline/source-manifest.json",
+    "docs:check": "node scripts/check-project-docs.mjs",
     "build:frontend:raw": "node scripts/build-frontend.mjs legacy/source dist",
     "build:frontend": "npm run build:frontend:raw && node scripts/patch-rpc.mjs dist/index.html && node scripts/patch-auth-shell.mjs dist/index.html && node scripts/patch-posv2-visibility.mjs dist/index.html && node scripts/patch-m01-a11y.mjs dist/index.html && node scripts/patch-m01-products-preview.mjs dist/index.html",
     "build:owner-frontend": "node scripts/build-owner-frontend.mjs",
