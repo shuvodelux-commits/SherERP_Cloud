@@ -327,9 +327,17 @@ migrations, and a 20-request/minute ingress limit. The earlier
 `shererp-control` D1 was **not** modified or deleted. This is a staging
 bootstrap, not a production ERP/tenant-onboarding release.
 
-The Worker currently returns **HTTP 503 (fail closed)** because the two
-required secrets have not been installed yet. This is intentional and
-must not be bypassed. Finish using **Cloudflare Dashboard**, without SQL:
+**Verified live state (20 November 2026):** Both required secrets have now
+been installed by the operator. Google/TOTP activation succeeded: the new
+Control D1 has **one immutable first Admin and one active MFA factor**, and
+`GET /api/platform/wizard` returns `{"setup":false}`. The private Admin
+page returns HTTP 200, while an unauthenticated session returns 401.
+The minimal Control Center overview fix from PR #817 was also deployed
+as Worker version `bfe01332-5177-428c-8cfc-51031dbd4bd6`.
+Business directory and hosted shop provisioning remain disabled.
+
+**For future fresh Cloudflare-account installations, complete these same
+Cloudflare Dashboard steps, without SQL:**
 
 1. In the correct Cloudflare account, open **Workers & Pages → admin →
    Settings → Variables and Secrets**. Add **Secret**
@@ -355,12 +363,13 @@ must not be bypassed. Finish using **Cloudflare Dashboard**, without SQL:
    subsequent sessions must require Google plus current TOTP. Verify
    sign-out, wrong-account denial and old-session revocation.
 
-**Release boundary:** The two secrets and interactive Google/TOTP
-enrollment are still pending operator action. Until they succeed, do not
-claim this Admin is fully operational. Shop D1 creation and ERP transaction
-APIs remain a separate integration gate. A one-time bootstrap secret is
-required because merely controlling an arbitrary Gmail must never allow a
-public visitor to claim the first platform administrator.
+**Release boundary:** The Super Admin identity and MFA are active in this
+new account; their setup wizard is permanently closed for this D1. However,
+this does **not** make the platform's business onboarding operational.
+Shop D1 creation, Owner setup and ERP transaction APIs remain separate
+integration gates, and no tenant-provisioning or financial write feature
+was enabled by the authentication rollout. The one-time bootstrap secret
+prevents an arbitrary Gmail visitor from claiming the first Admin.
 
 **Existing ticket-based installation:**
 
