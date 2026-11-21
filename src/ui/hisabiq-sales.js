@@ -293,6 +293,21 @@
         (pair[2]==='phone'?'No phone':'');
       helper.hidden=visible[pair[2]];
     });
+    var actionCell=tr.querySelector('td.erp-sticky-action-col');
+    if(actionCell && !actionCell.querySelector('.h-sales-details-button')){
+      var disclosure=document.createElement('button');
+      disclosure.type='button';disclosure.className='h-sales-details-button';
+      disclosure.textContent='▸ More details';
+      disclosure.setAttribute('aria-expanded','false');
+      disclosure.setAttribute('aria-label','More details for invoice');
+      disclosure.addEventListener('click',function(event){
+        event.stopPropagation();
+        var open=tr.classList.toggle('h-sales-mobile-expanded');
+        disclosure.textContent=open?'▾ Less details':'▸ More details';
+        disclosure.setAttribute('aria-expanded',String(open));
+      });
+      actionCell.insertBefore(disclosure,actionCell.firstChild);
+    }
     if(!tr.dataset.hSalesRowWired){
       tr.dataset.hSalesRowWired='true';tr.tabIndex=0;
       tr.setAttribute('aria-label','Open sales invoice details');
