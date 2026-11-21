@@ -66,3 +66,13 @@ normal counted Close Day and subsequent carry preserve the audit trail.
 - Legacy pre-0012 SQL still rejects first nonzero opening.
 - Hosted prebound verifier must accept exact 0012 and reject modified
   opening triggers/unknown schema while preserving 13 receipts.
+
+
+## Cross-workstream migration ordering (M03 #765)
+
+First-day Cash opening owns Shop D1 migration `0012`. Staged Support Product
+permits are now numbered `0013`, applied only *after* the first-day Cash
+schema, not as an alternative `0012`. The pinned schema verifier supports
+the exact combined profile without allowing unknown DDL. This change does
+not apply either migration to the live Shop and does not alter an already-Open
+zero-valued Session.

@@ -169,6 +169,60 @@ test('lost-phone recovery requires matching Google nonce and one unused backup c
     'until factor rotation succeeds, existing sessions are still governed by normal grants');
 });
 
+
+test('MFA rotation before recovery SQL batch cannot consume a saved recovery code',async t=>{
+  googleMock(t);
+  const f=await fixture(t),codes=await issueAdminRecoveryCodes(f.env,f.session,totp());
+  const ch=await f.challenge();
+  let batches=0;
+  const raced={...f.env,CONTROL_DB:{
+    prepare:(...args)=>f.db.prepare(...args),
+    batch:async statements=>{
+      batches++;
+      // Verification read the old factor, but current authority changes
+      // before the code-consumption transaction begins.
+      await f.db.prepare('UPDATE platform_admin_auth SET factor_version=2 WHERE singleton=1').run();
+      return f.db.batch(statements);
+    }
+  }};
+  assert.equal(await beginAdminMfaRecovery(raced,{
+    browserToken:ch.browserToken,credential:f.credential(ch.nonce),recoveryCode:codes[0]
+  }),null);
+  assert.equal(batches,1,'the injected stale-authority window was exercised');
+  assert.equal((await f.db.prepare(
+    'SELECT COUNT(*) AS n FROM platform_admin_recovery_codes WHERE consumed_at_ms IS NOT NULL').first()).n,
+  0,'stale factor version must not burn a valid saved recovery code');
+  assert.equal((await f.db.prepare('SELECT COUNT(*) AS n FROM platform_admin_recovery_pending').first()).n,
+    0,'stale factor version must not create a replacement authenticator');
+});
+
+test('cancelled Google recovery challenge cannot burn backup code in D1',async t=>{
+  googleMock(t);
+  const f=await fixture(t),codes=await issueAdminRecoveryCodes(f.env,f.session,totp());
+  const ch=await f.challenge();
+  const binding=await hashOpaqueSessionToken(ch.browserToken);
+  let batches=0;
+  const raced={...f.env,CONTROL_DB:{
+    prepare:(...args)=>f.db.prepare(...args),
+    batch:async statements=>{
+      batches++;
+      await f.db.prepare(
+        'INSERT INTO platform_login_cancellations (binding_hash,cancelled_at_ms) VALUES (?,?)'
+      ).bind(binding,Date.now()).run();
+      return f.db.batch(statements);
+    }
+  }};
+  assert.equal(await beginAdminMfaRecovery(raced,{
+    browserToken:ch.browserToken,credential:f.credential(ch.nonce),recoveryCode:codes[0]
+  }),null);
+  assert.equal(batches,1,'the cancellation occurred after Google identity verification');
+  assert.equal((await f.db.prepare(
+    'SELECT COUNT(*) AS n FROM platform_admin_recovery_codes WHERE consumed_at_ms IS NOT NULL').first()).n,
+  0,'cancelled challenge must leave recovery codes usable');
+  assert.equal((await f.db.prepare('SELECT COUNT(*) AS n FROM platform_admin_recovery_pending').first()).n,
+    0,'cancelled challenge must never create pending authenticator replacement');
+});
+
 test('recovery confirms a NEW authenticator, rotates factor and invalidates every old session/code',async t=>{
   googleMock(t);
   const f=await fixture(t),codes=await issueAdminRecoveryCodes(f.env,f.session,totp());

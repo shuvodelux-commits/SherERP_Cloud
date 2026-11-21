@@ -7,7 +7,9 @@
   font-feature-settings:normal;
   font-variant-numeric:proportional-nums;
 }
-#page-products.hpt-page .hpt-no-actions {display:none!important}
+/* Follow the actual server-authorized button visibility; never freeze the
+ * toolbar into a hidden state before the asynchronous catalog read completes. */
+#page-products.hpt-page .hpt-original-actions:not(:has(#prodAddBtn:not([hidden]), #prodUnpricedLotsBtn:not([hidden]))) {display:none!important}
 #page-products.hpt-page .hpt-original-actions {
   display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin:0 0 12px;
 }

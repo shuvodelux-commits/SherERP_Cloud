@@ -60,6 +60,34 @@ function resultRows(raw,key) {
     throw new Error('Party data limit or source unavailable');
   return raw[key];
 }
+/**
+ * Optional authenticated Supplier historical opening checkpoint. The current
+ * due includes positive opening payable, but the negative Supplier advance is
+ * a distinct asset and MUST NOT net against current due or Party role accounts.
+ * Older Shop schemas do not expose these extra fields.
+ */
+function sourceSupplierOpening(row,keys,sourceMoney=false) {
+  const [signedKey,payableKey,advanceKey]=keys;
+  const trigger=[payableKey,advanceKey].some(key=>Object.hasOwn(row,key));
+  if(!trigger) {
+    // Pre-overlay Supplier source rows have an independent original opening
+    // column; validate that money but never claim an operational checkpoint.
+    if(sourceMoney){
+      if(Object.hasOwn(row,signedKey))parseMoneyPaisa(row[signedKey]);
+    }else if(Object.hasOwn(row,signedKey))throw new Error(SOURCE_ERROR);
+    return null;
+  }
+  if(!keys.every(key=>Object.hasOwn(row,key)))throw new Error(SOURCE_ERROR);
+  const read=sourceMoney?parseMoneyPaisa:safePaisa;
+  const signedPaisa=read(row[signedKey]);
+  const payablePaisa=read(row[payableKey]);
+  const advancePaisa=read(row[advanceKey]);
+  if(payablePaisa!==Math.max(0,signedPaisa)||
+     advancePaisa!==Math.max(0,-signedPaisa))
+    throw new Error(SOURCE_ERROR);
+  return {signedPaisa,payablePaisa,advancePaisa};
+}
+
 export function sourceSupplierParties(raw) {
   const seen=new Set();
   return resultRows(raw,'suppliers').map(row=>{
@@ -68,13 +96,18 @@ export function sourceSupplierParties(raw) {
       throw new Error('Invalid or duplicate Supplier source record');
     seen.add(row['Supplier ID']);
     const due=parseMoneyPaisa(row['Current Due']);
+    const supplierOpening=sourceSupplierOpening(row,
+      ['Opening Balance','Opening Payable','Supplier Advance'],true);
+    const receivablePaisa=safePaisa((due<0?-due:0)+
+      (supplierOpening?.advancePaisa||0));
     return {
       id:'source:'+row['Supplier ID'],partyId:null,sourceOnly:true,
       sourceIds:{Supplier:row['Supplier ID']},
       name:textField(row['Supplier Name'],120),
       nameBn:'',phone:textField(row.Phone,40),address:textField(row.Address,250),
       roles:['Supplier'],status:row.Status==='Inactive'?'Inactive':'Active',
-      gross:{Supplier:{receivablePaisa:due<0?-due:0,payablePaisa:due>0?due:0}}
+      supplierOpening,
+      gross:{Supplier:{receivablePaisa,payablePaisa:due>0?due:0}}
     };
   });
 }
@@ -134,18 +167,28 @@ export function projectSupplierStatement(raw,expectedSourceId){
     !Number.isSafeInteger(row.currentDuePaisa)||
     typeof row.hasMore!=='boolean'||!Array.isArray(row.entries)||row.entries.length>50)
     throw new Error('Supplier statement unavailable');
+  const supplierOpening=sourceSupplierOpening(row,
+    ['openingBalancePaisa','openingPayablePaisa','supplierAdvancePaisa']);
   const entries=row.entries.map(entry=>{
-    if(!plainObject(entry)||!['Purchase','Supplier Payment'].includes(entry.kind)||
-      !/^(PUR|SPY)-[0-9]{6,}$/.test(entry.reference)||
+    const opening=entry?.kind==='Historical Opening';
+    if(!plainObject(entry)||
+      !['Purchase','Supplier Payment','Historical Opening'].includes(entry.kind)||
+      !(opening
+        ? /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(entry.reference)
+        : /^(PUR|SPY)-[0-9]{6,}$/.test(entry.reference))||
       !/^\d{4}-\d{2}-\d{2}$/.test(entry.purchaseDate)||
       !Number.isSafeInteger(entry.debitPaisa)||entry.debitPaisa<0||
       !Number.isSafeInteger(entry.creditPaisa)||entry.creditPaisa<0||
-      !Number.isSafeInteger(entry.balancePaisa))
+      !Number.isSafeInteger(entry.balancePaisa)||
+      (opening&&(!supplierOpening||entry.creditPaisa!==0||
+        entry.debitPaisa!==supplierOpening.payablePaisa)))
       throw new Error('Invalid Supplier statement row');
     return {kind:entry.kind,reference:entry.reference,date:entry.purchaseDate,
       debitPaisa:entry.debitPaisa,creditPaisa:entry.creditPaisa,
       balancePaisa:entry.balancePaisa};
   });
+  if(entries.filter(entry=>entry.kind==='Historical Opening').length>1)
+    throw new Error('Invalid Supplier statement row');
   if(entries.length && entries[0].balancePaisa!==row.currentDuePaisa)
     throw new Error('Supplier statement balance mismatch');
   for(let i=1;i<entries.length;i++) {
@@ -155,7 +198,7 @@ export function projectSupplierStatement(raw,expectedSourceId){
   }
   return {scope:row.scope,currentDuePaisa:row.currentDuePaisa,
     entries,complete:!row.hasMore,sourceId:expectedSourceId,
-    cashPayAvailable:row.cashPayAvailable===true};
+    supplierOpening,cashPayAvailable:row.cashPayAvailable===true};
 }
 
 export function sourceSupplierCreatePayload(values,operationId){
@@ -353,7 +396,10 @@ export function mountOwnerParties(){
       (state.tab==='Bills'&&row.kind==='Purchase')||
       (state.tab==='Payments'&&row.kind==='Supplier Payment'));
     const toolbar=create('div','hparty-ledger-toolbar');
-    const heading=create('strong','',state.tab==='Ledger'?'Supplier purchase & cash-payment ledger':state.tab);
+    const heading=create('strong','',state.tab==='Ledger'
+      ?(rows.some(row=>row.kind==='Historical Opening')
+        ?'Supplier opening, purchase & cash-payment ledger'
+        :'Supplier purchase & cash-payment ledger'):state.tab);
     toolbar.append(heading);
     if(state.tab==='Ledger') {
       const exportButton=asButton('CSV · রপ্তানি','hds-button');
@@ -417,6 +463,11 @@ export function mountOwnerParties(){
         card.dataset.kind=kind;
         card.append(create('small','',kind+(kind==='Receivable'?' · পাওনা':' · দেনা')),
           create('strong','',formatMoneyPaisa(value)));
+        if(kind==='Receivable'&&state.relationship==='Supplier'&&
+           p.supplierOpening?.advancePaisa>0)
+          card.append(create('small','hparty-balance-note',
+            'Supplier advance '+formatMoneyPaisa(p.supplierOpening.advancePaisa)+
+            ' · সাপ্লায়ার অগ্রিম'));
         finances.append(card);
       }
     }else if(state.relationship==='Payee'){
@@ -503,7 +554,10 @@ export function mountOwnerParties(){
             balances.append(create('strong','',formatMoneyPaisa(
               owed?account.payablePaisa:account.receivablePaisa)));
             balances.append(create('small','',owed?'Payable · দেনা':
-              account.receivablePaisa>0?'Advance · অগ্রিম':'Settled'));
+              account.receivablePaisa>0?'Receivable · পাওনা':'Settled'));
+            if(owed&&account.receivablePaisa>0)
+              balances.append(create('small','',
+                'Receivable '+formatMoneyPaisa(account.receivablePaisa)+' · পাওনা'));
           }else balances.append(create('small','', 'Balance unavailable'));
         }
         button.append(initials,content,balances);

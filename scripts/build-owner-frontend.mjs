@@ -9,6 +9,9 @@ import {patchM01Accessibility} from './patch-m01-a11y.mjs';
 import {installM01ProductsPreviewAssets,patchM01ProductsPreview} from './patch-m01-products-preview.mjs';
 import {installOwnerHisabiqParties} from './patch-owner-hisabiq-parties.mjs';
 import {installOwnerHisabiqProducts} from './patch-owner-hisabiq-products.mjs';
+import {installOwnerHisabiqSettings} from './patch-owner-hisabiq-settings.mjs';
+import {installOwnerHisabiqUnitEditor} from './patch-owner-hisabiq-unit-editor.mjs';
+import {installOwnerHisabiqPos} from './patch-owner-hisabiq-pos.mjs';
 
 const ownerNotice='<div id="owner-data-notice" role="status" style="padding:10px 16px;background:#fff4ce;color:#573b00;border-bottom:1px solid #e8c86b;font-weight:600;">Business data is not connected. ERP screens are visible, but reads and saves are unavailable.</div>';
 const ownerSupportActivity="<section id=\"owner-support-activity\" aria-label=\"Owner support activity\" hidden><div class=\"owner-support-title\">Support activity · read-only</div><p>The Super Admin support history for this shop. Only your own business is shown.</p><button type=\"button\" id=\"owner-support-refresh\" aria-controls=\"owner-support-events\">View support activity</button><p id=\"owner-support-status\" role=\"status\" aria-live=\"polite\"></p><ol id=\"owner-support-events\" aria-label=\"Recorded support actions\"></ol></section>";
@@ -657,6 +660,9 @@ export async function buildOwnerFrontend({sourceDir='legacy/source',outputDir='d
   html=patchOwnerApp(html);
   html=await installOwnerHisabiqParties(html);
   html=await installOwnerHisabiqProducts(html);
+  html=await installOwnerHisabiqSettings(html);
+  html=await installOwnerHisabiqUnitEditor(html);
+  html=await installOwnerHisabiqPos(html);
   const indexPath=join(output,'owner-erp.html');
   await writeFile(indexPath,html,'utf8');
   await copyFile('frontend/owner-auth/index.html',built.outputPath);

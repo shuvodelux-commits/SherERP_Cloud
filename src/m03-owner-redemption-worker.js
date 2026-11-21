@@ -7,7 +7,8 @@ import {acceptOwnerInvite,readOwnerInviteChallenge} from './auth/platform-owner-
 import {buildSourceAppShellData} from './modules/source-app-shell-reader.js';
 import {readCleanOwnerCatalog,readOwnerCatalog} from './db/m03-owner-catalog-read.js';
 import {createOwnerProduct} from './db/m03-owner-product-create.js';
-import {createOwnerSupplier,readOwnerSupplierBootstrap} from './db/m03-owner-supplier-create.js';
+import {createOwnerSupplier,readOwnerSupplierBootstrap,
+  recordOwnerSupplierOpening} from './db/m03-owner-supplier-create.js';
 import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,readOwnerCashOpeningSuggestion,
   postOwnerCreditPurchase,readOwnerPurchaseBootstrap,readOwnerPurchaseHistory,
   readOwnerPurchaseDetail} from './db/m03-owner-mvp-purchase.js';
@@ -22,6 +23,7 @@ import {postOwnerSupplierCashPayment} from './db/m08-owner-supplier-cash-pay.js'
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
+import {registerOwnerInvoiceProfileRoutes} from './modules/m09-owner-invoice-profile-routes.js';
 
 const app=new Hono();
 const INVITE_COOKIE='__Host-shererp-owner-invite';
@@ -179,10 +181,45 @@ app.post('/api/owner/suppliers',protectLogin,limitBody,async c=>{
   if(result.status==='denied')
     return c.json({success:false,message:'Owner supplier access is unavailable.'},403);
   if(result.status==='invalid')
-    return c.json({success:false,message:'Enter a supplier name. Nonzero opening balances require a ledger.'},400);
+    return c.json({success:false,message:'Enter a Supplier name and valid signed opening amount.'},400);
+  if(result.status==='unsupported')
+    return c.json({success:false,message:'Historical opening requires the reviewed Supplier ledger migration.'},503);
   if(result.status==='unavailable')
     return c.json({success:false,message:'Supplier source history is not verified.'},503);
   return c.json({success:false,message:'Supplier already exists or saved details changed.'},409);
+});
+
+// A Supplier created before the historical-opening extension may record one
+// immutable signed opening, but never after Purchases or payments have posted.
+// No Cash Session is required because this is not a cash movement.
+app.post('/api/owner/suppliers/:supplierId/opening',protectLogin,limitBody,async c=>{
+  if(!supplierApiEnabled(c.env))return c.notFound();
+  const token=getCookie(c,SESSION_COOKIE);
+  const session=await validateOwnerSession(c.env,token,{includeOwnerSubject:true});
+  const scope=pilotShopConfiguration(c.env);
+  if(!session||!scope||session.shopId!==scope.shopId)return denied(c);
+  if(c.req.header('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json')
+    return c.json({success:false,message:'Expected a JSON historical opening.'},400);
+  const input=await c.req.json().catch(()=>null);
+  if(!input||typeof input!=='object'||Array.isArray(input)||
+     Object.keys(input).length!==2||!Object.hasOwn(input,'operationId')||
+     !Object.hasOwn(input,'openingBalance'))
+    return c.json({success:false,message:'Invalid Supplier opening request.'},400);
+  const result=await recordOwnerSupplierOpening(scope,{
+    token,ownerSubject:session.ownerSubject,
+    supplierId:c.req.param('supplierId'),
+    operationId:input.operationId,openingBalance:input.openingBalance
+  });
+  if(result.status==='created'||result.status==='replayed')
+    return c.json({success:true,data:{supplierId:result.supplierId}},
+      result.status==='created'?201:200);
+  if(result.status==='invalid')return c.json({success:false,message:'Invalid signed opening amount.'},400);
+  if(result.status==='denied')return c.json({success:false,message:'Owner Supplier opening denied.'},403);
+  if(result.status==='unsupported')
+    return c.json({success:false,message:'Supplier historical ledger migration is not installed.'},503);
+  if(result.status==='conflict')
+    return c.json({success:false,message:'Supplier opening is already recorded or money activity exists.'},409);
+  return c.json({success:false,message:'Supplier opening unavailable.'},503);
 });
 
 // M03 MVP first operational credit Purchase is private, explicitly opt-in,
@@ -283,6 +320,15 @@ async function verifiedOwnerPurchaseContext(c,subject=false,dashboard=false){
      !await pilotShopIdentityMatches(scope))return null;
   return {token,ownerSubject:session.ownerSubject,shopName:session.dashboard?.displayName,scope};
 }
+
+// M03 sole shared Worker integrator. The installed M09 routes are flag-OFF by
+// default and reuse the current private Owner cookie, Origin and Shop D1 gate.
+// This adds no public RPC, staff account access, invoice printer or D1 migration.
+registerOwnerInvoiceProfileRoutes(app,{
+  protectLogin,
+  limitBody,
+  currentOwnerContext:c=>verifiedOwnerPurchaseContext(c,true),
+});
 function purchaseError(c,status){
   if(status==='denied')return c.json({success:false,message:'Purchase Owner access denied.'},403);
   if(status==='session-required')return c.json({success:false,

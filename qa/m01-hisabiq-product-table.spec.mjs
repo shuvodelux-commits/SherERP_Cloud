@@ -102,6 +102,21 @@ for(const width of widths){
   });
 }
 
+test('Owner Product toolbar follows asynchronous catalog write capability without re-mounting',async()=>{
+ const page=await browser.newPage({viewport:{width:390,height:800}});
+ try{await setup(page);if(baseline)return;
+  const toolbar=page.locator('#page-products .hpt-original-actions');
+  const add=page.locator('#prodAddBtn');
+  assert.equal(await add.isVisible(),false,'Owner action is hidden before a verified operational catalog');
+  assert.equal(await toolbar.isVisible(),false,'empty action toolbar should be hidden');
+  await add.evaluate(button=>{button.hidden=false;button.style.removeProperty('display');});
+  await toolbar.waitFor({state:'visible'});
+  assert.equal(await add.isVisible(),true,'verified operational catalog makes the original Add Product button usable');
+  await add.evaluate(button=>{button.hidden=true;});
+  assert.equal(await toolbar.isVisible(),false,'revoking the capability hides the empty toolbar again');
+ }finally{await page.close();}
+});
+
 test('Stock tabs, category chips, search, source sorting and clear filters operate together',async()=>{
  const page=await browser.newPage({viewport:{width:1024,height:850}});
  page.setDefaultTimeout(6500);

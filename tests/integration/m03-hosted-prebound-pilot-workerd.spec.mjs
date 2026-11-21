@@ -9,7 +9,8 @@ import {generateHostedPilotMigrations,composeHostedShopMigrations,
 import {verifiedPreboundPilot} from '../../src/auth/m03-hosted-prebound-pilot.js';
 import {readPortP2ShopCheckpoint} from '../../src/db/port-p2-shop-schema.js';
 import {matchesApprovedSupplierCashSchemaOverlay,
-  matchesApprovedFirstDayOpeningSchemaOverlay}
+  matchesApprovedFirstDayOpeningSchemaOverlay,matchesApprovedSupplierOpeningSchemaOverlay,
+  matchesApprovedSupportProductSchemaOverlay}
   from '../../src/db/m03-approved-supplier-overlay.js';
 import {beginFirstOwnerGmailLogin} from '../../src/auth/platform-owner-gmail-login.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
@@ -128,6 +129,53 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
   assert.equal(await matchesApprovedFirstDayOpeningSchemaOverlay(
     firstDayReceipts.at(-1).schema,firstDayReceipts.at(-1).schema),false,
     'original schema must not be confused with the reviewed first-day extension');
+
+  // Supplier historical openings are the *next* SQL overlay, preserving the
+  // separate negative advance rather than netting it into live Supplier AP.
+  const supplierOpening=await readFile(
+    'staging-migrations/shop-owner-write/0013_owner_supplier_historical_opening.sql','utf8');
+  await shopDb.batch(unstable_splitSqlQuery(supplierOpening).map(sql=>shopDb.prepare(sql)));
+  const {receipts:signedReceipts,schema:signedSchema}=
+    await readPortP2ShopCheckpoint(shopDb);
+  assert.equal(signedReceipts.length,13);
+  assert.equal(await matchesApprovedSupplierOpeningSchemaOverlay(
+    signedReceipts.at(-1).schema,signedSchema),true);
+  assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
+    'verified 0013 Supplier checkpoint must preserve first-Shop identity');
+  const tampered=JSON.parse(signedSchema);
+  const openingTrigger=tampered.find(row=>row[1]==='owner_supplier_opening_post');
+  openingTrigger[3]=openingTrigger[3].replace('signed_opening_paisa>0',
+    'signed_opening_paisa>=0');
+  assert.equal(await matchesApprovedSupplierCashSchemaOverlay(
+    signedReceipts.at(-1).schema,JSON.stringify(tampered)),false,
+    'modified historical payable posting must fail closed');
+
+  // M03 Support Product must coexist with the pinned first-day Cash and
+  // Supplier Cash overlays; unreviewed DDL still fails closed.
+  const supportProductSql=await readFile(
+    'staging-migrations/shop-owner-write/0014_support_product_permit.sql','utf8');
+  await shopDb.batch(unstable_splitSqlQuery(supportProductSql).map(sql=>shopDb.prepare(sql)));
+  const {receipts:combinedReceipts,schema:combinedSchema}=
+    await readPortP2ShopCheckpoint(shopDb);
+  assert.equal(combinedReceipts.length,13,'combined overlay must retain all baseline receipts');
+  assert.equal(await matchesApprovedSupportProductSchemaOverlay(
+    combinedReceipts.at(-1).schema,combinedSchema),true,
+    'exact Supplier 0013 and Support 0014 overlays must both be accepted');
+  assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
+    'Owner readiness must survive exact Supplier + Support migration composition');
+  const tamperedSupport=JSON.parse(combinedSchema);
+  const gate=tamperedSupport.find(row=>row[1]==='shop_support_product_receipt_gate');
+  assert.ok(gate);
+  gate[3]=gate[3].replace('p.intent_hash=NEW.intent_hash','1=1');
+  assert.equal(await matchesApprovedSupplierCashSchemaOverlay(
+    combinedReceipts.at(-1).schema,JSON.stringify(tamperedSupport)),false,
+    'weakened Support Product receipt guard must fail closed');
+
+  const incompleteSupport=JSON.parse(combinedSchema).filter(
+    row=>row[1]!=='shop_support_product_permits_no_delete');
+  assert.equal(await matchesApprovedSupplierCashSchemaOverlay(
+    combinedReceipts.at(-1).schema,JSON.stringify(incompleteSupport)),false,
+    'an incomplete Support Product schema may not be accepted');
 
   // Synthetically enroll an Admin only in isolated Workerd D1. The hosted
   // installation uses the REAL reviewed Google+TOTP wizard, not these rows.

@@ -17,7 +17,7 @@
     "inventory:schema": "node scripts/inventory-schema.mjs legacy/source/Config.gs",
     "catalog:dry-run": "node scripts/dry-run-catalog.mjs",
     "party:dry-run": "node scripts/dry-run-party.mjs",
-    "test:m01:browser": "node --test qa/m01-browser.spec.mjs qa/m01-print-flow.spec.mjs qa/m01-jpg.spec.mjs qa/m01-landscape.spec.mjs qa/m01-invoice-edge.spec.mjs qa/m01-thermal-long.spec.mjs qa/m01-rpc-failclosed.spec.mjs qa/m01-posv2-compiled-visibility.spec.mjs qa/m01-a11y.spec.mjs qa/m01-products-preview.spec.mjs qa/m03-owner-erp-browser.spec.mjs qa/m01-hisabiq-party-browser.spec.mjs qa/m01-hisabiq-shell-browser.spec.mjs qa/m01-hisabiq-product-table.spec.mjs"
+    "test:m01:browser": "node --test qa/m01-browser.spec.mjs qa/m01-print-flow.spec.mjs qa/m01-jpg.spec.mjs qa/m01-landscape.spec.mjs qa/m01-invoice-edge.spec.mjs qa/m01-thermal-long.spec.mjs qa/m01-rpc-failclosed.spec.mjs qa/m01-posv2-compiled-visibility.spec.mjs qa/m01-a11y.spec.mjs qa/m01-products-preview.spec.mjs qa/m01-hisabiq-add-product-unit-editor.spec.mjs qa/m03-owner-erp-browser.spec.mjs qa/m01-hisabiq-party-browser.spec.mjs qa/m01-hisabiq-shell-browser.spec.mjs qa/m01-hisabiq-product-table.spec.mjs"
   },
   "devDependencies": {
     "acorn": "8.19.0",

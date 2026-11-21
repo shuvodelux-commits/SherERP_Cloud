@@ -68,8 +68,6 @@ function mountProductsTable(){
   filters.append(search,categories,group);group.append(stock,brand,picker);
   card.insertBefore(filters,card.firstChild);
   originalToolbar.classList.add('hpt-original-actions');
-  if(!originalToolbar.querySelector('#prodAddBtn:not([hidden]),#prodUnpricedLotsBtn:not([hidden])'))
-    originalToolbar.classList.add('hpt-no-actions');
 
   const columnButton=picker.querySelector('#hpt-column-button');
   const menu=picker.querySelector('#hpt-columns-menu');
