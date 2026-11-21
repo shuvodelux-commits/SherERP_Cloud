@@ -163,6 +163,44 @@ test('HisabIQ topbar offers authorized navigation search, New Sale and existing 
   }finally{await page.close();}
 });
 
+
+test('drawer keeps early Tab inside modal while its opening animation frame is delayed',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
+  try{
+    await syntheticShell(page);
+    await page.evaluate(()=>{
+      const realFrame=window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame=function(callback){
+        if(String(callback).includes("drawer.classList.add('is-open')")){
+          window.__heldDrawerOpenFrame=callback;
+          return 999999;
+        }
+        return realFrame(callback);
+      };
+    });
+    await page.locator('#menuToggle').click();
+    assert.equal(await page.evaluate(()=>typeof window.__heldDrawerOpenFrame),'function',
+      'the test must genuinely hold the drawer animation frame');
+    assert.equal(await page.locator('#app').evaluate(node=>node.inert),true);
+    // An immediate keyboard event must remain in the modal even when the
+    // queued requestAnimationFrame has not run yet on a busy Chromium runner.
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(()=>
+      !!document.activeElement?.closest('#hisabiqMobileDrawer')),true,
+      'early Tab must not escape outside an inert ERP app');
+    await page.evaluate(()=>{
+      const callback=window.__heldDrawerOpenFrame;
+      delete window.__heldDrawerOpenFrame;
+      callback(performance.now());
+    });
+    await page.locator('#hisabiqMobileDrawer').waitFor({state:'visible'});
+    assert.equal(await page.locator('#erp-mobile-drawer').getAttribute('aria-modal'),'true');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
+    assert.equal(await page.locator('#app').evaluate(node=>node.inert),false);
+  }finally{await page.close();}
+});
+
 test('modal navigation isolates background and restores it at 320,390,768px',async()=>{
   for(const width of [320,390,768]){
     const page=await browser.newPage({viewport:{width,height:width===320?640:844},hasTouch:width<400});
