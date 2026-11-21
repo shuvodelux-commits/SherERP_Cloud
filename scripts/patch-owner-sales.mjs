@@ -29,8 +29,11 @@ export function patchOwnerSales(html){
       })
       .catch(function (error) {
         status.textContent = error.message;
+        throw error;
       })
       .finally(function () { ownerSalesLoadInFlight = null; });
+    // The topbar observes the rejected promise. Source click and navigation handlers rely on the inline status.
+    ownerSalesLoadInFlight.catch(function () {});
     return ownerSalesLoadInFlight;
   }
 
@@ -44,13 +47,13 @@ export function patchOwnerSales(html){
     empty.hidden = !smState._loaded || rows.length > 0;
     empty.textContent = smState.sales.length ? 'No sales match these filters.' : 'No invoices have been saved in this Shop.';`],
     ['      if (key === "sales" && !smState._loaded) {\n        smState._loaded = true;',
-      '      if (key === "sales" && !document.getElementById("page-sales").hidden && !smState._loaded) {'],
+      '      if (key === "sales" && !document.getElementById("page-sales").hidden) {'],
     ["        { action: 'edit', label: 'Edit', disabled: !row.editable, title: row.editable ? '' : 'This invoice is no longer available for editing' },\n        { action: 'receive-payment', label: 'Receive Payment', hidden: !row.customerId || Number(row.dueAmount) <= 0.004 },\n        { action: 'return', label: 'Sales Return' },\n        { divider: true },\n        { action: 'delete', label: 'Delete', danger: true }",
       "        { action: 'return', label: 'Sales Return', hidden: !ownerSalesReturnEnabled || row.returnStatus === 'Fully Returned' }"],
     ['id="smViewDeleteBtn"', 'id="smViewDeleteBtn" hidden style="display:none!important"'],
     ['          inv.dueAmount > 0 ? "inline-flex" : "none";',
       `          'none';
-        document.getElementById('smViewReturnBtn').hidden = !ownerSalesReturnEnabled ||
+        document.getElementById('smViewReturnBtn').hidden = inv.cashReturnAvailable !== true ||
           inv.returnStatus === 'Fully Returned';`],
   ];
   for(const [original,updated] of replacements){
@@ -58,6 +61,7 @@ export function patchOwnerSales(html){
     html=html.replace(original,updated);
   }
   return html.replace('</head>', `<style>
+#smViewReturnBtn[hidden] { display: none; }
 @media (max-width: 540px) {
   #smTableScroll .mobile-card-table tbody td:nth-last-child(2) {
     grid-column: 1 / -1;

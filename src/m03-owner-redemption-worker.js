@@ -14,7 +14,7 @@ import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,readOwne
   readOwnerPurchaseDetail} from './db/m03-owner-mvp-purchase.js';
 import {pilotShopConfiguration,pilotShopIdentityMatches,readPilotShopIdentityMatch} from './auth/platform-shop-binding.js';
 import {readOwnerPosBootstrap,postOwnerCashSale,readOwnerCashSaleInvoice,
-  ownerInvoiceSequence,ownerSalesSchemaReady,readOwnerSalesManagement}
+  ownerInvoiceSequence,ownerSalesSchemaReady,readOwnerSalesManagement,OwnerSalesHistoryLimitError}
   from './db/m03-owner-mvp-cash-sale.js';
 import {postOwnerCashReturn,readOwnerInvoiceForReturn,searchOwnerInvoicesForReturn}
   from './db/m03-owner-mvp-cash-return.js';
@@ -481,11 +481,13 @@ async function ownerSalesHistory(c,sequence=null){
     if(!await ownerSalesSchemaReady(db))
       return salesError(c,503,'SALES_SCHEMA_UNAVAILABLE','Sales storage is not ready. Contact your administrator.');
     const data=await readOwnerSalesManagement(db,sequence);
-    return data===null?salesError(c,404,'INVOICE_NOT_FOUND','Invoice not found in this Shop.'):
-      c.json({success:true,data,...(sequence===null?{
-        capabilities:{cashReturns:ownerCashReturnEnabled(c.env),bankPayments:false}
-      }:{})});
-  }catch{
+    if(data===null)return salesError(c,404,'INVOICE_NOT_FOUND','Invoice not found in this Shop.');
+    const cashReturns=ownerCashReturnEnabled(c.env);
+    return sequence===null?c.json({success:true,data,capabilities:{cashReturns,bankPayments:false}}):
+      c.json({success:true,data:{...data,cashReturnAvailable:cashReturns}});
+  }catch(error){
+    if(error instanceof OwnerSalesHistoryLimitError)
+      return salesError(c,503,'SALES_HISTORY_LIMIT','Sales history exceeds 1,000 invoices. Contact your administrator for help accessing the full history.');
     return salesError(c,503,'SALES_READ_FAILED','Sales history could not be read. Retry or contact your administrator.');
   }
 }

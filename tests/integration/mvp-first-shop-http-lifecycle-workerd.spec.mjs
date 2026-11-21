@@ -254,7 +254,7 @@ test('private Sales Management reads persisted Shop invoices, with isolated and 
       operationId:crypto.randomUUID(),openingCash:'0',notes:'Sales read test'
     });
     const purchaseInput=purchase();
-    Object.assign(purchaseInput.payload.items[0],{unitPrice:'60.01',sellingPrice:'75.11'});
+    Object.assign(purchaseInput.payload.items[0],{qty:'1000',unitPrice:'60.01',sellingPrice:'75.11'});
     await expectJson(ownerA,'/api/owner/purchases',201,purchaseInput);
     const saleInput=sale();
     saleInput.payload.items[0].unitPrice=75.11;
@@ -295,6 +295,23 @@ test('private Sales Management reads persisted Shop invoices, with isolated and 
     assert.deepEqual([invoice.invoiceId,invoice.grandTotal,invoice.returnedAmount,invoice.netSale,invoice.profit],
       ['INV-000001',150.22,75.11,75.11,15.10]);
     assert.equal((await request(fresh,list,{body:{}})).status,404);
+    const moreStock=purchase();
+    Object.assign(moreStock.payload.items[0],{qty:'1',unitPrice:'60.01',sellingPrice:'75.11'});
+    await expectJson(fresh,'/api/owner/purchases',201,moreStock);
+    await a.prepare(`WITH RECURSIVE numbers(n) AS (
+      VALUES(1) UNION ALL SELECT n+1 FROM numbers WHERE n<1000
+    ) INSERT INTO owner_mvp_sale_receipts
+      (operation_id,actor_id,intent_hash,cash_sequence,lot_sequence,product_id,product_name,
+       unit_name,quantity_micro,unit_price_paisa,subtotal_paisa,customer_name,customer_phone,
+       shop_name,created_at_ms)
+      SELECT 'fixture-volume-'||n,r.actor_id,r.intent_hash,r.cash_sequence,
+        CASE WHEN n<=999 THEN r.lot_sequence ELSE (SELECT MAX(sequence) FROM owner_mvp_stock_lots) END,
+        r.product_id,r.product_name,r.unit_name,1000000,r.unit_price_paisa,r.unit_price_paisa,
+        r.customer_name,r.customer_phone,r.shop_name,r.created_at_ms
+      FROM owner_mvp_sale_receipts r CROSS JOIN numbers WHERE r.sequence=1`).run();
+    assert.equal((await first(a,'SELECT COUNT(*) AS n FROM owner_mvp_sale_receipts')).n,1001);
+    assert.equal((await expectJson(fresh,list,503)).code,'SALES_HISTORY_LIMIT');
+    assert.equal((await expectJson(fresh,detail,200)).data.invoiceId,'INV-000001');
     assert.equal(await revokeOwnerSession(ownerA.env,token),true);
     assert.equal((await request(fresh,list)).status,401);
   }finally{await close();}

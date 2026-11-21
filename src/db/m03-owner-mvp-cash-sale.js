@@ -144,6 +144,9 @@ function projectOwnerCashInvoice(row){
 }
 
 // The pilot schema stores immutable cash sales and append-only cash returns.
+const SALES_HISTORY_LIMIT=1000;
+export class OwnerSalesHistoryLimitError extends Error {}
+
 const SALES_HISTORY_TABLES=[
   'owner_mvp_sale_receipts','owner_mvp_sale_cash_book','owner_mvp_sale_fifo_draws',
   'owner_mvp_sale_return_receipts','owner_mvp_return_cash_book','owner_mvp_return_stock_movements',
@@ -164,7 +167,10 @@ export function ownerInvoiceSequence(invoiceId){
 
 /** The caller must authorize the current Owner and verify the Shop identity. */
 export async function readOwnerSalesManagement(db,sequence=null){
-  const {success,results}=await db.prepare(`SELECT r.*,b.received_paisa,d.unit_cost_paisa,
+  const {success,results}=await db.prepare(`WITH receipts AS (
+    SELECT * FROM owner_mvp_sale_receipts WHERE sequence BETWEEN ? AND ?
+    ORDER BY sequence DESC LIMIT ?
+  ) SELECT r.*,b.received_paisa,d.unit_cost_paisa,
     COALESCE((SELECT SUM(ret.quantity_micro) FROM owner_mvp_sale_return_receipts ret
       WHERE ret.sale_sequence=r.sequence),0) AS returned_micro,
     COALESCE((SELECT SUM(ret.total_paisa) FROM owner_mvp_sale_return_receipts ret
@@ -177,14 +183,15 @@ export async function readOwnerSalesManagement(db,sequence=null){
         AND restock.product_id=r.product_id
       WHERE ret.sale_sequence=r.sequence AND
         (refund.return_sequence IS NULL OR restock.return_sequence IS NULL)) AS incomplete_return
-    FROM owner_mvp_sale_receipts r
+    FROM receipts r
     LEFT JOIN owner_mvp_sale_cash_book b ON b.sale_sequence=r.sequence AND b.cash_sequence=r.cash_sequence
     LEFT JOIN owner_mvp_sale_fifo_draws d ON d.sale_sequence=r.sequence
       AND d.lot_sequence=r.lot_sequence AND d.quantity_micro=r.quantity_micro
-    WHERE r.sequence BETWEEN ? AND ?
     ORDER BY r.created_at_ms DESC,r.sequence DESC`)
-    .bind(sequence??1,sequence??Number.MAX_SAFE_INTEGER).all();
+    .bind(sequence??1,sequence??Number.MAX_SAFE_INTEGER,sequence===null?SALES_HISTORY_LIMIT+1:1).all();
   if(!success)throw Error('Sales history read failed');
+  if(results.length>SALES_HISTORY_LIMIT)
+    throw new OwnerSalesHistoryLimitError('Sales history exceeds the pilot read limit');
   const projected=results.map(row=>{
     const netPaisa=row.subtotal_paisa-row.returned_paisa;
     const netQty=(row.quantity_micro-row.returned_micro)/1_000_000;
@@ -206,8 +213,10 @@ export async function readOwnerSalesManagement(db,sequence=null){
       sessions:[],bundleComponents:[],vendorSourcing:[],settlementsByInvoice:{},
       saleItemLots:[{...id,'Quantity':netQty,'Unit Cost':money(row.unit_cost_paisa)}],
     },{canViewSales:true,canViewProfit:true});
+    const profitPaisa=netPaisa-row.unit_cost_paisa*netQty;
     summary.netSale=money(netPaisa);
-    summary.profit=money(netPaisa-row.unit_cost_paisa*netQty);
+    summary.profit=money(profitPaisa);
+    summary.profitMarginPercent=netPaisa>0?100*profitPaisa/netPaisa:0;
     if(sequence===null)return summary;
     const {returnedAmount,netSale,profit,profitMarginPercent,profitCostComplete,returnStatus}=summary;
     return {...invoice,returnedAmount,netSale,profit,profitMarginPercent,profitCostComplete,returnStatus,editable:false};

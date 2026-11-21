@@ -91,7 +91,7 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
       const headers=await req.allHeaders(),body=req.postData();
       const response=await ownerWorker.fetch(new Request(req.url(),{
         method:req.method(),headers,...(body?{body}:{})
-      }),url.pathname==='/api/owner/sales'?salesConfiguration:env);
+      }),url.pathname.startsWith('/api/owner/sales')?salesConfiguration:env);
       if(req.method()==='POST'||url.pathname==='/api/rpc')
         records.push({path:url.pathname,method:req.method(),status:response.status,
           ...(req.method()==='POST'&&body?{body:JSON.parse(body)}:{})});
@@ -229,6 +229,8 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
     assert.equal(money.body.data.paidPaisa,7500);
     assert.equal(money.body.data.netPaisa,7500);
 
+    await page.evaluate(()=>{closeModal('invoiceModal');goToPage('sales');});
+    await page.locator('#smTableBody').getByText('INV-000001').waitFor({timeout:4000});
     await page.reload({waitUntil:'domcontentloaded'});
     if(view.phone) await page.locator('#mobileBottomNav [data-mobile-page="pos"]').waitFor();
     else await page.locator('#navList .nav-item[aria-label="POS"]').waitFor();
@@ -251,10 +253,18 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
     assert.equal(await page.locator('#smViewDeleteBtn').isVisible(),false);
     await captureSales('detail');
     await page.locator('#smViewModal .modal-close').click();
+    salesConfiguration={...env,OWNER_MVP_CASH_RETURN_ENABLED:'false'};
+    await page.locator('#smRefreshBtn').click();
+    await page.locator('#smTableBody').getByRole('button',{name:'INV-000001',exact:true}).click();
+    await page.locator('#smViewModal').waitFor();
+    assert.equal(await page.locator('#smViewReturnBtn').isVisible(),false);
+    await page.locator('#smViewModal .modal-close').click();
 
     salesConfiguration={...env,OWNER_MVP_POS_CASH_ENABLED:'false'};
-    await page.locator('#smRefreshBtn').click();
+    await page.locator('#refreshBtn').click();
     await page.getByText('Sales history is unavailable in this release.').waitFor();
+    await page.locator('#refreshBtn:not(.spinning)').waitFor();
+    assert.equal(await page.getByText('Refreshed.',{exact:true}).isVisible(),false);
     assert.equal(await page.locator('#smTableBody tr').count(),0);
     await captureSales('unavailable');
     salesConfiguration={...env,PLATFORM_PILOT_DB:b};
