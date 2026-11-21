@@ -120,6 +120,10 @@ async function openParty(page){
     await page.locator('#mobileBottomNav [data-mobile-page="more"]').click();
     await page.locator('#mobileMoreList [data-mobile-target="hisabiqParties"]').waitFor({state:'visible'});
     await page.locator('#mobileMoreList [data-mobile-target="hisabiqParties"]').click();
+  }else if(page.viewportSize().width<1024){
+    // The HisabIQ reference uses the authenticated ERP drawer on tablets.
+    await page.locator('#menuToggle').click();
+    await page.locator('#h-shell-drawer-nav [data-page="hisabiqParties"]').click();
   }else{
     await page.locator('#navList [data-page="hisabiqParties"]').waitFor({state:'visible'});
     await page.locator('#navList [data-page="hisabiqParties"]').click();
