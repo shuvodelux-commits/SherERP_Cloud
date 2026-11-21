@@ -11,6 +11,7 @@ import {buildLoginOnlyProfileFromLiveVersion} from './m03-first-shop-live-base.m
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url));
 const APPROVAL='FIRST_SHOP_CORE_MVP_TEST_ONLY';
+const REFRESH_APPROVAL='FIRST_SHOP_CORE_MVP_REFRESH';
 const ORIGIN='https://shererp.hisab.workers.dev';
 const ADMIN='https://admin.hisab.workers.dev';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -35,6 +36,17 @@ const originalSchemaBlockers=Object.freeze([
   ...coreBlockers,
   'SUPPLIER_CASH_MIGRATION_0010_MISSING',
   'SUPPLIER_CASH_RECONCILIATION_0011_MISSING'
+]);
+const activeCoreBlockers=Object.freeze([
+  'OWNER_MVP_CASH_RETURN_ENABLED_DISABLED',
+  'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED_DISABLED'
+]);
+const activeCoreReleaseChecks=Object.freeze([
+  'APPROVED_PRIVATE_PUBLISHER_REQUIRED',
+  'AUTHENTICATED_TWO_SHOP_E2E_REQUIRED',
+  'M10_M11_RESTORE_REHEARSAL_REQUIRED',
+  'FULL_ORIGINAL_RPC_PARITY_REQUIRED',
+  'INDEPENDENT_ACCOUNTING_SECURITY_REVIEW_REQUIRED'
 ]);
 const invalid=()=>{throw new Error('First-Shop core-only candidate refused: deployment evidence or policy mismatch');};
 const uuid=x=>typeof x==='string'&&UUID.test(x);
@@ -90,11 +102,28 @@ function validateEvidence(e){
      expected.some(code=>!e.blockers.includes(code)))invalid();
 }
 
+/** Already-enabled first Shop uses current live proof, never the old pre-core report. */
+function validateActiveCoreRefresh(e){
+  if(!e||e.status!=='BLOCKED'||e.productionReady!==false||
+     e.authConfigured!==true||e.shopIdentityVerified!==true||
+     e.baseline13Verified!==true||e.approvedSupplierOverlayVerified!==true||
+     e.coreReadConfigured!==true||e.coreWriteConfigured!==false||
+     e.supplierCashConfigured!==false||
+     !Array.isArray(e.blockers)||e.blockers.length!==activeCoreBlockers.length||
+     new Set(e.blockers).size!==activeCoreBlockers.length||
+     activeCoreBlockers.some(code=>!e.blockers.includes(code))||
+     !Array.isArray(e.releaseChecks)||
+     e.releaseChecks.length!==activeCoreReleaseChecks.length||
+     new Set(e.releaseChecks).size!==activeCoreReleaseChecks.length||
+     activeCoreReleaseChecks.some(code=>!e.releaseChecks.includes(code)))invalid();
+}
+
 /** Pure: no network, no Cloudflare credentials, no D1 write, no IO. */
 export function buildFirstShopCoreCandidate(base,evidence,approval){
-  if(approval!==APPROVAL)invalid();
+  if(approval!==APPROVAL&&approval!==REFRESH_APPROVAL)invalid();
   validateBase(base);
-  validateEvidence(evidence);
+  if(approval===REFRESH_APPROVAL)validateActiveCoreRefresh(evidence);
+  else validateEvidence(evidence);
   const candidate=structuredClone(base);
   // Enable only reviewed core. Cash Return and Supplier Cash Pay stay OFF
   // even when the independently verified 0010+0011 schema overlay is present.

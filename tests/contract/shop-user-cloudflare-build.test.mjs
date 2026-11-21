@@ -182,3 +182,75 @@ test('GitHub-to-Cloudflare release accepts the fully pinned reviewed Supplier ov
   }),/Shop-user deployment/);
  }
 });
+
+// TDD RED: an already activated first Shop has two approved disabled flags,
+// not the seven pre-activation blockers. Do not reuse stale release evidence.
+const activeCoreReadiness=()=>({
+ status:'BLOCKED',productionReady:false,authConfigured:true,
+ shopIdentityVerified:true,baseline13Verified:true,
+ approvedSupplierOverlayVerified:true,coreReadConfigured:true,
+ coreWriteConfigured:false,supplierCashConfigured:false,
+ blockers:[
+  'OWNER_MVP_CASH_RETURN_ENABLED_DISABLED',
+  'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED_DISABLED'
+ ],
+ releaseChecks:[
+  'APPROVED_PRIVATE_PUBLISHER_REQUIRED',
+  'AUTHENTICATED_TWO_SHOP_E2E_REQUIRED',
+  'M10_M11_RESTORE_REHEARSAL_REQUIRED',
+  'FULL_ORIGINAL_RPC_PARITY_REQUIRED',
+  'INDEPENDENT_ACCOUNTING_SECURITY_REVIEW_REQUIRED'
+ ]
+});
+const refreshApprovedEnv=()=>({
+ ...coreApprovedEnv(),
+ SHERERP_FIRST_SHOP_CORE_RELEASE:'FIRST_SHOP_CORE_MVP_REFRESH',
+ SHERERP_FIRST_SHOP_CORE_READINESS_JSON:JSON.stringify(activeCoreReadiness())
+});
+
+test('existing first-Shop core refresh accepts only current two-blocker D1 proof and preserves exact bindings',()=>{
+ const initial=buildShopUserDeployment(coreApprovedEnv());
+ const refresh=buildShopUserDeployment(refreshApprovedEnv());
+ assert.deepEqual(refresh,initial,'refresh never changes existing first-Shop runtime authorities');
+ assert.deepEqual(refresh.d1_databases.map(d=>d.database_id),[
+  buildEnv().SHERERP_CONTROL_DB_ID,buildEnv().SHERERP_SHOP_DB_ID
+ ]);
+ for(const flag of ['OWNER_MVP_CASH_RETURN_ENABLED',
+   'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED','OWNER_SUPPORT_AUDIT_ENABLED',
+   'OWNER_REDEMPTION_ENABLED'])assert.equal(refresh.vars[flag],'false');
+});
+
+test('existing core refresh rejects stale core evidence, forbidden money features, wrong owner and SHA',()=>{
+ const input=refreshApprovedEnv();
+ for(const patch of [
+   {SHERERP_FIRST_SHOP_CORE_RELEASE:'FIRST_SHOP_CORE_MVP_TEST_ONLY'},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE:'OTHER'},
+   {SHERERP_DEPLOYMENT_OWNER:'PRIVATE_PROVISIONER'},
+   {WORKERS_CI_COMMIT_SHA:'b'.repeat(40)},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:'b'.repeat(40)},
+   {WORKERS_CI_BRANCH:'feature/changed'},
+   {SHERERP_SHOP_DB_ID:buildEnv().SHERERP_CONTROL_DB_ID}
+ ])assert.throws(()=>buildShopUserDeployment({...input,...patch}),/Shop-user deployment/);
+ for(const evidencePatch of [
+   {approvedSupplierOverlayVerified:false},
+   {shopIdentityVerified:false},
+   {baseline13Verified:false},
+   {coreReadConfigured:false},
+   {coreWriteConfigured:true},
+   {supplierCashConfigured:true},
+   {productionReady:true},
+   {status:'CHECKS_REQUIRED'},
+   {blockers:[]},
+   {blockers:['OWNER_MVP_CASH_RETURN_ENABLED_DISABLED']},
+   {blockers:['OWNER_MVP_CASH_RETURN_ENABLED_DISABLED','OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED_DISABLED','UNKNOWN']},
+   {releaseChecks:[]},
+   {releaseChecks:undefined}
+ ])assert.throws(()=>buildShopUserDeployment({
+   ...input,SHERERP_FIRST_SHOP_CORE_READINESS_JSON:JSON.stringify({
+     ...activeCoreReadiness(),...evidencePatch
+   })
+ }),/Shop-user deployment/);
+ assert.throws(()=>buildShopUserDeployment({
+   ...coreApprovedEnv(),SHERERP_FIRST_SHOP_CORE_RELEASE:'FIRST_SHOP_CORE_MVP_REFRESH'
+ }),/Shop-user deployment/,'pre-activation proof cannot authorize an active-core refresh');
+});
