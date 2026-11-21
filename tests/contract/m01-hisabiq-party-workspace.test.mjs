@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
   ROLES,sourceSupplierParties,normalizePartyDirectory,projectSupplierStatement,
-  filterPartyDirectory,parseMoneyPaisa,formatMoneyPaisa
+  filterPartyDirectory,parseMoneyPaisa,formatMoneyPaisa,sourceSupplierCreatePayload
 } from '../../src/ui/hisabiq/party-workspace.mjs';
 import {patchOwnerHisabiqParties} from '../../scripts/patch-owner-hisabiq-parties.mjs';
 
@@ -125,6 +125,22 @@ test('source Party mobile/desktop CSS uses the exact 768px and 1024px breakpoint
   assert.match(source,/aria-modal/);
   assert.match(source,/aria-selected/);
   assert.match(source,/AbortController|AbortSignal/);
-  assert.doesNotMatch(source,/method:\s*['"]POST['"]/);
+  assert.equal((source.match(/method:\s*['"]POST['"]/g)||[]).length,1,
+    'Only the existing authenticated Supplier create POST is allowed');
+  assert.match(source,/fetch\('\/api\/owner\/suppliers'/);
   assert.doesNotMatch(source,/dispatchPartyPreview|availableParties|mock ledger/i);
+});
+
+test('Supplier quick-add payload is source-only, zero opening and operation-id scoped',()=>{
+  const operationId='ee444444-4444-4444-8444-444444444444';
+  assert.deepEqual(sourceSupplierCreatePayload({
+    name:'  New Hardware  ',phone:'01711111111',address:'Dhaka',notes:'Trade'
+  },operationId),{
+    operationId,name:'New Hardware',phone:'01711111111',
+    address:'Dhaka',notes:'Trade',openingBalance:'0'
+  });
+  assert.throws(()=>sourceSupplierCreatePayload({name:'   '},operationId),/name/i);
+  assert.throws(()=>sourceSupplierCreatePayload({name:'N'.repeat(121)},operationId),/name/i);
+  assert.throws(()=>sourceSupplierCreatePayload({name:'Valid',openingBalance:'9.00'},operationId),/opening/i);
+  assert.throws(()=>sourceSupplierCreatePayload({name:'Valid'},'non-uuid'),/operation/i);
 });

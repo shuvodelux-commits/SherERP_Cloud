@@ -2,6 +2,7 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {patchHisabiqDashboard} from './patch-hisabiq-dashboard.mjs';
+import {patchHisabiqShell} from './patch-hisabiq-shell.mjs';
 
 /** Expand only GAS HtmlService includes; never execute arbitrary template code. */
 export async function buildFrontend({sourceDir, outputDir}) {
@@ -44,7 +45,14 @@ export async function buildFrontend({sourceDir, outputDir}) {
   const dashboardTemplate=original.includes('id="page-dashboard"')
     ? await readFile(new URL('../src/ui/hisabiq-dashboard.html',import.meta.url),'utf8')
     : '';
-  const html=patchHisabiqDashboard(original,dashboardTemplate);
+  const shellCss=await readFile(new URL('../src/ui/hisabiq-shell.css',import.meta.url),'utf8');
+  const shellJs=await readFile(new URL('../src/ui/hisabiq-shell.js',import.meta.url),'utf8');
+  const assembled=patchHisabiqDashboard(original,dashboardTemplate);
+  // buildFrontend also assembles tiny non-ERP include fixtures in tests.
+  // Only the real ERP document has the complete shell; preserve fixture output byte-for-byte.
+  const html=original.includes('id="app"')
+    ? patchHisabiqShell(assembled,shellCss,shellJs)
+    : assembled;
   await mkdir(dest,{recursive:true});
   const outputPath=join(dest,'index.html');
   await writeFile(outputPath,html,'utf8');
