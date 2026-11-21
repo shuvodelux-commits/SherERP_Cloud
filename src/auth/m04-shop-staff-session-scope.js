@@ -29,7 +29,7 @@ export function canonicalStaffLoginPhone(input){
 }
 
 /** Reject accessors, extra role/actor claims and nonplain input before D1. */
-function requestValues(value,expected){
+export function requestValues(value,expected){
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
   try{
     const proto=Object.getPrototypeOf(value);
@@ -56,7 +56,7 @@ function scopeValues(scope){
  * Only immutable Shop D1 identity can attest the physical binding. This
  * lookup is not a browser-controlled tenant directory or a cross-Shop query.
  */
-async function trustedShop(scope,selected){
+export async function trustedShop(scope,selected){
   const checked=scopeValues(scope);
   if(!checked||typeof selected!=='string'||!UUID.test(selected)||
      selected!==checked.shopId)return null;
