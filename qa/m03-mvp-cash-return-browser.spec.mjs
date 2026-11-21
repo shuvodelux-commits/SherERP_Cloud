@@ -109,9 +109,15 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
         headers:Object.fromEntries(res.headers),body:Buffer.from(await res.arrayBuffer())});
     });
     await page.goto(origin+'/app',{waitUntil:'domcontentloaded'});
-    // Source UI.gs puts New Return under the Sales group, not sidebar.
+    // Navigate using the visible Sales tab in the compiled HisabIQ adapter.
+    // The original subNav remains the fallback for the unenhanced frontend.
     await page.locator('#navList .nav-item[aria-label="Sales"]').click();
-    await page.locator('#subNav .tab-btn').filter({hasText:'New Return'}).click();
+    const referenceReturnTab=page.locator('#page-sales .h-sales-tab[data-h-sales-route="returns"]');
+    if(await referenceReturnTab.isVisible()){
+      await referenceReturnTab.click();
+    }else{
+      await page.locator('#subNav .tab-btn:visible').filter({hasText:'New Return'}).click();
+    }
     await page.locator('#page-returns').waitFor({state:'visible'});
     await page.locator('#rtSearchInput').fill('INV-000001');
     await page.locator('#rtSearchInput').press('Enter');
