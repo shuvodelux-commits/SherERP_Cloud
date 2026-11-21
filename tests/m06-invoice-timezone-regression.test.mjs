@@ -14,6 +14,7 @@ test('posted-invoice source due-date parity survives UTC and Asia/Dhaka hosts',(
     const env={...process.env,TZ:tz};
     delete env.NODE_TEST_CONTEXT;
     const run=spawnSync(process.execPath,[
+      '--test','--test-reporter=tap',
       'tests/m06-posted-invoice-read-model.test.mjs'
     ],{encoding:'utf8',env,timeout:30000});
 

@@ -254,3 +254,35 @@ test('existing core refresh rejects stale core evidence, forbidden money feature
    ...coreApprovedEnv(),SHERERP_FIRST_SHOP_CORE_RELEASE:'FIRST_SHOP_CORE_MVP_REFRESH'
  }),/Shop-user deployment/,'pre-activation proof cannot authorize an active-core refresh');
 });
+
+// M11 / #690: never publish raw protected Build values while explaining why
+// a merged Owner frontend has not been deployed.
+test('M11: pin mismatch has an actionable code without exposing the protected values',()=>{
+ const env={...refreshApprovedEnv(),
+   WORKERS_CI_COMMIT_SHA:'b'.repeat(40)};
+ assert.throws(()=>buildShopUserDeployment(env),error=>
+   error.code==='RELEASE_COMMIT_PIN_MISMATCH' &&
+   !error.message.includes(env.SHERERP_OWNER_GOOGLE_CLIENT_ID) &&
+   !error.message.includes(env.WORKERS_CI_COMMIT_SHA));
+});
+
+test('M11: blocked Builds report distinguishes incomplete commit pin and malformed readiness safely',()=>{
+ const env=refreshApprovedEnv();
+ for(const [patch,code] of [
+   [{WORKERS_CI_COMMIT_SHA:undefined},'RELEASE_COMMIT_PIN_INVALID'],
+   [{SHERERP_FIRST_SHOP_CORE_READINESS_JSON:'TOP_SECRET_CANARY'},'RELEASE_READINESS_JSON_INVALID'],
+   [{SHERERP_FIRST_SHOP_CORE_READINESS_JSON:JSON.stringify(approvedReadiness())},'RELEASE_READINESS_PROFILE_MISMATCH'],
+   [{SHERERP_DEPLOYMENT_OWNER:'PRIVATE_PROVISIONER'},'RELEASE_OWNED_BY_PRIVATE_PROVISIONER']
+ ])assert.throws(()=>buildShopUserDeployment({...env,...patch}),error=>
+   error.code===code && !error.message.includes('TOP_SECRET_CANARY'));
+});
+
+test('M11: bad account and manifest are reported without leaking business identity',()=>{
+ const env=refreshApprovedEnv();
+ for(const [patch,code] of [
+   [{CLOUDFLARE_ACCOUNT_ID:'f'.repeat(32)},'RELEASE_CLOUDFLARE_ACCOUNT_MISMATCH'],
+   [{SHERERP_SHOP_ID:'SENSITIVE_CANARY'},'RELEASE_SHOP_MANIFEST_INVALID'],
+   [{WORKERS_CI_BRANCH:'test'},'RELEASE_BUILD_CONTEXT_INVALID']
+ ])assert.throws(()=>buildShopUserDeployment({...env,...patch}),error=>
+   error.code===code&&!error.message.includes('SENSITIVE_CANARY'));
+});

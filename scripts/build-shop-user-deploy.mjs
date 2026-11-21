@@ -20,17 +20,34 @@ const ROOT=fileURLToPath(new URL('../',import.meta.url));
 const ADMIN_ORIGIN='https://admin.hisab.workers.dev';
 const SHOP_ORIGIN='https://shererp.hisab.workers.dev';
 const TARGET='wrangler.shop-user.jsonc';
-const invalid=()=>{throw new TypeError('Shop-user deployment configuration unavailable (values withheld)');};
+// Fixed codes identify a failed protected build gate without printing any
+// account, Shop, Google client, release evidence or user-supplied value.
+const SAFE_CODES=new Set([
+  'RELEASE_OWNED_BY_PRIVATE_PROVISIONER','RELEASE_BUILD_CONTEXT_INVALID',
+  'RELEASE_OWNER_LOGIN_APPROVAL_INVALID','RELEASE_CLOUDFLARE_ACCOUNT_MISMATCH',
+  'RELEASE_SHOP_MANIFEST_INVALID','RELEASE_GENERATED_CONFIG_INVALID',
+  'RELEASE_MODE_INVALID','RELEASE_COMMIT_PIN_INVALID',
+  'RELEASE_COMMIT_PIN_MISMATCH','RELEASE_READINESS_JSON_INVALID',
+  'RELEASE_READINESS_PROFILE_MISMATCH','RELEASE_POLICY_MISMATCH'
+]);
+const invalid=(code='RELEASE_POLICY_MISMATCH')=>{
+  const error=new TypeError('Shop-user deployment configuration unavailable (values withheld)');
+  error.code=SAFE_CODES.has(code)?code:'RELEASE_POLICY_MISMATCH';
+  throw error;
+};
 
 export function buildShopUserDeployment(env){
   // Once the private multi-Shop publisher owns the Worker, the legacy
   // single-Shop Builds generator must never upload a stale binding roster.
   // This flag is a one-time operator setting, not browser-controlled.
-  if(env?.SHERERP_DEPLOYMENT_OWNER==='PRIVATE_PROVISIONER')invalid();
-  if(!env||env.WORKERS_CI!=='1'||env.WORKERS_CI_BRANCH!=='main'||
-     env.SHERERP_OWNER_LOGIN_RELEASE!=='OWNER_LOGIN_ONLY_APPROVED')invalid();
+  if(env?.SHERERP_DEPLOYMENT_OWNER==='PRIVATE_PROVISIONER')invalid('RELEASE_OWNED_BY_PRIVATE_PROVISIONER');
+  if(!env||env.WORKERS_CI!=='1'||env.WORKERS_CI_BRANCH!=='main')
+    invalid('RELEASE_BUILD_CONTEXT_INVALID');
+  if(env.SHERERP_OWNER_LOGIN_RELEASE!=='OWNER_LOGIN_ONLY_APPROVED')
+    invalid('RELEASE_OWNER_LOGIN_APPROVAL_INVALID');
   if(typeof env.CLOUDFLARE_ACCOUNT_ID==='string'&&env.CLOUDFLARE_ACCOUNT_ID.length>0&&
-     env.CLOUDFLARE_ACCOUNT_ID!==env.SHERERP_ACCOUNT_ID)invalid();
+     env.CLOUDFLARE_ACCOUNT_ID!==env.SHERERP_ACCOUNT_ID)
+    invalid('RELEASE_CLOUDFLARE_ACCOUNT_MISMATCH');
 
   // The portable instance validator provides strict shape, UUID, origin,
   // account, Google-client and namespace checks; no new auth mechanism.
@@ -58,13 +75,13 @@ export function buildShopUserDeployment(env){
   };
   let candidate;
   try{candidate=buildShopUserCandidate(manifest,SHOP_ORIGIN);}
-  catch{invalid();}
+  catch{invalid('RELEASE_SHOP_MANIFEST_INVALID');}
 
   // The P5 draft lives under .wrangler/portable-instance; the generated
   // production profile is at repo root. Convert ONLY known relative paths.
   const rootPath=path=>{
     if(typeof path!=='string'||!path.startsWith('../../')||
-      path.includes('..',6))invalid();
+      path.includes('..',6))invalid('RELEASE_GENERATED_CONFIG_INVALID');
     return path.slice(6);
   };
   const config={
@@ -85,7 +102,8 @@ export function buildShopUserDeployment(env){
     config.d1_databases[0].binding!=='CONTROL_DB'||
     config.d1_databases[1].binding!=='PLATFORM_PILOT_DB'||
     config.ratelimits.length!==1||
-    config.ratelimits[0].name!=='OWNER_INGRESS')invalid();
+    config.ratelimits[0].name!=='OWNER_INGRESS')
+    invalid('RELEASE_GENERATED_CONFIG_INVALID');
 
   // Workers Builds is still the ONLY deploy owner for the one-Shop pilot.
   // An approved core release (first activation OR current-core refresh) is
@@ -94,19 +112,23 @@ export function buildShopUserDeployment(env){
   if(env.SHERERP_FIRST_SHOP_CORE_RELEASE===undefined)return config;
   const sha=/^[a-f0-9]{40}$/;
   if(!['FIRST_SHOP_CORE_MVP_TEST_ONLY','FIRST_SHOP_CORE_MVP_REFRESH']
-       .includes(env.SHERERP_FIRST_SHOP_CORE_RELEASE)||
-     !sha.test(env.WORKERS_CI_COMMIT_SHA)||
-     !sha.test(env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT)||
-     env.WORKERS_CI_COMMIT_SHA!==env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT||
-     typeof env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON!=='string'||
-     env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON.length>4000)invalid();
+       .includes(env.SHERERP_FIRST_SHOP_CORE_RELEASE))
+    invalid('RELEASE_MODE_INVALID');
+  if(!sha.test(env.WORKERS_CI_COMMIT_SHA)||
+     !sha.test(env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT))
+    invalid('RELEASE_COMMIT_PIN_INVALID');
+  if(env.WORKERS_CI_COMMIT_SHA!==env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT)
+    invalid('RELEASE_COMMIT_PIN_MISMATCH');
+  if(typeof env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON!=='string'||
+     env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON.length>4000)
+    invalid('RELEASE_READINESS_JSON_INVALID');
   let evidence;
   try{evidence=JSON.parse(env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON);}
-  catch{invalid();}
+  catch{invalid('RELEASE_READINESS_JSON_INVALID');}
   try{
     return buildFirstShopCoreCandidate(config,evidence,
       env.SHERERP_FIRST_SHOP_CORE_RELEASE);
-  }catch{invalid();}
+  }catch{invalid('RELEASE_READINESS_PROFILE_MISMATCH');}
 }
 
 /** Create the ignored root config without ever replacing a different file. */
@@ -144,8 +166,9 @@ async function main(){
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  main().catch(()=>{
-    process.stderr.write('Shop-user deployment blocked: check approved Workers Builds variables, branch, and Owner assets (identities withheld)\n');
+  main().catch(error=>{
+    const code=SAFE_CODES.has(error?.code)?error.code:'RELEASE_POLICY_MISMATCH';
+    process.stderr.write('Shop-user deployment blocked ['+code+']: check protected Builds configuration and approved release evidence (values withheld)\n');
     process.exitCode=1;
   });
 }
