@@ -23,9 +23,9 @@
       "x": 24,
       "y": 753,
       "width": 272,
-      "height": 1142,
+      "height": 1291.59375,
       "right": 296,
-      "bottom": 1895
+      "bottom": 2044.59375
     },
     "cartRowCount": 2,
     "cartTotal": "৳1,970",
@@ -42,19 +42,19 @@
       "visibility": "visible",
       "rect": {
         "x": 48,
-        "y": 1433,
+        "y": 1582.59375,
         "width": 224,
         "height": 40,
         "right": 272,
-        "bottom": 1473
+        "bottom": 1622.59375
       },
       "panelRect": {
         "x": 37,
-        "y": 1402,
+        "y": 1551.59375,
         "width": 246,
         "height": 101,
         "right": 283,
-        "bottom": 1503
+        "bottom": 1652.59375
       },
       "parentDisplay": "block",
       "outer": "<div class=\"hisabiq-pos-amount-in-words\" id=\"posHisabiqAmountWords\"><strong>In words</strong><p>One thousand nine hundred seventy taka only</p><small>মোট টাকার পরিমাণ কথায়</small></div>"
@@ -85,9 +85,9 @@
       "x": 24,
       "y": 1039,
       "width": 342,
-      "height": 1071,
+      "height": 1220.59375,
       "right": 366,
-      "bottom": 2110
+      "bottom": 2259.59375
     },
     "cartRowCount": 2,
     "cartTotal": "৳1,970",
@@ -104,19 +104,19 @@
       "visibility": "visible",
       "rect": {
         "x": 48,
-        "y": 1686,
+        "y": 1835.59375,
         "width": 294,
         "height": 20,
         "right": 342,
-        "bottom": 1706
+        "bottom": 1855.59375
       },
       "panelRect": {
         "x": 37,
-        "y": 1655,
+        "y": 1804.59375,
         "width": 316,
         "height": 81,
         "right": 353,
-        "bottom": 1736
+        "bottom": 1885.59375
       },
       "parentDisplay": "block",
       "outer": "<div class=\"hisabiq-pos-amount-in-words\" id=\"posHisabiqAmountWords\"><strong>In words</strong><p>One thousand nine hundred seventy taka only</p><small>মোট টাকার পরিমাণ কথায়</small></div>"
@@ -147,9 +147,9 @@
       "x": 16,
       "y": 645,
       "width": 736,
-      "height": 1039,
+      "height": 1188.59375,
       "right": 752,
-      "bottom": 1684
+      "bottom": 1833.59375
     },
     "cartRowCount": 2,
     "cartTotal": "৳1,970",
@@ -166,19 +166,19 @@
       "visibility": "visible",
       "rect": {
         "x": 42,
-        "y": 1290,
+        "y": 1439.59375,
         "width": 684,
         "height": 20,
         "right": 726,
-        "bottom": 1310
+        "bottom": 1459.59375
       },
       "panelRect": {
         "x": 31,
-        "y": 1259,
+        "y": 1408.59375,
         "width": 706,
         "height": 81,
         "right": 737,
-        "bottom": 1340
+        "bottom": 1489.59375
       },
       "parentDisplay": "block",
       "outer": "<div class=\"hisabiq-pos-amount-in-words\" id=\"posHisabiqAmountWords\"><strong>In words</strong><p>One thousand nine hundred seventy taka only</p><small>মোট টাকার পরিমাণ কথায়</small></div>"
@@ -193,25 +193,25 @@
       "x": 270,
       "y": 171,
       "width": 434,
-      "height": 326,
+      "height": 268,
       "right": 704,
-      "bottom": 497
+      "bottom": 439
     },
     "quick": {
       "x": 270,
-      "y": 513,
+      "y": 455,
       "width": 434,
       "height": 226,
       "right": 704,
-      "bottom": 739
+      "bottom": 681
     },
     "checkout": {
       "x": 720,
       "y": 171,
       "width": 290,
-      "height": 1095,
+      "height": 1244.59375,
       "right": 1010,
-      "bottom": 1266
+      "bottom": 1415.59375
     },
     "cartRowCount": 2,
     "cartTotal": "৳1,970",
@@ -228,19 +228,19 @@
       "visibility": "visible",
       "rect": {
         "x": 746,
-        "y": 816,
+        "y": 965.59375,
         "width": 238,
         "height": 40,
         "right": 984,
-        "bottom": 856
+        "bottom": 1005.59375
       },
       "panelRect": {
         "x": 735,
-        "y": 785,
+        "y": 934.59375,
         "width": 260,
         "height": 101,
         "right": 995,
-        "bottom": 886
+        "bottom": 1035.59375
       },
       "parentDisplay": "block",
       "outer": "<div class=\"hisabiq-pos-amount-in-words\" id=\"posHisabiqAmountWords\"><strong>In words</strong><p>One thousand nine hundred seventy taka only</p><small>মোট টাকার পরিমাণ কথায়</small></div>"
@@ -271,9 +271,9 @@
       "x": 1076,
       "y": 181,
       "width": 340,
-      "height": 1095,
+      "height": 1244.59375,
       "right": 1416,
-      "bottom": 1276
+      "bottom": 1425.59375
     },
     "cartRowCount": 2,
     "cartTotal": "৳1,970",
@@ -290,19 +290,19 @@
       "visibility": "visible",
       "rect": {
         "x": 1102,
-        "y": 826,
+        "y": 975.59375,
         "width": 288,
         "height": 40,
         "right": 1390,
-        "bottom": 866
+        "bottom": 1015.59375
       },
       "panelRect": {
         "x": 1091,
-        "y": 795,
+        "y": 944.59375,
         "width": 310,
         "height": 101,
         "right": 1401,
-        "bottom": 896
+        "bottom": 1045.59375
       },
       "parentDisplay": "block",
       "outer": "<div class=\"hisabiq-pos-amount-in-words\" id=\"posHisabiqAmountWords\"><strong>In words</strong><p>One thousand nine hundred seventy taka only</p><small>মোট টাকার পরিমাণ কথায়</small></div>"

@@ -113,7 +113,7 @@
   details.id='posHisabiqCustomerDetails';
   const detailsTitle=make('summary','');
   detailsTitle.append(make('strong','','Invoice customer details · ক্রেতার তথ্য'),
-    make('small','','Name · Phone · Guardian · Address'));
+    make('small','','Guardian · Address · Customer history'));
   const detailsBody=make('div','hisabiq-pos-customer-details-body');
   details.append(detailsTitle,detailsBody);
   picker.insertAdjacentElement('afterend',details);
@@ -130,6 +130,24 @@
   }
   const nameInput=document.getElementById('posCustomerName');
   const phoneInput=document.getElementById('posCustomerPhone');
+  // The active Owner Cash checkout and the original real-D1 browser flow
+  // require both fields to remain directly usable. Only supplemental
+  // guardian/address/history fields belong inside the optional disclosure.
+  // Move the ORIGINAL inputs, labels and datalists, never duplicate them.
+  const primary=make('div','hisabiq-pos-customer-primary');
+  primary.id='posHisabiqCustomerPrimary';
+  details.insertAdjacentElement('beforebegin',primary);
+  [nameInput,phoneInput].forEach(input=>{
+    const wrap=input?.closest('.pos-customer-input-wrap');
+    if(!wrap)return;
+    const label=wrap.previousElementSibling;
+    const dataList=wrap.nextElementSibling;
+    const field=make('div','hisabiq-pos-customer-primary-field');
+    if(label?.tagName==='LABEL')field.appendChild(label);
+    field.appendChild(wrap);
+    if(dataList?.tagName==='DATALIST')field.appendChild(dataList);
+    primary.appendChild(field);
+  });
   const syncPicker=()=>{
     const name=nameInput?.value.trim()||'';
     pickerLabel.querySelector('strong').textContent=name||'Walk-in customer';
@@ -293,9 +311,45 @@
   if(sourceTotal)new MutationObserver(updateSummary).observe(sourceTotal,{
     subtree:true,characterData:true,childList:true});
   const cartList=page.querySelector('#posCartList');
-  if(cartList)new MutationObserver(updateSummary).observe(cartList,{
+  const emptyCart=make('p','hisabiq-pos-empty-cart','Cart is empty · কার্টে কোনো পণ্য নেই');
+  emptyCart.id='posHisabiqEmptyCart';
+  if(cartList)cartList.insertAdjacentElement('afterend',emptyCart);
+  const updateCartPresentation=()=>{
+    emptyCart.hidden=!!cartList?.querySelector('.cart-row:not(.pos-cart-entry-row),.pos-cart-entry-row.is-active');
+    syncPicker(); // Draft restoration and sale reset can change original fields programmatically.
+    updateSummary();
+  };
+  if(cartList)new MutationObserver(updateCartPresentation).observe(cartList,{
     childList:true,subtree:true});
-  updateSummary();
+  updateCartPresentation();
+
+  // This is an early UX rejection of known unsupported checkout shapes.
+  // It does not authorize supported shapes: the original authenticated Worker
+  // still validates tenant, Cash Session, FIFO quote and D1 atomic posting.
+  const complete=page.querySelector('#posCompleteBtn');
+  const formError=page.querySelector('#posFormError');
+  complete?.addEventListener('click',event=>{
+    const rows=cartList?.querySelectorAll('.cart-row:not(.pos-cart-entry-row)')||[];
+    const total=readMoney(sourceTotal?.textContent);
+    const received=Number(sourceReceived?.value)||0;
+    const discount=Number(sourceDiscount?.value)||0;
+    let reason='';
+    if(rows.length>1)reason='Current Shop D1 checkout supports only one product per sale. Remove extra cart lines or keep this sale as an unsaved preview.';
+    else if(discount>0)reason='Discounted sales are not connected to Shop D1 yet. Set discount to zero before checkout.';
+    else if(sourceMethod?.value!=='Cash')reason='Only Cash payment is connected to Shop D1. Select Cash before checkout.';
+    else if(total>0&&received<total-0.004)reason='Customer Due and partial payment are not connected to Shop D1. Receive the full amount in Cash.';
+    if(!reason)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if(formError){
+      formError.textContent=reason;
+      formError.style.display='block';
+      formError.setAttribute('role','alert');
+      formError.setAttribute('tabindex','-1');
+      formError.focus({preventScroll:true});
+      formError.scrollIntoView({block:'nearest',behavior:'instant'});
+    }
+  },true);
 
   const previewButton=make('button','btn hisabiq-pos-preview-button','Preview sale · F9');
   previewButton.id='posHisabiqPreviewButton';
@@ -316,8 +370,9 @@
   close.setAttribute('aria-label','Close sale preview');
   top.append(close);
   const previewItems=make('div','hisabiq-pos-preview-items');
+  const previewBreakdown=make('dl','hisabiq-pos-preview-breakdown');
   const previewTotal=make('div','hisabiq-pos-preview-total');
-  panel.append(top,previewItems,previewTotal);
+  panel.append(top,previewItems,previewBreakdown,previewTotal);
   dialog.appendChild(panel);
   page.appendChild(dialog);
   let previewReturnFocus=null;
@@ -355,6 +410,24 @@
         make('b','',total));
       previewItems.appendChild(line);
     });
+    previewBreakdown.replaceChildren();
+    const detail=(label,value)=>{
+      const dt=make('dt','',label);
+      const dd=make('dd','',value);
+      previewBreakdown.append(dt,dd);
+    };
+    const name=nameInput?.value.trim();
+    const phone=phoneInput?.value.trim();
+    detail('Customer · ক্রেতা',name||'Unspecified');
+    if(phone)detail('Phone · ফোন',phone);
+    detail('Subtotal · মোট',sourceSubtotal?.textContent||'৳0');
+    detail('Discount · ছাড়',amountText(Math.max(0,Number(sourceDiscount?.value)||0)));
+    detail('Payment · পেমেন্ট',sourceMethod?.value||'Cash');
+    const total=readMoney(sourceTotal?.textContent);
+    const received=Math.max(0,Number(sourceReceived?.value)||0);
+    detail('Paid now · জমা',amountText(Math.min(total,received)));
+    detail('Due · বাকি',amountText(Math.max(0,total-received)));
+    if(received>total)detail('Change · ফেরত',amountText(received-total));
     previewTotal.textContent='Total payable · মোট   '+
       (sourceTotal?.textContent||'৳0');
     dialog.hidden=false;close.focus();

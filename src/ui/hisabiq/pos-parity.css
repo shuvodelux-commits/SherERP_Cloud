@@ -653,3 +653,55 @@ html.dark body.hisabiq-pos-ready.pos-v2-active #page-pos
   #posSubtotal {
   color:var(--pos-v2-ink)!important;
 }
+/* Empty-cart status mirrors the reference cart's bilingual empty guidance. */
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-empty-cart {
+  border-top:1px solid var(--pos-v2-border);
+  padding:22px 12px;margin:0;text-align:center;
+  font-size:12px;line-height:19px;color:var(--pos-v2-muted);
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-empty-cart[hidden] {
+  display:none!important;
+}
+/* Preview details are read-only snapshots of the existing checkout inputs. */
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-preview-breakdown {
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);
+  gap:6px 10px;padding:12px 0;margin:0;
+  border-bottom:1px solid var(--pos-v2-border);
+  font-size:12px;line-height:18px;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-preview-breakdown dt {
+  color:var(--pos-v2-muted);min-width:0;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-preview-breakdown dd {
+  margin:0;color:var(--pos-v2-ink);text-align:right;
+  font-weight:500;overflow-wrap:anywhere;min-width:0;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos #posFormError[role="alert"]:focus {
+  outline:2px solid var(--pos-v2-primary);outline-offset:2px;
+}
+
+/* Preserve the original Owner Cash customer inputs outside optional details.
+   This also keeps the existing real Workerd/D1 checkout and accessible label
+   associations fully operable, on desktop and touch devices. */
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-customer-primary {
+  display:flex;flex-direction:column;gap:9px;min-width:0;margin:0 0 12px;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-customer-primary-field {
+  display:flex;flex-direction:column;gap:5px;min-width:0;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-customer-primary-field > label {
+  color:var(--pos-v2-muted);font-size:12px;line-height:17px;margin:0;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-customer-primary-field
+  .pos-customer-input-wrap {
+  min-width:0;width:100%;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-customer-primary-field input {
+  width:100%;height:36px;min-height:36px;
+  border:1px solid var(--pos-v2-input);border-radius:6px;
+  background:var(--pos-v2-surface);color:var(--pos-v2-ink);
+  font-size:13px;padding:6px 9px 6px 34px;
+}
+body.hisabiq-pos-ready.pos-v2-active #page-pos .hisabiq-pos-customer-primary-field input::placeholder {
+  color:var(--pos-v2-muted);opacity:1;
+}

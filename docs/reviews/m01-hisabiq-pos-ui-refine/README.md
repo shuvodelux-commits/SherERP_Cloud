@@ -147,3 +147,104 @@ invocation stays **unverified**. Review exact PR head CI and real D1 tests.
 - No hosted D1 save, Cloudflare deploy, real OAuth login session, actual
   multi-unit inventory post, split tender, credit/customer ledger, installment
   or source-component byte parity was tested or enabled by this PR.
+
+## Third refinement: source-safe POS checkout preflight and invoice preview
+
+**Source:** pinned HisabIQ React CartTable empty-state and CheckoutPanel.
+**Integration base:** main@9670c5e2; PR #869 remains the same isolated
+Owner M01 UI PR. No M03/M05/M06/SQL/Worker changes in this refinement.
+
+### RED → GREEN and visual review
+
+- **RED before code:** three new Chromium cases failed as expected:
+  missing inline early rejection for unsupported multi-line checkout, missing
+  source-style empty-cart hint, and preview lacking customer, discount,
+  paid and due breakdown.
+- **GREEN after code:** the same three passed. Two additional regression
+  cases pass: eligible single-product full-Cash checkout still opens the
+  **original source financial confirmation** with zero automatic POSTs; and
+  before/after screenshot capture uses actual compiled Owner HTML.
+- **Financial boundary:** known unsupported shapes (multiple products,
+  nonzero discount, Bank/Mobile payment or partial/Due) are rejected before
+  the Owner sale endpoint. The source error area exposes a focused accessible
+  explanation. **This is not authorization:** supported shapes still pass
+  through original source confirmation, private authentication/tenant/session
+  gates, FIFO stock/price quote and SQL-atomic D1 checks.
+- **Empty cart:** after the original Add Product entry row, shows the same
+  bilingual empty hint semantics as pinned HisabIQ CartTable. Disappears as
+  products are added, reappears when removed; original handlers unchanged.
+- **Unsaved preview:** item names, quantities, units, line totals plus
+  source customer/phone, subtotal, discount, payment method, paid, due and
+  change, total payable. Uses textContent only (safe user input). The
+  preview never saves or mutates financial input state.
+
+**Screenshots manually inspected:**
+
+- [320 before, old empty cart](images/320-empty-before.png)
+- [320 after, HisabIQ empty cart](images/320-empty-after.png)
+- [320 after, detailed unsaved preview](images/320-preview-details-after.png)
+
+The 320px empty comparison confirms the reference-style Add Product row and
+bilingual empty hint fit within the phone viewport. The preview screenshot
+confirms the modal remains entirely visible, its values reconcile to the
+source inputs (420 subtotal - 10 discount = 410 payable; 300 paid; 110 due),
+and the Not saved status is explicit. Modal close, Escape, original confirmation
+and no-post behavior are asserted in Playwright. The previous screenshots
+remain as historical before evidence; do not count the static visual fixture
+as a production cash sale.
+
+**Limits:** Frontend preflight is advisory/redundant to the authoritative
+Worker. It does not implement 2–4-unit conversion, split tender, Customer Due,
+cash-session changes, persistent Drafts or multi-product D1 posting.
+Retain original POS and do not deploy this as an operational new feature
+until M03/M05/M06 integration and owner-reviewed production release gates.
+
+### Exact CI failure triage and Customer input repair
+
+The previously queued PR #869 GitHub runs exposed two failures at old head
+48835507:
+
+1. **Owner real-D1 Cash browser (owner-pos-cash):** the original
+   #posCustomerName was hidden because M01 moved the source Name/Phone
+   controls inside a closed optional details accordion. The existing
+   qa/m03-mvp-cash-sale-browser.spec.mjs timed out at fill().
+   **RED:** new real Chromium test reproduced invisible customer fields.
+   **GREEN:** only the original Name/Phone wrappers, labels and datalists
+   are now moved into an always-visible primary customer section. Optional
+   guardian/address/history remain collapsible. No IDs, source event
+   handlers, data or posting paths were replaced. The original real
+   Workerd/D1 browser checkout + persisted invoice + reload/reprint test
+   passed **1/1 locally** after this fix, and five-width UI tests explicitly
+   assert Name/Phone visibility.
+2. **Shared M01 shell browser (Chromium desktop, mobile and synthetic A4
+   print):** qa/m01-hisabiq-shell-browser.spec.mjs:52 asserted 256px desktop
+   sidebar, GitHub runner measured 254px. Shell ownership is in parallel
+   PR #864, not POS. Handoff recorded at
+   https://github.com/shuvodelux-commits/SherERP_Cloud/pull/864#issuecomment-7057653022;
+   **no shared Shell CSS or test was edited**. Full local legacy M01
+   browser suite passed **157/157**, including that shell test. GitHub
+   must rerun exact latest head and review shell-owner resolution.
+
+All 84 original source files and the Shop D1 schema/financial writer remain
+unchanged. This new HTML relocation is needed for a functioning first-Shop
+Cash sale; the existing D1 session/FIFO/tenant/replay gate remains intact.
+
+### Final local acceptance snapshot, after original Cash-input repair
+
+- **157/157 PASS**: npm run test:m01:browser at the final local code
+  (original POS, invoice/A4/thermal, Party, shell, authorization,
+  responsive, keyboard, print and all existing Owner browser checks).
+- **30/30 PASS**: focused compiled Owner POS + Owner regression + POS
+  contract tests including source five breakpoints, light/dark, modal
+  focus, active Cash inputs and early unsupported intent rejection.
+- **1/1 PASS**: existing real Workerd/D1 Owner browser cash sale after
+  customer-input visibility repair. Exactly one confirmed D1 Cash
+  receipt, FIFO/Cash Book effects and persisted invoice reload/reprint.
+- **4/4 PASS**: existing local Workerd/D1 sale kernel tests (same
+  unchanged backend before this final frontend-only input relocation).
+- **84/84 PASS** frozen source integrity; docs check PASS; Owner
+  compiled frontend build PASS; git diff --check clean.
+- The previous GitHub PR head had 2 red jobs. Owner Cash source input
+  blocker fixed here. The unrelated Shell 254/256px assertion has a
+  coordination comment on #864. **Exact latest pushed head CI remains
+  authoritative; local tests do not mean it has merged or deployed.**

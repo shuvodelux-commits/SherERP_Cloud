@@ -24,16 +24,33 @@
 - Touch, keyboard, reduced motion, external dark theme and Bangla overflow.
 
 ### Task 1: Compiled-Owner injector and scoping
-- [ ] RED: contract test expects injector, scope, duplicate rejection, and immutable original source.
-- [ ] GREEN: implement safe Owner-only asset patch and attach it in Owner builder.
-- [ ] Run focused tests and compile.
+- [x] RED: contract test expects injector, scope, duplicate rejection, and immutable original source.
+- [x] GREEN: implement safe Owner-only asset patch and attach it in Owner builder.
+- [x] Run focused tests and compile.
 
 ### Task 2: Reference hierarchy and responsive cart
-- [ ] RED: Playwright verifies actual Owner layout, quick items and all panels at 320/390/768/1024/1440.
-- [ ] GREEN: build opt-in POS controller and scoped tokens/CSS.
-- [ ] Capture reference/baseline/after screenshots; inspect visually, fix bounded issues.
-- [ ] Verify browser keyboard and source accounting guardrails.
+- [x] RED: Playwright verifies actual Owner layout, quick items and all panels at 320/390/768/1024/1440.
+- [x] GREEN: build opt-in POS controller and scoped tokens/CSS.
+- [x] Capture reference/baseline/after screenshots; inspect visually, fix bounded issues.
+- [x] Verify browser keyboard and source accounting guardrails.
 
 ### Task 3: Ship reviewable PR
-- [ ] Test full affected suite and source manifest, run CSS visual checks.
-- [ ] Commit screenshots and matrix report; open non-merged PR; disclose missing /ui-refine-skill and backend conversion gap.
+- [x] Test full affected suite and source manifest, run CSS visual checks.
+- [x] Commit screenshots and matrix report; open non-merged PR; disclose missing /ui-refine-skill and backend conversion gap.
+
+
+## Post-PR CI and source safety refinement
+
+- Original Owner Cash POST regression from previous PR head reproduced
+  invisible required Name/Phone controls in a RED Chromium test.
+  The original inputs/datalists/handlers now remain visible outside the
+  optional disclosure. Same real Workerd/D1 Cash Sale browser test GREEN.
+- Source-compatible empty-cart, unsaved sale preview with complete breakdown
+  and early known-unsupported checkout guard added via test-first RED/GREEN.
+- Existing Worker/D1 SQL writer untouched; original explicit confirmation
+  remains reachable for eligible single-line full-Cash sale.
+- The independent Shell exact-width CI discrepancy was handed off to the
+  single Shell owner at PR #864, without changing shell code here.
+- The exact /ui-refine-skill invocation was unavailable. The documented
+  manual source comparison/Playwright screenshot inspection is the fallback,
+  **not** a verified run of the named skill.

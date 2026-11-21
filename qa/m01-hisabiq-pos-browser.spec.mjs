@@ -100,6 +100,8 @@ test('Owner POS composed screen remains visible at five source breakpoints and p
       try{
         assert.equal(await page.locator('#posHisabiqHeader').count(),1);
         assert.equal(await page.locator('#posHisabiqInvoiceHead').count(),1);
+        assert.ok(await page.locator('#posCustomerName').isVisible(),'primary cash customer name visible');
+        assert.ok(await page.locator('#posCustomerPhone').isVisible(),'primary cash customer phone visible');
         assert.ok(await page.locator('#posCartList [data-cart-product-mode="add"]').isVisible());
         assert.ok(await page.locator('#posProductGrid .product-tile').first().isVisible(),'quick product is visible');
         await page.locator('#posProductGrid .product-tile').first().click();
@@ -343,4 +345,125 @@ test('source dark-theme POS remains readable on phone and desktop with screensho
       assert.deepEqual(errors,[]);
     }finally{await page.close();}
   }
+});
+
+test('cash-only pilot blocks a multi-line checkout before any Owner POST, with an actionable inline reason',async()=>{
+  const {page,errors}=await visit({width:390,height:840});
+  try{
+    await page.evaluate(()=>{
+      posState.activeSession={sessionId:'11111111-1111-4111-8111-111111111111',status:'Open'};
+      posRenderSessionUI_();
+    });
+    await page.locator('#posProductGrid .product-tile').first().click();
+    await page.locator('#posProductGrid .product-tile').nth(1).click();
+    await page.locator('#posHisabiqCustomerPicker').click();
+    await page.locator('#posCustomerName').fill('Test Buyer');
+    await page.locator('#posCustomerPhone').fill('01710000001');
+    await page.locator('[data-pos-cash-shortcut="exact"]').click();
+    await page.locator('#posCompleteBtn').click();
+    assert.equal(salePostCount,0,'known unsupported mode must not reach financial writer');
+    assert.match(await page.locator('#posFormError').innerText(),/one product|one in-stock|single product/i);
+    assert.ok(await page.locator('#posFormError').isVisible());
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('empty cart shows HisabIQ source-guided empty copy and hides it as products are added',async()=>{
+  const {page,errors}=await visit({width:320,height:760});
+  try{
+    assert.ok(await page.locator('#posHisabiqEmptyCart').isVisible());
+    assert.match(await page.locator('#posHisabiqEmptyCart').innerText(),/empty|পণ্য/i);
+    await page.locator('#posProductGrid .product-tile').first().click();
+    assert.equal(await page.locator('#posHisabiqEmptyCart').isVisible(),false);
+    await page.locator('#posCartList .cart-remove').first().click();
+    assert.ok(await page.locator('#posHisabiqEmptyCart').isVisible());
+    assert.equal(salePostCount,0);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('preview includes customer and accounting breakdown without posting or changing live inputs',async()=>{
+  const {page,errors}=await visit({width:390,height:840});
+  try{
+    await page.locator('#posProductGrid .product-tile').first().click();
+    await page.locator('#posHisabiqCustomerPicker').click();
+    await page.locator('#posCustomerName').fill('Nila Ahmed');
+    await page.locator('#posCustomerPhone').fill('01711000001');
+    await page.locator('#posDiscount').fill('20');
+    await page.locator('#posDiscount').dispatchEvent('input');
+    await page.locator('#posAmountReceived').fill('300');
+    await page.locator('#posAmountReceived').dispatchEvent('input');
+    await page.locator('#posHisabiqPreviewButton').click();
+    const preview=page.locator('#posHisabiqPreview');
+    assert.match(await preview.innerText(),/Nila Ahmed/);
+    assert.match(await preview.innerText(),/01711000001/);
+    assert.match(await preview.innerText(),/Discount/i);
+    assert.match(await preview.innerText(),/Paid|Amount received/i);
+    assert.match(await preview.innerText(),/Due/i);
+    assert.equal(salePostCount,0);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#posDiscount').inputValue(),'20');
+    assert.equal(await page.locator('#posAmountReceived').inputValue(),'300');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('eligible one-product full-Cash sale still reaches the original source confirmation, never auto-posts',async()=>{
+  const {page,errors}=await visit({width:390,height:840});
+  try{
+    await page.evaluate(()=>{
+      posState.activeSession={sessionId:'11111111-1111-4111-8111-111111111111',status:'Open'};
+      posRenderSessionUI_();
+    });
+    await page.locator('#posProductGrid .product-tile').first().click();
+    await page.locator('#posHisabiqCustomerPicker').click();
+    await page.locator('#posCustomerName').fill('Eligible Cash Buyer');
+    await page.locator('#posCustomerPhone').fill('01710000002');
+    await page.locator('[data-pos-cash-shortcut="exact"]').click();
+    await page.locator('#posCompleteBtn').click();
+    assert.equal(await page.locator('#posFormError').innerText(),'',
+      'new early-rejection path must not block the supported cart shape');
+    assert.equal(salePostCount,0,'confirmation never auto-submits');
+    assert.ok(await page.locator('#confirmActionModal:not([hidden])').isVisible(),
+      'existing source financial confirmation must be preserved');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('new empty-cart and detailed-preview before/after screenshots use the actual compiled Owner UI',async()=>{
+  await mkdir(folder,{recursive:true});
+  const baselineVisit=await visit({width:320,height:760},{before:true});
+  try{
+    await baselineVisit.page.screenshot({path:join(folder,'320-empty-before.png'),fullPage:false});
+  }finally{await baselineVisit.page.close();}
+  const {page,errors}=await visit({width:320,height:760});
+  try{
+    await page.screenshot({path:join(folder,'320-empty-after.png'),fullPage:false});
+    await page.locator('#posProductGrid .product-tile').first().click();
+    await page.locator('#posHisabiqCustomerPicker').click();
+    await page.locator('#posCustomerName').fill('Preview Buyer');
+    await page.locator('#posCustomerPhone').fill('01710000003');
+    await page.locator('#posDiscount').fill('10');
+    await page.locator('#posDiscount').dispatchEvent('input');
+    await page.locator('#posAmountReceived').fill('300');
+    await page.locator('#posAmountReceived').dispatchEvent('input');
+    await page.locator('#posHisabiqPreviewButton').click();
+    await page.screenshot({path:join(folder,'320-preview-details-after.png'),fullPage:false});
+    assert.match(await page.locator('#posHisabiqPreview').innerText(),/Due/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('original Cash checkout customer name and phone remain visible without opening optional details',async()=>{
+  const {page,errors}=await visit({width:390,height:840});
+  try{
+    assert.equal(await page.locator('#posHisabiqCustomerDetails').getAttribute('open'),null);
+    assert.ok(await page.locator('#posCustomerName').isVisible(),'original Cash sale customer must stay accessible');
+    assert.ok(await page.locator('#posCustomerPhone').isVisible(),'original Cash sale phone must stay accessible');
+    await page.locator('#posCustomerName').fill('Counter Buyer');
+    await page.locator('#posCustomerPhone').fill('01712345678');
+    assert.equal(await page.locator('#posCustomerName').inputValue(),'Counter Buyer');
+    assert.equal(await page.locator('#posCustomerPhone').inputValue(),'01712345678');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
 });
