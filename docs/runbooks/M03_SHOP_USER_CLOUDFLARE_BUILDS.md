@@ -322,3 +322,41 @@ automatically injected `WORKERS_CI_COMMIT_SHA`. The readiness JSON must
 be refreshed against the currently active Worker and Shop D1 before
 the production Build. Never bypass this SHA gate by running a separate
 `wrangler deploy` while automatic Builds remains the release owner.
+
+
+## 21 November 2026 — safe first-Shop core refresh after merged HisabIQ UI
+
+**Status:** GitHub PR candidate, not a production deployment, database migration or release signoff.
+
+**Observed mismatch:** GitHub `main@c002c8390adf1796880373672ca45d3723ebf159` includes the current HisabIQ Shell, Product Table, POS, Party, Settings and Dashboard, and local `npm run build:owner-frontend` embeds their controllers. The active `shererp` deployment (Cloudflare Worker version 70) was created **2026-11-20 21:35:25 UTC** and is older. Recent GitHub `Workers Builds: shererp` check runs have failed. The Cloudflare Builds API returns **403** for the currently authorized Wrangler OAuth; we cannot read the actual failing build log or edit protected production Build variables. The exact failing build stage (commit gate, quota, missing variables, or another error) requires the owner's Cloudflare Build History.
+
+**Why simply moving the initial-release pin was unsafe:** the existing `FIRST_SHOP_CORE_MVP_TEST_ONLY` proof assumes a *pre-activation* Shop (seven disabled-feature blockers). The actual live authenticated Shop D1 and active Worker version 70 now report exactly **two** remaining disabled flags: `OWNER_MVP_CASH_RETURN_ENABLED` and `OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED`. Reusing seven old blockers would be falsifying current evidence. Deploying the login-only fallback would disable working Product/Purchase/POS functionality.
+
+A separate, opt-in protected release value `FIRST_SHOP_CORE_MVP_REFRESH` now accepts **only** the current verified two-blocker report, with `authConfigured=true`, exact immutable Shop D1 identity, original thirteen receipt/schema seal, cryptographically approved Supplier Cash overlay, `coreReadConfigured=true`, `coreWriteConfigured=false`, `supplierCashConfigured=false`, and all five outstanding release checks. The generated runtime retains identical existing single-Shop D1 bindings, business IDs/markers, Owner Google origin, rate limiter and core flags; Cash Return, Supplier Pay, support audit and Redemption remain **OFF**. It still rejects wrong branch, unapproved SHA, stale/wrong report, extra flags and private publisher takeover. This is **not** approval to enable multi-Shop, any new financial operation, or public RPC.
+
+### Required protected production Cloudflare Builds update — owner-operated
+
+1. Check the most recent failing **Workers Builds: shererp** check and open its **Details → Build log**. This is necessary to distinguish the protected SHA gate from Cloudflare build-minute limits or unrelated installer/permission errors. Do not infer the error solely from the GitHub summary.
+2. Confirm Cloudflare **Workers & Pages → shererp → Settings → Builds** is connected to `shuvodelux-commits/SherERP_Cloud`, branch `main`, root `/`. Leave the existing build/deploy commands unchanged:
+
+   ```bash
+   npm run build:owner-frontend && node scripts/build-shop-user-deploy.mjs --generate
+   npx wrangler@4.161.0 deploy --config wrangler.shop-user.jsonc
+   ```
+
+3. First confirm read-only that the current active Worker is still bound to `CONTROL_DB` (existing `shererp-admin-control-v2`) and `PLATFORM_PILOT_DB` (existing `shererp-shop-001`). Verify the same Shop ID/immutable marker and Owner login. **Do not create D1, rerun migrations, switch account, delete Shop data or manually promote a different Worker publisher.** Before approved production promotion, preserve an independent existing Control/Shop D1 restore-tested backup and a rollback version, and require the repo's M10/M11 controls.
+4. After the refresh PR merges and GitHub required tests are green, obtain the **new current, full 40-character `main` SHA**. Never copy the dated diagnosis SHA above or the branch commit SHA to the protected variable. Rerun the existing read-only `scripts/m03-live-owner-readiness.mjs --version <currently active Owner Worker version UUID> --shop-db shererp-shop-001`. A process exit code 2 and status `BLOCKED` are expected for the **exact two intentionally OFF flags**; do not ignore any other blocker. The JSON is non-identifying and contains no credentials.
+5. In **production Builds Variables and Secrets** (not Runtime Variables, and not GitHub Secrets), replace exactly these protected values, keeping all existing IDs and other variables unchanged:
+
+   | Variable | Verified new value |
+   | --- | --- |
+   | `SHERERP_FIRST_SHOP_CORE_RELEASE` | `FIRST_SHOP_CORE_MVP_REFRESH` |
+   | `SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT` | full GitHub `main` SHA **after** this PR merges |
+   | `SHERERP_FIRST_SHOP_CORE_READINESS_JSON` | fresh, successful read-only **two-blocker** report from the currently active Worker/Shop D1 |
+
+6. Trigger or retry **one approved production build for that exact SHA** through Cloudflare's existing Builds integration. If the check still fails, inspect its Cloudflare log and fix the *specific* reported error; do not replace the protected release with login-only, remove the SHA gate, edit Worker runtime database bindings, or use a second manual `wrangler deploy`.
+7. After it succeeds, read Cloudflare's active Worker version and compare it with the newly built version, runtime flags and both D1 bindings. Sign out and sign back in as the approved Shop Owner. Reopen `https://shererp.hisab.workers.dev/app` and verify the updated HisabIQ Shell, POS, Product Table, Party and Dashboard at desktop/mobile widths. Check existing Product/Supplier/Purchase/POS session flows without enabling new finance features; keep M10/M11 production NO-GO until approved acceptance.
+
+**Parallel UI dependency:** PR [#882](https://github.com/shuvodelux-commits/SherERP_Cloud/pull/882) already owns the Dashboard/Sales Invoice source-readiness and unsupported-RPC protocol. It must pass review and merge before accepting a UI release. The refresh lane deliberately **does not** edit its shared Dashboard compiler, Worker endpoints, Owner frontend, tests, Sales views, or `PROJECT.md`. The separately diagnosed post-merge string mismatch is not claimed as corrected by this release-gate PR.
+
+**Local evidence:** `npm run build:owner-frontend` successfully compiled all five current HisabIQ controllers, and a *strict, local-only* Wrangler Worker dry-run was constructed from the actual active Worker bindings and current two-blocker D1 report. The candidate's D1 IDs, Owner runtime variables and enabled/disabled flag set were independently compared with the active version and matched. No Cloudflare code upload, release promotion, data mutation or Build-API variable update was made. This proves candidate integrity, **not** hosted deployment.
