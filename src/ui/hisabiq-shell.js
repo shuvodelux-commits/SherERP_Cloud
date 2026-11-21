@@ -154,6 +154,56 @@
     syncNavState();
   }
 
+  // Owner Party is an existing additive module that installs its own
+  // permission-aware navigation button after the shared sidebar has rendered.
+  // Mirror that *existing* button into the drawer; do not invent a Party route,
+  // grant or API. Keep its original click handler as the authority.
+  function syncExternalOwnerNav() {
+    var sidebar = document.getElementById('navList');
+    if (!sidebar) return;
+    var source = sidebar.querySelector('[data-page="hisabiqParties"]');
+    if (!source) return;
+    var business = Array.from(sidebar.querySelectorAll('.h-shell-section')).find(function (section) {
+      return section.querySelector('.h-shell-section-label')?.textContent === 'Business';
+    });
+    var businessRows = business?.querySelector('.h-shell-section-items');
+    if (businessRows && source.parentElement !== businessRows) businessRows.appendChild(source);
+    if (!source.querySelector('svg')) {
+      var icon = document.createElement('span');
+      icon.className = 'h-shell-external-icon';
+      icon.innerHTML = ICONS.customers || '';
+      source.prepend(icon);
+    }
+    var drawerNav = document.getElementById('h-shell-drawer-nav');
+    if (!drawerNav || drawerNav.querySelector('[data-page="hisabiqParties"]')) return;
+    var drawerBusiness = Array.from(drawerNav.querySelectorAll('.h-shell-section')).find(function (section) {
+      return section.querySelector('.h-shell-section-label')?.textContent === 'Business';
+    });
+    var destination = drawerBusiness?.querySelector('.h-shell-section-items');
+    if (!destination) {
+      var section = document.createElement('section');
+      section.className = 'h-shell-section';
+      var heading = document.createElement('span');
+      heading.className = 'h-shell-section-label';
+      heading.textContent = 'Business';
+      destination = document.createElement('div');
+      destination.className = 'h-shell-section-items';
+      section.append(heading, destination);
+      drawerNav.appendChild(section);
+    }
+    var button = makeButton('nav-item', 'Parties & Ledger');
+    button.dataset.page = 'hisabiqParties';
+    button.innerHTML = (ICONS.customers || '') +
+      '<span class="nav-item-text"><span>Parties & Ledger</span></span>';
+    button.addEventListener('click', function () {
+      source.click();
+      closeDrawer();
+      button.classList.add('active');
+      button.setAttribute('aria-current', 'page');
+    });
+    destination.appendChild(button);
+  }
+
   function syncNavState() {
     var selected = activeGroupKey();
     document.querySelectorAll('#navList .h-shell-group, #h-shell-drawer-nav .h-shell-group').forEach(function (group) {
@@ -253,6 +303,7 @@
       groups = filterNavByRole_(navItems_ || []);
     }
     renderNavigation(document.getElementById('h-shell-drawer-nav'), groups, true);
+    syncExternalOwnerNav();
     var user = document.getElementById('logoutBtn');
     var drawerLogout = document.getElementById('h-shell-drawer-logout');
     if (drawerLogout) drawerLogout.hidden = !user;
@@ -334,6 +385,7 @@
     app.setAttribute('data-hisabiq-shell', '');
     document.getElementById('sidebar').setAttribute('data-sidebar','sidebar');
     nav.setAttribute('aria-label','Main');
+    new MutationObserver(syncExternalOwnerNav).observe(nav,{childList:true});
     var brand = document.createElement('div');
     brand.className = 'h-shell-brand';
     var word = document.createElement('span');
