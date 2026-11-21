@@ -468,3 +468,357 @@ body:has(#page-hisabiqParties:not([hidden])) #owner-data-notice {
 #content:has(#page-hisabiqParties[data-theme="dark"]:not([hidden])) {
   background-color:#0b1a2c;
 }
+/* Screenshot-locked HisabIQ Party surface, src/pages/Parties.tsx and
+   PartyDetail/Editor/PaymentDialog/LedgerRowActions. Scoped to Owner Party. */
+#page-hisabiqParties #hisabiq-party-root {max-width:none;padding:12px 12px 24px;}
+#page-hisabiqParties .hparty-head {gap:8px;margin-bottom:9px;}
+#page-hisabiqParties .hparty-connection {font-size:11px;padding:6px 10px;margin-bottom:9px;}
+#page-hisabiqParties .hparty-layout {gap:16px;}
+#page-hisabiqParties .hparty-directory,
+#page-hisabiqParties .hparty-detail {border:1px solid var(--hds-border);border-radius:12px;background:var(--hds-card);}
+#page-hisabiqParties .hparty-profile {min-height:126px;gap:14px;align-items:flex-start;padding:16px;}
+#page-hisabiqParties .hparty-profile-info h2 {font-size:18px;line-height:24px;font-weight:650;letter-spacing:-.02em;}
+#page-hisabiqParties .hparty-account-balance {margin-inline-start:auto;flex:0 1 auto;max-width:100%;}
+#page-hisabiqParties .hparty-balance-card {
+  min-height:86px;min-width:170px;align-items:flex-end;gap:3px;
+  border:0;border-radius:12px;padding:12px 15px;
+  background:color-mix(in srgb,var(--hds-success) 8%,var(--hds-card));
+}
+#page-hisabiqParties .hparty-balance-card[data-kind="Payable"] {
+  background:color-mix(in srgb,var(--hds-danger) 8%,var(--hds-card));
+}
+#page-hisabiqParties .hparty-balance-card strong {font-size:22px;line-height:28px;}
+#page-hisabiqParties .hparty-balance-card .hparty-balance-subtitle {font-size:10px;}
+#page-hisabiqParties .hparty-profile-roles {margin-top:4px;}
+#page-hisabiqParties .hparty-detail-actions {padding:10px 14px;min-height:58px;}
+#page-hisabiqParties .hparty-primary-actions {display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+#page-hisabiqParties .hparty-action-bar .hds-button {
+  border:1px solid var(--hds-border);border-radius:6px;
+  background:var(--hds-card);color:var(--hds-foreground);
+  padding-inline:12px;min-height:36px;height:36px;
+  font-size:13px;font-weight:500;white-space:nowrap;
+}
+#page-hisabiqParties .hparty-action-bar .hparty-action-main {
+  background:var(--hds-primary);color:var(--hds-primary-foreground);
+  border-color:var(--hds-primary);
+}
+#page-hisabiqParties .hparty-action-bar .hds-button:disabled {opacity:.53;cursor:not-allowed;}
+#page-hisabiqParties .hparty-more-wrap,
+#page-hisabiqParties .hparty-row-actions {position:relative;}
+#page-hisabiqParties .hparty-more-menu,
+#page-hisabiqParties .hparty-row-action-menu {
+  position:absolute;z-index:100;top:calc(100% + 4px);right:0;
+  width:220px;max-width:calc(100vw - 48px);
+  padding:6px;border:1px solid var(--hds-border);border-radius:10px;
+  background:var(--hds-card);box-shadow:var(--hds-shadow-pop);
+}
+#page-hisabiqParties .hparty-more-menu[hidden],
+#page-hisabiqParties .hparty-row-action-menu[hidden] {display:none!important;}
+#page-hisabiqParties .hparty-more-menu .hds-button,
+#page-hisabiqParties .hparty-row-action-menu .hds-button {
+  width:100%;min-height:36px;height:auto;border:0;background:transparent;
+  justify-content:flex-start;padding:8px 10px;text-align:left;
+  border-radius:6px;font-size:12px;line-height:18px;
+}
+#page-hisabiqParties .hparty-more-menu .hds-button:hover,
+#page-hisabiqParties .hparty-row-action-menu .hds-button:hover {
+  background:var(--hds-accent);
+}
+#page-hisabiqParties .hparty-row-action-menu .hds-button:disabled {opacity:.52;cursor:not-allowed;}
+#page-hisabiqParties .hparty-tab-count {
+  display:inline-flex;justify-content:center;align-items:center;
+  min-width:20px;height:20px;padding:0 5px;margin-left:5px;border-radius:5px;
+  background:var(--hds-background);font-size:10px;line-height:17px;
+}
+#page-hisabiqParties .hparty-ledger-toolbar {
+  display:grid;grid-template-columns:minmax(165px,1fr) 112px 160px 40px 72px auto;
+  align-items:center;gap:8px;padding:9px 12px;
+}
+#page-hisabiqParties .hparty-ledger-toolbar .hds-select,
+#page-hisabiqParties .hparty-ledger-toolbar .hds-input {
+  min-width:0;width:100%;min-height:36px;height:36px;
+  font-size:12px;border-radius:6px;
+}
+#page-hisabiqParties .hparty-ledger-toolbar .hds-button {
+  min-height:36px;height:36px;font-size:12px;white-space:nowrap;
+  border:1px solid var(--hds-border);background:var(--hds-card);border-radius:6px;
+}
+#page-hisabiqParties .hparty-ledger-summary {
+  display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:9px 14px;background:var(--hds-background);font-size:12px;
+  color:var(--hds-muted-foreground);border-bottom:1px solid var(--hds-border);
+}
+#page-hisabiqParties .hparty-table {width:100%;min-width:680px;font-size:12px;}
+#page-hisabiqParties .hparty-table th {text-align:left;font-weight:600;padding:12px 10px;}
+#page-hisabiqParties .hparty-table td {vertical-align:middle;padding:10px;font-size:12px;}
+#page-hisabiqParties .hparty-table td[data-numeric] {text-align:right;font-weight:600;}
+#page-hisabiqParties .hparty-ledger-kind {
+  display:inline-block;padding:3px 6px;margin-right:8px;border-radius:4px;
+  background:var(--hds-accent);font-size:10px;font-weight:600;color:var(--hds-primary);
+}
+#page-hisabiqParties .hparty-ledger-kind[data-kind="Supplier Payment"] {color:var(--hds-success);}
+#page-hisabiqParties .hparty-row-trigger {
+  min-width:32px;width:32px;height:32px;padding:0;
+  background:transparent;border:0;border-radius:6px;
+  color:var(--hds-muted-foreground);font-size:19px;
+}
+#page-hisabiqParties .hparty-row-actions {display:flex;justify-content:center;}
+#page-hisabiqParties .hparty-ledger-closing {
+  display:flex;justify-content:space-between;gap:10px;
+  padding:13px 14px;background:color-mix(in srgb,var(--hds-primary) 7%,var(--hds-card));
+  color:var(--hds-foreground);font-size:13px;
+}
+#page-hisabiqParties .hparty-ledger-pager {
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:10px 14px;color:var(--hds-muted-foreground);font-size:12px;
+}
+#page-hisabiqParties .hparty-ledger-pager > div {display:flex;gap:8px;}
+#page-hisabiqParties .hparty-ledger-pager .hds-button {
+  min-height:34px;border:1px solid var(--hds-border);background:var(--hds-card);
+}
+@media(min-width:1024px) {
+  #page-hisabiqParties .hparty-layout {grid-template-columns:minmax(320px,394px) minmax(0,1fr);}
+  #page-hisabiqParties .hparty-table-wrap {overflow:visible;}
+}
+@media(min-width:1280px) {
+  #page-hisabiqParties .hparty-layout {grid-template-columns:394px minmax(0,1fr);}
+}
+/* Screenshot Add Party dialog: 2-column fields, relationship chips,
+   separate opening amount+direction+date; no fake 7-role writer. */
+#page-hisabiqParties .hparty-supplier-panel {
+  width:min(752px,calc(100vw - 28px));max-height:92dvh;
+  border-radius:14px;overflow-y:auto;
+}
+#page-hisabiqParties .hparty-supplier-head {padding:18px 20px 9px;border:0;}
+#page-hisabiqParties .hparty-supplier-head h2 {font-size:18px;line-height:26px;}
+#page-hisabiqParties .hparty-supplier-head p {font-size:13px;line-height:21px;}
+#page-hisabiqParties #hparty-supplier-form {padding:8px 20px 20px;gap:16px;}
+#page-hisabiqParties .hparty-editor-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;}
+#page-hisabiqParties .hparty-editor-fields > div {min-width:0;display:flex;flex-direction:column;gap:4px;}
+#page-hisabiqParties #hparty-supplier-form label {
+  display:block;font-size:13px;line-height:20px;font-weight:500;margin:0;
+}
+#page-hisabiqParties #hparty-supplier-form .hds-input,
+#page-hisabiqParties #hparty-supplier-form .hds-select {
+  height:42px;min-height:42px;width:100%;border-radius:7px;font-size:13px;
+}
+#page-hisabiqParties .hparty-editor-relationships,
+#page-hisabiqParties .hparty-editor-openings {
+  min-width:0;border:1px solid var(--hds-border);
+  border-radius:12px;padding:12px 14px;background:var(--hds-card);
+}
+#page-hisabiqParties .hparty-editor-relationships legend {
+  padding:0 6px;font-size:13px;font-weight:600;
+}
+#page-hisabiqParties .hparty-editor-role-grid {
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;
+}
+#page-hisabiqParties #hparty-supplier-form .hparty-editor-role {
+  display:flex;align-items:center;gap:9px;
+  border:1px solid var(--hds-border);border-radius:7px;padding:10px 9px;
+  font-size:13px;font-weight:400;cursor:pointer;
+}
+#page-hisabiqParties .hparty-editor-role input {
+  flex:0 0 18px;width:18px;height:18px;accent-color:var(--hds-primary);
+}
+#page-hisabiqParties #hparty-relationship-status {
+  padding:9px;color:var(--hds-warning);background:var(--hds-warning-bg);
+  border-radius:7px;font-size:12px;line-height:18px;margin-top:10px;
+}
+#page-hisabiqParties .hparty-editor-openings {padding:12px;}
+#page-hisabiqParties .hparty-editor-openings summary,
+#page-hisabiqParties .hparty-editor-other summary {font-size:13px;font-weight:600;cursor:pointer;}
+#page-hisabiqParties .hparty-editor-openings > p {font-size:12px;line-height:20px;color:var(--hds-muted-foreground);padding:8px 0;}
+#page-hisabiqParties .hparty-opening-card {padding:14px;border-radius:8px;background:var(--hds-background);}
+#page-hisabiqParties #hparty-opening-role {display:block;font-size:13px;margin-bottom:10px;}
+#page-hisabiqParties .hparty-opening-card .hparty-opening-rule {font-size:11px;margin-top:10px;}
+#page-hisabiqParties .hparty-editor-other {font-size:12px;}
+#page-hisabiqParties #hparty-supplier-form footer {
+  position:sticky;bottom:-20px;margin:8px -20px -20px;padding:14px 20px;
+  border-top:1px solid var(--hds-border);background:var(--hds-background);
+}
+#page-hisabiqParties #hparty-supplier-save {min-height:40px;}
+/* Read-only invoice/source preview and nonposting split-payment editor */
+#page-hisabiqParties .hparty-source-preview,
+#page-hisabiqParties .hparty-payment-modal {
+  position:fixed;inset:0;z-index:5150;display:grid;place-items:center;
+}
+#page-hisabiqParties .hparty-source-preview[hidden],
+#page-hisabiqParties .hparty-payment-modal[hidden] {display:none!important;}
+#page-hisabiqParties .hparty-modal-veil {
+  position:absolute;inset:0;width:100%;border:0;
+  background:rgba(11,26,44,.50);backdrop-filter:blur(3px);
+}
+#page-hisabiqParties .hparty-reference-panel {
+  position:relative;z-index:1;width:min(720px,calc(100vw - 28px));
+  max-height:92dvh;overflow-y:auto;padding:18px 20px;
+  border:1px solid var(--hds-border);border-radius:14px;
+  background:var(--hds-card);box-shadow:var(--hds-shadow-pop);
+}
+#page-hisabiqParties .hparty-payment-modal .hparty-reference-panel {
+  width:min(880px,calc(100vw - 28px));
+}
+#page-hisabiqParties .hparty-reference-panel > header {
+  display:flex;align-items:start;justify-content:space-between;gap:10px;
+  margin-bottom:14px;
+}
+#page-hisabiqParties .hparty-reference-panel header h2 {font-size:18px;line-height:26px;font-weight:600;margin:0;}
+#page-hisabiqParties .hparty-reference-panel header p {
+  font-size:13px;line-height:21px;color:var(--hds-muted-foreground);margin:3px 0 0;
+}
+#page-hisabiqParties .hparty-reference-panel > footer {
+  display:flex;justify-content:flex-end;gap:8px;margin-top:18px;
+}
+#page-hisabiqParties .hparty-preview-reference {
+  text-align:right;font-weight:650;font-size:16px;margin:5px 0 12px;
+}
+#page-hisabiqParties .hparty-preview-label {
+  padding:5px;border-radius:5px;color:var(--hds-primary);
+  background:var(--hds-accent);font-size:11px;
+}
+#page-hisabiqParties .hparty-preview-metrics {
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  padding:12px;gap:12px;border:1px solid var(--hds-border);
+  background:var(--hds-background);border-radius:8px;
+}
+#page-hisabiqParties .hparty-preview-metrics div,
+#page-hisabiqParties .hparty-payment-person > div {
+  display:flex;flex-direction:column;gap:3px;min-width:0;
+}
+#page-hisabiqParties .hparty-preview-metrics small,
+#page-hisabiqParties .hparty-payment-person small {font-size:12px;color:var(--hds-muted-foreground);}
+#page-hisabiqParties .hparty-preview-warning,
+#page-hisabiqParties .hparty-payment-unavailable {
+  border:1px solid var(--hds-border);border-radius:8px;margin-top:12px;
+  padding:10px 12px;color:var(--hds-muted-foreground);font-size:12px;line-height:20px;
+}
+#page-hisabiqParties .hparty-payment-person {
+  display:flex;justify-content:space-between;gap:12px;padding:14px;
+  border-radius:10px;background:var(--hds-background);margin-bottom:16px;
+}
+#page-hisabiqParties .hparty-payment-person > div:last-child {text-align:right;}
+#page-hisabiqParties .hparty-payment-modal .hparty-payment-fields {margin-bottom:14px;}
+#page-hisabiqParties .hparty-reference-panel label {font-size:13px;font-weight:500;}
+#page-hisabiqParties .hparty-reference-panel input,
+#page-hisabiqParties .hparty-reference-panel select {
+  width:100%;height:42px;min-height:42px;border-radius:7px;font-size:13px;
+}
+#page-hisabiqParties .hparty-inline-field {display:flex;gap:6px;}
+#page-hisabiqParties .hparty-inline-field .hds-button {flex:0 0 58px;}
+#page-hisabiqParties .hparty-payment-sources {
+  border:1px solid var(--hds-border);border-radius:12px;padding:0 14px 12px;margin-bottom:16px;
+}
+#page-hisabiqParties .hparty-payment-sources > header {
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:12px 0;border-bottom:1px solid var(--hds-border);
+}
+#page-hisabiqParties .hparty-payment-sources header > div {display:flex;flex-direction:column;gap:4px;}
+#page-hisabiqParties .hparty-payment-sources header strong {font-size:13px;}
+#page-hisabiqParties .hparty-payment-sources header small {
+  font:400 11px/17px 'Hind Siliguri',sans-serif;color:var(--hds-muted-foreground);
+}
+#page-hisabiqParties .hparty-payment-row {
+  display:grid;grid-template-columns:165px minmax(0,1fr) 145px 35px;
+  gap:10px;margin-top:10px;align-items:center;
+}
+#page-hisabiqParties .hparty-payment-row .hds-button {font-size:16px;}
+#page-hisabiqParties .hparty-split-summary {
+  display:flex;justify-content:space-between;gap:10px;padding-top:12px;
+  border-top:1px solid var(--hds-border);margin-top:12px;
+  font-size:12px;color:var(--hds-muted-foreground);
+}
+#page-hisabiqParties .hparty-amount-words {
+  display:flex;flex-direction:column;gap:5px;padding:14px;
+  border:1px solid color-mix(in srgb,var(--hds-primary) 30%,var(--hds-border));
+  border-radius:10px;background:color-mix(in srgb,var(--hds-primary) 7%,var(--hds-card));
+}
+#page-hisabiqParties .hparty-amount-words small {font-size:12px;color:var(--hds-primary);}
+#page-hisabiqParties .hparty-amount-words strong {font:600 17px/26px 'Hind Siliguri',sans-serif;}
+#page-hisabiqParties .hparty-payment-modal [disabled] {opacity:.56;cursor:not-allowed;}
+@media(max-width:1023px) {
+  #page-hisabiqParties .hparty-ledger-toolbar {grid-template-columns:minmax(0,1fr) 110px 145px 40px 66px;}
+  #page-hisabiqParties .hparty-ledger-toolbar > :last-child {grid-column:1/-1;justify-self:end;}
+}
+@media(max-width:767px) {
+  #page-hisabiqParties #hisabiq-party-root {padding:8px 8px 22px;}
+  #page-hisabiqParties .hparty-profile {min-height:unset;gap:10px;padding:12px;}
+  #page-hisabiqParties .hparty-account-balance {width:100%;justify-content:flex-start;}
+  #page-hisabiqParties .hparty-balance-card {min-width:160px;flex:1 1 160px;align-items:flex-start;}
+  #page-hisabiqParties .hparty-detail-actions {padding:8px 10px;}
+  #page-hisabiqParties .hparty-primary-actions {gap:6px;}
+  #page-hisabiqParties .hparty-action-bar .hds-button {padding-inline:9px;font-size:12px;}
+  #page-hisabiqParties .hparty-ledger-toolbar {grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  #page-hisabiqParties .hparty-ledger-toolbar #hparty-ledger-query {grid-column:1/-1;}
+  #page-hisabiqParties .hparty-ledger-toolbar .hds-button {min-width:0;}
+  #page-hisabiqParties .hparty-ledger-summary {font-size:11px;}
+  #page-hisabiqParties .hparty-supplier-panel {position:absolute;bottom:0;left:0;width:100%;max-height:94dvh;border-radius:12px 12px 0 0;}
+  #page-hisabiqParties .hparty-editor-fields {grid-template-columns:minmax(0,1fr);}
+  #page-hisabiqParties .hparty-editor-role-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+  #page-hisabiqParties .hparty-reference-panel {width:100%;max-width:100%;max-height:94dvh;position:absolute;left:0;bottom:0;border-radius:12px 12px 0 0;padding:14px;}
+  #page-hisabiqParties .hparty-reference-panel .hparty-payment-fields {grid-template-columns:minmax(0,1fr);}
+  #page-hisabiqParties .hparty-payment-row {grid-template-columns:minmax(0,1fr) minmax(0,1fr) 35px;}
+  #page-hisabiqParties .hparty-payment-row select:nth-child(2) {grid-column:1/3;}
+  #page-hisabiqParties .hparty-preview-metrics {grid-template-columns:repeat(2,minmax(0,1fr));}
+  #page-hisabiqParties .hparty-table-wrap {overflow-x:visible;}
+  #page-hisabiqParties .hparty-table {min-width:0;width:100%;display:block;}
+  #page-hisabiqParties .hparty-row-actions {justify-content:flex-end;}
+  #page-hisabiqParties .hparty-row-action-menu {top:auto;bottom:calc(100% + 4px);}
+}
+@media(prefers-reduced-motion:reduce) {
+  #page-hisabiqParties .hparty-source-preview *,
+  #page-hisabiqParties .hparty-payment-modal * {transition:none!important;animation:none!important;}
+}
+@media print {
+  #page-hisabiqParties :is(.hparty-row-actions,.hparty-ledger-pager,
+    .hparty-source-preview,.hparty-payment-modal) {display:none!important;}
+}
+/* Content-width proof: the Owner shell has its own sidebar; keep the 6-column
+   source table and all toolbar buttons inside the remaining right pane. */
+@media (min-width:1024px) {
+  #page-hisabiqParties .hparty-ledger-toolbar {
+    grid-template-columns:minmax(110px,1fr) 100px 136px 36px 60px 114px;
+    gap:5px;
+  }
+  #page-hisabiqParties .hparty-table {min-width:0;table-layout:fixed;width:100%;}
+  #page-hisabiqParties .hparty-table th,
+  #page-hisabiqParties .hparty-table td {padding-inline:7px;}
+  #page-hisabiqParties .hparty-table th:nth-child(1) {width:88px;}
+  #page-hisabiqParties .hparty-table th:nth-child(3),
+  #page-hisabiqParties .hparty-table th:nth-child(4) {width:94px;}
+  #page-hisabiqParties .hparty-table th:nth-child(5) {width:86px;}
+  #page-hisabiqParties .hparty-table th:nth-child(6) {width:54px;}
+  #page-hisabiqParties .hparty-table td[data-label="Particulars"] {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #page-hisabiqParties .hparty-table td[data-label="Particulars"] strong {display:inline;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+}
+/* Browser verified: Actions header needs 62px, not 54px. Otherwise its
+   intrinsic content expands fixed table by seven pixels at 1440 desktop. */
+@media(min-width:1024px) {
+  #page-hisabiqParties .hparty-table th:nth-child(6) {width:70px;}
+  #page-hisabiqParties .hparty-ledger-toolbar {grid-template-columns:minmax(100px,1fr) 96px 132px 36px 60px 122px;}
+}
+@media(max-width:767px) {
+  #page-hisabiqParties .hparty-payment-row {
+    grid-template-columns:minmax(105px,130px) minmax(0,1fr) 34px;
+    gap:6px 8px;
+  }
+  #page-hisabiqParties .hparty-payment-row > select:first-child {grid-column:1;grid-row:1;}
+  #page-hisabiqParties .hparty-payment-row > select:nth-child(2) {grid-column:2/4;grid-row:1;}
+  #page-hisabiqParties .hparty-payment-row > input {grid-column:1/3;grid-row:2;}
+  #page-hisabiqParties .hparty-payment-row > button {
+    grid-column:3;grid-row:2;min-width:34px;padding:0;background:transparent;
+    border:1px solid var(--hds-border);color:var(--hds-muted-foreground);
+  }
+  #page-hisabiqParties .hparty-payment-sources header .hds-button {
+    min-width:80px;white-space:nowrap;flex-shrink:0;
+  }
+  #page-hisabiqParties #hparty-supplier-form .hparty-editor-role {
+    min-height:44px;padding:8px 9px;font-size:12px;
+  }
+}
+#page-hisabiqParties .hparty-ledger-toolbar .hds-button,
+#page-hisabiqParties .hparty-ledger-pager .hds-button {
+  color:var(--hds-foreground);
+}
+#page-hisabiqParties .hparty-ledger-pager .hds-button:disabled {
+  color:var(--hds-muted-foreground);opacity:.65;
+}

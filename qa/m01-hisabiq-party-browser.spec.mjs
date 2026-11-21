@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {readFile,mkdtemp,rm} from 'node:fs/promises';
+import {readFile,mkdtemp,rm,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve,join,extname} from 'node:path';
 import {before,after,test} from 'node:test';
@@ -172,7 +172,7 @@ for(const width of [320,390,768,1024,1440]){
       assert.equal(await page.locator('#page-customers').count(),1);
       assert.equal(await page.locator('#page-supplierLedger').count(),1);
       assert.equal(await page.locator('#hparty-detail .hparty-badge').count(),1);
-      assert.equal(await page.locator('.hparty-balance-card').count(),2);
+      assert.equal(await page.locator('.hparty-balance-card').count(),1);
       assert.match(await page.locator('#hparty-source-mode').textContent(),/Supplier-only D1 source/);
       const pageDims=await page.locator('#page-hisabiqParties').evaluate(node=>({
         scroll:node.scrollWidth,client:node.clientWidth
@@ -265,13 +265,13 @@ test('synthetic unified Party response renders one identity with independent Cus
     assert.match(await page.locator('#hparty-list').innerText(),/Multiple ledgers/);
     assert.match(await page.locator('.hparty-balance-card[data-kind="Receivable"]').innerText(),/5,000\.00/);
     assert.equal(await page.locator('#hparty-detail .hparty-badge').count(),3);
-    await page.locator('#hparty-detail select').selectOption('Supplier');
+    await page.getByLabel('Selected Party relationship').selectOption('Supplier');
     await page.locator('#hparty-tab-content').getByText('PUR-000007').waitFor();
     assert.match(await page.locator('.hparty-balance-card[data-kind="Payable"]').innerText(),/1,200\.55/);
-    await page.locator('#hparty-detail select').selectOption('Lender');
+    await page.getByLabel('Selected Party relationship').selectOption('Lender');
     assert.match(await page.locator('.hparty-balance-card[data-kind="Payable"]').innerText(),/20,000\.00/);
     assert.match(await page.locator('#hparty-tab-content').innerText(),/relationship ledger is not connected/);
-    assert.equal(await page.locator('.hparty-balance-card[data-kind="Receivable"]').innerText().then(s=>s.includes('5,000')),false);
+    assert.equal(await page.locator('.hparty-balance-card[data-kind="Receivable"]').count(),0);
   }finally{genericMode='source-only';await page.close();}
 });
 
@@ -300,7 +300,8 @@ test('source-only Add Supplier posts zero-opening authorized intent and selects 
     assert.match(await button.innerText(),/Add Party/);
     assert.equal(await page.locator('#owner-data-notice').evaluate(x=>getComputedStyle(x).display),'none');
     await button.click();
-    await page.locator('#hparty-add-relationship').selectOption('Supplier');
+    await page.locator('#hparty-editor-role-grid input[value=\"Customer\"]').uncheck();
+    await page.locator('#hparty-editor-role-grid input[value=\"Supplier\"]').check();
     await page.locator('#hparty-supplier-name').fill('New Hardware');
     await page.locator('#hparty-supplier-phone').fill('01888000111');
     await page.locator('#hparty-supplier-address').fill('Khulna');
@@ -324,7 +325,8 @@ test('Supplier timeout retry reuses exact payload and operationId',async()=>{
     await page.route(/^https:\/\/fonts\./,route=>route.abort());
     await openParty(page);
     await page.locator('#hparty-add-party').click();
-    await page.locator('#hparty-add-relationship').selectOption('Supplier');
+    await page.locator('#hparty-editor-role-grid input[value=\"Customer\"]').uncheck();
+    await page.locator('#hparty-editor-role-grid input[value=\"Supplier\"]').check();
     await page.locator('#hparty-supplier-name').fill('Retry Electric');
     await page.locator('#hparty-supplier-save').click();
     await page.locator('#hparty-supplier-status').getByText('Retry unchanged').waitFor();
@@ -344,7 +346,8 @@ test('403 Supplier save stays denied without adding a client-side Party',async()
     await openParty(page);
     const count=await page.locator('#hparty-list [role="option"]').count();
     await page.locator('#hparty-add-party').click();
-    await page.locator('#hparty-add-relationship').selectOption('Supplier');
+    await page.locator('#hparty-editor-role-grid input[value=\"Customer\"]').uncheck();
+    await page.locator('#hparty-editor-role-grid input[value=\"Supplier\"]').check();
     await page.locator('#hparty-supplier-name').fill('Blocked Supplier');
     await page.locator('#hparty-supplier-save').click();
     await page.locator('#hparty-supplier-status').getByText('access denied').waitFor();
@@ -371,4 +374,117 @@ test('read-only Party never triggers a new financial POST or clones missing Cust
   assert.equal(audit.financialPosts,0);
   assert.ok(audit.partyReads>=1,'Attempted only approved Party read route');
   assert.ok(audit.supplierReads>=1,'Fallback from explicit 404 reads existing Supplier source');
+});
+
+for(const width of [390,1440]){
+  test('annotated HisabIQ Party reference dialogs and action menu '+width+'px',async()=>{
+    const page=await browser.newPage({viewport:{width,height:900}});
+    try{
+      await page.route(/^https:\/\/fonts\./,route=>route.abort());
+      await openParty(page);
+      await mkdir('docs/reviews/m01-party-annotated-parity/images',{recursive:true});
+      const prefix='docs/reviews/m01-party-annotated-parity/images/'+width;
+      await page.screenshot({path:prefix+'-party.png',fullPage:true});
+      const table=page.locator('#hparty-tab-content .hparty-table');
+      assert.match(await table.locator('thead').innerText(),/Particulars/i);
+      assert.match(await table.locator('thead').innerText(),/Debit/i);
+      assert.match(await table.locator('thead').innerText(),/Credit/i);
+      assert.match(await table.locator('thead').innerText(),/Actions/i);
+      const dims=await page.locator('#hparty-detail').evaluate(el=>({
+        scroll:el.scrollWidth,client:el.clientWidth,
+        width:el.offsetWidth,overflow:getComputedStyle(el).overflow,
+        children:Array.from(el.querySelectorAll('*')).filter(n=>n.scrollWidth>n.clientWidth+2&&n.clientWidth>0).slice(0,12).map(n=>({tag:n.tagName,c:String(n.className).slice(0,55),sw:n.scrollWidth,cw:n.clientWidth})),
+        offenders:Array.from(el.querySelectorAll('*')).filter(n=>{
+          const r=n.getBoundingClientRect(),parent=el.getBoundingClientRect();
+          return getComputedStyle(n).position!=='fixed'&&r.right>parent.right+2;
+        }).slice(0,15).map(n=>({name:n.tagName,cls:String(n.className),width:Math.round(n.getBoundingClientRect().width),right:Math.round(n.getBoundingClientRect().right)}))
+      }));
+      assert.ok(dims.scroll<=dims.client+2,'Party detail overflows '+width+'px '+JSON.stringify(dims));
+
+      await page.locator('#hparty-action-receive').click();
+      const payment=page.locator('#hparty-payment-modal');
+      assert.equal(await payment.isVisible(),true);
+      assert.match(await payment.innerText(),/Payment sources/);
+      assert.match(await payment.innerText(),/Invoice \/ bill allocation/);
+      assert.equal(await payment.locator('#hparty-allocation option').count(),2,
+        'Only actual verified Supplier purchase ID may be allocated');
+      await payment.locator('#hparty-payment-add').click();
+      assert.equal(await payment.locator('.hparty-payment-row').count(),2);
+      await payment.locator('#hparty-payment-full').click();
+      assert.equal(await payment.locator('#hparty-payment-amount').inputValue(),'1200.55');
+      assert.match(await payment.locator('#hparty-split-total').innerText(),/1,200\.55/);
+      assert.equal(await payment.getByRole('button',{name:'Review payment'}).isDisabled(),true);
+      await page.screenshot({path:prefix+'-payment.png',fullPage:true});
+      await payment.getByRole('button',{name:'Cancel'}).click();
+
+      await page.locator('.hparty-row-trigger').first().click();
+      const menu=page.locator('.hparty-row-action-menu:not([hidden])');
+      assert.equal(await menu.isVisible(),true);
+      for(const name of ['Edit','Print','Delete / reverse'])
+        assert.equal(await menu.getByRole('button',{name}).isDisabled(),true);
+      await page.screenshot({path:prefix+'-row-menu.png',fullPage:true});
+      await menu.getByRole('button',{name:/View/}).click();
+      const preview=page.locator('#hparty-source-preview');
+      assert.equal(await preview.isVisible(),true);
+      assert.match(await preview.innerText(),/PUR-000007/);
+      assert.match(await preview.innerText(),/1,200\.55/);
+      await page.screenshot({path:prefix+'-source-preview.png',fullPage:true});
+      await page.keyboard.press('Escape');
+      assert.equal(await preview.isVisible(),false);
+
+      await page.locator('#hparty-add-party').click();
+      const editor=page.locator('#hparty-supplier-modal');
+      assert.equal(await editor.isVisible(),true);
+      assert.equal(await editor.locator('#hparty-editor-role-grid input[type=checkbox]').count(),7);
+      for(const selector of ['#hparty-supplier-name','#hparty-supplier-name-bn',
+        '#hparty-supplier-phone','#hparty-supplier-address','#hparty-opening-amount',
+        '#hparty-opening-side'])assert.equal(await editor.locator(selector).isVisible(),true,'Hidden editor source field: '+selector);
+      assert.equal(await editor.locator('#hparty-opening-date').count(),1);
+      assert.equal((await editor.locator('#hparty-opening-date').isVisible())||
+        (await editor.locator('.touch-date-trigger').count()>0),true,
+        'Desktop uses original ERP touch-date proxy; mobile keeps native date');
+      assert.equal(await editor.locator('#hparty-supplier-save').isDisabled(),true,
+        'Customer source is not backed by Shop D1 Party create');
+      await editor.locator('input[name=hparty-role][value=Customer]').uncheck();
+      await editor.locator('input[name=hparty-role][value=Supplier]').check();
+      await editor.locator('#hparty-supplier-name').fill('Source Layout Check');
+      await editor.locator('#hparty-opening-amount').fill('25');
+      assert.equal(await editor.locator('#hparty-supplier-save').isDisabled(),true,
+        'Nonzero historical opening not posted by ordinary Supplier create');
+      await editor.locator('#hparty-opening-amount').fill('0');
+      assert.equal(await editor.locator('#hparty-supplier-save').isEnabled(),true);
+      await editor.locator('#hparty-supplier-name-bn').fill('বাংলা');
+      assert.equal(await editor.locator('#hparty-supplier-save').isDisabled(),true,
+        'Unsupported Bangla-name data may not be silently dropped');
+      await editor.locator('#hparty-supplier-name-bn').fill('');
+      await editor.locator('.hparty-supplier-panel').evaluate(panel=>{panel.scrollTop=0;});
+      await page.screenshot({path:prefix+'-add-party.png',fullPage:true});
+      await editor.locator('#hparty-supplier-close').click();
+      assert.equal(audit.financialPosts,0);
+    }finally{await page.close();}
+  });
+}
+
+test('annotated ledger search, type, reset, page size and contextual More behave without financial POST',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    await page.route(/^https:\/\/fonts\./,route=>route.abort());
+    await openParty(page);
+    await page.locator('#hparty-ledger-query').fill('PUR-000007');
+    assert.equal(await page.locator('#hparty-tab-content table tbody tr').count(),1);
+    await page.locator('#hparty-ledger-query').fill('NO-SUCH-REFERENCE');
+    assert.equal(await page.locator('#hparty-tab-content table tbody tr').count(),0);
+    await page.getByRole('button',{name:'Reset ledger filters'}).click();
+    assert.equal(await page.locator('#hparty-tab-content table tbody tr').count(),1);
+    await page.getByLabel('Ledger transaction type').selectOption('Payments');
+    assert.equal(await page.locator('#hparty-tab-content table tbody tr').count(),0);
+    await page.getByLabel('Ledger transaction type').selectOption('All transactions');
+    await page.getByLabel('Ledger page size').selectOption('50');
+    await page.locator('#hparty-more').click();
+    assert.equal(await page.locator('.hparty-more-menu').isVisible(),true);
+    assert.match(await page.locator('.hparty-more-menu').innerText(),/original Supplier ledger/);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.hparty-more-menu').isVisible(),false);
+    assert.equal(audit.financialPosts,0);
+  }finally{await page.close();}
 });
