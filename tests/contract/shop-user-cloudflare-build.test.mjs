@@ -305,3 +305,52 @@ test('M11: partial core refresh approval cannot silently disable live Purchase a
  // only with NO core-refresh metadata in the environment.
  assert.equal(buildShopUserDeployment(buildEnv()).vars.OWNER_MVP_PURCHASE_ENABLED,'false');
 });
+
+// Owner-approved dev iteration lane: the *existing first Shop* is already
+// activated. A normal UI merge must not need a new production SHA approval.
+const devBuildEnv=()=>({
+ ...refreshApprovedEnv(),
+ SHERERP_FIRST_SHOP_CORE_RELEASE:'DEVELOPMENT_AUTO',
+ SHERERP_DEVELOPMENT_CORE_CONFIRMATION:'EXISTING_SHOP_CORE_VERIFIED'
+});
+
+test('M11: explicit existing-Shop development mode retains exact approved runtime but allows subsequent main commits',()=>{
+ const protectedCore=buildShopUserDeployment(refreshApprovedEnv());
+ const first=buildShopUserDeployment(devBuildEnv());
+ const second=buildShopUserDeployment({...devBuildEnv(),WORKERS_CI_COMMIT_SHA:'b'.repeat(40)});
+ assert.deepEqual(first,protectedCore);
+ assert.deepEqual(second,protectedCore);
+ const stale=buildShopUserDeployment({...devBuildEnv(),
+   SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:'INVALID_OLD_PRODUCTION_SHA',
+   SHERERP_FIRST_SHOP_CORE_READINESS_JSON:'obsolete report not JSON'});
+ assert.deepEqual(stale,protectedCore);
+ assert.equal(first.name,'shererp');
+ assert.equal(first.assets.directory,'dist-owner');
+ for(const k of ['OWNER_CATALOG_ENABLED','OWNER_CLEAN_PRODUCTS_ENABLED','OWNER_WRITE_GRANTS_ENABLED',
+   'OWNER_MVP_PURCHASE_ENABLED','OWNER_MVP_POS_CASH_ENABLED'])assert.equal(first.vars[k],'true');
+ for(const k of ['OWNER_MVP_CASH_RETURN_ENABLED','OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED',
+   'OWNER_SUPPORT_AUDIT_ENABLED','OWNER_REDEMPTION_ENABLED'])assert.equal(first.vars[k],'false');
+});
+
+test('M11: development selection is explicit and refuses unsafe owner, target, branch or confirmation',()=>{
+ for(const patch of [
+   {SHERERP_DEVELOPMENT_CORE_CONFIRMATION:undefined},
+   {SHERERP_DEVELOPMENT_CORE_CONFIRMATION:'YES'},
+   {SHERERP_DEPLOYMENT_OWNER:'PRIVATE_PROVISIONER'},
+   {WORKERS_CI_BRANCH:'feature/dev'},
+   {WORKERS_CI:'0'},
+   {SHERERP_OWNER_LOGIN_RELEASE:undefined},
+   {SHERERP_SHOP_DB_ID:buildEnv().SHERERP_CONTROL_DB_ID},
+   {SHERERP_SHOP_ID:'MALFORMED'},
+   {CLOUDFLARE_ACCOUNT_ID:'f'.repeat(32)},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE:'UNREVIEWED'}
+ ])assert.throws(()=>buildShopUserDeployment({...devBuildEnv(),...patch}),/Shop-user deployment/);
+});
+
+test('M11: developer confirmation alone cannot silently downgrade to login-only',()=>{
+ const env={...devBuildEnv(),SHERERP_FIRST_SHOP_CORE_RELEASE:undefined,
+  SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:undefined,
+  SHERERP_FIRST_SHOP_CORE_READINESS_JSON:undefined};
+ assert.throws(()=>buildShopUserDeployment(env),error=>
+   error.code==='RELEASE_MODE_REQUIRED_FOR_CORE');
+});

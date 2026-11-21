@@ -118,21 +118,38 @@ function validateActiveCoreRefresh(e){
      activeCoreReleaseChecks.some(code=>!e.releaseChecks.includes(code)))invalid();
 }
 
-/** Pure: no network, no Cloudflare credentials, no D1 write, no IO. */
-export function buildFirstShopCoreCandidate(base,evidence,approval){
-  if(approval!==APPROVAL&&approval!==REFRESH_APPROVAL)invalid();
-  validateBase(base);
-  if(approval===REFRESH_APPROVAL)validateActiveCoreRefresh(evidence);
-  else validateEvidence(evidence);
+// The existing approved first-Shop core feature roster has ONE projection.
+// Development does not change the runtime authorities; only the frequency
+// of protected build-time approval differs. No broader finance is activated.
+function projectApprovedFirstShopCore(base){
   const candidate=structuredClone(base);
-  // Enable only reviewed core. Cash Return and Supplier Cash Pay stay OFF
-  // even when the independently verified 0010+0011 schema overlay is present.
   for(const name of requiredFalse.slice(0,5))candidate.vars[name]='true';
   candidate.vars.OWNER_MVP_CASH_RETURN_ENABLED='false';
   candidate.vars.OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED='false';
   candidate.vars.OWNER_SUPPORT_AUDIT_ENABLED='false';
   candidate.vars.OWNER_REDEMPTION_ENABLED='false';
   return candidate;
+}
+
+/** Pure: approved production core requires exact live D1 evidence. */
+export function buildFirstShopCoreCandidate(base,evidence,approval){
+  if(approval!==APPROVAL&&approval!==REFRESH_APPROVAL)invalid();
+  validateBase(base);
+  if(approval===REFRESH_APPROVAL)validateActiveCoreRefresh(evidence);
+  else validateEvidence(evidence);
+  return projectApprovedFirstShopCore(base);
+}
+
+/**
+ * Existing first-Shop *development* only. The operator must first verify the
+ * actual Shop/Control D1 and opt in once in the protected Builds settings.
+ * No per-commit SHA/report; always exactly the existing reviewed core flags.
+ * This never authorizes a commercial production release, DB write or deploy.
+ */
+export function buildFirstShopDevelopmentCandidate(base,confirmation){
+  if(confirmation!=='EXISTING_SHOP_CORE_VERIFIED')invalid();
+  validateBase(base);
+  return projectApprovedFirstShopCore(base);
 }
 
 export async function prepareFirstShopCoreCandidate(base,evidence,approval,root=ROOT){
