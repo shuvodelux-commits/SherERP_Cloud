@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import {patchHisabiqDashboard} from './patch-hisabiq-dashboard.mjs';
 import {patchHisabiqShell} from './patch-hisabiq-shell.mjs';
 import {patchHisabiqSales} from './patch-hisabiq-sales.mjs';
+import {patchHisabiqPos} from './patch-hisabiq-pos.mjs';
 
 /** Expand only GAS HtmlService includes; never execute arbitrary template code. */
 export async function buildFrontend({sourceDir, outputDir}) {
@@ -50,11 +51,13 @@ export async function buildFrontend({sourceDir, outputDir}) {
   const shellJs=await readFile(new URL('../src/ui/hisabiq-shell.js',import.meta.url),'utf8');
   const salesCss=await readFile(new URL('../src/ui/hisabiq-sales.css',import.meta.url),'utf8');
   const salesJs=await readFile(new URL('../src/ui/hisabiq-sales.js',import.meta.url),'utf8');
+  const posCss=await readFile(new URL('../src/ui/hisabiq-pos.css',import.meta.url),'utf8');
+  const posJs=await readFile(new URL('../src/ui/hisabiq-pos.js',import.meta.url),'utf8');
   const assembled=patchHisabiqDashboard(original,dashboardTemplate);
   // buildFrontend also assembles tiny non-ERP include fixtures in tests.
   // Only the real ERP document has the complete shell; preserve fixture output byte-for-byte.
   const html=original.includes('id="app"')
-    ? patchHisabiqSales(patchHisabiqShell(assembled,shellCss,shellJs),salesCss,salesJs)
+    ? patchHisabiqPos(patchHisabiqSales(patchHisabiqShell(assembled,shellCss,shellJs),salesCss,salesJs),posCss,posJs)
     : assembled;
   await mkdir(dest,{recursive:true});
   const outputPath=join(dest,'index.html');
