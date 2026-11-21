@@ -240,6 +240,9 @@ for(const width of [390,1440]){
       assert.ok(columns.qty<130,'V2 Qty input must not occupy product column '+JSON.stringify(columns));
       assert.ok(columns.number>0,'V2 native row number must remain '+JSON.stringify(columns));
       assert.notEqual(columns.grip,'none','native pointer drag handle must remain accessible');
+      // The synthetic fixture has no real Cash Session API; omit its toast
+      // only from the screenshot, never from the active application logic.
+      await page.locator('#toast').evaluate(node=>{node.hidden=true;});
       await page.screenshot({path:join(evidence,width+'-active-posv2.png'),fullPage:true,animations:'disabled'});
       assert.deepEqual(errors,[]);
     }finally{await page.close();}
