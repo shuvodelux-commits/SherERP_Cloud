@@ -99,6 +99,11 @@
       if(node.tagName==='INPUT')node.setAttribute('aria-label',id==='smDateFrom'?'Date from':'Date to');
       else node.setAttribute('aria-label',id==='smPaymentStatus'?'Payment status':'Return status');
       filterFields.appendChild(node);
+      // The original ERP touch-select/date enhancer may already have created
+      // a proxy button beside this native control. Reparent that exact proxy
+      // with its source, retaining its existing click, focus and sheet handler.
+      var proxy=node._touchSelectTrigger || node._touchDateTrigger;
+      if(proxy)filterFields.appendChild(proxy);
     }
   });
   toolbar.appendChild(filterFields);
@@ -170,7 +175,13 @@
   clearButton.textContent='Reset';
   clearButton.addEventListener('click',function(){
     ['smSearch','smDateFrom','smDateTo','smPaymentStatus','smReturnStatus'].forEach(function(id){
-      var node=document.getElementById(id);if(node)node.value='';
+      var node=document.getElementById(id);
+      if(!node)return;
+      node.value='';
+      if(node._touchSelectTrigger && typeof refreshTouchSelect_==='function')
+        refreshTouchSelect_(node);
+      if(node._touchDateTrigger && typeof refreshTouchDate_==='function')
+        refreshTouchDate_(node);
     });
     pageIndex=0;
     if(typeof smRender==='function')smRender();
