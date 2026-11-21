@@ -218,6 +218,16 @@ for(const width of [390,1440]){
       await page.locator('[data-hi-native-field="posCustomerName"]').fill('Real Route Buyer');
       assert.equal(await page.locator('#posCustomerName').inputValue(),'Real Route Buyer');
       assert.equal(await page.locator('#hi-pos-add-payment').isDisabled(),true);
+      const columns=await page.locator('#posCartList .cart-row:not(.pos-cart-entry-row)').first().evaluate(row=>{
+        const rect=css=>row.querySelector(css)?.getBoundingClientRect();
+        return {name:rect('.c-name')?.width,qty:rect('.c-qty-wrap')?.width,
+          number:rect('.pos-v2-line-no')?.width,
+          grip:getComputedStyle(row.querySelector('.pos-v2-reorder-handle')).display};
+      });
+      assert.ok(columns.name>=145,'V2 product name column must remain readable '+JSON.stringify(columns));
+      assert.ok(columns.qty<130,'V2 Qty input must not occupy product column '+JSON.stringify(columns));
+      assert.ok(columns.number>0,'V2 native row number must remain '+JSON.stringify(columns));
+      assert.notEqual(columns.grip,'none','native pointer drag handle must remain accessible');
       await page.screenshot({path:join(evidence,width+'-active-posv2.png'),fullPage:true,animations:'disabled'});
       assert.deepEqual(errors,[]);
     }finally{await page.close();}
