@@ -69,7 +69,7 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
       }});
     assert.equal(sale.status,'created');
     await buildOwnerFrontend({outputDir:dir});
-    const requests=[],env={...ownerA.env,
+    const requests=[],salesReads=[],env={...ownerA.env,
       OWNER_LOGIN_ENABLED:'true',OWNER_CLEAN_PRODUCTS_ENABLED:'true',
       OWNER_WRITE_GRANTS_ENABLED:'true',OWNER_CATALOG_ENABLED:'true',
       OWNER_MVP_PURCHASE_ENABLED:'true',OWNER_MVP_POS_CASH_ENABLED:'true',
@@ -105,13 +105,32 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
       }),env);
       if(url.pathname.includes('/api/owner/returns'))requests.push({
         path:url.pathname,method:req.method(),status:res.status});
+      if(url.pathname.startsWith('/api/owner/sales') && req.method()==='GET')
+        salesReads.push({path:url.pathname,status:res.status});
       return route.fulfill({status:res.status,
         headers:Object.fromEntries(res.headers),body:Buffer.from(await res.arrayBuffer())});
     });
     await page.goto(origin+'/app',{waitUntil:'domcontentloaded'});
+    // Real authenticated Owner -> Worker -> Shop D1 -> compiled Sales list and
+    // invoice detail. These are NOT synthetic rows from the React reference.
+    await page.locator('#navList .nav-item[aria-label="Sales"]').click();
+    await page.locator('#smTableBody [data-invoice-view-id="INV-000001"]').waitFor();
+    assert.equal((await page.locator('#page-sales [data-summary="count"]').innerText()).trim(),'1');
+    const beforeSales=await page.evaluate(()=>serverCall('getSalesManagementList',''));
+    assert.equal(beforeSales.length,1);
+    assert.deepEqual([beforeSales[0].invoiceId,beforeSales[0].grandTotal,
+      beforeSales[0].paidAmount,beforeSales[0].dueAmount,beforeSales[0].returnedAmount],
+      ['INV-000001',150,150,0,0]);
+    const beforeDetail=await page.evaluate(()=>
+      serverCall('getSaleDetail','','INV-000001'));
+    assert.equal(beforeDetail.invoiceId,'INV-000001');
+    assert.equal(beforeDetail.items[0].name,'Real Copper Wire');
+    assert.equal(beforeDetail.grandTotal,150);
+    assert.ok(salesReads.some(r=>r.path==='/api/owner/sales'&&r.status===200));
+    assert.ok(salesReads.some(r=>r.path==='/api/owner/sales/INV-000001'&&r.status===200));
+
     // Navigate using the visible Sales tab in the compiled HisabIQ adapter.
     // The original subNav remains the fallback for the unenhanced frontend.
-    await page.locator('#navList .nav-item[aria-label="Sales"]').click();
     const referenceReturnTab=page.locator('#page-sales .h-sales-tab[data-h-sales-route="returns"]');
     if(await referenceReturnTab.isVisible()){
       await referenceReturnTab.click();
@@ -138,6 +157,23 @@ test('original Returns screen loads real saved invoice and posts one FIFO lot Ca
     assert.equal((await a.prepare('SELECT qty_micro AS n FROM owner_mvp_stock_lots').first()).n,9000000);
     assert.equal((await readOwnerCashSession(a)).expectedCash,75);
     assert.equal((await b.prepare('SELECT COUNT(*) AS n FROM owner_mvp_sale_return_receipts').first()).n,0);
+    // Return is visible in the real Sales read model after the SQL-atomic
+    // refund, with no duplicate posting or leakage from the other Shop.
+    const afterSales=await page.evaluate(()=>
+      serverCall('getSalesManagementList',''));
+    assert.equal(afterSales.length,1);
+    assert.deepEqual([afterSales[0].returnedAmount,afterSales[0].netSale,
+      afterSales[0].profit,afterSales[0].returnStatus],
+      [75,75,15,'Partially Returned']);
+    const afterDetail=await page.evaluate(()=>
+      serverCall('getSaleDetail','','INV-000001'));
+    assert.deepEqual([afterDetail.returnedAmount,afterDetail.netSale,
+      afterDetail.profit],[75,75,15]);
+    const unauthorized=await ownerWorker.fetch(new Request(origin+'/api/owner/sales',{
+      headers:{Cookie:cookie+'='+harness.ownerB.token}
+    }),env);
+    assert.equal(unauthorized.status,401,
+      'An Owner session for Shop B cannot read Shop A Sales history');
     await page.reload({waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>typeof serverCall==='function');
     const after=await page.evaluate(()=>serverCall('getInvoiceForReturn','','INV-000001'));
