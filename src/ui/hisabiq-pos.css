@@ -543,3 +543,46 @@ body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row > :is(.cart-remove
 #app #page-pos[data-hisabiq-pos] .hi-pos-customer-panel .hi-pos-preview-summary {
  min-width:0;
 }
+
+
+/* Reference add-product row is an inline searchable entry, not four inert
+   disabled input boxes. Native entry mode becomes editable on selection. */
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) :is(.c-qty-wrap,.c-unit-wrap,.c-price-wrap,.c-line-total-wrap) {
+ display:flex!important;align-items:center;justify-content:center!important;
+ color:#73839a!important;font-size:11px!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) .c-qty-wrap input:disabled,
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) .c-price-wrap input:disabled,
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) .c-unit-wrap .c-unit {
+ display:none!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) .c-qty-wrap::after {
+ content:"Qty";
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) .c-unit-wrap::after {
+ content:"Unit";
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) .c-price-wrap::after {
+ content:"Price";
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row:not(.is-active) .c-line-total-wrap::after {
+ content:"Total";
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row .pos-cart-inline-picker {
+ width:100%!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row .pos-cart-inline-picker > input {
+ width:100%!important;
+ min-width:170px!important;
+ min-height:36px!important;
+ height:36px!important;
+ padding:0 9px!important;
+ background:#f6fcfa!important;
+ color:#304c65!important;
+ border:1px dashed #9bb9b5!important;
+ border-radius:7px!important;
+ text-align:left!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row .pos-cart-inline-picker > input::placeholder {
+ color:#6a8092!important;opacity:1!important;
+}
