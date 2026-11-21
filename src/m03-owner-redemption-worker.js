@@ -9,6 +9,8 @@ import {readCleanOwnerCatalog,readOwnerCatalog} from './db/m03-owner-catalog-rea
 import {createOwnerProduct} from './db/m03-owner-product-create.js';
 import {createOwnerSupplier,readOwnerSupplierBootstrap,
   recordOwnerSupplierOpening} from './db/m03-owner-supplier-create.js';
+import {createOwnerCustomer,readOwnerCustomerBootstrap,readOwnerPosCustomers}
+  from './db/m03-owner-customer.js';
 import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,readOwnerCashOpeningSuggestion,
   postOwnerCreditPurchase,readOwnerPurchaseBootstrap,readOwnerPurchaseHistory,
   readOwnerPurchaseDetail} from './db/m03-owner-mvp-purchase.js';
@@ -155,6 +157,39 @@ app.post('/api/owner/catalog',protectLogin,limitBody,async c=>{
 
 // Reuse the already reviewed clean-Products Shop gate; no extra MVP feature toggle.
 const supplierApiEnabled=cleanProductsEnabled;
+
+// One Shop-scoped unified Party Customer role. Deliberately disabled until
+// the local 0015 migration is verified, Owner flag opted in and CI is green.
+// Staff Customer CRUD, historical balance editing and ledger writes stay off.
+const ownerCustomerEnabled=env=>cleanProductsEnabled(env)&&env.OWNER_CUSTOMERS_ENABLED==='true';
+app.get('/api/owner/customers',protectLogin,async c=>{
+  if(!ownerCustomerEnabled(c.env))return c.notFound();
+  const token=getCookie(c,SESSION_COOKIE);
+  const session=await validateOwnerSession(c.env,token);
+  const scope=pilotShopConfiguration(c.env);
+  if(!session||!scope||session.shopId!==scope.shopId||
+     !await pilotShopIdentityMatches(scope))return denied(c);
+  try{return c.json({success:true,data:await readOwnerCustomerBootstrap(scope.shopDb)});}
+  catch{return c.json({success:false,message:'Customer directory unavailable'},503);}
+});
+app.post('/api/owner/customers',protectLogin,limitBody,async c=>{
+  if(!ownerCustomerEnabled(c.env))return c.notFound();
+  const token=getCookie(c,SESSION_COOKIE);
+  const session=await validateOwnerSession(c.env,token,{includeOwnerSubject:true});
+  const scope=pilotShopConfiguration(c.env);
+  if(!session||!scope||session.shopId!==scope.shopId||
+     !await pilotShopIdentityMatches(scope))return denied(c);
+  const input=await ownerPurchaseJson(c);
+  const result=await createOwnerCustomer(scope,{
+    token,ownerSubject:session.ownerSubject,input
+  });
+  if(['created','replayed'].includes(result.status))
+    return c.json({success:true,data:{id:result.id}},result.status==='created'?201:200);
+  if(result.status==='invalid')return c.json({success:false,message:'Enter Customer name and phone with zero opening balance.'},400);
+  if(result.status==='denied')return c.json({success:false,message:'Owner Customer access denied.'},403);
+  if(result.status==='conflict')return c.json({success:false,message:'Customer save was already used with different details.'},409);
+  return c.json({success:false,message:'Customer master unavailable.'},503);
+});
 
 // Actual private clean-Shop Supplier master; no financial balances are posted.
 app.get('/api/owner/suppliers',protectLogin,async c=>{
@@ -506,9 +541,12 @@ app.get('/api/owner/pos/bootstrap',protectLogin,async c=>{
   if(!ownerCashPosEnabled(c.env))return c.notFound();
   const ctx=await verifiedOwnerPurchaseContext(c,false,true);
   if(!ctx)return denied(c);
-  try{return c.json({success:true,data:await readOwnerPosBootstrap(ctx.scope.shopDb,{
-    shopName:ctx.shopName,
-  })});}catch{return c.json({success:false,message:'POS stock data unavailable'},503);}
+  try{
+    const data=await readOwnerPosBootstrap(ctx.scope.shopDb,{shopName:ctx.shopName});
+    if(ownerCustomerEnabled(c.env))
+      data.customers=await readOwnerPosCustomers(ctx.scope.shopDb);
+    return c.json({success:true,data});
+  }catch{return c.json({success:false,message:'POS stock data unavailable'},503);}
 });
 
 app.get('/api/owner/pos/drafts',protectLogin,async c=>{

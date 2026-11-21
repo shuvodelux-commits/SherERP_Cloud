@@ -191,6 +191,56 @@ export function patchOwnerApp(html){
       operational ? 'Opening stock ' : 'Stock at backup ';
   }
 
+  var ownerCustomerSaving = false;
+  var ownerCustomerPendingSave = null;
+  // Reuse the original Customer modal + its POS onSaved callback. A failed or
+  // uncertain POST reuses exactly the same operationId and payload on retry.
+  function saveOwnerCustomer_(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+      return Promise.reject(new Error('Customer details are required.'));
+    if (Object.keys(payload).some(function(key){
+      return !['name','phone','fatherName','relationType','address','notes',
+        'openingBalance','openingBalanceReason'].includes(key);
+    }) || (payload.openingBalanceReason && String(payload.openingBalanceReason).trim()))
+      return Promise.reject(new Error('Historical Customer balance editing is not connected.'));
+    if (![0,'0','0.0','0.00'].includes(payload.openingBalance))
+      return Promise.reject(new Error('New Customers must start with zero opening balance.'));
+    if (ownerCustomerSaving)
+      return Promise.reject(new Error('Customer save is already in progress.'));
+    var value={name:payload.name,phone:payload.phone,fatherName:payload.fatherName,
+      relationType:payload.relationType,address:payload.address,notes:payload.notes,
+      openingBalance:'0'};
+    var fingerprint=JSON.stringify(value);
+    if (ownerCustomerPendingSave && ownerCustomerPendingSave.fingerprint!==fingerprint)
+      return Promise.reject(new Error('A previous Customer save may have succeeded. Retry unchanged or refresh.'));
+    if (!ownerCustomerPendingSave)
+      ownerCustomerPendingSave={fingerprint:fingerprint,
+        body:JSON.stringify({...value,operationId:crypto.randomUUID()})};
+    ownerCustomerSaving=true;
+    var button=document.getElementById('custSaveBtn');
+    if(button)button.disabled=true;
+    var uncertain='Customer save status is unknown. Retry unchanged to confirm; your cart is preserved.';
+    return fetch('/api/owner/customers',{method:'POST',credentials:'same-origin',
+      cache:'no-store',headers:{'Content-Type':'application/json'},
+      body:ownerCustomerPendingSave.body})
+      .catch(function(){throw new Error(uncertain);})
+      .then(async function(response){
+        var result=await response.json().catch(function(){throw new Error(uncertain);});
+        if(response.status>=500)throw new Error(uncertain);
+        if(!response.ok){
+          if(response.status===400)ownerCustomerPendingSave=null;
+          throw new Error(result.message||'Customer save is unavailable.');
+        }
+        if(result.success!==true||typeof result.data?.id!=='string'||
+           !/^CUS-[0-9]{6,}$/.test(result.data.id))throw new Error(uncertain);
+        ownerCustomerPendingSave=null;
+        return result.data;
+      }).finally(function(){
+        ownerCustomerSaving=false;
+        if(button)button.disabled=false;
+      });
+  }
+
   var ownerSupplierSaveInProgress = false;
   var ownerSupplierPendingSave = null;
 
@@ -480,6 +530,7 @@ export function patchOwnerApp(html){
       return readOwnerSales_('/api/owner/sales/' + salesInvoiceId);
     }
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
+    if (fnName === 'addCustomerChecked') return saveOwnerCustomer_(arguments[2]);
     if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
     if (fnName === 'paySupplier') return saveOwnerSupplierCash_(arguments[2],arguments[3],
       arguments[4],arguments[5],arguments[6],arguments[7],arguments[8],arguments[9],arguments[10]);
@@ -491,6 +542,7 @@ export function patchOwnerApp(html){
     var path, method = 'GET';
     if (fnName === 'getAppShellData') path = '/api/owner/app-shell';
     else if (fnName === 'getProductsBootstrap') path = '/api/owner/catalog';
+    else if (fnName === 'getCustomersBootstrap') path = '/api/owner/customers';
     else if (fnName === 'getSuppliersBootstrap') path = '/api/owner/suppliers';
     else if (fnName === 'getSupplierDetail') {
       var supplierId = arguments[2];
@@ -537,6 +589,7 @@ export function patchOwnerApp(html){
       .then(function (response) {
         if (response.status === 401) throw new Error('Your session expired. Sign in again.');
         var unavailable = fnName === 'getProductsBootstrap' ? 'Product catalog is unavailable.' :
+          fnName === 'getCustomersBootstrap' ? 'Customer list is unavailable.' :
           fnName === 'getSuppliersBootstrap' ? 'Supplier list is unavailable.' :
           fnName === 'getSupplierDetail' ? 'Supplier purchase ledger is unavailable.' :
           fnName.startsWith('getPurchase') ? 'Purchase data is unavailable.' :
