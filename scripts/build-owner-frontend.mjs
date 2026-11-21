@@ -8,6 +8,7 @@ import {patchPosV2HiddenVisibility} from './patch-posv2-visibility.mjs';
 import {patchM01Accessibility} from './patch-m01-a11y.mjs';
 import {installM01ProductsPreviewAssets,patchM01ProductsPreview} from './patch-m01-products-preview.mjs';
 import {installOwnerHisabiqParties} from './patch-owner-hisabiq-parties.mjs';
+import {installOwnerHisabiqProducts} from './patch-owner-hisabiq-products.mjs';
 import {installOwnerHisabiqSettings} from './patch-owner-hisabiq-settings.mjs';
 import {installOwnerHisabiqUnitEditor} from './patch-owner-hisabiq-unit-editor.mjs';
 import {installOwnerHisabiqPos} from './patch-owner-hisabiq-pos.mjs';
@@ -658,6 +659,7 @@ export async function buildOwnerFrontend({sourceDir='legacy/source',outputDir='d
   await installM01ProductsPreviewAssets(output);
   html=patchOwnerApp(html);
   html=await installOwnerHisabiqParties(html);
+  html=await installOwnerHisabiqProducts(html);
   html=await installOwnerHisabiqSettings(html);
   html=await installOwnerHisabiqUnitEditor(html);
   html=await installOwnerHisabiqPos(html);

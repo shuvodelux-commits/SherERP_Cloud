@@ -1,0 +1,236 @@
+/* HisabIQ Product Table parity. Strictly scoped to the private Owner Product surface.
+ * Original source handlers, accounting/stock functions, action restrictions remain intact.
+ */
+#page-products.hpt-page {
+  min-width:0;
+  font-family:Geist,'Hind Siliguri',system-ui,sans-serif;
+  font-feature-settings:normal;
+  font-variant-numeric:proportional-nums;
+}
+/* Follow the actual server-authorized button visibility; never freeze the
+ * toolbar into a hidden state before the asynchronous catalog read completes. */
+#page-products.hpt-page .hpt-original-actions:not(:has(#prodAddBtn:not([hidden]), #prodUnpricedLotsBtn:not([hidden]))) {display:none!important}
+#page-products.hpt-page .hpt-original-actions {
+  display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin:0 0 12px;
+}
+#page-products.hpt-page .hpt-original-actions .toolbar-spacer {display:none}
+#page-products.hpt-page .hpt-table-card {
+  max-width:100%;min-width:0;padding:0!important;
+  border:1px solid var(--hds-border);border-radius:12px;
+  background:var(--hds-card);box-shadow:var(--hds-shadow-card);
+  overflow:visible;
+}
+#page-products.hpt-page .hpt-filters {
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  border-bottom:1px solid var(--hds-border);padding:10px 12px;
+  background:var(--hds-card);border-radius:12px 12px 0 0;
+}
+#page-products.hpt-page .hpt-search {flex:0 1 244px;min-width:185px;max-width:100%}
+#page-products.hpt-page .hpt-search-input-wrap {
+  position:relative!important;width:100%!important;flex:1 1 auto!important;
+  min-width:0!important;max-width:100%!important;margin:0!important;
+}
+#page-products.hpt-page #prodSearch {
+  box-sizing:border-box!important;height:36px!important;min-height:36px!important;
+  width:100%!important;max-width:none!important;
+  border:1px solid var(--hds-border)!important;border-radius:6px!important;
+  color:var(--hds-foreground)!important;background:var(--hds-card)!important;
+  font:400 13px/20px Geist,'Hind Siliguri',system-ui,sans-serif!important;
+  padding:7px 30px 7px 30px!important;
+}
+#page-products.hpt-page #prodSearch::placeholder {color:var(--hds-helper);opacity:1}
+#page-products.hpt-page #prodSearch:focus-visible,
+#page-products.hpt-page :is(.hpt-stock-pill,.hpt-category,.hpt-column-button,.hpt-column-choice,.hpt-clear-button):focus-visible {
+  outline:2px solid var(--hds-ring);outline-offset:2px;
+}
+#page-products.hpt-page .hpt-search-input-wrap:before {
+  content:'';position:absolute;left:10px;top:11px;width:13px;height:13px;
+  border:1.6px solid var(--hds-helper);border-radius:50%;pointer-events:none;z-index:1;
+}
+#page-products.hpt-page .hpt-search-input-wrap:after {
+  content:'';position:absolute;left:22px;top:23px;width:6px;height:1.6px;
+  background:var(--hds-helper);transform:rotate(48deg);transform-origin:left center;pointer-events:none;
+}
+#page-products.hpt-page .hpt-categories {
+  display:flex;flex:1 1 230px;min-width:0;align-items:center;gap:4px;
+  overflow-x:auto;scrollbar-width:thin;overscroll-behavior-x:contain;
+  white-space:nowrap;padding:2px 0;
+}
+#page-products.hpt-page .hpt-native-category,
+#page-products.hpt-page .hpt-native-category+.touch-select-trigger {
+  position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;
+  opacity:0!important;pointer-events:none!important;overflow:hidden!important;
+}
+#page-products.hpt-page .hpt-category,
+#page-products.hpt-page .hpt-stock-pill,
+#page-products.hpt-page .hpt-column-button {
+  font:500 12px/18px Geist,'Hind Siliguri',system-ui,sans-serif;
+  height:32px;min-height:32px;box-sizing:border-box;border-radius:6px;
+  white-space:nowrap;cursor:pointer;transition:background-color 150ms,color 150ms;
+}
+#page-products.hpt-page .hpt-category {
+  flex:0 0 auto;min-width:0;padding:6px 9px;border:1px solid transparent;
+  color:var(--hds-muted-foreground);background:transparent;
+}
+#page-products.hpt-page .hpt-category:hover {background:var(--hds-accent);color:var(--hds-foreground)}
+#page-products.hpt-page .hpt-category.hpt-category-active {
+  background:var(--hds-inverse);color:var(--hds-inverse-foreground);
+}
+#page-products.hpt-page .hpt-filter-actions {
+  display:flex;flex:0 1 auto;gap:8px;align-items:center;justify-content:flex-end;
+  min-width:0;margin-left:auto;
+}
+#page-products.hpt-page .hpt-stock {
+  display:flex;align-items:center;gap:2px;padding:2px;background:var(--hds-background);
+  border-radius:6px;white-space:nowrap;
+}
+#page-products.hpt-page .hpt-stock-pill {
+  height:30px;min-height:30px;border:0;padding:5px 9px;
+  color:var(--hds-muted-foreground);background:transparent;
+}
+#page-products.hpt-page .hpt-stock-pill:hover {color:var(--hds-foreground)}
+#page-products.hpt-page .hpt-stock-pill[aria-checked="true"] {
+  background:var(--hds-card);box-shadow:var(--hds-shadow-card);
+  color:var(--hds-foreground);font-weight:600;
+}
+#page-products.hpt-page .hpt-brand {
+  display:flex;align-items:center;gap:5px;color:var(--hds-helper);font-size:11px;
+}
+#page-products.hpt-page #prodBrandFilter {
+  width:120px;max-width:140px!important;min-width:0;height:32px;min-height:32px;
+  font:400 12px Geist,'Hind Siliguri',system-ui,sans-serif;
+  border:1px solid var(--hds-border);border-radius:6px;
+  background:var(--hds-card);color:var(--hds-foreground);padding:4px 6px;
+}
+#page-products.hpt-page .hpt-column-picker {position:relative;flex:0 0 auto}
+#page-products.hpt-page .hpt-column-button {
+  display:flex;align-items:center;gap:10px;padding:6px 10px;
+  border:1px solid var(--hds-border);background:var(--hds-card);color:var(--hds-foreground);
+}
+#page-products.hpt-page .hpt-column-button:hover {background:var(--hds-accent)}
+#page-products.hpt-page .hpt-chevron {
+  width:7px;height:7px;display:inline-block;transform:rotate(45deg) translateY(-2px);
+  border-right:1.5px solid var(--hds-helper);border-bottom:1.5px solid var(--hds-helper);
+  transition:transform 140ms var(--hds-ease-pop);
+}
+#page-products.hpt-page .hpt-open .hpt-chevron {transform:rotate(225deg) translateY(-2px)}
+#page-products.hpt-page #hpt-columns-menu {
+  position:absolute;top:calc(100% + 6px);right:0;z-index:200;
+  width:210px;max-width:calc(100vw - 26px);max-height:min(390px,70vh);
+  overflow-y:auto;padding:4px 0;border:1px solid var(--hds-border);
+  border-radius:9px;background:var(--hds-popover);box-shadow:var(--hds-shadow-pop);
+}
+#page-products.hpt-page #hpt-columns-menu[hidden] {display:none!important}
+#page-products.hpt-page .hpt-column-choice {
+  display:flex;justify-content:space-between;align-items:center;gap:14px;
+  width:100%;min-height:35px;border:0;background:transparent;
+  padding:7px 12px;text-align:left;font:400 13px/20px Geist,'Hind Siliguri',system-ui,sans-serif;
+  color:var(--hds-foreground);cursor:pointer;
+}
+#page-products.hpt-page .hpt-column-choice:hover:not(:disabled),
+#page-products.hpt-page .hpt-column-choice:focus-visible {background:var(--hds-accent)}
+#page-products.hpt-page .hpt-column-choice:disabled {opacity:.67;cursor:not-allowed}
+#page-products.hpt-page .hpt-column-choice[aria-checked="true"] .hpt-column-check:before {
+  content:'';display:block;width:11px;height:6px;border-left:2px solid var(--hds-foreground);
+  border-bottom:2px solid var(--hds-foreground);transform:rotate(-45deg) translateY(-2px);
+}
+#page-products.hpt-page #prodTableScroll {
+  box-sizing:border-box;max-width:100%;width:100%;max-height:none!important;
+  overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:thin;
+  overscroll-behavior-x:contain;
+}
+#page-products.hpt-page #prodTable {
+  border-collapse:separate;border-spacing:0;width:100%;min-width:900px!important;
+  table-layout:auto!important;background:var(--hds-card);
+  color:var(--hds-foreground);font-family:Geist,'Hind Siliguri',system-ui,sans-serif;
+}
+#page-products.hpt-page #prodTable thead {display:table-header-group!important}
+#page-products.hpt-page #prodTable tbody {display:table-row-group!important}
+#page-products.hpt-page #prodTable tr {display:table-row!important;background:var(--hds-card);box-shadow:none!important}
+#page-products.hpt-page #prodTable tr[hidden] {display:none!important}
+#page-products.hpt-page #prodTable th,
+#page-products.hpt-page #prodTable td {
+  display:table-cell!important;border:0;border-bottom:1px solid var(--hds-border);
+  padding:8px 11px!important;vertical-align:middle;white-space:nowrap;
+  text-align:left;font:400 13px/19px Geist,'Hind Siliguri',system-ui,sans-serif;
+  color:var(--hds-foreground);background:var(--hds-card);
+}
+#page-products.hpt-page #prodTable td::before {content:none!important;display:none!important}
+#page-products.hpt-page #prodTable th[hidden],
+#page-products.hpt-page #prodTable td[hidden] {display:none!important}
+#page-products.hpt-page #prodTable thead th {
+  height:36px;min-height:36px;box-sizing:border-box;
+  font-size:12px;font-weight:500;color:var(--hds-muted-foreground);
+  background:var(--hds-card);vertical-align:middle;
+}
+#page-products.hpt-page #prodTable th .prod-sort-button {
+  font:500 12px/18px Geist,'Hind Siliguri',system-ui,sans-serif;
+  color:inherit;min-height:24px;padding:0;align-items:center;
+}
+#page-products.hpt-page #prodTable tr:hover td {background:var(--hds-background)}
+#page-products.hpt-page #prodTable td[data-hpt-column="index"] {
+  width:42px;padding-left:16px!important;color:var(--hds-helper);
+}
+#page-products.hpt-page #prodTable .hpt-product-cell {min-width:205px;max-width:300px}
+#page-products.hpt-page .hpt-product-layout {display:flex;align-items:center;gap:10px;min-width:0}
+#page-products.hpt-page .hpt-product-thumbnail {
+  flex:0 0 34px;width:34px;height:34px;display:grid;place-items:center;
+  border:1px solid var(--hds-border);border-radius:6px;
+  color:var(--hds-primary);background:var(--hds-accent);font-size:13px;font-weight:600;
+}
+#page-products.hpt-page .hpt-product-identity {min-width:0;max-width:240px}
+#page-products.hpt-page #prodTable .prod-item-name {
+  display:block;max-width:235px;overflow:hidden;text-overflow:ellipsis;
+  color:var(--hds-foreground);font:500 13px/19px Geist,'Hind Siliguri',system-ui,sans-serif;
+}
+#page-products.hpt-page .hpt-product-meta,
+#page-products.hpt-page .hpt-category-brand {
+  display:block;overflow:hidden;max-width:240px;text-overflow:ellipsis;
+  color:var(--hds-helper);font:400 11px/15px Geist,'Hind Siliguri',system-ui,sans-serif;
+}
+#page-products.hpt-page #prodTable td.hpt-stock-cell,
+#page-products.hpt-page #prodTable td.hpt-price-cell,
+#page-products.hpt-page #prodTable th[data-hpt-column="stock"],
+#page-products.hpt-page #prodTable th[data-hpt-column="stockValue"],
+#page-products.hpt-page #prodTable th[data-hpt-column="purchase"],
+#page-products.hpt-page #prodTable th[data-hpt-column="selling"] {text-align:right!important}
+#page-products.hpt-page #prodTable .hpt-stock-low {color:var(--hds-warning)!important}
+#page-products.hpt-page #prodTable .hpt-stock-out {color:var(--hds-danger)!important}
+#page-products.hpt-page #prodTable td.hpt-selling-cell {font-weight:600}
+#page-products.hpt-page #prodTable th.erp-sticky-action-col,
+#page-products.hpt-page #prodTable td.erp-sticky-action-col {
+  position:sticky!important;right:0;z-index:3;min-width:82px;
+  padding:7px 10px!important;border-left:1px solid var(--hds-border);
+  background:var(--hds-card);text-align:right!important;
+}
+#page-products.hpt-page #prodTable tr:hover td.erp-sticky-action-col {background:var(--hds-background)}
+#page-products.hpt-page #prodEmptyState {
+  padding:34px 14px;text-align:center;color:var(--hds-muted-foreground);
+  font-size:13px;
+}
+#page-products.hpt-page #prodEmptyState p {margin:4px 0}
+#page-products.hpt-page #prodEmptyState p:first-child {font-size:14px;font-weight:600;color:var(--hds-foreground)}
+#page-products.hpt-page .hpt-clear-button {
+  margin-top:9px;padding:7px 12px;border:1px solid var(--hds-border);
+  border-radius:6px;color:var(--hds-foreground);background:var(--hds-card);
+}
+@media (max-width:1199px) {
+  #page-products.hpt-page .hpt-search {flex:1 1 185px}
+  #page-products.hpt-page .hpt-categories {order:3;flex:1 0 100%;}
+  #page-products.hpt-page .hpt-filter-actions {order:2;margin-left:auto}
+}
+@media (max-width:740px) {
+  #page-products.hpt-page .hpt-filters {gap:7px;padding:8px}
+  #page-products.hpt-page .hpt-search {order:0;flex:1 0 100%;width:100%}
+  #page-products.hpt-page .hpt-categories {order:1;flex:1 0 100%;max-width:100%;}
+  #page-products.hpt-page .hpt-filter-actions {order:2;width:100%;flex-wrap:wrap;justify-content:space-between;gap:5px;margin:0;}
+  #page-products.hpt-page .hpt-stock-pill {padding:5px 7px;font-size:11px}
+  #page-products.hpt-page .hpt-brand {display:flex;order:3;flex:1 0 100%;margin-top:5px}
+  #page-products.hpt-page #prodBrandFilter {width:100%;max-width:none!important;flex:1}
+  #page-products.hpt-page #prodTable {min-width:820px!important}
+  #page-products.hpt-page #prodTopScroll {display:none!important}
+  #page-products.hpt-page .hpt-original-actions {margin:0 0 8px;}
+}
+@media (prefers-reduced-motion:reduce) {
+  #page-products.hpt-page :is(.hpt-category,.hpt-stock-pill,.hpt-column-button,.hpt-chevron) {transition:none!important}
+}
