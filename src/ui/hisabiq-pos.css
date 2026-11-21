@@ -484,3 +484,62 @@ body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row > :is(.cart-remove
    min-width:620px!important;
  }
 }
+
+
+/* Source Classic and V2 both share POS. Mobile's old 5-column card layout
+   must not break reference columns into vertical letters when V2 is inactive.
+   Scroll only the cart; keep the rest of the 320px page inside the viewport. */
+#app #page-pos[data-hisabiq-pos] #posCartList {
+ overflow-x:auto!important;overflow-y:auto!important;
+ max-width:100%!important;scrollbar-width:thin;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .cart-row:not(.cart-shortage-row) {
+ min-width:650px!important;
+ width:max(100%,650px)!important;
+ display:grid!important;
+ grid-template-columns:35px minmax(178px,1fr) 80px 68px 95px 90px 27px!important;
+ grid-template-rows:auto!important;
+ gap:5px!important;
+ padding:8px 10px!important;
+ align-items:center!important;
+ min-height:54px!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .cart-row .c-name {
+ grid-column:auto!important;grid-row:auto!important;
+ min-width:0!important;width:auto!important;
+ border:0!important;padding:0!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .cart-row :is(.c-qty-wrap,.c-unit-wrap,.c-price-wrap,.c-line-total-wrap){
+ grid-column:auto!important;grid-row:auto!important;
+ align-self:center!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .cart-row > :is(.cart-remove,.cart-remove-placeholder){
+ grid-column:auto!important;grid-row:auto!important;align-self:center!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .cart-row .c-name-main {
+ padding-right:0!important;
+}
+#app #page-pos[data-hisabiq-pos] #posCartList > .cart-row .c-name-title {
+ display:block!important;
+ white-space:normal!important;
+ overflow-wrap:normal!important;
+ word-break:normal!important;
+ max-width:none!important;
+ text-align:left!important;
+}
+#app #page-pos[data-hisabiq-pos] .pos-cart-columns {
+ min-width:650px!important;
+ grid-template-columns:35px minmax(178px,1fr) 80px 68px 95px 90px 27px!important;
+ gap:5px!important;
+ padding:8px 10px!important;
+}
+#app #page-pos[data-hisabiq-pos] .pos-cart-columns .pos-v2-line-no-header{display:none!important;}
+#app #page-pos[data-hisabiq-pos] .pos-product-card .product-grid {
+ overflow:visible!important;
+}
+#app #page-pos[data-hisabiq-pos] .hi-pos-customer-panel{
+ width:100%!important;max-width:100%!important;box-sizing:border-box;
+}
+#app #page-pos[data-hisabiq-pos] .hi-pos-customer-panel .hi-pos-preview-summary {
+ min-width:0;
+}
