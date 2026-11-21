@@ -25,7 +25,7 @@ const currentAdmin=[
   'AND s.created_at_ms<=? AND s.expires_at_ms>?',
   'AND s.last_activity_at_ms>? AND s.last_activity_at_ms<=?',
   "AND admin.role_name='Administrator' AND admin.status='Active'",
-  'AND admin.credential_state='+"'Modern'"+'',
+  "AND admin.credential_state='Modern'",
   'AND admin.auth_version=s.user_auth_version',
   'AND admin.credential_version=s.credential_version',
   'AND s.role_auth_version IS NULL'
@@ -98,7 +98,8 @@ const consumeTicket=[
   'UPDATE auth_staff_activation_tickets AS t',
   'SET consumed_at_ms=?,consumed_nonce=?',
   'WHERE token_hash=? AND shop_id=? AND consumed_at_ms IS NULL',
-  'AND expires_at_ms>? AND EXISTS('+currentTicket+')'
+  'AND expires_at_ms>? AND EXISTS('+currentTicket+')',
+  'RETURNING token_hash'
 ].join(' ');
 
 const activateUser=[
@@ -113,7 +114,8 @@ const activateUser=[
   'AND t.target_auth_version=auth_users.auth_version',
   'AND t.target_credential_version=auth_users.credential_version',
   'AND t.role_name=auth_users.role_name',
-  'AND EXISTS('+currentTicket+'))'
+  'AND EXISTS('+currentTicket+'))',
+  'RETURNING user_id'
 ].join(' ');
 
 /**
@@ -196,7 +198,9 @@ export async function activateInvitedStaffForShop(scope,input){
         ticket.user_id,tokenHash,checked.shopId,nowMs,nonce
       )
     ]);
-    if(results[0]?.meta?.changes!==1||results[1]?.meta?.changes!==1)
+    // The auth_users authority-version trigger counts as an additional D1
+    // change. RETURNING is the accurate cardinality of the intended rows.
+    if(results[0]?.results?.length!==1||results[1]?.results?.length!==1)
       return activateDenied();
     return {activated:true,shopId:checked.shopId,userId:ticket.user_id};
   }catch{return activateDenied();}
