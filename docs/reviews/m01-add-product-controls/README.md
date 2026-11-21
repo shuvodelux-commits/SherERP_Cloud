@@ -47,3 +47,7 @@ Scoped fix: `#prodModal .hapu-field {margin:0}` removes that inherited extra 6px
 | 1440px desktop | [Centered conversion and chevrons](images/alignment-1440.png) |
 
 Screenshots use a synthetic nonposting Owner fixture and are **not proof of live Shop D1 connectivity**. Multi-unit Save remains disabled pending authorized backend conversion-profile persistence. The named `/ui-refine-skill` is still not installed on this environment; direct Playwright screenshot refinement and the approved HisabIQ design contract were used instead.
+
+### CI contract follow-up: fail-closed Owner action messaging
+
+GitHub Actions Admin staging/Invoice Studio Workerd checks initially failed on the shared Owner frontend test's stale literal `/Shop business data is not connected yet\./` in `tests/integration/m03-owner-erp-frontend-workerd.spec.mjs`. The exact same failure was reproduced locally, and the test now verifies the replacement **`This ERP action is not available yet.`** while asserting the old blanket message is absent. It still independently requires `id="owner-data-notice"` and the real business-connection notice; no login, D1, or access contract changed. The corrected Workerd integration file passes **3/3** locally, including signed-out/authorized-session safety. Admin/Invoice Studio CI must still rerun on the updated PR head before claiming those jobs green.

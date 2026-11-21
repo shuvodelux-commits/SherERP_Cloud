@@ -17,7 +17,10 @@ test('Owner frontend is a separate compiled copy with no staff password login or
     assert.match(html,/Business data is not connected/);
     assert.doesNotMatch(html,/id="loginMobile"|id="loginPassword"/);
     assert.match(html,/\/api\/owner\/auth\/session/);
-    assert.match(html,/Shop business data is not connected yet\./);
+    // An unsupported Owner RPC must reject without falsely diagnosing the
+    // entire Shop D1 connection; the separate data-notice remains explicit.
+    assert.match(html,/This ERP action is not available yet\./);
+    assert.doesNotMatch(html,/Shop business data is not connected yet\./);
     assert.doesNotMatch(html,/fetch\('\/api\/rpc'/);
     assert.doesNotMatch(html,/owner-cookie-session/);
   }finally{
