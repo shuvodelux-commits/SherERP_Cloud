@@ -657,3 +657,12 @@ body.pos-v2-active #app #page-pos[data-hisabiq-pos] #posCartList > .cart-row:not
 body.pos-v2-active #app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row .c-name {
   grid-column:1 / span 2!important;
 }
+
+
+#app #page-pos[data-hisabiq-pos] .hi-pos-invoice-actions {
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;
+  flex-wrap:wrap;
+}
+#app #page-pos[data-hisabiq-pos] .hi-pos-invoice-actions .hi-pos-action {
+  min-width:0;padding:0 8px;white-space:nowrap;
+}
