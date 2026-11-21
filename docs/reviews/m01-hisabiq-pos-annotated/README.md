@@ -50,3 +50,13 @@ Follow existing merged Superpowers design and plan:
 5. M10/M11: two-Shop real D1 browser + finance reconciliation, auth/revocation, backup/rollback, full CI and explicit production release.
 
 **No live database changes, merges or production flag changes are approved by this UI-only PR.**
+
+
+## CI fix: the true POS V2 route is now annotated
+
+The first branch iteration had 73/74 GitHub Actions successful but the real-D1 Cash Sale browser test failed because the new Customer Details button was **hidden** when `goToPage('posv2')` activated `body.pos-v2-active`. The source `src/modules/source-app-shell-reader.js` and the frozen UI both identify `posv2` as the only user-facing POS. Merely relaxing a test would conceal the actual missing UI.
+
+The correction keeps the annotated `data-hisabiq-pos` panel enabled on the **real authenticated POS V2 route** and uses the native source V2 number/reorder controls for cart lines, retaining correct seven-column placement. It adds visible **Preview** that forwards to the existing no-post source invoice modal and explicitly disables the unconnected Bank/Mobile method options. The original V2 screen's feature-complete dark mode, source invoice words, draft and preview regression tests remain accessible with `/app?posLegacy=1` (visual-only rollback; all native financial handlers remain unchanged).
+
+The fixed real-D1 Cash Sale browser test uses visible annotated Name/Phone/Amount and Complete Sale controls rather than clicking inputs intentionally hidden in the new presentation. Its source readbacks still validate one immutable saved invoice, a correct Cash Book entry, inventory decrement and reprint after reload. New Playwright evidence `images/390-active-posv2.png` and `images/1440-active-posv2.png` checks the **actual POS V2** presentation and asserts product name column width, native row number/drag handle, customer details and cash-only feature gates. Local affected tests passed after the route correction; the exact GitHub workflow must also finish before ready-for-review status.
+
