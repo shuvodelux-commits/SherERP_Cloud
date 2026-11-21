@@ -115,7 +115,12 @@ D1, changed or deleted Shop D1, duplicated Shop binding/ID, and any
 Cloudflare Builds command other than an exact nonpromoting
 `npx wrangler@4.161.0 versions upload --config wrangler.shop-user.jsonc`.
 It requires the reviewed code SHA and the existing full Shop binding
-roster; it **does not** claim to read Cloudflare state or deploy a Worker.
+roster, including the version ID and *each* Shop UUID/marker, immutable D1
+identity, canonical binding key and pinned schema receipt for new Shops.
+The preflight now reuses `verifyCompleteBindingRoster`; retaining a D1
+binding while removing or rewriting its Shop record is also denied. It
+**does not** claim to read Cloudflare state or deploy a Worker. Missing
+roster metadata is a BLOCKER, not permission to fall back to one-Shop Builds.
 
 **One-time account handoff, only after the trusted publisher is ready:**
 
