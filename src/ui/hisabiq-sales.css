@@ -396,3 +396,81 @@
   #page-sales[data-hisabiq-sales] #smTableScroll tbody tr.h-sales-mobile-expanded
     td[data-h-sales-col="phone"] {grid-column:2;}
 }
+
+/* Native Sales route tabs, gated by the original authorized navigation tree. */
+#page-sales[data-hisabiq-sales] .h-sales-tabs:not([data-ready="true"]) {display:none;}
+#page-sales[data-hisabiq-sales] .h-sales-tabs[data-ready="true"] {
+  display:flex;align-items:center;gap:4px;max-width:100%;overflow-x:auto;
+  padding:0 11px;background:var(--h-sales-card);
+  border:1px solid var(--h-sales-border);border-radius:12px 12px 0 0;
+  scrollbar-width:thin;
+}
+#page-sales[data-hisabiq-sales] .h-sales-tab {
+  display:inline-flex;align-items:center;gap:6px;position:relative;
+  flex:none;min-height:40px;padding:7px 11px;
+  border:0;background:transparent;color:#607087;cursor:pointer;
+  font:500 12.5px/1.3 var(--h-shell-font,Geist,sans-serif);
+  transition:color .16s,background-color .16s;white-space:nowrap;
+}
+#page-sales[data-hisabiq-sales] .h-sales-tab:hover {color:var(--h-sales-ink);background:#f7fafb;}
+#page-sales[data-hisabiq-sales] .h-sales-tab[aria-selected="true"] {color:var(--h-sales-ink);font-weight:650;}
+#page-sales[data-hisabiq-sales] .h-sales-tab[aria-selected="true"]::after {
+  content:"";position:absolute;bottom:0;left:5px;right:5px;height:2px;
+  border-radius:2px;background:var(--h-sales-teal);
+}
+#page-sales[data-hisabiq-sales] .h-sales-tab-count {
+  padding:2px 5px;border-radius:4px;background:#f1f5f8;color:#748399;
+  font-size:10px;font-weight:600;
+}
+#page-sales[data-hisabiq-sales] .h-sales-tabs[data-ready="true"] + .h-sales-toolbar {
+  border-top:0;border-radius:0;
+}
+#app[data-hisabiq-shell] #content:has(#page-sales:not([hidden]) .h-sales-tabs[data-ready="true"]) > #subNav {
+  display:none!important;
+}
+#page-sales[data-hisabiq-sales] .h-sales-summary-toggle {display:none;}
+@media(max-width:540px) {
+  #page-sales[data-hisabiq-sales] .h-sales-summary {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;
+    align-items:center;gap:6px;margin:0 0 14px;
+    padding:7px 0 10px;border-top:1px solid var(--h-sales-border);
+    border-bottom:1px solid var(--h-sales-border);
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-summary:not(.h-sales-summary-expanded)
+    .h-sales-summary-card:nth-child(1),
+  #page-sales[data-hisabiq-sales] .h-sales-summary:not(.h-sales-summary-expanded)
+    .h-sales-summary-card:nth-child(3) {display:none;}
+  #page-sales[data-hisabiq-sales] .h-sales-summary-card {
+    padding:0 4px;border:0;background:transparent;box-shadow:none;border-radius:0;
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-summary-card .h-sales-summary-label {
+    white-space:nowrap;font-size:10px;
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-summary-card .h-sales-summary-value {
+    font-size:14px;line-height:1.45;margin-top:1px;
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-summary-card .h-sales-summary-sub {display:none;}
+  #page-sales[data-hisabiq-sales] .h-sales-summary-toggle {
+    display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;
+    min-height:34px;padding:4px;border:0;background:transparent;color:#607189;
+    cursor:pointer;font:500 11px/1.2 var(--h-shell-font,Geist,sans-serif);
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-summary.h-sales-summary-expanded {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-summary.h-sales-summary-expanded
+    .h-sales-summary-toggle {grid-column:1/-1;}
+  #page-sales[data-hisabiq-sales] .h-sales-summary.h-sales-summary-expanded
+    .h-sales-summary-card {padding:8px;border:1px solid var(--h-sales-border);border-radius:8px;}
+  #page-sales[data-hisabiq-sales] #smTableScroll tbody tr td.erp-sticky-action-col {
+    width:100%!important;min-width:0!important;justify-self:stretch!important;
+    max-width:none!important;
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-details-button {
+    width:auto!important;max-width:none!important;min-width:108px;
+    white-space:nowrap;flex-shrink:0;
+  }
+  #page-sales[data-hisabiq-sales] .h-sales-tab {
+    padding-inline:9px;font-size:12px;
+  }
+}
