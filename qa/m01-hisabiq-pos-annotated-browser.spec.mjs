@@ -61,8 +61,9 @@ async function setup(page){
       {id:'PRD-000001',name:'PVC Pipe 1 inch',unit:'pcs',sellingPrice:420,stock:100,productType:'Standard'},
       {id:'PRD-000002',name:'LED Bulb 12W',unit:'pcs',sellingPrice:500,stock:100,productType:'Standard'},
       {id:'PRD-000003',name:'Mesh Net',unit:'Gauge',sellingPrice:180,stock:100,productType:'Standard'},
+      {id:'PRD-000004',name:'Teflon Tape',unit:'pcs',sellingPrice:60,stock:100,productType:'Standard'},
     ];
-    posState.productStockById={'PRD-000001':100,'PRD-000002':100,'PRD-000003':100};
+    posState.productStockById={'PRD-000001':100,'PRD-000002':100,'PRD-000003':100,'PRD-000004':100};
     posState.cart=[
       {productId:'PRD-000001',name:'PVC Pipe 1 inch',unit:'pcs',qty:4,unitPrice:420,priceMode:'fixed',lineTotal:1680,productType:'Standard',shortageResolution:'own'},
       {productId:'PRD-000002',name:'LED Bulb 12W',unit:'pcs',qty:2,unitPrice:500,priceMode:'fixed',lineTotal:1000,productType:'Standard',shortageResolution:'own'},
@@ -86,11 +87,15 @@ for(const width of widths){
         '#posCartList [data-cart-product-mode="add"]','#hi-pos-payment-presets','#posCompleteBtn'];
       for(const selector of required)assert.equal(await page.locator(selector).count(),1,selector);
       assert.equal(await page.locator('#posCartList .hi-pos-grip').count(),3);
-      assert.equal(await page.locator('#posProductGrid .product-tile').count(),3,
+      assert.equal(await page.locator('#posProductGrid .product-tile').count(),4,
         'native product quick-item tiles must render, not be fabricated by CSS');
       assert.equal(await page.locator('[data-hi-pos-unit]').count(),3);
       assert.equal(await page.locator('#hi-pos-add-payment').isDisabled(),true,
         'unconnected split-payment backend must not falsely accept Add');
+      // Synthetic browser fixture has no live Owner catalog API. Suppress only
+      // the connection toast in the visual screenshot; do not suppress errors
+      // or pretend this fixture is a hosted Shop D1 session.
+      await page.locator('#toast').evaluate(node=>{node.hidden=true;});
       await page.screenshot({path:join(evidence,width+'-after.png'),fullPage:true,animations:'disabled'});
       const bounds=await page.locator('#page-pos').boundingBox();
       assert.ok(bounds.x>=-2&&bounds.x+bounds.width<=width+3,
@@ -164,5 +169,19 @@ test('unconnected multi-unit controls are blocked instead of silently mis-postin
     assert.match(await page.locator('[data-hi-pos-unit]').first().getAttribute('title'),/verified multi-unit Shop D1/i);
     assert.equal(await page.locator('#hi-pos-add-payment').isDisabled(),true);
     assert.equal(await page.evaluate(()=>posState.paymentRows.length),1);
+  }finally{await page.close();}
+});
+
+test('inline Add Product combobox adds a new product through native POS handlers',async()=>{
+  const page=await browser.newPage({viewport:{width:1024,height:900}});
+  try{
+    const errors=await setup(page);
+    const add=page.locator('#posCartList input[data-cart-product-mode="add"]');
+    await add.fill('Teflon');
+    await add.press('Enter');
+    assert.equal(await page.evaluate(()=>posState.cart.length),4,
+      'native POS adds the selected catalog product to the existing cart');
+    assert.equal(await page.evaluate(()=>posState.cart[3].name),'Teflon Tape');
+    assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
