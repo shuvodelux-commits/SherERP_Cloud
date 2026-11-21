@@ -113,10 +113,18 @@ test('original POS checkout button and invoice renderer post ONE real saved D1 c
       posState.cart=[line];
       posRenderCart_();
     });
-    await page.locator('#posCustomerName').fill('Counter Buyer');
-    await page.locator('#posCustomerPhone').fill('01712345678');
-    await page.locator('#posAmountReceived').fill('150');
-    await page.locator('#posCompleteBtn').click();
+    // The HisabIQ POS adaptation deliberately keeps original source inputs
+    // in their native checkout DOM for the original V2 controller; the visible
+    // Customer details panel and payment row are synchronized proxies. Drive
+    // the UI as an Owner would, then assert the original checkout values.
+    await page.locator('#hi-pos-details-toggle').click();
+    await page.locator('[data-hi-native-field="posCustomerName"]').fill('Counter Buyer');
+    await page.locator('[data-hi-native-field="posCustomerPhone"]').fill('01712345678');
+    assert.equal(await page.locator('#posCustomerName').inputValue(),'Counter Buyer');
+    assert.equal(await page.locator('#posCustomerPhone').inputValue(),'01712345678');
+    await page.locator('#hi-pos-payment-amount').fill('150');
+    assert.equal(await page.locator('#posAmountReceived').inputValue(),'150');
+    await page.locator('#hi-pos-proxy-complete').click();
     await page.locator('#confirmActionModal:not([hidden])').waitFor();
     await page.locator('#confirmActionConfirm').click();
     await page.waitForFunction(()=>posState._lastInvoice?.invoiceId==='INV-000001');
