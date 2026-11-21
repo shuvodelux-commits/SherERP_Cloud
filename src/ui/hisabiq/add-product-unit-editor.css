@@ -4,6 +4,35 @@
 /* Owner enhancer proxies the original M05 preview inputs and must not
  * show a second, fixed Box/Pcs editor underneath the new equation surface. */
 #prodModal:has(#hapu-editor) #m01ProductUnitPanel {display:none!important;}
+/* The original ERP turns every select into a visible button. On phones the
+ * old proxy gets 44px while inputs remain 36px, so match the rendered proxy,
+ * not only the hidden native select. Scope to Add Product only. */
+#prodModal .form-grid :is(input:not([type="checkbox"]):not([type="radio"]),select,.touch-select-trigger),
+#prodModal .hapu-field :is(input,select,.touch-select-trigger) {
+  box-sizing:border-box; width:100%; min-width:0;
+  height:36px; min-height:36px; border-radius:6px;
+  font:400 13px/20px Geist,'Hind Siliguri',system-ui,sans-serif;
+  font-variant-numeric:proportional-nums;
+}
+#prodModal .hapu-field > .touch-select-trigger {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:6px 9px; border:1px solid var(--hds-border,#dbe3e8);
+  background:var(--hds-card,#fff); color:var(--hds-foreground,#14243b);
+}
+#prodModal .hapu-field > .touch-select-trigger:focus-visible {
+  outline:2px solid var(--hds-ring,#0d7c74); outline-offset:2px;
+}
+#prodModal .form-grid .touch-select-trigger {padding:6px 9px;}
+#prodModal .form-grid :is(#prodManageUnitsBtn,#prodManageCategoriesBtn,#prodBundleAddItem) {
+  box-sizing:border-box; min-height:36px; height:36px;
+  border-radius:6px; padding:6px 10px;
+  font:500 13px/20px Geist,'Hind Siliguri',system-ui,sans-serif;
+  white-space:nowrap;
+}
+/* Genuine errors must remain readable and must not obscure Save/Cancel. */
+body:has(#prodModal:not([hidden]) #hapu-details:not([hidden])) #toast:not([hidden]) {
+  bottom:calc(116px + env(safe-area-inset-bottom));
+}
 #prodModal .modal {max-width:min(880px,calc(100vw - 18px))!important; width:min(880px,calc(100vw - 18px));}
 #prodModal .modal-body {min-width:0;overscroll-behavior:contain;}
 #prodModal .hapu-editor {box-sizing:border-box;min-width:0;margin:6px 0 12px;
@@ -34,7 +63,7 @@
 #prodModal .hapu-group {min-width:0;padding:12px;margin:8px 0 10px;border:1px solid var(--hds-border,#dbe3e8);
   border-radius:8px;background:var(--hds-background,#f8fafb);}
 #prodModal .hapu-group legend {font:600 12px/17px Geist,'Hind Siliguri',system-ui,sans-serif;padding:0 5px;}
-#prodModal .hapu-equation {min-width:0;display:grid;grid-template-columns:18px minmax(88px,1.4fr) 15px minmax(75px,1fr) minmax(48px,auto);
+#prodModal .hapu-equation {min-width:0;display:grid;grid-template-columns:18px minmax(0,1fr) 15px minmax(0,1fr) minmax(48px,auto);
   gap:8px;align-items:end;margin:5px 0 9px;}
 #prodModal .hapu-one,#prodModal .hapu-equals,#prodModal .hapu-unit,#prodModal .hapu-stock-name {align-self:center;
   font-size:14px;font-weight:600;white-space:nowrap;}
@@ -52,7 +81,7 @@
 #prodModal .hapu-extra-row button {min-height:36px;padding:6px 8px;border:0;border-radius:6px;color:#087a70;
   font:600 12px/18px Geist,'Hind Siliguri',system-ui,sans-serif;background:transparent;text-align:left;cursor:pointer;}
 #prodModal .hapu-extra-row button:hover {background:#e7f4f1;}
-#prodModal #hapu-outer-row {grid-template-columns:18px minmax(88px,1.4fr) 15px minmax(75px,1fr) minmax(42px,auto) 34px;}
+#prodModal #hapu-outer-row {grid-template-columns:18px minmax(0,1fr) 15px minmax(0,1fr) minmax(42px,auto) 34px;}
 #prodModal .hapu-remove {width:34px;height:36px;padding:0;align-self:end;border:0;border-radius:6px;
   font-size:22px;background:transparent;color:#c33244;cursor:pointer;}
 #prodModal .hapu-remove:hover {background:#ffedf0;}
@@ -76,11 +105,12 @@
 @media (max-width:600px){
  #prodModal .modal {width:calc(100vw - 12px)!important;max-width:calc(100vw - 12px)!important;}
  #prodModal .hapu-editor {margin:6px 0 8px;}
+ #prodModal .modal-footer .btn {white-space:nowrap;font-size:13px;padding-inline:6px;}
  #prodModal .hapu-heading {padding:10px;gap:8px;}
  #prodModal #hapu-details {padding:0 10px 10px;}
  #prodModal .hapu-group {padding:8px 6px;margin:7px 0;}
- #prodModal .hapu-equation {grid-template-columns:14px minmax(66px,1fr) 12px minmax(56px,1fr) minmax(32px,auto);gap:5px;}
- #prodModal #hapu-outer-row {grid-template-columns:14px minmax(62px,1fr) 12px minmax(55px,1fr) minmax(29px,auto) 27px;gap:3px;}
+ #prodModal .hapu-equation {grid-template-columns:14px minmax(0,1fr) 12px minmax(0,1fr) minmax(32px,auto);gap:5px;}
+ #prodModal #hapu-outer-row {grid-template-columns:14px minmax(0,1fr) 12px minmax(0,1fr) minmax(29px,auto) 27px;gap:3px;}
  #prodModal .hapu-field :is(input,select){padding:6px;font-size:12px;}
  #prodModal .hapu-heading h4 {font-size:13px;}
  #prodModal .hapu-heading p {font-size:11px;}

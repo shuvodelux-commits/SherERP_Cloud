@@ -11,7 +11,15 @@ import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js
 const widths=[320,390,768,1024,1440];
 const baseline=process.env.ADD_PRODUCT_BASELINE==='1';
 const appShell=buildSourceAppShellData({shopName:'Fixture Shop',currencySymbol:''}).data;
-const evidence=resolve('docs/reviews/m01-hisabiq-add-product/images');
+const evidence=resolve(process.env.ADD_PRODUCT_EVIDENCE_DIR || 'docs/reviews/m01-hisabiq-add-product/images');
+// Screenshots are synthetic Owner UI captures, not real D1 health evidence.
+// A transient unsupported background RPC toast auto-dismisses after 3.2s;
+// capture the settled form rather than advertising the synthetic error.
+async function captureSettled(page,path){
+ await page.locator('#toast').waitFor({state:'hidden',timeout:6500});
+ await page.screenshot({path,animations:'disabled'});
+}
+
 let dir,url,server,browser;
 before(async()=>{
  dir=await mkdtemp(join(tmpdir(),'hisabiq-add-unit-'));
@@ -59,6 +67,10 @@ async function setup(page){
    get('prodType').value='Standard';
    get('prodPurchasePrice').value='100';get('prodSellingPrice').value='175';
    get('prodName').value='Ceramic Floor Tile';
+   // This screenshot route has no operational D1. Make the fixture explicit;
+   // never change the real Owner notice or conceal real product errors.
+   const notice=get('owner-data-notice');
+   if(notice)notice.textContent='UI fixture — no live Shop D1 connection was tested.';
    const modal=get('prodModal');document.body.append(modal);
    modal.hidden=false;modal.style.display='flex';
    get('prodType').dispatchEvent(new Event('change',{bubbles:true}));
@@ -73,7 +85,7 @@ for(const width of widths){
   page.setDefaultTimeout(7000);
   try{
    const errors=await setup(page);
-   if(baseline){await page.screenshot({path:join(evidence,`${width}-before.png`),animations:'disabled'});return;}
+   if(baseline){await captureSettled(page,join(evidence,`${width}-before.png`));return;}
    const toggle=page.locator('#hapu-enable');
    assert.equal(await toggle.getAttribute('role'),'switch');
    assert.equal(await toggle.isChecked(),false);
@@ -105,7 +117,7 @@ for(const width of widths){
    // The merged Shell topbar has an independently observed 21px overflow at 1024px.
    // Keep the Add Product editor bounded; do not modify parallel-owned Shell CSS.
    if(width!==1024)assert.ok(geom.documentWidth<=geom.windowWidth+2,`body does not overflow at ${width}: ${JSON.stringify(geom)}`);
-   await page.screenshot({path:join(evidence,`${width}-after.png`),animations:'disabled'});
+   await captureSettled(page,join(evidence,`${width}-after.png`));
    await page.locator('#hapu-result').scrollIntoViewIfNeeded();
    const visible=await page.evaluate(()=>{
     const result=document.getElementById('hapu-result').getBoundingClientRect();
@@ -114,7 +126,7 @@ for(const width of widths){
     return {resultTop:result.top,resultBottom:result.bottom,footerTop:footer.top,bodyBottom:body.bottom};
    });
    assert.ok(visible.resultTop>=0&&visible.resultBottom<=visible.footerTop+1,`preview must be scrollable above footer: ${JSON.stringify(visible)}`);
-   await page.screenshot({path:join(evidence,`${width}-preview.png`),animations:'disabled'});
+   await captureSettled(page,join(evidence,`${width}-preview.png`));
    await page.locator('#hapu-editor').screenshot({path:join(evidence,`${width}-editor.png`),animations:'disabled'});
    assert.deepEqual(errors,[]);
   }finally{await page.close();}
@@ -183,5 +195,66 @@ test('changing base stock unit preserves a natural larger-unit choice and never 
   assert.equal(await page.locator('#hapu-pack').inputValue(),'Carton');
   assert.match(await page.locator('#hapu-result').innerText(),/1 Carton = 15 Box/);
   assert.equal(await page.locator('#prodSaveBtn').isDisabled(),true);
+ }finally{await page.close();}
+});
+
+
+test('visible Add Product dropdowns and quantity fields share 36px geometry at phone and desktop widths',async()=>{
+ for(const width of [320,390,1440]){
+  const page=await browser.newPage({viewport:{width,height:850},hasTouch:width<=390});
+  try{
+   await setup(page);
+   await page.locator('.hapu-switch-wrap').click();
+   await page.locator('#hapu-outer-toggle').click();
+   await page.locator('#hapu-area-enable').check();
+   await page.locator('#hapu-outer-row').waitFor({state:'visible'});
+   await page.locator('#hapu-pack + .touch-select-trigger').waitFor({state:'visible'});
+   await page.locator('#hapu-buy-anchor + .touch-select-trigger').waitFor({state:'visible'});
+   const geometry=await page.evaluate(()=>{
+    const rect=id=>{
+      const source=document.getElementById(id);
+      const target=source?.tagName==='SELECT'&&source.nextElementSibling?.classList.contains('touch-select-trigger')
+        ?source.nextElementSibling:source;
+      const r=target.getBoundingClientRect();
+      return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom};
+    };
+    return Object.fromEntries(['prodName','prodBrand','prodType','prodPurchasePrice','prodSellingPrice','prodUnit','prodCategory',
+      'prodManageUnitsBtn','prodManageCategoriesBtn',
+      'hapu-pack','hapu-size','hapu-outer','hapu-outer-size','hapu-area-size',
+      'hapu-opening-packs','hapu-opening-pieces','hapu-buy-anchor','hapu-sell-anchor']
+      .map(id=>[id,rect(id)]));
+   });
+   for(const [id,r] of Object.entries(geometry)){
+     assert.ok(Math.abs(r.height-36)<=1,`${width}px ${id}: 36px visible control required; found ${r.height}`);
+   }
+   for(const [select,input] of [['hapu-pack','hapu-size'],['hapu-outer','hapu-outer-size']]){
+     const a=geometry[select],b=geometry[input];
+     assert.ok(Math.abs(a.y-b.y)<=1,`${width}px ${select}/${input}: top edges must align: ${JSON.stringify({a,b})}`);
+     assert.ok(Math.abs(a.width-b.width)<=2,`${width}px ${select}/${input}: equal field widths required: ${JSON.stringify({a,b})}`);
+   }
+   assert.ok(Math.abs(geometry['hapu-buy-anchor'].width-geometry['hapu-sell-anchor'].width)<=2,
+     `${width}px price unit dropdown widths must match`);
+  }finally{await page.close();}
+ }
+});
+
+test('unsupported Owner RPC does not falsely claim all Shop data is disconnected; visible errors never cover Save/Cancel',async()=>{
+ const page=await browser.newPage({viewport:{width:390,height:850},hasTouch:true});
+ try{
+  await setup(page);
+  await page.locator('.hapu-switch-wrap').click();
+  const message=await page.evaluate(async()=>{
+    try{await serverCall('unimplementedProductAction');return 'Unexpected success';}
+    catch(error){return error.message;}
+  });
+  assert.match(message,/feature|action|function/i,'unknown RPC must be described as unavailable functionality');
+  assert.doesNotMatch(message,/Shop business data is not connected/i);
+  await page.evaluate(text=>showToast(text,'error'),message);
+  const rects=await page.evaluate(()=>{
+    const toast=document.getElementById('toast').getBoundingClientRect();
+    const footer=document.querySelector('#prodModal .modal-footer').getBoundingClientRect();
+    return {toastBottom:toast.bottom,footerTop:footer.top};
+  });
+  assert.ok(rects.toastBottom<=rects.footerTop-4,`error toast must sit above fixed modal footer: ${JSON.stringify(rects)}`);
  }finally{await page.close();}
 });

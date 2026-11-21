@@ -523,7 +523,7 @@ export function patchOwnerApp(html){
       path='/api/owner/purchases/'+purchaseId;
     }
     else if (fnName === 'logout') { path = '/api/owner/auth/logout'; method = 'POST'; }
-    else return Promise.reject(new Error('Shop business data is not connected yet.'));
+    else return Promise.reject(new Error('This ERP action is not available yet.'));
     return fetch(path, {method:method,credentials:'same-origin',cache:'no-store'})
       .then(function (response) {
         if (response.status === 401) throw new Error('Your session expired. Sign in again.');
