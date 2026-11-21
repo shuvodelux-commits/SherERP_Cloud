@@ -80,7 +80,10 @@ async function visit(viewport,{before=false}={}){
   const page=await browser.newPage({viewport,reducedMotion:'reduce',hasTouch:viewport.width<=390});
   await page.route(/^https:\/\/(fonts|www.google)/,r=>r.abort());
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(root+(before?'/baseline':'/app'),{waitUntil:'domcontentloaded'});
+  // Preserve the original V2 controller's preview, amount-in-words and dark
+  // visual acceptance under a presentation-only legacy fallback. Normal /app
+  // POS now shows the annotated UI, tested separately with real D1 checkout.
+  await page.goto(root+(before?'/baseline?posLegacy=1':'/app?posLegacy=1'),{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>!!document.querySelector('#navList .nav-item'));
   await page.evaluate(()=>goToPage('posv2'));
   await page.waitForFunction(()=>document.body.classList.contains('pos-v2-active'));
