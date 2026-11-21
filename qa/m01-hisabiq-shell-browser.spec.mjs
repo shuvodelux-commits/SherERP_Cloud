@@ -122,3 +122,35 @@ test('HisabIQ enhancement does not expose restricted modules or replace original
     }
   }finally{await page.close();}
 });
+
+
+test('HisabIQ topbar offers authorized navigation search, New Sale and existing user action',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    await syntheticShell(page);
+    const search=page.locator('#h-shell-search-input');
+    await search.fill('report');
+    const result=page.locator('#h-shell-search-results [data-target="reports"]');
+    await result.click();
+    assert.equal(await page.locator('#page-reports').isVisible(),true);
+    await page.locator('#h-shell-new-sale').click();
+    assert.equal(await page.evaluate(()=>currentPage),'posv2');
+    await page.locator('#h-shell-user-trigger').click();
+    assert.equal(await page.locator('#h-shell-user-popover').isVisible(),true);
+    assert.match(await page.locator('#h-shell-user-popover').textContent(),/Synthetic Admin/);
+    assert.equal(await page.locator('#logoutBtn').count(),1,'original confirm-based sign-out remains present');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#h-shell-user-popover').isVisible(),false);
+    await page.keyboard.press('Control+k');
+    assert.equal(await search.evaluate(n=>document.activeElement===n),true);
+    await page.evaluate(()=>{
+      allowedModules=['dashboard','reports'];
+      userPermissions={dashboard:{view:true},reports:{view:true}};
+      buildNav_(navItems_);
+    });
+    assert.equal(await page.locator('#h-shell-new-sale').isVisible(),false,
+      'staff without POS access must not see a New Sale shortcut');
+    await search.fill('pos');
+    assert.equal(await page.locator('#h-shell-search-results [data-target="posv2"]').count(),0);
+  }finally{await page.close();}
+});
