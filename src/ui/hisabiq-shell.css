@@ -231,6 +231,10 @@
 }
 @media (max-width:1023px) {
   #app[data-hisabiq-shell] .sidebar {display:none!important;}
+  /* The unauthenticated source shell stays hidden as a whole. Preserve its
+     original desktop-mode display contract for wide fine-pointer landscape. */
+  #app[data-hisabiq-shell][style*="visibility:hidden"] .sidebar,
+  #app[data-hisabiq-shell][style*="visibility: hidden"] .sidebar {display:flex!important;}
   #app[data-hisabiq-shell] .main {
     margin-left:0!important;width:100%;
     min-height:100dvh;height:auto;
