@@ -86,7 +86,7 @@ for(const width of widths){
         '#hi-pos-discount-input','#hi-pos-add-payment','#hi-pos-fill-remaining',
         '#posCartList [data-cart-product-mode="add"]','#hi-pos-payment-presets','#posCompleteBtn'];
       for(const selector of required)assert.equal(await page.locator(selector).count(),1,selector);
-      assert.equal(await page.locator('#posCartList .hi-pos-grip').count(),3);
+      assert.equal(await page.locator('#posCartList :is(.hi-pos-grip, .pos-v2-reorder-handle)').count(),3);
       assert.equal(await page.locator('#posProductGrid .product-tile').count(),4,
         'native product quick-item tiles must render, not be fabricated by CSS');
       assert.equal(await page.locator('[data-hi-pos-unit]').count(),3);
@@ -117,7 +117,7 @@ test('customer dropdown chooses verified ID, guest clears it, details expand wit
     await page.locator('#hi-pos-customer-picker').click();
     await page.locator('#hi-pos-customer-menu [data-hi-customer-guest]').click();
     assert.equal(await page.locator('#posCustomerName').evaluate(e=>e.dataset.customerId),'');
-    assert.equal(await page.locator('#posCartList .hi-pos-grip').count(),3);
+    assert.equal(await page.locator('#posCartList :is(.hi-pos-grip, .pos-v2-reorder-handle)').count(),3);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
@@ -130,7 +130,7 @@ test('discount percent, Exact/Remaining, and keyboard reorder update original ca
     assert.equal(await page.locator('#posDiscount').inputValue(),'286');
     await page.locator('#hi-pos-fill-remaining').click();
     assert.equal(await page.locator('#posAmountReceived').inputValue(),'2574');
-    await page.locator('#posCartList .hi-pos-grip').first().focus();
+    await page.locator('#posCartList :is(.hi-pos-grip, .pos-v2-reorder-handle)').first().focus();
     await page.keyboard.press('ArrowDown');
     const names=await page.evaluate(()=>posState.cart.map(x=>x.name));
     assert.deepEqual(names,['LED Bulb 12W','PVC Pipe 1 inch','Mesh Net']);
@@ -143,7 +143,7 @@ test('Quick Add launches original customer modal, but the Owner backend remains 
     const errors=await setup(page);
     await page.locator('#hi-pos-quick-add').click();
     assert.equal(await page.locator('#custModal').isVisible(),true);
-    assert.equal(await page.locator('#posCartList .hi-pos-grip').count(),3);
+    assert.equal(await page.locator('#posCartList :is(.hi-pos-grip, .pos-v2-reorder-handle)').count(),3);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
@@ -190,7 +190,7 @@ test('pointer drag cart reorder persists in the original posState cart',async()=
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   try{
     const errors=await setup(page);
-    const handles=page.locator('#posCartList .hi-pos-grip');
+    const handles=page.locator('#posCartList :is(.hi-pos-grip, .pos-v2-reorder-handle)');
     await handles.first().dragTo(handles.nth(1),{force:true});
     assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),
       ['PRD-000002','PRD-000001','PRD-000003']);
