@@ -205,7 +205,10 @@ function mountProductsTable(){
       category.classList.add('hpt-category-cell');stockQty.classList.add('hpt-stock-cell');
       stockValue.classList.add('hpt-price-cell');unitCell.classList.add('hpt-unit-cell');
       purchase.classList.add('hpt-price-cell');selling.classList.add('hpt-price-cell','hpt-selling-cell');
-      actions.classList.add('hpt-actions-cell');
+      // Owner read-only projection replaces the original action <td> and loses
+      // its class. Reapply the original sticky-action contract without enabling
+      // any forbidden edit, delete, stock-adjust or lot action.
+      actions.classList.add('erp-sticky-action-col','hpt-actions-cell');
       if(product){
         addProductMeta(name,product);
         const brandName=String(product.Brand||'').trim();

@@ -13,15 +13,15 @@
 **Review focus:** Disabled product actions stay disabled; stale stock snapshot is not shown as live current stock; hidden required columns cannot be hidden by tampered local storage; no page-level horizontal overflow at 320px; browser keyboard category, stock, column controls behave correctly; no XSS from names.
 
 ## Task 1 — Contract and adapter
-- [ ] Write failing contract tests for source column parity, essential column locks, stock-filter semantics, storage validation and bounded HTML injection.
-- [ ] Run tests to observe expected missing module failure (RED).
-- [ ] Implement `src/ui/hisabiq/product-table.mjs`, `src/ui/hisabiq/product-table.css`, `scripts/patch-owner-hisabiq-products.mjs`; wire build with no legacy source modifications.
-- [ ] Run contract tests and original Owner build (GREEN).
+- [x] Write failing contract tests for source column parity, essential column locks, stock-filter semantics, storage validation and bounded HTML injection.
+- [x] Run tests to observe expected missing module failure (RED).
+- [x] Implement `src/ui/hisabiq/product-table.mjs`, `src/ui/hisabiq/product-table.css`, `scripts/patch-owner-hisabiq-products.mjs`; wire build with no legacy source modifications.
+- [x] Run contract tests and original Owner build (GREEN).
 
 ## Task 2 — Browser states and screenshots
-- [ ] Add Playwright Owner page test for search, sorts, category, stock segmented buttons, column menu, persistent choice and action preservation.
-- [ ] Capture baseline and final screenshot matrix for 320, 390, 768, 1024, 1440px and inspect horizontal overflow, table density, accessible popup/keyboard/focus.
-- [ ] Run Owner browser regression, design system, full unit test suite; recheck GitHub CI after PR is raised.
+- [x] Add Playwright Owner page test for search, sorts, category, stock segmented buttons, column menu, persistent choice and action preservation.
+- [x] Capture baseline and final screenshot matrix for 320, 390, 768, 1024, 1440px and inspect horizontal overflow, table density, accessible popup/keyboard/focus.
+- [x] Run Owner browser regressions, design system, source manifest, Owner build; recheck full unit suite and GitHub CI separately after PR.
 
 ## Task 3 — Review handoff
 - [ ] Publish scoped PR; document screenshot evidence and known source-backed gaps, especially disabled stock/edit operations.
