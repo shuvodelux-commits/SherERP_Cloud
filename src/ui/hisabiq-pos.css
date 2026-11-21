@@ -666,3 +666,38 @@ body.pos-v2-active #app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-ent
 #app #page-pos[data-hisabiq-pos] .hi-pos-invoice-actions .hi-pos-action {
   min-width:0;padding:0 8px;white-space:nowrap;
 }
+/* POS [+] reports missing Shop Customer D1 inline without opening a form
+   that cannot save. A verified Shop still uses the original modal and focus. */
+#page-pos[data-hisabiq-pos] .hi-pos-customer-status {
+  margin:-5px 0 11px;padding:8px 10px;border-radius:6px;
+  border:1px solid #e8d3ac;background:#fffbf4;color:#79511a;
+  font-size:11px;line-height:1.45;
+}
+#page-pos[data-hisabiq-pos] .hi-pos-customer-status[hidden] {display:none!important;}
+#page-pos[data-hisabiq-pos] .hi-pos-plus:disabled {opacity:.65;cursor:progress;}
+#page-pos[data-hisabiq-pos] :is(.hi-pos-plus,.hi-pos-customer-picker):focus-visible {
+  outline:2px solid var(--hi-teal);outline-offset:2px;
+}
+/* Quick Add is name + phone first. Optional source fields remain available
+   by disclosure; historical opening is always zero for POS-created Party. */
+#custModal[data-hi-pos-quick-add="true"] .form-grid > .hi-pos-quick-phone {
+  order:1;grid-column:1 / -1;
+}
+#custModal[data-hi-pos-quick-add="true"] .form-grid > .hi-pos-quick-opening {
+  display:none!important;
+}
+#custModal[data-hi-pos-quick-add="true"] .form-grid > .hi-pos-quick-optional {
+  order:3;grid-column:1 / -1;
+}
+#custModal[data-hi-pos-quick-add="true"][data-hi-pos-quick-more="false"] .hi-pos-quick-optional {
+  display:none!important;
+}
+#custModal[data-hi-pos-quick-add="true"] .hi-pos-quick-more {
+  order:2;grid-column:1 / -1;width:max-content;height:36px;
+  padding:0 10px;border:1px solid #d6e0e9;border-radius:6px;
+  background:#fff;color:#456278;font-size:12px;text-align:left;cursor:pointer;
+}
+#custModal[data-hi-pos-quick-add="true"] .hi-pos-quick-more:hover {background:#f0f8f6;color:#137b72;}
+#custModal[data-hi-pos-quick-add="true"] .hi-pos-quick-more:focus-visible {
+  outline:2px solid #137b72;outline-offset:2px;
+}
