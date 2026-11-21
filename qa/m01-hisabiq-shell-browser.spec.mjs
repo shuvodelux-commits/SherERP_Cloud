@@ -230,6 +230,9 @@ test('modal drawer exits cleanly when tablet becomes desktop',async()=>{
   try{
     await syntheticShell(page);
     await page.locator('#menuToggle').click();
+    // Drawer opens on requestAnimationFrame; CI must observe the actual
+    // visible modal before simulating the 768px-to-desktop resize.
+    await page.locator('#hisabiqMobileDrawer').waitFor({state:'visible'});
     assert.equal(await page.locator('#hisabiqMobileDrawer').isVisible(),true);
     await page.setViewportSize({width:1024,height:768});
     await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
