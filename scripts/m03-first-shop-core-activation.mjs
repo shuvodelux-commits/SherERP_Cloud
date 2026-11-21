@@ -171,7 +171,10 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
       const [source,evidence]=await Promise.all(args.slice(1).map(async path=>
         JSON.parse(await readFile(resolve(path),'utf8'))));
       const base=args[0]!=='--prepare'
-        ?buildLoginOnlyProfileFromLiveVersion(source,process.env.SHERERP_ACCOUNT_ID)
+        ?buildLoginOnlyProfileFromLiveVersion(source,process.env.SHERERP_ACCOUNT_ID,{
+          allowActiveCoreRefresh:process.env.SHERERP_FIRST_SHOP_CORE_APPROVAL===
+            REFRESH_APPROVAL
+        })
         :source;
       if(args[0]==='--check-from-version'){
         buildFirstShopCoreCandidate(base,evidence,

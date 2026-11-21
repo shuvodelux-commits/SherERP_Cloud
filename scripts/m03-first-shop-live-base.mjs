@@ -9,7 +9,7 @@ const uuid=x=>typeof x==='string'&&UUID.test(x);
  * generated deployment config. The JSON must come from Wrangler versions view
  * in the same Cloudflare account; no secrets, D1 rows or browser input.
  */
-export function buildLoginOnlyProfileFromLiveVersion(version,accountId){
+export function buildLoginOnlyProfileFromLiveVersion(version,accountId,{allowActiveCoreRefresh=false}={}){
   const bindings=version?.resources?.bindings;
   if(!/^[a-f0-9]{32}$/.test(accountId)||!Array.isArray(bindings)||
      !bindings.length||new Set(bindings.map(b=>b?.name)).size!==bindings.length)
@@ -44,10 +44,25 @@ export function buildLoginOnlyProfileFromLiveVersion(version,accountId){
   };
   let profile;
   try{profile=buildShopUserDeployment(env);}catch{invalid();}
-  // The live authenticated Owner version must already be exactly the
-  // generated source profile; unknown vars/ bindings may not be dropped.
+  // A verified, already-activated Shop can be refreshed ONLY by the
+  // separately approved FIRST_SHOP_CORE_MVP_REFRESH path. The source must
+  // still match the exact five original core flags; all other permissions,
+  // immutable bindings and disabled money features must remain unchanged.
+  // A login-only source cannot masquerade as an active-core refresh.
+  const approvedCoreFlags=[
+    'OWNER_CATALOG_ENABLED','OWNER_CLEAN_PRODUCTS_ENABLED',
+    'OWNER_WRITE_GRANTS_ENABLED','OWNER_MVP_PURCHASE_ENABLED',
+    'OWNER_MVP_POS_CASH_ENABLED'
+  ];
+  const expectedVars=allowActiveCoreRefresh===true
+    ?{
+      ...profile.vars,
+      ...Object.fromEntries(approvedCoreFlags.map(name=>[name,'true'])),
+      OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED:'false'
+    }
+    :profile.vars;
   if(JSON.stringify(Object.entries(plain).sort())!==
-     JSON.stringify(Object.entries(profile.vars).sort())||
+     JSON.stringify(Object.entries(expectedVars).sort())||
      profile.d1_databases[0].database_id!==c.database_id||
      profile.d1_databases[1].database_id!==s.database_id||
      profile.ratelimits[0].namespace_id!==String(ingress.namespace_id)||

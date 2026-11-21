@@ -190,3 +190,82 @@ test('real CLI verifies approved migrated Worker version without an import cycle
  assert.equal(result.status,0,'CLI did not complete: '+(result.stderr||'').slice(0,250));
  assert.match(result.stdout,/verified/i);
 });
+
+// M11: the live Shop is ALREADY activated. The original version adapter was
+// strict login-only and silently prevented a correct verified refresh.
+const activeCoreRefreshReport=()=>({
+ ...migratedEvidence(),coreReadConfigured:true,coreWriteConfigured:false,
+ supplierCashConfigured:false,blockers:[
+  'OWNER_MVP_CASH_RETURN_ENABLED_DISABLED',
+  'OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED_DISABLED'
+ ],releaseChecks:[
+  'APPROVED_PRIVATE_PUBLISHER_REQUIRED',
+  'AUTHENTICATED_TWO_SHOP_E2E_REQUIRED',
+  'M10_M11_RESTORE_REHEARSAL_REQUIRED',
+  'FULL_ORIGINAL_RPC_PARITY_REQUIRED',
+  'INDEPENDENT_ACCOUNTING_SECURITY_REVIEW_REQUIRED'
+ ]
+});
+const activeCoreBindings=()=>{
+ const base=current();
+ for(const name of ['OWNER_CATALOG_ENABLED','OWNER_CLEAN_PRODUCTS_ENABLED',
+  'OWNER_WRITE_GRANTS_ENABLED','OWNER_MVP_PURCHASE_ENABLED',
+  'OWNER_MVP_POS_CASH_ENABLED'])base.vars[name]='true';
+ base.vars.OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED='false';
+ return {resources:{bindings:[
+  {name:'ASSETS',type:'assets'},
+  ...base.d1_databases.map(d=>({name:d.binding,type:'d1',database_id:d.database_id})),
+  ...base.ratelimits.map(d=>({...d,type:'ratelimit'})),
+  ...Object.entries(base.vars).map(([name,text])=>({name,type:'plain_text',text}))
+ ]}};
+};
+test('M11 active core refresh accepts exactly the current five enabled core flags, preserving login-only strictness',()=>{
+ const active=activeCoreBindings();
+ const account='0123456789abcdef0123456789abcdef';
+ assert.throws(()=>buildLoginOnlyProfileFromLiveVersion(active,account),/binding mismatch/,
+  'the default source version parser must remain login-only');
+ const base=buildLoginOnlyProfileFromLiveVersion(active,account,{allowActiveCoreRefresh:true});
+ assert.equal(base.vars.OWNER_MVP_POS_CASH_ENABLED,'false',
+  'refreshed candidate must start from the original disabled-core base');
+ const candidate=buildFirstShopCoreCandidate(base,activeCoreRefreshReport(),
+  'FIRST_SHOP_CORE_MVP_REFRESH');
+ const live=Object.fromEntries(active.resources.bindings.filter(b=>b.type==='plain_text')
+  .map(b=>[b.name,b.text]));
+ assert.deepEqual(Object.entries(candidate.vars).sort(),Object.entries(live).sort(),
+  'the refreshed Worker must retain precisely all existing runtime vars');
+ assert.deepEqual(candidate.d1_databases.map(d=>d.database_id),
+  base.d1_databases.map(d=>d.database_id));
+ assert.deepEqual(candidate.ratelimits,base.ratelimits);
+});
+
+test('M11 refresh adapter fails closed on extra enabled flags, altered D1 or incomplete live core',()=>{
+ const account='0123456789abcdef0123456789abcdef';
+ for(const change of [
+  b=>b.find(x=>x.name==='OWNER_MVP_CASH_RETURN_ENABLED').text='true',
+  b=>b.find(x=>x.name==='OWNER_MVP_SUPPLIER_CASH_PAY_ENABLED').text='true',
+  b=>b.find(x=>x.name==='OWNER_CATALOG_ENABLED').text='false',
+  b=>b.find(x=>x.name==='PLATFORM_PILOT_DB').database_id=uuid(123),
+  b=>b.push({name:'UNAPPROVED_API',type:'plain_text',text:'true'}),
+  b=>b.push({name:'NEW_SHOP_DB',type:'d1',database_id:uuid(12)})
+ ]){
+  const version=activeCoreBindings();change(version.resources.bindings);
+  assert.throws(()=>buildLoginOnlyProfileFromLiveVersion(
+   version,account,{allowActiveCoreRefresh:true}),/binding mismatch/);
+ }
+});
+
+test('M11 real CLI checks a verified already-active Shop version in refresh mode without network writes',async t=>{
+ const tmp=await mkdtemp(join(tmpdir(),'m03-refresh-core-'));
+ t.after(()=>rm(tmp,{recursive:true,force:true}));
+ const ver=join(tmp,'live-core.json'),proof=join(tmp,'live-core-proof.json');
+ await writeFile(ver,JSON.stringify(activeCoreBindings()));
+ await writeFile(proof,JSON.stringify(activeCoreRefreshReport()));
+ const cli=fileURLToPath(new URL('../../scripts/m03-first-shop-core-activation.mjs',import.meta.url));
+ const result=spawnSync(process.execPath,[cli,'--check-from-version',ver,proof],{
+  timeout:6500,encoding:'utf8',env:{...process.env,
+    SHERERP_ACCOUNT_ID:'0123456789abcdef0123456789abcdef',
+    SHERERP_FIRST_SHOP_CORE_APPROVAL:'FIRST_SHOP_CORE_MVP_REFRESH'}
+ });
+ assert.equal(result.status,0,'approved active-core CLI must verify: '+(result.stderr||'').slice(0,200));
+ assert.match(result.stdout,/NOT deployed/i);
+});
