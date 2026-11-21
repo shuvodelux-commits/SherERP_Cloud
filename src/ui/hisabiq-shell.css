@@ -393,12 +393,13 @@
 @media (min-width:1024px) and (max-width:1199px) {
   #app[data-hisabiq-shell] .topbar {gap:8px;padding-inline:12px;}
 }
-/* The drawer is outside #app to preserve the existing print and auth shell. */
+/* The drawer is outside #app to preserve the existing print and auth shell.
+   When unhidden, its focusable controls must have layout *before* the opening
+   animation frame, otherwise early Tab escapes the aria-modal overlay. */
 .h-shell-drawer[hidden] {display:none!important;}
 .h-shell-drawer {
-  position:fixed;inset:0;z-index:2450;display:none;
+  position:fixed;inset:0;z-index:2450;display:block;
 }
-.h-shell-drawer.is-open {display:block;}
 .h-shell-drawer-backdrop {
   position:absolute;inset:0;border:0;width:100%;height:100%;padding:0;
   background:rgba(11,26,44,.45);cursor:pointer;
