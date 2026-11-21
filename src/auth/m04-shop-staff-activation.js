@@ -165,6 +165,55 @@ export async function issueStaffInviteForShop(scope,input){
   }catch{return issueDenied();}
 }
 
+const STAFF_ID=/^STAFF-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+
+const reissueTicket=[
+  'UPDATE auth_staff_activation_tickets AS t',
+  'SET token_hash=?,issuer_user_id=?,issuer_auth_version=?,',
+  'issued_at_ms=?,expires_at_ms=?',
+  'WHERE user_id=? AND shop_id=? AND consumed_at_ms IS NULL',
+  'AND EXISTS(SELECT 1 FROM auth_users target',
+  'JOIN auth_roles role ON role.role_name=target.role_name',
+  'WHERE target.user_id=t.user_id',
+  "AND target.status='Inactive' AND target.credential_state='Modern'",
+  "AND target.role_name=t.role_name AND target.role_name<>'Administrator'",
+  'AND target.auth_version=t.target_auth_version',
+  'AND target.credential_version=t.target_credential_version',
+  "AND role.status='Active' AND role.auth_version=t.role_auth_version)",
+  'AND EXISTS(SELECT 1 '+currentAdmin,
+  'AND admin.user_id=? AND admin.auth_version=?)',
+  'RETURNING user_id'
+].join(' ');
+
+/** Rotate an unused/expired staff code without creating another account. */
+export async function reissueStaffInviteForShop(scope,input){
+  const parsed=requestValues(input,['selectedShopId','managerToken','userId']);
+  if(!parsed||typeof parsed.managerToken!=='string'||
+      !TOKEN.test(parsed.managerToken)||typeof parsed.userId!=='string'||
+      !STAFF_ID.test(parsed.userId))return issueDenied();
+  const checked=await trustedShop(scope,parsed.selectedShopId);
+  if(!checked)return issueDenied();
+  try{
+    const db=checked.shopDb;
+    const nowMs=Date.now();
+    const managerHash=await hashOpaqueSessionToken(parsed.managerToken);
+    const manager=await db.prepare('SELECT admin.user_id AS id,admin.auth_version AS version '+currentAdmin)
+      .bind(...currentAdminArgs(managerHash,nowMs)).first();
+    if(!manager)return issueDenied();
+    const activationToken=createOpaqueSessionToken();
+    const tokenHash=await hashOpaqueSessionToken(activationToken);
+    const expiresAtMs=nowMs+INVITATION_LIFETIME_MS;
+    const rotated=await db.prepare(reissueTicket).bind(
+      tokenHash,manager.id,manager.version,nowMs,expiresAtMs,
+      parsed.userId,checked.shopId,
+      ...currentAdminArgs(managerHash,nowMs),manager.id,manager.version
+    ).first();
+    if(rotated?.user_id!==parsed.userId)return issueDenied();
+    return {issued:true,shopId:checked.shopId,userId:parsed.userId,
+      activationToken,expiresAtMs};
+  }catch{return issueDenied();}
+}
+
 /**
  * Activates only the disabled account bound to an uncancelled 15-minute
  * ticket, same trusted Shop and still-valid issuer and target authority.
