@@ -162,6 +162,10 @@ for(const width of [320,390,768,1024,1440]){
     try{
       await page.route(/^https:\/\/fonts\./,route=>route.abort());
       await openParty(page);
+      if([390,1440].includes(width))await page.screenshot({
+        path:'docs/reviews/m01-party-supplier-gross-opening/images/'+width+'-before.png',
+        fullPage:true
+      });
       const compact=width<1024;
       assert.equal(await page.locator('#page-hisabiqParties').isVisible(),true);
       assert.equal(await page.locator('.hparty-directory').isVisible(),!compact);

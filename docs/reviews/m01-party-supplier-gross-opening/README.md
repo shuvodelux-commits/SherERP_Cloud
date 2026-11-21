@@ -9,7 +9,7 @@
 | 390px phone | ![390px source before](images/390-before.png) | ![390px source after](images/390-after.png) |
 | 1440px desktop | ![1440px source before](images/1440-before.png) | ![1440px source after](images/1440-after.png) |
 
-The **before** images are exact copies of the previously verified `docs/reviews/m01-hisabiq-party-ui/images/390-after.png` and `1440-after.png` captures; they are baseline images of the pre-opening contract, not doctored/synthetic renderings of the new balances. All **after** images are captured by `qa/m01-hisabiq-party-browser.spec.mjs` in the new feature branch after loading the same source supplier with the optional signed opening fields. The source profile previously displayed only one payable/current due.
+The **before** images are actual Playwright captures of the **same compiled Owner shell** with the pre-0013 Supplier response (no new opening checkpoint fields). The **after** images are captures of that exact build with the proposed optional signed opening fields and a source history entry. Both screenshot states are recorded by `qa/m01-hisabiq-party-browser.spec.mjs` with fixed viewport widths. This eliminates misleading differences from the separately merged HisabIQ sidebar redesign. The older PR #854 Party screenshots are retained at `docs/reviews/m01-hisabiq-party-ui/` as historical source implementation evidence, but are **not** the before images used here.
 
 ## Screenshot review findings and fixes
 
