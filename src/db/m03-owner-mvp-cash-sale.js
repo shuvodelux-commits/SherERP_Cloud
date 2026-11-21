@@ -13,6 +13,7 @@ import {pilotShopIdentityMatches} from '../auth/platform-shop-binding.js';
 import {hashOpaqueSessionToken} from '../auth/session-token.js';
 import {hashCanonicalOperationIntent} from './operation-intent-fingerprint.js';
 import {normalizeMvpPosV2SaleIntent} from '../modules/mvp-pos-v2-sale-intent.js';
+import {projectSalesManagementList} from '../modules/sales-management-list-read.js';
 import {readOwnerCashSession} from './m03-owner-mvp-purchase.js';
 
 const OP=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -108,13 +109,17 @@ export async function readOwnerCashSaleInvoice(DB,invoiceId){
   if(typeof invoiceId!=='string'||!/^INV-[0-9]{6,}$/.test(invoiceId))return null;
   const seq=Number(invoiceId.slice(4));
   if(!Number.isSafeInteger(seq)||seq<1)return null;
-  const row=await DB.prepare(`SELECT r.*,b.received_paisa,b.sale_sequence AS posted
+  const row=await DB.prepare(`SELECT r.*,b.received_paisa
     FROM owner_mvp_sale_receipts r
     JOIN owner_mvp_sale_cash_book b ON b.sale_sequence=r.sequence
     JOIN owner_mvp_sale_fifo_draws d ON d.sale_sequence=r.sequence
        AND d.lot_sequence=r.lot_sequence AND d.quantity_micro=r.quantity_micro
     WHERE r.sequence=?`).bind(seq).first();
   if(!row||row.received_paisa!==row.subtotal_paisa)return null;
+  return projectOwnerCashInvoice(row);
+}
+
+function projectOwnerCashInvoice(row){
   const when=invoiceDate(row.created_at_ms);
   const total=money(row.subtotal_paisa);
   return {
@@ -136,6 +141,78 @@ export async function readOwnerCashSaleInvoice(DB,invoiceId){
       paymentMethods:'[]',terms:'[]',paymentTermsText:'',
       currencySymbol:'',footer:'',receiptSize:'80mm'}
   };
+}
+
+// The pilot schema stores immutable cash sales and append-only cash returns.
+const SALES_HISTORY_TABLES=[
+  'owner_mvp_sale_receipts','owner_mvp_sale_cash_book','owner_mvp_sale_fifo_draws',
+  'owner_mvp_sale_return_receipts','owner_mvp_return_cash_book','owner_mvp_return_stock_movements',
+];
+
+export async function ownerSalesSchemaReady(db){
+  const columns=SALES_HISTORY_TABLES.map(()=>'?').join(',');
+  const row=await db.prepare(`SELECT COUNT(*) AS present FROM sqlite_schema
+    WHERE type='table' AND name IN (${columns})`).bind(...SALES_HISTORY_TABLES).first();
+  return row?.present===SALES_HISTORY_TABLES.length;
+}
+
+export function ownerInvoiceSequence(invoiceId){
+  if(typeof invoiceId!=='string'||!/^INV-[0-9]{6,16}$/.test(invoiceId))return null;
+  const sequence=Number(invoiceId.slice(4));
+  return Number.isSafeInteger(sequence)&&sequence>0&&sourceId(sequence)===invoiceId?sequence:null;
+}
+
+/** The caller must authorize the current Owner and verify the Shop identity. */
+export async function readOwnerSalesManagement(db,sequence=null){
+  const {success,results}=await db.prepare(`SELECT r.*,b.received_paisa,d.unit_cost_paisa,
+    COALESCE((SELECT SUM(ret.quantity_micro) FROM owner_mvp_sale_return_receipts ret
+      WHERE ret.sale_sequence=r.sequence),0) AS returned_micro,
+    COALESCE((SELECT SUM(ret.total_paisa) FROM owner_mvp_sale_return_receipts ret
+      WHERE ret.sale_sequence=r.sequence),0) AS returned_paisa,
+    EXISTS(SELECT 1 FROM owner_mvp_sale_return_receipts ret
+      LEFT JOIN owner_mvp_return_cash_book refund ON refund.return_sequence=ret.sequence
+        AND refund.debit_paisa=ret.total_paisa AND refund.cash_sequence=ret.cash_sequence
+      LEFT JOIN owner_mvp_return_stock_movements restock ON restock.return_sequence=ret.sequence
+        AND restock.quantity_micro=ret.quantity_micro AND restock.lot_sequence=r.lot_sequence
+        AND restock.product_id=r.product_id
+      WHERE ret.sale_sequence=r.sequence AND
+        (refund.return_sequence IS NULL OR restock.return_sequence IS NULL)) AS incomplete_return
+    FROM owner_mvp_sale_receipts r
+    LEFT JOIN owner_mvp_sale_cash_book b ON b.sale_sequence=r.sequence AND b.cash_sequence=r.cash_sequence
+    LEFT JOIN owner_mvp_sale_fifo_draws d ON d.sale_sequence=r.sequence
+      AND d.lot_sequence=r.lot_sequence AND d.quantity_micro=r.quantity_micro
+    WHERE r.sequence BETWEEN ? AND ?
+    ORDER BY r.created_at_ms DESC,r.sequence DESC`)
+    .bind(sequence??1,sequence??Number.MAX_SAFE_INTEGER).all();
+  if(!success)throw Error('Sales history read failed');
+  const projected=results.map(row=>{
+    const netPaisa=row.subtotal_paisa-row.returned_paisa;
+    const netQty=(row.quantity_micro-row.returned_micro)/1_000_000;
+    const costComplete=Number.isSafeInteger(row.unit_cost_paisa*netQty);
+    if(row.received_paisa!==row.subtotal_paisa||row.unit_cost_paisa===null||
+       row.incomplete_return||netPaisa<0||netQty<0||!costComplete)
+      throw Error('Sales history needs reconciliation');
+    const invoice=projectOwnerCashInvoice(row);
+    const id={'Invoice ID':invoice.invoiceId,'Product ID':row.product_id};
+    const [summary]=projectSalesManagementList({
+      sales:[{'Invoice ID':invoice.invoiceId,'Date':invoice.date,'Time':invoice.time,
+        'Created At':new Date(row.created_at_ms).toISOString(),
+        'Customer ID':invoice.customerId,'Customer Name':invoice.customerName,'Customer Phone':invoice.customerPhone,
+        'Subtotal':invoice.subtotal,'Grand Total':invoice.grandTotal,'Paid Amount':invoice.paidAmount,
+        'Due Amount':invoice.dueAmount,'Payment Status':invoice.paymentStatus}],
+      items:[{...id,'Quantity':row.quantity_micro/1_000_000}],
+      returnItems:row.returned_micro?[{...id,'Return Quantity':row.returned_micro/1_000_000,
+        'Line Total':money(row.returned_paisa),'Pricing Basis':'NetAfterInvoiceDiscount'}]:[],
+      sessions:[],bundleComponents:[],vendorSourcing:[],settlementsByInvoice:{},
+      saleItemLots:[{...id,'Quantity':netQty,'Unit Cost':money(row.unit_cost_paisa)}],
+    },{canViewSales:true,canViewProfit:true});
+    summary.netSale=money(netPaisa);
+    summary.profit=money(netPaisa-row.unit_cost_paisa*netQty);
+    if(sequence===null)return summary;
+    const {returnedAmount,netSale,profit,profitMarginPercent,profitCostComplete,returnStatus}=summary;
+    return {...invoice,returnedAmount,netSale,profit,profitMarginPercent,profitCostComplete,returnStatus,editable:false};
+  });
+  return sequence===null?projected:projected[0]??null;
 }
 
 export async function readOwnerPosBootstrap(DB,{shopName}={}){

@@ -5,7 +5,7 @@
  * Does not claim the login-only production Worker enables these features.
  */
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdir,mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve,sep} from 'node:path';
 import {test} from 'node:test';
@@ -13,6 +13,7 @@ import {chromium} from 'playwright';
 import {unstable_splitSqlQuery} from 'wrangler';
 import {startCleanShopHarness} from '../tests/fixtures/m03-clean-shop-harness.mjs';
 import ownerWorker from '../src/m03-owner-redemption-worker.js';
+import {issueOwnerSession} from '../src/auth/platform-owner-sessions.js';
 import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 
 const ORIGIN='https://first-shop-browser.example.test';
@@ -65,6 +66,17 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
       }}
     };
     const records=[];
+    let salesConfiguration=env;
+    const screenshots=process.env.SHERERP_SALES_SCREENSHOTS;
+    async function captureSales(state){
+      if(!screenshots||view.phone)return;
+      await mkdir(screenshots,{recursive:true});
+      for(const width of [320,390,768,1024,1440]){
+        await page.setViewportSize({width,height:900});
+        await page.screenshot({path:join(screenshots,`${width}-${state}.png`),animations:'disabled'});
+      }
+      await page.setViewportSize({width:view.width,height:view.height});
+    }
     browser=await chromium.launch({headless:true});
     const context=await browser.newContext({viewport:{width:view.width,height:view.height},timezoneId:'Asia/Dhaka'});
     await context.addCookies([{name:OWNER_COOKIE,value:ownerA.token,url:ORIGIN,
@@ -79,7 +91,7 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
       const headers=await req.allHeaders(),body=req.postData();
       const response=await ownerWorker.fetch(new Request(req.url(),{
         method:req.method(),headers,...(body?{body}:{})
-      }),env);
+      }),url.pathname==='/api/owner/sales'?salesConfiguration:env);
       if(req.method()==='POST'||url.pathname==='/api/rpc')
         records.push({path:url.pathname,method:req.method(),status:response.status,
           ...(req.method()==='POST'&&body?{body:JSON.parse(body)}:{})});
@@ -89,6 +101,15 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
     });
 
     await page.goto(ORIGIN+'/app',{waitUntil:'domcontentloaded'});
+    await page.waitForFunction(()=>!!currentUser);
+    await page.evaluate(()=>goToPage('sales'));
+    if(process.env.SHERERP_SALES_BASELINE){
+      await captureSales('before');
+      return;
+    }
+    await page.getByText('No invoices have been saved in this Shop.').waitFor({timeout:4000});
+    await captureSales('empty');
+    assert.doesNotMatch(await page.locator('#owner-data-notice').textContent(),/Business data is not connected/);
     if(view.phone) await page.locator('#mobileBottomNav [data-mobile-page="products"]').click();
     else await page.locator('#navList .nav-item[aria-label="Products"]').click();
     await page.locator('#prodAddBtn').click();
@@ -214,6 +235,51 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
     const invoice=await page.evaluate(()=>serverCall('findInvoice','','INV-000001'));
     assert.equal(invoice.invoiceId,'INV-000001');
     assert.match(await page.evaluate(data=>renderInvoiceHtml_(data),invoice),/Complete Journey Pipe/);
+
+    await page.evaluate(()=>goToPage('sales'));
+    await page.locator('#smTableBody').getByText('INV-000001').waitFor();
+    assert.match(await page.locator('#smTableBody').innerText(),/Partially Returned/);
+    await captureSales('loaded');
+    if(view.phone){
+      const badges=await page.locator('#smTableBody td .badge').evaluateAll(items=>
+        items.map(badge=>[getComputedStyle(badge).whiteSpace,badge.getBoundingClientRect().width]));
+      assert.ok(badges.every(([wrap,width])=>wrap==='nowrap'&&width>20));
+    }
+    await page.locator('#smTableBody').getByRole('button',{name:'INV-000001',exact:true}).click();
+    await page.locator('#smViewModal').waitFor();
+    assert.match(await page.locator('#smViewProfit').innerText(),/15/);
+    assert.equal(await page.locator('#smViewDeleteBtn').isVisible(),false);
+    await captureSales('detail');
+    await page.locator('#smViewModal .modal-close').click();
+
+    salesConfiguration={...env,OWNER_MVP_POS_CASH_ENABLED:'false'};
+    await page.locator('#smRefreshBtn').click();
+    await page.getByText('Sales history is unavailable in this release.').waitFor();
+    assert.equal(await page.locator('#smTableBody tr').count(),0);
+    await captureSales('unavailable');
+    salesConfiguration={...env,PLATFORM_PILOT_DB:b};
+    await page.locator('#smRefreshBtn').click();
+    await page.getByText('This Shop storage could not be verified. Contact your administrator.').waitFor();
+    salesConfiguration={...env,PLATFORM_PILOT_DB:undefined};
+    await page.locator('#smRefreshBtn').click();
+    await page.getByText('Shop storage is unavailable. Contact your administrator.').waitFor();
+    await captureSales('error');
+    salesConfiguration=env;
+    await page.evaluate(()=>{goToPage('dashboard');goToPage('sales');});
+    await page.locator('#smTableBody').getByText('INV-000001').waitFor();
+
+    const newToken=await issueOwnerSession(ownerA.env,{
+      issuer:'https://accounts.google.com',subject:'fixture-owner-a'
+    });
+    assert.equal(typeof newToken,'string');
+    await page.locator('#smRefreshBtn').click();
+    await page.getByText('Your session expired. Sign in again.').waitFor();
+    await context.addCookies([{name:OWNER_COOKIE,value:newToken,url:ORIGIN,
+      secure:true,httpOnly:true,sameSite:'Strict'}]);
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.waitForFunction(()=>!!currentUser);
+    await page.evaluate(()=>goToPage('sales'));
+    await page.locator('#smTableBody').getByText('INV-000001').waitFor();
 
     assert.equal((await b.prepare('SELECT COUNT(*) AS n FROM products').first()).n,0);
     assert.equal((await b.prepare('SELECT COUNT(*) AS n FROM owner_mvp_sale_receipts').first()).n,0);

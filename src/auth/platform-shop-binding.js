@@ -14,10 +14,14 @@ export function pilotShopConfiguration(env){
   return {shopDb,shopId,databaseId,databaseMarker};
 }
 
-export async function pilotShopIdentityMatches({shopDb,shopId,databaseId,databaseMarker}){
+export async function readPilotShopIdentityMatch({shopDb,shopId,databaseId,databaseMarker}){
+  const identity=await shopDb.prepare('SELECT shop_id,database_id,database_marker FROM shop_identity WHERE singleton=1').first();
+  return identity?.shop_id===shopId&&identity.database_id===databaseId&&identity.database_marker===databaseMarker;
+}
+
+export async function pilotShopIdentityMatches(scope){
   try{
-    const identity=await shopDb.prepare('SELECT shop_id,database_id,database_marker FROM shop_identity WHERE singleton=1').first();
-    return identity?.shop_id===shopId&&identity.database_id===databaseId&&identity.database_marker===databaseMarker;
+    return await readPilotShopIdentityMatch(scope);
   }catch{
     return false;
   }

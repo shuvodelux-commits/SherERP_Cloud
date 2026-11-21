@@ -4,6 +4,7 @@ import {test} from 'node:test';
 import {unstable_splitSqlQuery} from 'wrangler';
 import {startCleanShopHarness} from '../fixtures/m03-clean-shop-harness.mjs';
 import ownerWorker from '../../src/m03-owner-redemption-worker.js';
+import {issueOwnerSession,revokeOwnerSession} from '../../src/auth/platform-owner-sessions.js';
 
 /**
  * Synthetic, disposable Workerd/D1 HTTP acceptance through the existing
@@ -216,6 +217,86 @@ test('isolated first-Shop Owner HTTP lifecycle: product → supplier → purchas
     assert.equal(page.currentDuePaisa,51*60000);
     assert.deepEqual(page.entries.map(row=>[row.reference,row.balancePaisa]),
       Array.from({length:50},(_,i)=>['PUR-'+String(51-i).padStart(6,'0'),(51-i)*60000]));
+  }finally{await close();}
+});
+
+test('private Sales Management reads persisted Shop invoices, with isolated and actionable failures',async()=>{
+  const {ownerA,ownerB,SHOP_A_DB:a,SHOP_B_DB:b,close}=await startCleanShopHarness();
+  const list='/api/owner/sales';
+  const detail=list+'/INV-000001';
+  try{
+    const missingSchema=await request(ownerA,list);
+    assert.equal(missingSchema.status,503,'unapplied Sales schema is unavailable');
+    assert.equal((await missingSchema.json()).code,'SALES_SCHEMA_UNAVAILABLE');
+    await installOperations(a);
+    await installOperations(b);
+
+    assert.deepEqual(await expectJson(ownerA,list,200),{success:true,data:[],
+      capabilities:{cashReturns:true,bankPayments:false}});
+    assert.equal((await request(ownerA,list,{token:'invalid'})).status,401);
+    assert.equal((await request(ownerA,list,{token:ownerB.token})).status,401);
+    assert.equal((await request(ownerA,list+'?shopId=other')).status,400);
+    const unavailable=await request(ownerA,list,{config:{...runtime(ownerA),PLATFORM_PILOT_DB:undefined}});
+    assert.equal(unavailable.status,503);
+    assert.equal((await unavailable.json()).code,'SHOP_CONFIGURATION_UNAVAILABLE');
+    const swapped=await request(ownerA,list,{config:{...runtime(ownerA),PLATFORM_PILOT_DB:b}});
+    assert.equal(swapped.status,403);
+    assert.equal((await swapped.json()).code,'SHOP_ACCESS_DENIED');
+    const disabled=await request(ownerA,list,{config:{...runtime(ownerA),OWNER_MVP_POS_CASH_ENABLED:'false'}});
+    assert.equal(disabled.status,404);
+    assert.equal((await disabled.json()).code,'SALES_UNAVAILABLE');
+    assert.equal((await expectJson(ownerA,list+'/bank-accounts',501)).code,'SALES_BANK_UNAVAILABLE');
+    assert.equal((await expectJson(ownerA,list+'/invalid',400)).code,'INVALID_INVOICE_ID');
+
+    await expectJson(ownerA,'/api/owner/catalog',201,product());
+    await expectJson(ownerA,'/api/owner/suppliers',201,supplier());
+    await expectJson(ownerA,'/api/owner/cash-session/start',201,{
+      operationId:crypto.randomUUID(),openingCash:'0',notes:'Sales read test'
+    });
+    const purchaseInput=purchase();
+    Object.assign(purchaseInput.payload.items[0],{unitPrice:'60.01',sellingPrice:'75.11'});
+    await expectJson(ownerA,'/api/owner/purchases',201,purchaseInput);
+    const saleInput=sale();
+    saleInput.payload.items[0].unitPrice=75.11;
+    saleInput.payload.paidAmount=150.22;
+    await expectJson(ownerA,'/api/owner/pos/sales',201,saleInput);
+
+    const reloaded=(await expectJson(ownerA,list,200)).data;
+    assert.equal(reloaded.length,1);
+    assert.equal(reloaded[0].invoiceId,'INV-000001');
+    assert.equal(reloaded[0].grandTotal,150.22);
+    assert.equal(reloaded[0].paidAmount,150.22);
+    assert.equal(reloaded[0].dueAmount,0);
+    assert.equal(reloaded[0].paymentStatus,'Paid');
+    assert.equal(reloaded[0].returnStatus,'No Return');
+    assert.equal(reloaded[0].profit,30.20);
+    assert.equal(reloaded[0].editable,false);
+    assert.equal((await expectJson(ownerA,detail,200)).data.items[0].qty,2);
+    assert.equal((await request(ownerB,detail)).status,404);
+    assert.deepEqual((await expectJson(ownerB,list,200)).data,[]);
+
+    const returnInput=refund('INV-000001');
+    returnInput.payload.items[0].price=75.11;
+    await expectJson(ownerA,'/api/owner/returns',201,returnInput);
+    const returnsDisabled={...runtime(ownerA),OWNER_MVP_CASH_RETURN_ENABLED:'false'};
+    const after=await request(ownerA,list,{config:returnsDisabled});
+    assert.equal(after.status,200);
+    const afterJson=await after.json();
+    assert.deepEqual(afterJson.capabilities,{cashReturns:false,bankPayments:false});
+    const [row]=afterJson.data;
+    assert.deepEqual([row.returnedAmount,row.netSale,row.returnStatus,row.profit],
+      [75.11,75.11,'Partially Returned',15.10]);
+
+    const token=await issueOwnerSession(ownerA.env,{issuer:'https://accounts.google.com',subject:'fixture-owner-a'});
+    assert.equal(typeof token,'string');
+    assert.equal((await request(ownerA,list)).status,401);
+    const fresh={...ownerA,token};
+    const invoice=(await expectJson(fresh,detail,200)).data;
+    assert.deepEqual([invoice.invoiceId,invoice.grandTotal,invoice.returnedAmount,invoice.netSale,invoice.profit],
+      ['INV-000001',150.22,75.11,75.11,15.10]);
+    assert.equal((await request(fresh,list,{body:{}})).status,404);
+    assert.equal(await revokeOwnerSession(ownerA.env,token),true);
+    assert.equal((await request(fresh,list)).status,401);
   }finally{await close();}
 });
 

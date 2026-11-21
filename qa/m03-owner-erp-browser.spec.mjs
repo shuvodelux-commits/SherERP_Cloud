@@ -276,7 +276,7 @@ test('Owner session restore opens ERP modules, blocks RPC, and signs out through
     await page.locator('#navList .nav-item[aria-label="Products"]').waitFor();
     await page.locator('#logoutBtn').waitFor();
     assert.match(await page.locator('#owner-data-notice').innerText(),
-      /Shop D1 is connected for enabled modules/);
+      /Shop storage verified at sign-in/);
     assert.doesNotMatch(await page.locator('#owner-data-notice').innerText(),
       /reads and saves are unavailable/);
     assert.equal(await page.locator('#loginMobile, #loginPassword').count(),0);
