@@ -1,0 +1,35 @@
+name: M03 private Owner Invoice Studio Settings route (local Workerd D1)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  owner-invoice-private-route:
+    name: Verify private Owner Invoice Studio route using real local Control and Shop D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate code, pinned source and compile Owner UI
+        run: |
+          npm run verify:source
+          npm run docs:check
+          npm run build:owner-frontend
+          node --test tests/m03-owner-invoice-route-wiring.test.mjs tests/m09-owner-invoice-profile.test.mjs
+      - name: Install pinned Wrangler in the test runner only
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Private Worker, Owner session, Shop D1, invoice CAS and revocation
+        run: TZ=UTC node --test tests/integration/m03-owner-invoice-routes-workerd.spec.mjs tests/integration/m03-owner-erp-frontend-workerd.spec.mjs
