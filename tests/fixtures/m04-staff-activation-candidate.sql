@@ -12,5 +12,7 @@ CREATE TABLE auth_staff_activation_tickets (
   role_auth_version INTEGER NOT NULL CHECK(role_auth_version>=1),
   issued_at_ms INTEGER NOT NULL CHECK(issued_at_ms>0),
   expires_at_ms INTEGER NOT NULL CHECK(expires_at_ms>issued_at_ms AND expires_at_ms-issued_at_ms<=900000),
-  consumed_at_ms INTEGER CHECK(consumed_at_ms IS NULL OR consumed_at_ms>=issued_at_ms)
+  consumed_at_ms INTEGER CHECK(consumed_at_ms IS NULL OR consumed_at_ms>=issued_at_ms),
+  consumed_nonce TEXT UNIQUE CHECK(consumed_nonce IS NULL OR (length(consumed_nonce)=64 AND consumed_nonce NOT GLOB '*[^0-9a-f]*')),
+  CHECK((consumed_at_ms IS NULL)=(consumed_nonce IS NULL))
 ) STRICT;
