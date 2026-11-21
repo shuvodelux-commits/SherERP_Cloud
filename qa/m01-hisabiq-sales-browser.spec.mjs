@@ -186,3 +186,24 @@ test('Mobile filters, visibility, empty and unloaded states stay truthful',async
     assert.equal((await page.locator('#page-sales [data-summary="billed"]').innerText()).trim(),'—');
   }finally{await page.close();}
 });
+
+test('HisabIQ mobile Sales rows expose optional details only on request',async()=>{
+  if(baseline)return;
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
+  try{
+    await setup(page);
+    const first=page.locator('#smTableBody tr').first();
+    assert.equal(await first.locator('[data-h-sales-col="paid"]').isVisible(),false,
+      'compact Sales record initially shows only key totals');
+    const more=first.locator('.h-sales-details-button');
+    assert.equal(await more.getAttribute('aria-expanded'),'false');
+    await more.click();
+    assert.equal(await more.getAttribute('aria-expanded'),'true');
+    assert.equal(await first.locator('[data-h-sales-col="paid"]').isVisible(),true);
+    await more.click();
+    assert.equal(await more.getAttribute('aria-expanded'),'false');
+    assert.equal(await first.locator('[data-h-sales-col="paid"]').isVisible(),false);
+    assert.equal(await first.locator('[data-act="menu"]').count(),1,
+      'original action menu survives a disclosure toggle');
+  }finally{await page.close();}
+});
