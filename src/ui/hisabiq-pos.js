@@ -181,6 +181,12 @@
   }
   function decorateCart(){
     if(!cart)return;
+    // The original POS V2 route owns its native, pointer-draggable handles.
+    // Never add a second grip or override that protected presentation route.
+    if(document.body.classList.contains('pos-v2-active')){
+      cart.querySelectorAll('.hi-pos-grip').forEach(function(grip){grip.remove();});
+      return;
+    }
     var entry=cart.querySelector('.pos-cart-entry-row:not(.is-active) input[data-cart-product-mode="add"]');
     if(entry)entry.placeholder='⌕ Add product... name, SKU or বাংলা';
     var rows=Array.from(cart.querySelectorAll(':scope > .cart-row:not(.pos-cart-entry-row)'));
@@ -246,6 +252,19 @@
       nativeCustomer=sel('.pos-customer-section'),nativeCart=sel('.pos-cart-section');
     if(!layout||!catalog||!nativeCustomer||!nativeCart||!cart)return;
     page.dataset.hiPosMounted='true';
+    // The actual navigation POS route uses the annotated Owner layout. The
+    // separate legacy 'posv2' QA route keeps the original V2 presentation,
+    // invoice preview, amount-in-words, dark theme and original mobile tabs.
+    function syncPosPresentation(){
+      var legacyV2=document.body.classList.contains('pos-v2-active');
+      if(legacyV2)page.removeAttribute('data-hisabiq-pos');
+      else page.setAttribute('data-hisabiq-pos','');
+      decorateCart();
+    }
+    new MutationObserver(syncPosPresentation).observe(document.body,{
+      attributes:true,attributeFilter:['class']
+    });
+    syncPosPresentation();
     var heading=make('header','hi-pos-head');
     var headingTitle=make('h1','', 'New sale');
     headingTitle.appendChild(make('small','','নতুন বিক্রি'));
