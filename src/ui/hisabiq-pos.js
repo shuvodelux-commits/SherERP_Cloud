@@ -255,9 +255,13 @@
     // The actual navigation POS route uses the annotated Owner layout. The
     // separate legacy 'posv2' QA route keeps the original V2 presentation,
     // invoice preview, amount-in-words, dark theme and original mobile tabs.
+    // POS V2 is the sole authenticated user-facing POS route. Keep the
+    // annotated layout active there as well as in the direct POS view.
+    // A presentation-only legacy fallback is available for visual regression
+    // and rollback; it does not change checkout, permissions or D1 authority.
+    var legacyVisual=new URLSearchParams(window.location.search).get('posLegacy')==='1';
     function syncPosPresentation(){
-      var legacyV2=document.body.classList.contains('pos-v2-active');
-      if(legacyV2)page.removeAttribute('data-hisabiq-pos');
+      if(legacyVisual)page.removeAttribute('data-hisabiq-pos');
       else page.setAttribute('data-hisabiq-pos','');
       decorateCart();
     }
