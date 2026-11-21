@@ -1,0 +1,62 @@
+/* Compiled Owner workflows opt into the reviewed HisabIQ tokens. */
+:is(#app, #page-purchase, #prodModal, #prodManageListModal)[data-hisabiq-design-system] {
+  --font: 'Geist', 'Hind Siliguri', system-ui, sans-serif;
+  --font-sans: var(--font);
+  --color-bg: var(--hds-background);
+  --color-surface: var(--hds-card);
+  --color-text: var(--hds-foreground);
+  --color-text-muted: var(--hds-muted-foreground);
+  --color-primary: var(--hds-primary);
+  --color-primary-dark: var(--hds-primary-hover);
+  --color-primary-light: var(--hds-accent);
+  --color-border: var(--hds-border);
+  --color-danger: var(--hds-danger);
+  --radius: var(--hds-panel-radius);
+  --radius-sm: var(--hds-control-radius);
+}
+:is(#prodModal, #prodManageListModal)[data-hisabiq-design-system] {
+  background-color: rgba(11, 26, 44, .5);
+}
+:is(#page-purchase, #prodModal, #prodManageListModal) :is(input, select, .btn) {
+  min-height: var(--hds-control-height);
+  border-radius: var(--hds-control-radius);
+  font-size: var(--hds-text-input);
+}
+:is(#page-purchase, #prodModal, #prodManageListModal) .btn-primary {
+  color: var(--hds-primary-foreground);
+}
+:is(#prodModal, #prodManageListModal) .modal-footer {
+  gap: var(--hds-space-2);
+}
+#prodManageListModal {
+  align-items: center;
+  padding: var(--hds-space-3);
+}
+#prodManageListModal .modal {
+  width: min(100%, 420px);
+  height: auto;
+  max-height: calc(100dvh - 24px);
+  border-radius: var(--hds-panel-radius);
+  box-shadow: var(--hds-shadow-pop);
+}
+#prodManageListModal .empty-state {
+  padding: var(--hds-space-3) 0 0;
+  text-align: left;
+}
+#hparty-relationship-status {
+  color: var(--hds-warning);
+}
+
+
+#app[data-hisabiq-design-system] #cashSessionTopbarStatus.is-open {
+  color: var(--hds-success);
+  background-color: var(--hds-success-bg);
+}
+#app[data-hisabiq-design-system] #cashSessionTopbarStatus.is-closing {
+  color: var(--hds-warning);
+  background-color: var(--hds-warning-bg);
+}
+#app[data-hisabiq-design-system] #cashSessionTopbarStatus.is-closed {
+  color: var(--hds-muted-foreground);
+  background-color: var(--hds-background);
+}

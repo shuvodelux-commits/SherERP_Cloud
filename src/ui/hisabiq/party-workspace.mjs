@@ -307,15 +307,21 @@ export function mountOwnerParties(){
       </section>
     </div>
     <div class="hparty-supplier-modal" id="hparty-supplier-modal" hidden data-open="false">
-      <button type="button" class="hparty-supplier-backdrop" aria-label="Close Add Supplier"></button>
+      <button type="button" class="hparty-supplier-backdrop" aria-label="Close Add Party"></button>
       <section class="hparty-supplier-panel" role="dialog" aria-modal="true" aria-labelledby="hparty-supplier-title">
         <header class="hparty-supplier-head">
-          <div><h2 id="hparty-supplier-title">Add Supplier <span lang="bn">নতুন সাপ্লায়ার</span></h2>
-            <p>Clean Shop, zero historical opening balance only.</p></div>
-          <button type="button" class="hds-button" id="hparty-supplier-close" aria-label="Close Add Supplier">×</button>
+          <div><h2 id="hparty-supplier-title">Add Party <span lang="bn">নতুন পার্টি</span></h2>
+            <p>Choose the relationship this party has with your business.</p></div>
+          <button type="button" class="hds-button" id="hparty-supplier-close" aria-label="Close Add Party">×</button>
         </header>
         <form id="hparty-supplier-form">
-          <label for="hparty-supplier-name">Supplier name <span lang="bn">নাম</span> *</label>
+          <label for="hparty-add-relationship">Relationship <span lang="bn">সম্পর্ক</span> *</label>
+          <select class="hds-select" id="hparty-add-relationship" data-touch-select-skip="true" required>
+            <option value="">Select a relationship</option>
+            ${ROLES.map(role=>`<option value="${role}">${role}</option>`).join('')}
+          </select>
+          <p id="hparty-relationship-status" role="status" hidden></p>
+          <label for="hparty-supplier-name">Party name <span lang="bn">নাম</span> *</label>
           <input class="hds-input" id="hparty-supplier-name" name="name" required maxlength="120" autocomplete="organization"/>
           <label for="hparty-supplier-phone">Phone <span lang="bn">ফোন</span></label>
           <input class="hds-input" id="hparty-supplier-phone" name="phone" maxlength="40" type="tel" autocomplete="tel"/>
@@ -323,11 +329,11 @@ export function mountOwnerParties(){
           <input class="hds-input" id="hparty-supplier-address" name="address" maxlength="250" autocomplete="street-address"/>
           <label for="hparty-supplier-notes">Notes <span lang="bn">নোট</span></label>
           <textarea class="hds-input" id="hparty-supplier-notes" name="notes" maxlength="500" rows="2"></textarea>
-          <p class="hparty-opening-rule">Opening balance: ৳0.00. Historical payable or supplier advance requires a separately verified ledger migration.</p>
+          <p class="hparty-opening-rule" id="hparty-add-opening-rule" hidden>Opening balance: ৳0.00. Historical payable or supplier advance requires a separately verified ledger migration.</p>
           <p id="hparty-supplier-status" role="alert" aria-live="assertive"></p>
           <footer>
             <button class="hds-button" id="hparty-supplier-cancel" type="button" data-variant="outline">Cancel</button>
-            <button class="hds-button" id="hparty-supplier-save" type="submit">Save Supplier</button>
+            <button class="hds-button" id="hparty-supplier-save" type="submit">Save Party</button>
           </footer>
         </form>
       </section>
@@ -343,6 +349,17 @@ export function mountOwnerParties(){
   const supplierModal=pick('#hparty-supplier-modal');
   const supplierForm=pick('#hparty-supplier-form');
   const supplierStatus=pick('#hparty-supplier-status');
+  const relationship=pick('#hparty-add-relationship');
+  const relationshipStatus=pick('#hparty-relationship-status');
+  function syncAddRelationship(){
+    const available=relationship.value==='Supplier';
+    relationshipStatus.hidden=available||!relationship.value;
+    relationshipStatus.textContent=relationshipStatus.hidden?'':relationship.value+' creation is unavailable in this release.';
+    pick('#hparty-add-opening-rule').hidden=!available;
+    relationship.disabled=supplierSaving;
+    pick('#hparty-supplier-save').disabled=!available||supplierSaving;
+  }
+  relationship.addEventListener('change',syncAddRelationship);
   let supplierIntent=null,supplierSaving=false,supplierOpener=null,supplierCloseTimer=null;
   const getSelected=()=>state.items.find(p=>p.id===state.selectionId)||null;
   const isVisible=()=>!page.hidden;
@@ -582,7 +599,6 @@ export function mountOwnerParties(){
       'Independent role balances; no cross-role offset');
     const add=pick('#hparty-add-party');
     add.disabled=state.mode!=='supplier-source';
-    add.textContent=state.mode==='supplier-source'?'+ Add Supplier':'+ Add Party';
     add.title=state.mode==='supplier-source'
       ?'Create a clean-Shop Supplier with zero opening balance'
       :'The unified Party writer is not connected';
@@ -698,7 +714,9 @@ export function mountOwnerParties(){
     supplierStatus.textContent=supplierIntent
       ?'Previous save is unconfirmed. Retry unchanged to verify the same operation.':'';
     requestAnimationFrame(()=>supplierModal.dataset.open='true');
-    pick('#hparty-supplier-name').focus();
+    if(supplierIntent)relationship.value='Supplier';
+    syncAddRelationship();
+    relationship.focus();
   }
   function closeSupplierModal(force=false){
     if((supplierSaving&&!force)||supplierModal.hidden)return;
@@ -712,7 +730,7 @@ export function mountOwnerParties(){
   }
   supplierForm.addEventListener('submit',async event=>{
     event.preventDefault();
-    if(supplierSaving||state.mode!=='supplier-source'||!supplierForm.reportValidity())return;
+    if(supplierSaving||state.mode!=='supplier-source'||relationship.value!=='Supplier'||!supplierForm.reportValidity())return;
     const fields={
       name:pick('#hparty-supplier-name').value,
       phone:pick('#hparty-supplier-phone').value,
@@ -727,7 +745,7 @@ export function mountOwnerParties(){
         const record=sourceSupplierCreatePayload(fields,crypto.randomUUID());
         supplierIntent={fingerprint,body:JSON.stringify(record)};
       }
-      supplierSaving=true;pick('#hparty-supplier-save').disabled=true;
+      supplierSaving=true;syncAddRelationship();
       supplierStatus.textContent='Saving Supplier to authenticated Shop D1…';
       const response=await fetch('/api/owner/suppliers',{
         method:'POST',credentials:'same-origin',cache:'no-store',
@@ -755,7 +773,7 @@ export function mountOwnerParties(){
     }catch(error){
       supplierStatus.textContent=error instanceof Error?error.message:'Could not confirm Supplier save. Retry unchanged.';
     }finally{
-      supplierSaving=false;pick('#hparty-supplier-save').disabled=false;
+      supplierSaving=false;syncAddRelationship();
     }
   });
   pick('#hparty-add-party').addEventListener('click',openSupplierModal);
@@ -766,7 +784,7 @@ export function mountOwnerParties(){
     if(event.key==='Escape'){event.preventDefault();closeSupplierModal();}
     if(event.key!=='Tab')return;
     const focusable=Array.from(supplierModal.querySelectorAll(
-      'button:not([disabled]),input:not([disabled]),textarea:not([disabled])'
+      'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])'
     )).filter(el=>el.getClientRects().length);
     if(!focusable.length)return;
     if(event.shiftKey&&document.activeElement===focusable[0]){
