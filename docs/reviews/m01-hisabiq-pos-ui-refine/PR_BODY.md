@@ -118,3 +118,16 @@ No D1 cutover or deploy. Review visual screenshot matrix, permissions, dark them
 - Affected UI Chromium **33/33**, injector contracts **10/10**,
   frozen source **84/84**, docs and Owner build passed.
 - No financial writer/schema/RPC modification or hosted D1 operation.
+
+## Last exact-head CI browser-only race correction
+
+- PR head afc63052 had 81 GitHub checks pass and one Chromium/A4 failure:
+  Shell modal Tab assertion pressed before the merged Shell's async
+  requestAnimationFrame made the drawer visible and moved focus.
+- Test now waits for real open/visible focus before asserting modal
+  Tab containment (320/390/768). All actual inert/aria-modal/focus
+  assertions remain; production Shell code is untouched.
+- Targeted real Chromium Shell modal test passed locally.
+  One local full-suite Add Product page.goto timeout under high load
+  is disclosed separately; all relevant test modules are rechecked.
+- Do not merge until checks on the new exact PR head are complete.

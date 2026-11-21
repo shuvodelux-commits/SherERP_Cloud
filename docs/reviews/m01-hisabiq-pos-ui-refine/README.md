@@ -271,3 +271,26 @@ Cash sale; the existing D1 session/FIFO/tenant/replay gate remains intact.
 - No Shop D1 posting kernel, migration SQL, public RPC, Cash Session,
   or legacy source HTML/JS modified by this POS conflict resolution.
 - Latest exact-head GitHub CI and human review remain release gates.
+
+### CI shell modal focus sequencing on merged Shell #876/#877
+
+- At PR head afc63052, the shared Chromium/A4 job showed **179/180**
+  tests passed. The one red assertion was in the existing Shell test at
+  qa/m01-hisabiq-shell-browser.spec.mjs:177. It pressed Tab immediately
+  after opening the mobile drawer and expected focus within the modal.
+- The merged Shell intentionally switches the drawer from hidden to
+  displayable and focuses its Close control on the *next animation frame*.
+  CI can press Tab before that frame and sample an unmounted focus target.
+  The test now waits for actual is-open and focused-in-dialog state
+  before testing Tab containment. It still fails if drawer focus never
+  transfers, and retains the app.inert/aria-modal/closing focus assertions.
+- No Shell production source, navigation policy, breakpoints, auth,
+  D1, invoice, Cash Session, or POS posting behavior changed. The revised
+  Shell test passed with Chromium at all 320/390/768px target widths.
+- A separate local 180-case M01 run on a heavily loaded workstation
+  completed 179/180; its only failure was a 7-second page.goto load
+  timeout in the parallel-owned Add Product test, which separately
+  passed as part of the 33/33 cross-module Chromium run. This is
+  disclosed rather than described as a full-suite pass.
+- Latest exact-head GitHub CI remains mandatory to accept the timing
+  correction and release the integration PR.
