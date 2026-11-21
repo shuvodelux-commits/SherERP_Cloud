@@ -1,5 +1,23 @@
 # SherERP Cloud — Project Status, Handoff & Task Board
 
+## 22 November 2026 — fresh GitHub monitor snapshot (development only; no release authorization)
+
+**Verified main:** `51178bb509a72ced6e42d872d5c3bc15ebf60301` (latest commit: M01 POS Customer Quick Add, PR #899). The repository default branch is `main`.
+
+**Pull-request inventory:** GitHub Search API and the direct repository `GET /pulls?state=open` endpoint both returned **zero open PRs across all target branches** at 2026-11-22 01:32 Asia/Dhaka. Older active-PR tables and handoff snapshots below are historical; do not reuse them as a current queue. Recheck live PRs and exact heads before every task.
+
+**Exact-main CI evidence:** the commit has one check run, `Workers Builds: shererp`, completed **success** (run/check URL: https://github.com/shuvodelux-commits/SherERP_Cloud/runs/136836347235). The Actions `workflow-runs?head_sha=...` query returned **zero workflow runs**, and the combined legacy commit status is `pending` with zero status contexts. Therefore the Cloudflare build is green, but complete current-main Node, Workerd/D1, accounting, auth, source and browser CI is **not independently certified** by this snapshot.
+
+**Main protection:** active repository ruleset [SherERP Main Branch Protection, ID 27454206](https://github.com/shuvodelux-commits/SherERP_Cloud/rules/27454206). Required PR status contexts are `m00-audit`, `Fast PR confidence`, and `Verify source, Worker and safe preview configuration`; review-thread resolution is required and there are no bypass actors. The configured minimum approving-review count is zero. The monitoring policy remains stricter: obtain independent review and verify all applicable exact-head checks before any merge.
+
+**Parallel-workstream gate:** coordination [issue #456](https://github.com/shuvodelux-commits/SherERP_Cloud/issues/456) and `docs/M03_PARALLEL_READINESS.md` remain authoritative. Parallel preparation is READY; parallel financial transaction-module implementation remains NOT READY. M03 is the sole integrator for shared `src/db`, migrations, `src/rpc`, Worker entry/bindings, stock/invoice IDs and atomic posting. M02 supplies reviewed source semantics; M04 supplies auth/session/RBAC contracts. Do not infer release readiness from parallel PR counts or green preview builds.
+
+**Operational boundary:** this is a read-only GitHub snapshot. No live D1 read/write or migration, financial posting, Cloudflare Builds variable/secret change, Worker deployment, or Mohim_ERP source modification was performed or authorized by this entry. Production financial activation remains **NO-GO** pending the full M02/M03/M04, accounting, M10/M11, hosted authenticated acceptance and separate owner release gates.
+
+**Next monitor action:** inspect newly opened PRs against their actual base/head, file ownership, dependency issues and exact-head full CI; resolve only safe failures using test-first GitHub branch commits. Merge only after independent review, protection and post-merge `main` file verification. Keep this dated section as the current GitHub snapshot; older dated handoffs remain historical evidence.
+
+---
+
 ## 21 November 2026 — development builds no longer need a new production approval for each merge (opt-in PR)
 
 **Owner decision:** SherERP is still an active *development/testing* Shop. Requiring `FIRST_SHOP_CORE_MVP_REFRESH` with an exact new approved GitHub SHA and D1 report for **every** code merge repeatedly blocks current HisabIQ UI deployment. The currently connected Shop D1 is nevertheless real and must remain isolated. A **separate opt-in** `SHERERP_FIRST_SHOP_CORE_RELEASE=DEVELOPMENT_AUTO` with one-time `SHERERP_DEVELOPMENT_CORE_CONFIRMATION=EXISTING_SHOP_CORE_VERIFIED` is being implemented under M11/M03. It preserves exactly the previously approved first-Shop core flags, both existing D1 bindings, Owner auth/rate limits and main-only Cloudflare Builds publisher; disabled finance flags remain OFF. It does **not** grant production GO, change remote D1 or call Wrangler deploy, and it does **not** bypass build/permission failures other than obsolete per-commit SHA/readiness requirements in this explicit development mode.
