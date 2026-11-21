@@ -22,6 +22,22 @@
 #prodModal .hapu-field > .touch-select-trigger:focus-visible {
   outline:2px solid var(--hds-ring,#0d7c74); outline-offset:2px;
 }
+/* Original touch-select uses a font glyph (⌄), whose baseline makes it look
+ * too low inside the visible 36px dropdown. Draw a consistently centered
+ * chevron instead, preserving the original accessible trigger and events. */
+#prodModal .touch-select-trigger .touch-select-caret {
+  display:grid;place-items:center;flex:0 0 16px;
+  width:16px;height:16px;min-width:16px;min-height:16px;
+  font-size:0;line-height:0;color:var(--hds-muted-foreground,#69798e);
+}
+#prodModal .touch-select-trigger .touch-select-caret::after {
+  content:"";display:block;box-sizing:border-box;
+  width:7px;height:7px;
+  border-right:1.5px solid currentColor;
+  border-bottom:1.5px solid currentColor;
+  transform:translateY(-2px) rotate(45deg);
+}
+
 #prodModal .form-grid .touch-select-trigger {padding:6px 9px;}
 #prodModal .form-grid :is(#prodManageUnitsBtn,#prodManageCategoriesBtn,#prodBundleAddItem) {
   box-sizing:border-box; min-height:36px; height:36px;
@@ -65,11 +81,19 @@ body:has(#prodModal:not([hidden]) #hapu-details:not([hidden])) #toast:not([hidde
 #prodModal .hapu-group legend {font:600 12px/17px Geist,'Hind Siliguri',system-ui,sans-serif;padding:0 5px;}
 #prodModal .hapu-equation {min-width:0;display:grid;grid-template-columns:18px minmax(0,1fr) 15px minmax(0,1fr) minmax(48px,auto);
   gap:8px;align-items:end;margin:5px 0 9px;}
-#prodModal .hapu-one,#prodModal .hapu-equals,#prodModal .hapu-unit,#prodModal .hapu-stock-name {align-self:center;
-  font-size:14px;font-weight:600;white-space:nowrap;}
+/* The equation row includes a label *above* each 36px form control.
+ * Center symbols on the visible input instead of the taller grid track. */
+#prodModal .hapu-one,#prodModal .hapu-equals,#prodModal .hapu-unit,#prodModal .hapu-stock-name {
+  display:flex;align-items:center;align-self:end;
+  height:36px;min-height:36px;box-sizing:border-box;
+  font-size:14px;font-weight:600;white-space:nowrap;
+}
 #prodModal .hapu-one,#prodModal .hapu-equals {text-align:center;}
 #prodModal .hapu-unit,#prodModal .hapu-stock-name {color:var(--hds-foreground,#14243b);text-overflow:ellipsis;overflow:hidden;}
-#prodModal .hapu-field {display:flex;flex-direction:column;gap:5px;min-width:0;font-size:11px;
+/* The global legacy `label { margin-bottom:6px }` offsets only form inputs
+ * by six pixels against their grid siblings. Keep the inline equation on one
+ * common baseline without changing labels elsewhere in the ERP. */
+#prodModal .hapu-field {display:flex;flex-direction:column;gap:5px;min-width:0;margin:0;font-size:11px;
   color:var(--hds-muted-foreground,#69798e);font-weight:500;}
 #prodModal .hapu-field :is(input,select) {appearance:auto;box-sizing:border-box;margin:0;width:100%;min-width:0;min-height:36px;height:36px;
   border:1px solid var(--hds-border,#cdd8e2);border-radius:6px;

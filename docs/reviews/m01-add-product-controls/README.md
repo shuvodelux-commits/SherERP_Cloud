@@ -29,3 +29,21 @@ The original ERP enhances every `<select>` with a visible `.touch-select-trigger
 **TDD evidence:** Before implementation, Chromium failed at `320px prodName: 36px visible control required; found 46`, `320px prodManageUnitsBtn: 36px visible control required; found 44`, and the unsupported RPC returned the misleading blanket Shop-data error. The new tests also verify the exact visible custom trigger (not a hidden native input), matching top/bottom and widths at 320/390/1440, paired Manage buttons, and that a visible error toast never obscures Save/Cancel.
 
 **Focused acceptance:** 41/41 Chromium/Node/M05 calculation and real-local-Workerd/D1 single-unit Save tests passed. **Full M01 Chromium suite** (exact candidate head `83d36bcf`): **181/181 passed**, zero failures, including new geometry/toast assertions, POS, authentication, print, Party, Supplier and Owner regression flows. This **does not** prove that a production hosted Shop D1 is connected or that multi-unit Save works. Original frozen source, auth, price/stock posting and historical snapshots are not altered. `/ui-refine-skill` runtime was not available on this PC; pinned source, actual 5-breakpoint Chromium UI and bounded screenshot comparison were used instead; the named skill gate remains unverified.
+
+## Follow-up: centered equations and actual dropdown chevrons (approved)
+
+The follow-up screenshot annotated four misalignments: the `=` signs in pack and area rows and the visible `v` carets in pack and price-unit selectors. New Chromium geometry assertions reproduced **7px vertical misalignment** at 320px: the pack `=` center was at y=202 while its 36px quantity input center was at y=209. The reason is the original frozen source's global `label { margin-bottom:6px }` combined with the original grid's `align-self:center` on an entire label-plus-input row. The global rule itself is untouched.
+
+Scoped fix: `#prodModal .hapu-field {margin:0}` removes that inherited extra 6px only inside the Owner Add Product, and the equation's `=`, `1` and unit suffix become 36px-high flex items with `align-self:end;align-items:center`. This centers all equation symbols on the **actual editable input**, not the surrounding label. Every visible Add Product `touch-select-trigger` keeps its original semantics and event handlers, while the browser-font-dependent `⌄` text glyph is replaced with a fixed 7px CSS-bordered chevron centered in a 16px grid. All affected selectors remain 36px tall with the unchanged 6px corner radius.
+
+**Playwright source+DOM evidence:** `qa/m01-hisabiq-add-product-unit-editor.spec.mjs` now checks Pack/Quantity, Carton/Quantity and Pcs/Sqft `=` center differences within 1.5px, and four visible dropdown caret centers (Pack, Carton, Purchase Price, Selling Price) within 1.5px of their button centers, at **320, 390, 768, 1024 and 1440px**. It also opens/closes a mobile picker with click/Escape to prove keyboard behavior remains intact. The new test went RED on the exact 7px defect and GREEN only after the scoped CSS fix. No D1 or backend code was changed.
+
+| Viewport | After alignment screenshot |
+| --- | --- |
+| 320px phone | [Centered conversion and chevrons](images/alignment-320.png) |
+| 390px phone | [Centered conversion and chevrons](images/alignment-390.png) |
+| 768px tablet | [Centered conversion and chevrons](images/alignment-768.png) |
+| 1024px desktop | [Centered conversion and chevrons](images/alignment-1024.png) |
+| 1440px desktop | [Centered conversion and chevrons](images/alignment-1440.png) |
+
+Screenshots use a synthetic nonposting Owner fixture and are **not proof of live Shop D1 connectivity**. Multi-unit Save remains disabled pending authorized backend conversion-profile persistence. The named `/ui-refine-skill` is still not installed on this environment; direct Playwright screenshot refinement and the approved HisabIQ design contract were used instead.

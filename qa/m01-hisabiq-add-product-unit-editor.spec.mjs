@@ -258,3 +258,56 @@ test('unsupported Owner RPC does not falsely claim all Shop data is disconnected
   assert.ok(rects.toastBottom<=rects.footerTop-4,`error toast must sit above fixed modal footer: ${JSON.stringify(rects)}`);
  }finally{await page.close();}
 });
+
+
+test('equation signs and visible dropdown chevrons align at control center on all five viewports',async()=>{
+ for(const width of [320,390,768,1024,1440]){
+  const page=await browser.newPage({viewport:{width,height:850},hasTouch:width<=390,reducedMotion:'reduce'});
+  try{
+   await setup(page);
+   await page.locator('.hapu-switch-wrap').click();
+   await page.locator('#hapu-outer-toggle').click();
+   await page.locator('#hapu-area-enable').check();
+   const result=await page.evaluate(()=>{
+    const rect=node=>{const r=node.getBoundingClientRect();return {top:r.top,height:r.height,centerY:r.top+r.height/2};};
+    const equations=[...document.querySelectorAll('#hapu-details .hapu-equation:not([hidden])')].map(row=>{
+      const sign=row.querySelector('.hapu-equals');
+      const input=row.querySelector('.hapu-quantity input');
+      const data={name:row.dataset.hapuEquation,sign:rect(sign),input:rect(input)};
+      return data;
+    });
+    const dropdowns=['hapu-pack','hapu-outer','hapu-buy-anchor','hapu-sell-anchor'].map(id=>{
+      const source=document.getElementById(id);
+      const button=source.nextElementSibling;
+      const caret=button.querySelector('.touch-select-caret');
+      const pseudo=getComputedStyle(caret,'::after');
+      return {id,button:rect(button),caret:rect(caret),display:getComputedStyle(caret).display,
+        fontSize:getComputedStyle(caret).fontSize,pseudoContent:pseudo.content,
+        pseudoBorderRight:pseudo.borderRightStyle,pseudoBorderBottom:pseudo.borderBottomStyle};
+    });
+    return {equations,dropdowns};
+   });
+   assert.deepEqual(result.equations.map(x=>x.name),['pack','outer','area']);
+   for(const eq of result.equations){
+     assert.ok(Math.abs(eq.sign.centerY-eq.input.centerY)<=1.5,
+       `${width}px ${eq.name}: = sign must be centered against the 36px control; ${JSON.stringify(eq)}`);
+   }
+   for(const item of result.dropdowns){
+     assert.ok(Math.abs(item.button.centerY-item.caret.centerY)<=1.5,
+       `${width}px ${item.id}: caret geometry must be centered in the visible dropdown; ${JSON.stringify(item)}`);
+     assert.equal(item.fontSize,'0px',`${width}px ${item.id}: do not render a baseline-shifted text glyph`);
+     assert.ok(item.pseudoContent!=='none'&&item.pseudoContent!=='normal',`${width}px ${item.id}: show the CSS chevron`);
+     assert.equal(item.pseudoBorderRight,'solid');
+     assert.equal(item.pseudoBorderBottom,'solid');
+   }
+   if(width===390){
+     await page.locator('#hapu-pack + .touch-select-trigger').click();
+     assert.equal(await page.locator('#hapu-pack + .touch-select-trigger').getAttribute('aria-expanded'),'true');
+     await page.keyboard.press('Escape');
+     assert.equal(await page.locator('#hapu-pack + .touch-select-trigger').getAttribute('aria-expanded'),'false');
+   }
+   await page.locator('#hapu-outer-row').scrollIntoViewIfNeeded();
+   await captureSettled(page,join(evidence,`${width}-centered-conversion.png`));
+  }finally{await page.close();}
+ }
+});
