@@ -193,17 +193,17 @@
       "x": 270,
       "y": 171,
       "width": 434,
-      "height": 268,
+      "height": 326,
       "right": 704,
-      "bottom": 439
+      "bottom": 497
     },
     "quick": {
       "x": 270,
-      "y": 455,
+      "y": 513,
       "width": 434,
       "height": 226,
       "right": 704,
-      "bottom": 681
+      "bottom": 739
     },
     "checkout": {
       "x": 720,
