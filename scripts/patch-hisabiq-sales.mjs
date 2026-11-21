@@ -7,13 +7,13 @@ const REQUIRED_IDS=['smSearch','smDateFrom','smDateTo','smPaymentStatus',
 export function patchHisabiqSales(html,stylesheet,script){
   if(typeof html!=='string'||typeof stylesheet!=='string'||typeof script!=='string')
     throw new TypeError('Expected compiled HTML and reviewed Sales UI assets');
-  const count=html.split(SALES_PAGE).length-1;
-  if(count===0)return html; // Unrelated HtmlService test fixture.
-  if(count!==1)throw new Error('Ambiguous compiled Sales page boundary');
   if(html.includes('id="hisabiq-sales-runtime"') ||
      html.includes('id="hisabiq-sales-style"') ||
      html.includes('data-hisabiq-sales'))
     throw new Error('HisabIQ Sales UI already installed');
+  const count=html.split(SALES_PAGE).length-1;
+  if(count===0)return html; // Unrelated HtmlService test fixture.
+  if(count!==1)throw new Error('Ambiguous compiled Sales page boundary');
   const at=html.indexOf(SALES_PAGE);
   const end=html.indexOf('</section>',at+SALES_PAGE.length);
   if(end<0)throw new Error('Missing compiled Sales page closure');
