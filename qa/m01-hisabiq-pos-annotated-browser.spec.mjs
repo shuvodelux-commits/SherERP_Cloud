@@ -233,3 +233,18 @@ for(const width of [390,1440]){
     }finally{await page.close();}
   });
 }
+
+test('active POS V2 preview delegates to source and never posts a sale',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    const errors=await setup(page);
+    await page.evaluate(()=>goToPage('posv2'));
+    assert.equal(await page.locator('#hi-pos-proxy-preview').isVisible(),true);
+    assert.equal(await page.locator('#hi-pos-payment-method option:not(:disabled)').count(),1);
+    await page.locator('#hi-pos-proxy-preview').click();
+    assert.ok(await page.locator('#posHisabiqPreview[aria-modal="true"]').isVisible(),
+      'must reuse the source preview modal');
+    assert.match(await page.locator('#posHisabiqPreview').innerText(),/PVC Pipe 1 inch/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
