@@ -41,6 +41,40 @@ export function patchHisabiqDashboard(html,template){
   const closeAt=html.indexOf('</section>',dashboardAt);
   if(closeAt<0 || !html.slice(dashboardAt,closeAt).includes('function dashLoad()'))
     throw new Error('Original source Dashboard closure changed');
+  // The original dashboard loader calls the as-yet unsupported full
+  // eleven-field getDashboardStats. The Owner source bridge already checks
+  // the actual Control/Shop D1 identity, so the generic disconnected-Shop
+  // toast is misleading in that *one* known missing-read case. Keep the
+  // original GAS source immutable and every other RPC/error fail-closed.
+  let sourceDashboard=html.slice(dashboardAt,closeAt);
+  const good="return serverCall('getDashboardStats', authToken).then(function (d) {";
+  const next=good+"\n      var notice=document.getElementById('hdb-data-readiness');"+
+    " if(notice)notice.hidden=true;";
+  const failed=".catch(function (err) { showToast(err.message, 'error'); });";
+  const handled=`.catch(function (err) {
+      var notice=document.getElementById('hdb-data-readiness');
+      var ownerNotice=document.getElementById('owner-data-notice');
+      if(notice && ownerNotice &&
+          err && err.message === 'Shop business data is not connected yet.') {
+        notice.hidden = false;
+        // The original all-data-disconnected banner is not accurate after
+        // validated Owner login and current Shop D1 identity. Only replace
+        // the exact untouched default, never a module-specific warning.
+        if(ownerNotice.textContent.trim() ===
+          'Business data is not connected. ERP screens are visible, but reads and saves are unavailable.') {
+          ownerNotice.textContent =
+            'Shop D1 is connected for enabled modules. Full Dashboard totals and unported screens remain unavailable. Check each module before saving.';
+        }
+        return;
+      }
+      if(notice)notice.hidden = true;
+      showToast(err.message, 'error');
+    });`;
+  if(sourceDashboard.split(good).length!==2||
+     sourceDashboard.split(failed).length!==2||
+     !markup.includes('id="hdb-data-readiness"'))
+    throw new Error('Original dashboard read-failure boundary changed');
+  sourceDashboard=sourceDashboard.replace(good,next).replace(failed,handled);
   return html.slice(0,dashboardAt)+'\n'+markup+'\n'+
-    html.slice(dashboardAt,closeAt)+'\n'+runtime+'\n'+html.slice(closeAt);
+    sourceDashboard+'\n'+runtime+'\n'+html.slice(closeAt);
 }
