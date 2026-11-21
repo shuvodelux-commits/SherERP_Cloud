@@ -593,3 +593,13 @@ body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row > :is(.cart-remove
  grid-row:auto!important;
  min-width:0!important;
 }
+
+
+/* The legacy 'posv2' internal reference/QA route must remain unaltered by the
+   annotated normal POS view. In V2 mode the runtime removes data-hisabiq-pos;
+   hide only the additional normal-POS proxy elements. */
+#page-pos:not([data-hisabiq-pos]) .hi-pos-head,
+#page-pos:not([data-hisabiq-pos]) .hi-pos-customer-panel,
+#page-pos:not([data-hisabiq-pos]) .hi-pos-quick-heading {
+ display:none!important;
+}
