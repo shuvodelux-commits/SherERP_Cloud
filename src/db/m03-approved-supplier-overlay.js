@@ -26,6 +26,16 @@ const approvedSqlObjects=Object.freeze({
   owner_mvp_supplier_payment_ledger:['table','owner_mvp_supplier_payment_ledger','3b0c6529345b5b20f4c78f42ab2b1b3e755b4484f1823ee2e2cd2d490606bc80']
 });
 const modifiedBaseObject='owner_mvp_cash_close_guard';
+// Optional next reviewed schema: preserve all prior 0010/0011 SQL, change only
+// the first-session physical cash carry guard and make session deletion illegal.
+// Hashes pin *SQLite-stored* CREATE TRIGGER SQL, not the migration file text.
+const firstDayCashObjects=Object.freeze({
+  ...approvedSqlObjects,
+  owner_mvp_cash_open_carry_guard:['trigger','owner_mvp_cash_sessions',
+    'd079efff240d6297f06023decb34704b24a76e2d1a533f4daf0b44045cc5a2e1'],
+  owner_mvp_cash_session_no_delete:['trigger','owner_mvp_cash_sessions',
+    '388b38b7bfe8a6d6ed06a0f283c53d58db956ccdc2fae88f1d3cbe362331014b']
+});
 const isObjectRow=row=>Array.isArray(row)&&row.length===4 &&
   ['table','index','trigger','view'].includes(row[0]) &&
   typeof row[1]==='string'&&row[1].length>0 &&
@@ -53,7 +63,7 @@ async function sha256Sql(sql){
  * All comparisons are against the SAME D1's own baseline receipt, not a
  * SQLite export/reimport (which can normalize CREATE SQL differently).
  */
-export async function matchesApprovedSupplierCashSchemaOverlay(baselineSchema,currentSchema){
+async function matchesExactOverlay(baselineSchema,currentSchema,pins,changedObjects){
   if(typeof baselineSchema!=='string'||typeof currentSchema!=='string'||
      baselineSchema.length>1_000_000||currentSchema.length>1_000_000||
      !baselineSchema||!currentSchema)return false;
@@ -61,24 +71,35 @@ export async function matchesApprovedSupplierCashSchemaOverlay(baselineSchema,cu
     const base=toMap(JSON.parse(baselineSchema));
     const current=toMap(JSON.parse(currentSchema));
     if(!base||!current||!base.has(modifiedBaseObject)||
-       current.size!==base.size+Object.keys(approvedSqlObjects).length-1)return false;
-    // Preserve every original Product/Party/Stock/Owner schema object exactly.
+       changedObjects.some(name=>!base.has(name))||
+       current.size!==base.size+Object.keys(pins).length-changedObjects.length)
+      return false;
     for(const [name,oldRow] of base){
       const newRow=current.get(name);
       if(!newRow)return false;
-      if(name!==modifiedBaseObject&&JSON.stringify(newRow)!==JSON.stringify(oldRow))
+      if(!changedObjects.includes(name)&&JSON.stringify(newRow)!==JSON.stringify(oldRow))
         return false;
     }
-    // No unreviewed tables, triggers, indexes, or schema substitutions.
     for(const [name,newRow] of current){
-      const pin=approvedSqlObjects[name];
-      if(base.has(name)&&name!==modifiedBaseObject)continue;
+      const pin=pins[name];
+      if(base.has(name)&&!changedObjects.includes(name))continue;
       if(!pin||newRow[0]!==pin[0]||newRow[2]!==pin[1]||
          await sha256Sql(newRow[3])!==pin[2])return false;
     }
     return true;
-  }catch{
-    // Corrupt receipt, foreign schema, missing WebCrypto or SQL mismatch.
-    return false;
-  }
+  }catch{return false;}
+}
+
+/** Exact reviewed 0010+0011 SQL, or its tightly pinned first-day 0012 successor.
+ * All 13 original migration receipts remain mandatory and unchanged.
+ */
+export async function matchesApprovedSupplierCashSchemaOverlay(baselineSchema,currentSchema){
+  return await matchesExactOverlay(baselineSchema,currentSchema,
+    approvedSqlObjects,[modifiedBaseObject])||
+    await matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema);
+}
+
+export async function matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema){
+  return matchesExactOverlay(baselineSchema,currentSchema,firstDayCashObjects,
+    [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
 }

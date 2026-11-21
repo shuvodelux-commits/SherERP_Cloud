@@ -8,7 +8,9 @@ import {generateHostedPilotMigrations,composeHostedShopMigrations,
   HOSTED_CONTROL_MIGRATIONS} from '../../scripts/m03-hosted-pilot-migrations.mjs';
 import {verifiedPreboundPilot} from '../../src/auth/m03-hosted-prebound-pilot.js';
 import {readPortP2ShopCheckpoint} from '../../src/db/port-p2-shop-schema.js';
-import {matchesApprovedSupplierCashSchemaOverlay} from '../../src/db/m03-approved-supplier-overlay.js';
+import {matchesApprovedSupplierCashSchemaOverlay,
+  matchesApprovedFirstDayOpeningSchemaOverlay}
+  from '../../src/db/m03-approved-supplier-overlay.js';
 import {beginFirstOwnerGmailLogin} from '../../src/auth/platform-owner-gmail-login.js';
 import {hashOpaqueSessionToken} from '../../src/auth/session-token.js';
 
@@ -102,6 +104,30 @@ test('hosted prebound Shop reuses Control Center Create, Resume, list and verifi
   await shopDb.prepare('DROP TABLE m03_unreviewed_table').run();
   assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
     'recovering to the exact approved schema can restore readiness');
+
+  // The separate first-day physical drawer extension may only change the
+  // exact carried-opening guard and add immutable Cash Session protection.
+  const firstDay=await readFile(
+    'staging-migrations/shop-owner-write/0012_owner_first_day_cash_opening.sql','utf8');
+  await shopDb.batch(unstable_splitSqlQuery(firstDay).map(sql=>shopDb.prepare(sql)));
+  const {receipts:firstDayReceipts,schema:firstDaySchema}=
+    await readPortP2ShopCheckpoint(shopDb);
+  assert.equal(firstDayReceipts.length,13,'baseline receipts cannot be rewritten');
+  assert.equal(await matchesApprovedFirstDayOpeningSchemaOverlay(
+    firstDayReceipts.at(-1).schema,firstDaySchema),true,
+    'only the exact approved first-day guard may extend the migrated Shop');
+  assert.ok(await verifiedPreboundPilot({...env,...conf.vars}),
+    'prebound Owner must stay ready under the exact reviewed first-day overlay');
+  const changed=JSON.parse(firstDaySchema);
+  const guard=changed.find(row=>row[1]==='owner_mvp_cash_open_carry_guard');
+  guard[3]=guard[3].replace('WHEN EXISTS (SELECT 1 FROM owner_mvp_cash_sessions)',
+    'WHEN 1');
+  assert.equal(await matchesApprovedSupplierCashSchemaOverlay(
+    firstDayReceipts.at(-1).schema,JSON.stringify(changed)),false,
+    'weakened opening guard must always fail closed');
+  assert.equal(await matchesApprovedFirstDayOpeningSchemaOverlay(
+    firstDayReceipts.at(-1).schema,firstDayReceipts.at(-1).schema),false,
+    'original schema must not be confused with the reviewed first-day extension');
 
   // Synthetically enroll an Admin only in isolated Workerd D1. The hosted
   // installation uses the REAL reviewed Google+TOTP wizard, not these rows.
