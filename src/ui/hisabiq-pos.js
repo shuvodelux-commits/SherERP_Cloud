@@ -426,6 +426,13 @@
     card.appendChild(note);
     layout.appendChild(card);
 
+    // The original Customer modal lives under the hidden Customer page.
+    // Promote that SAME modal node (and its original listeners/IDs) to body
+    // so POS Quick Add is visible without navigating away or losing the cart.
+    var existingCustomerModal=document.getElementById('custModal');
+    if(existingCustomerModal&&existingCustomerModal.closest('.page')!==page)
+      document.body.appendChild(existingCustomerModal);
+
     renderQuickProducts();updateCustomer();decorateCart();refreshTotals();
     var observer=new MutationObserver(function(){decorateCart();refreshTotals();});
     observer.observe(cart,{childList:true});
