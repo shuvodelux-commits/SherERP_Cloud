@@ -55,7 +55,7 @@ async function assertViewportMetrics(page){
 test('original responsive viewport metrics survive portrait to coarse landscape and back',async()=>{
   const page=await browser.newPage({viewport:{width:375,height:812},isMobile:true,hasTouch:true});
   try{
-    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
     await page.locator('#loginOverlay:not([hidden])').waitFor();
     const portrait=await assertViewportMetrics(page);
     assert.equal(portrait.mobile,true);
@@ -81,7 +81,7 @@ test('original responsive viewport metrics survive portrait to coarse landscape 
 test('original wide short landscape uses desktop layout on a fine-pointer browser',async()=>{
   const page=await browser.newPage({viewport:{width:812,height:375}});
   try{
-    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
     await page.locator('#loginOverlay:not([hidden])').waitFor();
     const state=await assertViewportMetrics(page);
     assert.equal(state.mobile,false,'original predicate requires coarse pointer in wide landscape');
@@ -96,7 +96,7 @@ test('original landscape login stays touch-operable at wide and compact phone si
       const page=await browser.newPage({viewport:{width,height},isMobile:true,hasTouch:true});
       let loginRequests=0;
       try{
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         const state=await assertViewportMetrics(page);
         assert.equal(state.mobile,true);
@@ -154,7 +154,7 @@ test('M01 synthetic Clerk mobile and tablet navigation keeps source role filteri
       });
       try{
         const {calls}=await installM01SyntheticNavigation(page);
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -249,7 +249,7 @@ test('M01 Playwright original POS V2 navigation and workflow parity at phone tab
           permissions:{dashboard:{view:true},pos:{view:true}},
           navItems
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -366,7 +366,7 @@ test('M01 Playwright POS V2 authorized Products add action stays visible',async(
         {key:'products',label:'Products',sidebarGroup:1,sidebarOrder:30}
       ]
     });
-    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
     await page.locator('#loginOverlay:not([hidden])').waitFor();
     await page.locator('#loginMobile').fill('01710000001');
     await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -430,7 +430,7 @@ test('M01 original POS V2 keyboard tabs and no-match search never create a sale'
           permissions:{dashboard:{view:true},pos:{view:true}},
           navItems
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -521,7 +521,7 @@ test('M01 Run 2 authenticated POS V2 stays role-safe through phone landscape tab
       permissions:{dashboard:{view:true},pos:{view:true}},
       navItems
     });
-    await page.goto(server.url,{waitUntil:'domcontentloaded'});
+    await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
     await page.locator('#loginOverlay:not([hidden])').waitFor();
     await page.locator('#loginMobile').fill('01710000001');
     await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -649,7 +649,7 @@ test('M01 canonical six-width POS V2 keeps source keyboard and responsive presen
           permissions:{dashboard:{view:true},pos:{view:true}},
           navItems
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -767,7 +767,7 @@ test('M01 POS V2 Drafts dialog preserves keyboard, empty state and failed-load s
             body:JSON.stringify({success:true,data:[]})
           });
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -871,7 +871,7 @@ test('M01 original POS V2 keyboard product picker creates, edits and clears synt
           permissions:{dashboard:{view:true},pos:{view:true}},
           navItems
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -1016,7 +1016,7 @@ test('M01 original POS V2 pointer reorder keeps product quantity, unit, pricing 
           permissions:{dashboard:{view:true},pos:{view:true}},
           navItems
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -1166,7 +1166,7 @@ test('M01 original POS V2 FIFO lot sum survives manual price override, Qty and r
           permissions:{dashboard:{view:true},pos:{view:true}},
           navItems
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
@@ -1326,7 +1326,7 @@ test('M01 original POS V2 discount and cash tender preview keeps due and change 
           permissions:{dashboard:{view:true},pos:{view:true}},
           navItems
         });
-        await page.goto(server.url,{waitUntil:'domcontentloaded'});
+        await page.goto(server.url+'?posLegacy=1',{waitUntil:'domcontentloaded'});
         await page.locator('#loginOverlay:not([hidden])').waitFor();
         await page.locator('#loginMobile').fill('01710000001');
         await page.locator('#loginPassword').fill('m01-synthetic-only');
