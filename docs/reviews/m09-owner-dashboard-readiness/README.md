@@ -4,7 +4,7 @@
 
 ## Why the reported error occurred
 
-The existing source `legacy/source/dashboard.html::dashLoad()` calls `serverCall('getDashboardStats', authToken)` on opening the Dashboard. In `scripts/build-owner-frontend.mjs`, the original authenticated Owner RPC bridge implements Product, Supplier, Purchase, Cash Session, POS/Return and app-shell endpoints, but **does not implement this complete Dashboard source function**. Its deliberate unrecognized-function fallback returns `Shop business data is not connected yet.`; original `dashLoad()` shows it as a global red toast. In parallel, the source Owner banner says **all business reads/saves unavailable**. Neither text proves the Shop DB is physically disconnected.
+The existing source `legacy/source/dashboard.html::dashLoad()` calls `serverCall('getDashboardStats', authToken)` on opening the Dashboard. In `scripts/build-owner-frontend.mjs`, the original authenticated Owner RPC bridge implements Product, Supplier, Purchase, Cash Session, POS/Return and app-shell endpoints, but **does not implement this complete Dashboard source function**. Its deliberate unrecognized-function fallback returns `This ERP action is not available yet.`; original `dashLoad()` shows it as a global red toast. In parallel, the source Owner banner says **all business reads/saves unavailable**. Neither text proves the Shop DB is physically disconnected.
 
 ### Live Cloudflare read-only evidence (no database IDs, session tokens or personal data recorded)
 
@@ -34,7 +34,7 @@ Both screenshot states use the same frozen source Owner UI and synthetic authent
 
 ### Visual inspection results
 
-1. **Root cause:** red global toast `Shop business data is not connected yet.` is issued by missing `getDashboardStats` RPC adapter, not by failed D1 identity check. Now suppressed *only* for that exact known missing Summary RPC in the compiled **Owner** Dashboard. Other unexpected errors continue to the global toast; the original source and inert public Worker do not change.
+1. **Root cause:** red global toast `This ERP action is not available yet.` is issued by missing `getDashboardStats` RPC adapter, not by failed D1 identity check. Now suppressed *only* for that exact known missing Summary RPC in the compiled **Owner** Dashboard. Other unexpected errors continue to the global toast; the original source and inert public Worker do not change.
 2. **Misleading original banner found on first after screenshot:** yellow banner said `Business data is not connected. ERP screens are visible, but reads and saves are unavailable.` after a current authenticated Owner session. Updated it *only if its exact untouched default is still present* to `Shop D1 is connected for enabled modules. Full Dashboard totals and unported screens remain unavailable. Check each module before saving.` Existing more specific module/status banners are never overridden.
 3. **Truthful status:** a scoped, inline bilingual status explains why the original eleven-field Dashboard totals need new validated Customer, Finance, Sales, Expense and Cash/Bank readers. The cards remain `—`; no misleading zeros or made-up financial chart values.
 4. **Responsive:** Playwright checked 320/390 mobile, 768 tablet, 1024 desktop and 1440 wide desktop. Final screenshots examined at 390 and 1440. No horizontal overflow; inherited HisabIQ control, typography and palette preserved. The inline message is compact at desktop and wraps safely on small devices. No new modal or inactive controls.
@@ -55,3 +55,20 @@ Both screenshot states use the same frozen source Owner UI and synthetic authent
 Implement a separately reviewed *complete*, permission-checked eleven-field Dashboard read from actual Shop D1, including original source date/time/currency, gross Customer/Supplier/Finance account directions, Cash Session Cash Book, Sales/Returns, Expense, Purchases and low-stock counts, with real D1 and cross-tenant denial tests. M03 alone owns Worker binding, authorizing D1 reads and schema; M09 may supply source-faithful data projections but must not publish a financial route on its own. Once the complete endpoint is backed and source-reconciled, the original `dashLoad` success path automatically hides the inline warning; avoid inventing partial totals.
 
 **Rollback:** revert this compile-only UI PR. Neither live databases nor historical Party/finance ledgers require changes. Do not retire legacy screens based on this UI fix.
+
+
+## 21 November — compiled Owner Dashboard fallback compatibility / CI fix
+
+The generic Owner frontend unsupported-RPC fallback uses
+`This ERP action is not available yet.`, but the Dashboard overlay and
+its contract still matched the superseded message. As a result, the
+real compiled Dashboard did not show its contextual readiness note and
+the baseline M09 contract failed in unrelated pull requests. The minimal
+correction matches the **current** generic rejection only inside the
+existing `getDashboardStats` catch branch. Other unsupported RPCs still
+reject, unrecognized errors remain visible, source files and all
+financial data remain unchanged. Playwright before/after screenshots at
+390px/1440px show the scoped status replacing the misleading generic
+banner, without changing the original Dashboard layout. The exact
+`/ui-refine-skill` launcher was unavailable; real-browser visual
+comparison and source-aligned functional checks were used instead.

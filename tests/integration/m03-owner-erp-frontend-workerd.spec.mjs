@@ -14,7 +14,8 @@ test('Owner frontend is a separate compiled copy with no staff password login or
     const result=await buildOwnerFrontend({outputDir});
     const html=await readFile(result.indexPath,'utf8');
     assert.match(html,/id="owner-data-notice"/);
-    assert.match(html,/Business data is not connected/);
+    assert.match(html,/Shop storage verified at sign-in/);
+    assert.doesNotMatch(html,/Business data is not connected/);
     assert.doesNotMatch(html,/id="loginMobile"|id="loginPassword"/);
     assert.match(html,/\/api\/owner\/auth\/session/);
     // An unsupported Owner RPC must reject without falsely diagnosing the

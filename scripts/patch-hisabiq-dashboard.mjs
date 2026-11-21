@@ -53,18 +53,8 @@ export function patchHisabiqDashboard(html,template){
   const failed=".catch(function (err) { showToast(err.message, 'error'); });";
   const handled=`.catch(function (err) {
       var notice=document.getElementById('hdb-data-readiness');
-      var ownerNotice=document.getElementById('owner-data-notice');
-      if(notice && ownerNotice &&
-          err && err.message === 'Shop business data is not connected yet.') {
+      if(notice && err?.code === 'OWNER_RPC_UNAVAILABLE') {
         notice.hidden = false;
-        // The original all-data-disconnected banner is not accurate after
-        // validated Owner login and current Shop D1 identity. Only replace
-        // the exact untouched default, never a module-specific warning.
-        if(ownerNotice.textContent.trim() ===
-          'Business data is not connected. ERP screens are visible, but reads and saves are unavailable.') {
-          ownerNotice.textContent =
-            'Shop D1 is connected for enabled modules. Full Dashboard totals and unported screens remain unavailable. Check each module before saving.';
-        }
         return;
       }
       if(notice)notice.hidden = true;
