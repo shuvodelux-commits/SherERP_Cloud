@@ -257,17 +257,16 @@ test('existing core refresh rejects stale core evidence, forbidden money feature
 
 // M11 / #690: never publish raw protected Build values while explaining why
 // a merged Owner frontend has not been deployed.
-test('M11 RED: pin mismatch has an actionable code without exposing the protected values',()=>{
+test('M11: pin mismatch has an actionable code without exposing the protected values',()=>{
  const env={...refreshApprovedEnv(),
-   WORKERS_CI_COMMIT_SHA:'b'.repeat(40),
-   SHERERP_OWNER_GOOGLE_CLIENT_ID:'SECRET_CANARY.apps.googleusercontent.com'};
+   WORKERS_CI_COMMIT_SHA:'b'.repeat(40)};
  assert.throws(()=>buildShopUserDeployment(env),error=>
    error.code==='RELEASE_COMMIT_PIN_MISMATCH' &&
-   !error.message.includes('SECRET_CANARY') &&
+   !error.message.includes(env.SHERERP_OWNER_GOOGLE_CLIENT_ID) &&
    !error.message.includes(env.WORKERS_CI_COMMIT_SHA));
 });
 
-test('M11 RED: blocked Builds report distinguishes incomplete commit pin and malformed readiness safely',()=>{
+test('M11: blocked Builds report distinguishes incomplete commit pin and malformed readiness safely',()=>{
  const env=refreshApprovedEnv();
  for(const [patch,code] of [
    [{WORKERS_CI_COMMIT_SHA:undefined},'RELEASE_COMMIT_PIN_INVALID'],
@@ -278,7 +277,7 @@ test('M11 RED: blocked Builds report distinguishes incomplete commit pin and mal
    error.code===code && !error.message.includes('TOP_SECRET_CANARY'));
 });
 
-test('M11 RED: bad account and manifest are reported without leaking business identity',()=>{
+test('M11: bad account and manifest are reported without leaking business identity',()=>{
  const env=refreshApprovedEnv();
  for(const [patch,code] of [
    [{CLOUDFLARE_ACCOUNT_ID:'f'.repeat(32)},'RELEASE_CLOUDFLARE_ACCOUNT_MISMATCH'],
