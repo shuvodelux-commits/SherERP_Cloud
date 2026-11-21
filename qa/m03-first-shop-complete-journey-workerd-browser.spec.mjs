@@ -208,25 +208,18 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
       posState.cart=[line];
       posRenderCart_();
     });
-    // The original mobile POS uses Customer/Payment tabs. The approved
-    // HisabIQ Owner layout keeps those old tabs hidden and exposes the
-    // original inputs directly; exercise whichever navigation is visible,
-    // never force-click a hidden legacy tab or bypass the real D1 writer.
-    if(view.phone){
-      const customerTab=page.locator('#page-pos [data-pos-v2-tab="customer"]');
-      if(await customerTab.isVisible())await customerTab.click();
-    }
-    assert.equal(await page.locator('#posCustomerName').isVisible(),true);
-    assert.equal(await page.locator('#posCustomerPhone').isVisible(),true);
-    await page.locator('#posCustomerName').fill('Walk-in Tester');
-    await page.locator('#posCustomerPhone').fill('01712345678');
-    if(view.phone){
-      const paymentTab=page.locator('#page-pos [data-pos-v2-tab="payment"]');
-      if(await paymentTab.isVisible())await paymentTab.click();
-    }
-    assert.equal(await page.locator('#posAmountReceived').isVisible(),true);
-    await page.locator('#posAmountReceived').fill('150');
-    await page.locator('#posCompleteBtn').click();
+    // The normal Owner POS now displays HisabIQ Customer Details/payment
+    // proxies without moving or replacing the original POS handlers. Source
+    // controls remain authoritative in the DOM, though visually hidden.
+    // The separate posv2 internal route still uses native fields/tabs.
+    await page.locator('#hi-pos-details-toggle').click();
+    await page.locator('[data-hi-native-field="posCustomerName"]').fill('Walk-in Tester');
+    await page.locator('[data-hi-native-field="posCustomerPhone"]').fill('01712345678');
+    assert.equal(await page.locator('#posCustomerName').inputValue(),'Walk-in Tester');
+    assert.equal(await page.locator('#posCustomerPhone').inputValue(),'01712345678');
+    await page.locator('#hi-pos-payment-amount').fill('150');
+    assert.equal(await page.locator('#posAmountReceived').inputValue(),'150');
+    await page.locator('#hi-pos-proxy-complete').click();
     await page.locator('#confirmActionModal:not([hidden])').waitFor();
     await page.locator('#confirmActionConfirm').click();
     await page.waitForFunction(()=>posState._lastInvoice?.invoiceId==='INV-000001');
