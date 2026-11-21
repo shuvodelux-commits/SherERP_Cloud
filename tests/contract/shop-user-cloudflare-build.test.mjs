@@ -286,3 +286,22 @@ test('M11: bad account and manifest are reported without leaking business identi
  ])assert.throws(()=>buildShopUserDeployment({...env,...patch}),error=>
    error.code===code&&!error.message.includes('SENSITIVE_CANARY'));
 });
+
+// M11 / #884: On an already core-enabled Shop, incomplete protected refresh
+// variables must never silently produce the legacy login-only Worker profile.
+test('M11: partial core refresh approval cannot silently disable live Purchase and Cash POS',()=>{
+ const full=refreshApprovedEnv();
+ for(const patch of [
+   {SHERERP_FIRST_SHOP_CORE_RELEASE:undefined},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE:undefined,SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:undefined},
+   {SHERERP_FIRST_SHOP_CORE_RELEASE:undefined,SHERERP_FIRST_SHOP_CORE_READINESS_JSON:undefined}
+ ]){
+   assert.throws(()=>buildShopUserDeployment({...full,...patch}),error=>
+     error.code==='RELEASE_MODE_REQUIRED_FOR_CORE' &&
+     !error.message.includes(full.SHERERP_SHOP_DB_ID) &&
+     !error.message.includes(full.SHERERP_OWNER_GOOGLE_CLIENT_ID));
+ }
+ // An intentional login-only, initial provisioning profile remains supported
+ // only with NO core-refresh metadata in the environment.
+ assert.equal(buildShopUserDeployment(buildEnv()).vars.OWNER_MVP_PURCHASE_ENABLED,'false');
+});
