@@ -185,3 +185,15 @@ test('inline Add Product combobox adds a new product through native POS handlers
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+test('pointer drag cart reorder persists in the original posState cart',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    const errors=await setup(page);
+    const handles=page.locator('#posCartList .hi-pos-grip');
+    await handles.first().dragTo(handles.nth(1),{force:true});
+    assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),
+      ['PRD-000002','PRD-000001','PRD-000003']);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
