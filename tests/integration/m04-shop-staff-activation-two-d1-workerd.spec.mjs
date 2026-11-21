@@ -178,3 +178,33 @@ test('a Shop Administrator can safely reissue an expired staff code without dupl
     selectedShopId:A.shopId,managerToken:a.adminToken,userId:original.userId
   }),{issued:false},'active staff must not be reset by an invitation reissue');
 });
+
+
+test('invitation expiring during password hashing is rejected at SQL commit',async t=>{
+  const {a}=await fixture(t);
+  const issued=await issueStaffInviteForShop(a.scope,request(a.scope,a.adminToken));
+  assert.equal(issued.issued,true);
+  let intercepted=false;
+  const raced={...a.scope,shopDb:{
+    prepare:(...args)=>a.scope.shopDb.prepare(...args),
+    batch:async statements=>{
+      intercepted=true;
+      // An untrusted old preflight timestamp must not authorize this code.
+      await a.scope.shopDb.prepare(
+        'UPDATE auth_staff_activation_tickets SET expires_at_ms=? WHERE user_id=?'
+      ).bind(Date.now()-1,issued.userId).run();
+      return a.scope.shopDb.batch(statements);
+    }
+  }};
+  assert.deepEqual(await activateInvitedStaffForShop(raced,
+    activate(A,issued.activationToken)),{activated:false});
+  assert.equal(intercepted,true,'the real D1 write boundary was exercised');
+  const ticket=await a.scope.shopDb.prepare(
+    'SELECT consumed_at_ms FROM auth_staff_activation_tickets WHERE user_id=?'
+  ).bind(issued.userId).first();
+  assert.equal(ticket.consumed_at_ms,null,'expired code must remain unconsumed');
+  const user=await a.scope.shopDb.prepare(
+    'SELECT status FROM auth_users WHERE user_id=?'
+  ).bind(issued.userId).first();
+  assert.equal(user.status,'Inactive','expired activation cannot enable staff');
+});
