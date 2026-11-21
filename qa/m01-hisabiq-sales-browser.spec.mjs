@@ -134,6 +134,7 @@ test('Sales instant search, native filters, reset, sort and column choice preser
     assert.match(first,/INV-000003/);
     await page.locator('#h-sales-columns-button').click();
     assert.equal(await page.locator('#h-sales-column-menu').isVisible(),true);
+    assert.equal(await page.locator('#h-sales-column-menu [role="menuitemcheckbox"]').first().evaluate(n=>n===document.activeElement),true);
     const phone=page.locator('#h-sales-column-menu label').filter({hasText:'Phone'}).locator('input');
     await phone.check();
     assert.equal(await page.locator('#smTableBody tr:first-child td[data-h-sales-col="phone"]').isVisible(),true);
@@ -205,5 +206,25 @@ test('HisabIQ mobile Sales rows expose optional details only on request',async()
     assert.equal(await first.locator('[data-h-sales-col="paid"]').isVisible(),false);
     assert.equal(await first.locator('[data-act="menu"]').count(),1,
       'original action menu survives a disclosure toggle');
+  }finally{await page.close();}
+});
+
+test('Sales navigation uses only authorized native routes in reference order',async()=>{
+  if(baseline)return;
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    await setup(page);
+    await page.locator('.h-sales-tabs[data-ready="true"]').waitFor({state:'visible'});
+    const routes=await page.locator('.h-sales-tabs [data-h-sales-route]')
+      .evaluateAll(nodes=>nodes.map(node=>node.dataset.hSalesRoute));
+    const allowed=['sales','returns','returnHistory','draftSales'];
+    assert.deepEqual(routes,allowed,
+      'native authorized Sales routes follow the reference tab ordering');
+    assert.equal(await page.locator('.h-sales-tab[aria-selected="true"]').count(),1);
+    assert.equal(await page.locator('.h-sales-tab-count').innerText(),'3');
+    await page.locator('#h-sales-columns-button').click();
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#h-sales-column-menu').isVisible(),false);
+    assert.equal(await page.locator('#h-sales-columns-button').evaluate(n=>n===document.activeElement),true);
   }finally{await page.close();}
 });
