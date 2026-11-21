@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {createTestHarness,unstable_splitSqlQuery} from 'wrangler';
 import {createOfflinePasswordCredential} from '../../src/auth/d1-auth-core.js';
 import {loginStaffForShop} from '../../src/auth/m04-shop-staff-session-scope.js';
-import {issueStaffInviteForShop,activateInvitedStaffForShop}
+import {issueStaffInviteForShop,reissueStaffInviteForShop,activateInvitedStaffForShop}
   from '../../src/auth/m04-shop-staff-activation.js';
 
 const A={
@@ -146,4 +146,35 @@ test('simultaneous redemption activates one staff account exactly once',async t=
   ).bind(issued.userId).first();
   assert.equal(row.status,'Active');
   assert.equal(row.credential_version,2,'credential must increment exactly once');
+});
+
+
+test('a Shop Administrator can safely reissue an expired staff code without duplicating users',async t=>{
+  const {a,b}=await fixture(t);
+  const original=await issueStaffInviteForShop(a.scope,request(a.scope,a.adminToken));
+  assert.equal(original.issued,true);
+  const before=(await a.scope.shopDb.prepare('SELECT count(*) AS n FROM auth_users').first()).n;
+  // Expire first code and prove a different Shop's manager cannot regenerate.
+  await a.scope.shopDb.prepare(
+    'UPDATE auth_staff_activation_tickets SET expires_at_ms=issued_at_ms+1 WHERE user_id=?'
+  ).bind(original.userId).run();
+  assert.deepEqual(await reissueStaffInviteForShop(a.scope,{
+    selectedShopId:A.shopId,managerToken:b.adminToken,userId:original.userId
+  }),{issued:false});
+  const rotated=await reissueStaffInviteForShop(a.scope,{
+    selectedShopId:A.shopId,managerToken:a.adminToken,userId:original.userId
+  });
+  assert.equal(rotated.issued,true);
+  assert.equal(rotated.userId,original.userId);
+  assert.equal(rotated.shopId,A.shopId);
+  assert.notEqual(rotated.activationToken,original.activationToken);
+  assert.equal((await a.scope.shopDb.prepare('SELECT count(*) AS n FROM auth_users').first()).n,
+    before,'reissue must not create duplicate staff accounts');
+  assert.deepEqual(await activateInvitedStaffForShop(a.scope,activate(A,original.activationToken)),
+    {activated:false},'old token is invalidated by reissue');
+  assert.equal((await activateInvitedStaffForShop(a.scope,
+    activate(A,rotated.activationToken))).activated,true);
+  assert.deepEqual(await reissueStaffInviteForShop(a.scope,{
+    selectedShopId:A.shopId,managerToken:a.adminToken,userId:original.userId
+  }),{issued:false},'active staff must not be reset by an invitation reissue');
 });
