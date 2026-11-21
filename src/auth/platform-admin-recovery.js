@@ -50,6 +50,15 @@ export async function issueAdminRecoveryCodes(env,sessionToken,code){
     if(step===null)return null;
     const hash=await hashOpaqueSessionToken(sessionToken);
     const {codes,hashes}=await freshCodes();
+    // D1 batch is atomic, but a zero-row authorization write does not roll
+    // it back. Fence each dependent mutation inside that same SQL batch.
+    const currentRecoveryGeneration=`EXISTS(
+      SELECT 1 FROM platform_admin_recovery_generation g
+      JOIN platform_admin_auth a ON a.singleton=g.singleton
+        AND a.enabled=1 AND a.factor_version=g.factor_version
+      WHERE g.singleton=1 AND g.factor_version=?
+        AND EXISTS(SELECT 1 ${CURRENT_PLATFORM_ADMIN_FROM})
+    )`;
     const statements=[
       db.prepare(`INSERT INTO platform_admin_recovery_generation
         (singleton,generation,factor_version,updated_at_ms)
@@ -61,12 +70,16 @@ export async function issueAdminRecoveryCodes(env,sessionToken,code){
         ON CONFLICT(singleton) DO UPDATE SET
           generation=excluded.generation,factor_version=excluded.factor_version,
           updated_at_ms=excluded.updated_at_ms`).bind(factor.factorVersion,hash),
-      db.prepare('DELETE FROM platform_admin_recovery_codes WHERE singleton=1'),
+      db.prepare(`DELETE FROM platform_admin_recovery_codes
+        WHERE singleton=1 AND ${currentRecoveryGeneration}`)
+        .bind(factor.factorVersion,hash),
       ...hashes.map(codeHash=>db.prepare(`INSERT INTO platform_admin_recovery_codes
         (code_hash,singleton,generation,factor_version,issued_at_ms)
         SELECT ?,1,generation,factor_version,${NOW}
-        FROM platform_admin_recovery_generation WHERE singleton=1 AND factor_version=?`)
-        .bind(codeHash,factor.factorVersion))
+        FROM platform_admin_recovery_generation
+        WHERE singleton=1 AND factor_version=?
+          AND ${currentRecoveryGeneration}`)
+        .bind(codeHash,factor.factorVersion,factor.factorVersion,hash))
     ];
     const results=await db.batch(statements);
     if(results[0]?.meta?.changes!==1||
