@@ -47,7 +47,12 @@ export async function buildFrontend({sourceDir, outputDir}) {
     : '';
   const shellCss=await readFile(new URL('../src/ui/hisabiq-shell.css',import.meta.url),'utf8');
   const shellJs=await readFile(new URL('../src/ui/hisabiq-shell.js',import.meta.url),'utf8');
-  const html=patchHisabiqShell(patchHisabiqDashboard(original,dashboardTemplate),shellCss,shellJs);
+  const assembled=patchHisabiqDashboard(original,dashboardTemplate);
+  // buildFrontend also assembles tiny non-ERP include fixtures in tests.
+  // Only the real ERP document has the complete shell; preserve fixture output byte-for-byte.
+  const html=original.includes('id="app"')
+    ? patchHisabiqShell(assembled,shellCss,shellJs)
+    : assembled;
   await mkdir(dest,{recursive:true});
   const outputPath=join(dest,'index.html');
   await writeFile(outputPath,html,'utf8');
