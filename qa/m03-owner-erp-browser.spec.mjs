@@ -72,6 +72,19 @@ before(async()=>{
         response.end(JSON.stringify({success:true,data}));
         return;
       }
+      if(path==='/api/owner/cash-session'&&request.method==='GET'){
+        response.writeHead(200,{'Content-Type':'application/json'});
+        response.end(JSON.stringify({success:true,data:cashOpen?{
+          sessionId:'CS-000001',status:'Open',openingCash:0,cashIn:0,cashOut:0,expectedCash:0
+        }:null}));
+        return;
+      }
+      if(path==='/api/owner/pos/bootstrap'&&request.method==='GET'){
+        response.writeHead(200,{'Content-Type':'application/json'});
+        response.end(JSON.stringify({success:true,data:{products:[],customers:[],
+          activeSession:cashOpen?{'Session ID':'CS-000001',Status:'Open'}:null}}));
+        return;
+      }
       if(path==='/api/owner/cash-session/next-opening'&&request.method==='GET'){
         // The new private read-only physical cash count contract is required
         // before Start Day. This synthetic Owner fixture has never closed a day.
@@ -228,7 +241,7 @@ test('Owner Supplier screen lists and saves through the private API without publ
   }finally{await page.close();}
 });
 
-test('Original Purchases page offers Start Day and sends one real Owner Purchase operation without public RPC',async()=>{
+test('New Purchase uses the shared Cash Session dialog and sends one Owner Purchase operation without public RPC',async()=>{
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
@@ -237,10 +250,12 @@ test('Original Purchases page offers Start Day and sends one real Owner Purchase
     await page.goto(url+'/',{waitUntil:'domcontentloaded'});
     await page.waitForURL(url+'/app');
     await page.locator('#navList .nav-item[aria-label="Purchases"]').click();
-    await page.locator('#owner-purchase-day-bar').waitFor({timeout:10000});
-    assert.match(await page.locator('#owner-purchase-day-state').textContent(),/Start Day/);
-    await page.locator('#owner-purchase-start-day').click();
-    await page.waitForFunction(()=>document.getElementById('owner-purchase-day-state')?.textContent?.includes('Day Open'));
+    assert.equal(await page.locator('#owner-purchase-day-bar').count(),0);
+    await page.locator('#cashSessionToggleBtn').click();
+    await page.locator('#posStartSessionBtn').click();
+    await page.locator('#confirmActionConfirm').click();
+    await page.waitForFunction(()=>document.getElementById('cashSessionTopbarStatus')?.textContent==='Open');
+    await page.locator('#posSessionModal .modal-close').click();
     assert.ok(nextOpeningReads>=1,'read-only next opening must be verified before Start Day');
     const saved=await page.evaluate(async()=>{
       return serverCall('createPurchase','',{

@@ -34,7 +34,7 @@ export function patchOwnerApp(html){
   const app='<div id="app" style="visibility:hidden;">';
   const main='<div class="main">\n      <header class="topbar">';
   if(html.split(app).length!==2||html.split(main).length!==2)throw new Error('Original ERP app shell boundary changed');
-  html=html.replace(overlay,ownerLogin).replace(main,'<div class="main">\n      '+ownerNotice+'\n      '+ownerSupportActivity+'\n      <header class="topbar">');
+  html=html.replace(app,'<div id="app" style="visibility:hidden;" data-hisabiq-design-system>').replace(overlay,ownerLogin).replace(main,'<div class="main">\n      '+ownerNotice+'\n      '+ownerSupportActivity+'\n      <header class="topbar">');
 
   const start='  function bootstrapSession_() {';
   const next='\n  function wireLoginForm_() {';
@@ -360,49 +360,31 @@ export function patchOwnerApp(html){
       .then(function (result) {ownerCashPendingAction=null;return result;});
   }
 
-  function ownerPurchaseDayBar_(session) {
-    var page=document.getElementById('page-purchase');
-    if(!page)return;
-    var bar=document.getElementById('owner-purchase-day-bar');
-    if(!bar) {
-      bar=document.createElement('div');
-      bar.id='owner-purchase-day-bar';
-      bar.setAttribute('role','status');
-      bar.style.cssText='padding:10px 12px;margin:8px 0 12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap';
-      var label=document.createElement('span');
-      label.id='owner-purchase-day-state';
-      var start=document.createElement('button');
-      start.type='button';
-      start.className='btn btn-primary';
-      start.id='owner-purchase-start-day';
-      start.textContent='Start Day (0 opening cash)';
-      start.addEventListener('click',function(){
-        start.disabled=true;
-        ownerNextOpeningCash_().then(function(openingCash){
-          return ownerCashAction_('startCashSession',openingCash,'MVP shop daily opening');
-        }).then(function(r){ownerPurchaseDayBar_({sessionId:r.sessionId,status:'Open'});})
-          .catch(function(e){showToast(e.message,'error');})
-          .finally(function(){start.disabled=false;});
-      });
-      bar.append(label,start);
-      page.prepend(bar);
-    }
-    var active=session?.status==='Open';
-    document.getElementById('owner-purchase-day-state').textContent=active
-      ?'Day Open · Original Cash Session records Sale, Return and counted daily cash.'
-      :'Start Day before purchasing. Unpaid purchases only; payments, returns and Tiles are not connected.';
-    document.getElementById('owner-purchase-start-day').hidden=active;
-    if(!active){
-      // Suggest a verified opening before posting, but re-read on click.
-      ownerNextOpeningCash_().then(function(value){
-        var b=document.getElementById('owner-purchase-start-day');
-        if(b&&!b.hidden)b.textContent='Start Day (opening '+value.toFixed(2)+')';
-      }).catch(function(){
-        var b=document.getElementById('owner-purchase-start-day');
-        if(b&&!b.hidden)b.textContent='Start Day (verify previous counted cash)';
-      });
-    }
+  function closeOwnerProductName_() {
+    closeModal('prodManageListModal');
+    document.getElementById(prodManageListMode_ === 'category'
+      ? 'prodManageCategoriesBtn' : 'prodManageUnitsBtn').focus();
   }
+
+  document.getElementById('prodManageListModal').addEventListener('keydown', function (event) {
+    if (event.isComposing) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeOwnerProductName_();
+    } else if (event.key === 'Enter' && event.target.id === 'prodManageListNewName') {
+      event.preventDefault();
+      document.getElementById('prodManageListAddBtn').click();
+    } else if (event.key === 'Tab') {
+      var controls = Array.from(event.currentTarget.querySelectorAll('button,input'))
+        .filter(function (el) { return !el.disabled && el.getClientRects().length > 0; });
+      var from = event.shiftKey ? controls.at(0) : controls.at(-1);
+      var to = event.shiftKey ? controls.at(-1) : controls.at(0);
+      if (event.target === from && to) {
+        event.preventDefault();
+        to.focus();
+      }
+    }
+  });
 
   // Source POS still calls completeSale(authToken,payload). Only this
   // private Owner adapter can submit the narrowly authorized real cash MVP.
@@ -592,13 +574,19 @@ export function patchOwnerApp(html){
                   'Purchase Price':row.savedPurchasePrice,'Current Stock':operational ? row.stock : row.stockAtBackup};
               });
               setOwnerProductsMode_(operational);
-              if (operational) return {products:products,units:result.units,categories:result.categories};
+              if (operational) {
+                function names(master, field) {
+                  return Array.from(new Set(master.map(function (row) { return row.name; })
+                    .concat(products.map(function (row) { return row[field]; })).filter(Boolean)))
+                    .sort(function (a, b) { return a.localeCompare(b); })
+                    .map(function (name) { return {name:name}; });
+                }
+                return {products:products,units:names(result.units,'Unit'),
+                  categories:names(result.categories,'Category')};
+              }
               return {products:products,units:[],categories:Array.from(new Set(products.map(function (row) {
                 return row.Category;
               }).filter(Boolean))).map(function (name) { return {name:name}; })};
-            }
-            if (fnName === 'getPurchaseBootstrap' && result?.success===true) {
-              ownerPurchaseDayBar_(result.data.cashSession);
             }
             return result && result.data !== undefined ? result.data : result;
           });
@@ -609,7 +597,50 @@ export function patchOwnerApp(html){
   html=html.slice(0,e)+rpc+html.slice(f);
   html=html.replace('</head>', '<style>[data-owner-clean-products] #m01ProductUnitPanel {display:none!important}</style></head>');
   html=html.replace('</head>',ownerSupportCss+'</head>');
+  const productNameClose=`onclick="closeModal('prodManageListModal')"`;
+  if(html.split(productNameClose).length!==3)throw new Error('Original Product name dialog boundary changed');
+  html=html.replaceAll(productNameClose,'onclick="closeOwnerProductName_()"');
+  html=html.replace('class="modal-close" onclick="closeOwnerProductName_()"',
+    'class="modal-close" aria-label="Close name dialog" onclick="closeOwnerProductName_()"');
   const screenReplacements=[
+    ["      filter.innerHTML += '<option value=\"' + escapeHtml(c.name) + '\">' + escapeHtml(c.name) + '</option>';", "      filter.add(new Option(c.name, c.name));"],
+    ["      catSel.innerHTML += '<option value=\"' + escapeHtml(c.name) + '\">' + escapeHtml(c.name) + '</option>';", "      catSel.add(new Option(c.name, c.name));"],
+    ["      unitSel.innerHTML += '<option value=\"' + escapeHtml(u.name) + '\">' + escapeHtml(u.name) + '</option>';", "      unitSel.add(new Option(u.name, u.name));"],
+    ['if (!canView || !authToken) return Promise.resolve(null);',
+      'if (!canView) return Promise.resolve(null);'],
+    ['id="page-purchase"', 'id="page-purchase" data-hisabiq-design-system'],
+    ['id="prodModal"', 'id="prodModal" data-hisabiq-design-system'],
+    ['id="prodManageListModal"', 'id="prodManageListModal" data-hisabiq-design-system role="dialog" aria-modal="true" aria-labelledby="prodManageListTitle"'],
+    ['>যোগ বা বাদ দিন</span></div>', '>পণ্যের জন্য নাম লিখুন</span></div>'],
+    ['title="Add or remove categories">Manage', 'title="Enter a new category">New'],
+    ['title="Add or remove units">Manage', 'title="Enter a new unit">New'],
+    ['id="prodManageListNewName" type="text" placeholder="New name"',
+      'id="prodManageListNewName" type="text" aria-label="New name" placeholder="New name"'],
+    ["    document.getElementById('prodManageListTitle').textContent = mode === 'category' ? 'Manage Categories' : 'Manage Units';", `
+    var isCategory = mode === 'category';
+    document.getElementById('prodManageListTitle').textContent = isCategory ? 'New category' : 'New unit';
+    var nameField = document.getElementById('prodManageListNewName');
+    nameField.maxLength = isCategory ? 120 : 80;
+    nameField.placeholder = isCategory ? 'Category name' : 'Unit name';
+    nameField.setAttribute('aria-label', isCategory ? 'Category name' : 'Unit name');
+    document.getElementById('prodManageListAddBtn').textContent = 'Use name';`],
+    ["    prodRenderManageList_();\n    openModal('prodManageListModal');", `    document.getElementById('prodManageListBody').closest('table').style.display = 'none';
+    document.getElementById('prodManageListEmpty').textContent = 'The name is saved with this product.';
+    document.getElementById('prodManageListEmpty').hidden = false;
+    openModal('prodManageListModal');
+    nameField.focus();`],
+    ["    if (!name) return;\n    var fn = prodManageListMode_ === 'category' ? 'addProductCategory' : 'addProductUnit';", `    if (!name) return;
+    if (ownerProductsEnabled) {
+      var select = document.getElementById(prodManageListMode_ === 'category' ? 'prodCategory' : 'prodUnit');
+      if (!Array.from(select.options).some(function (option) { return option.value === name; }))
+        select.add(new Option(name, name));
+      select.value = name;
+      select.dispatchEvent(new Event('change', {bubbles:true}));
+      closeOwnerProductName_();
+      return;
+    }
+    var fn = prodManageListMode_ === 'category' ? 'addProductCategory' : 'addProductUnit';`],
+
     ['id="supDetailDue"></div></div>\n        <div class="mobile-payment-workspace" style="',
       'id="supDetailDue"></div></div>\n        <fieldset id="owner-supplier-cash-pay" disabled aria-label="Cash supplier payment" class="mobile-payment-workspace" style="border:0;padding:0;margin:0;'],
     ['id="supPayError"></div>\n        </div>', 'id="supPayError"></div>\n        </fieldset>'],
@@ -626,11 +657,7 @@ export function patchOwnerApp(html){
       (data.hasMore ? ' Showing the latest 50 ledger entries.' : '');
     supState.ledger = data.ledger;`],
     ["    prodState.addSource = source || 'products';", `    prodState.addSource = source || 'products';
-    if (ownerProductsEnabled) {
-      ['prodType','prodManageCategoriesBtn','prodManageUnitsBtn'].forEach(function (id) {
-        document.getElementById(id).disabled = true;
-      });
-    }`],
+    if (ownerProductsEnabled) document.getElementById('prodType').disabled = true;`],
     ["    document.getElementById('prodStock').disabled = false;\n    document.getElementById('prodFormError').style.display = 'none';",
       "    document.getElementById('prodStock').disabled = ownerProductsEnabled;\n    document.getElementById('prodFormError').style.display = 'none';"],
     ['id="prodAddBtn"', 'id="prodAddBtn" hidden style="display:none!important"'],
@@ -688,6 +715,8 @@ export async function buildOwnerFrontend({sourceDir='legacy/source',outputDir='d
   html=await installOwnerHisabiqSettings(html);
   html=await installOwnerHisabiqUnitEditor(html);
   html=await installOwnerHisabiqPos(html);
+  const surfaceCss=await readFile(new URL('../src/ui/hisabiq/owner-workflow-consistency.css',import.meta.url),'utf8');
+  html=html.replace('</head>', '<style id="owner-workflow-consistency">'+surfaceCss+'</style></head>');
   const indexPath=join(output,'owner-erp.html');
   await writeFile(indexPath,html,'utf8');
   await copyFile('frontend/owner-auth/index.html',built.outputPath);
