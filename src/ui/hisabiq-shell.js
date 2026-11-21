@@ -323,10 +323,17 @@
     document.body.style.overflow = 'hidden';
     app.inert = true;
     drawer.hidden = false;
-    window.requestAnimationFrame(function () { drawer.classList.add('is-open'); });
     document.getElementById('menuToggle')?.setAttribute('aria-expanded','true');
     document.addEventListener('keydown', onDrawerKeydown, true);
-    document.getElementById('h-shell-drawer-close')?.focus({preventScroll:true});
+    // Only focus after the drawer is display:block. Focusing the Close
+    // button while its ancestor is display:none is ignored by Chromium,
+    // leaving keyboard focus outside the aria-modal navigation.
+    window.requestAnimationFrame(function () {
+      if (!drawer || drawer.hidden ||
+          document.getElementById('menuToggle')?.getAttribute('aria-expanded')!=='true') return;
+      drawer.classList.add('is-open');
+      document.getElementById('h-shell-drawer-close')?.focus({preventScroll:true});
+    });
   }
   function onDrawerKeydown(event) {
     if (event.key === 'Escape') {
