@@ -104,6 +104,25 @@
   function refreshTotals(){
     if(!feedback)return;
     var total=Number((sel('#posGrandTotal')||{}).textContent?.replace(/[^0-9.-]/g,''))||0;
+    var displaySubtotal=sel('#hi-pos-subtotal');
+    var displayLabel=sel('#hi-pos-subtotal-label');
+    var displayGrand=sel('#hi-pos-grand');
+    var nativeMethod=sel('#posPaymentMethod');
+    var proxyMethod=sel('#hi-pos-payment-method');
+    var proxyAmount=sel('#hi-pos-payment-amount');
+    if(displaySubtotal)displaySubtotal.textContent=money(sourceSubTotal());
+    if(displayLabel)displayLabel.textContent='Subtotal · '+(posState?.cart?.length||0)+' items';
+    if(displayGrand)displayGrand.textContent=money(total);
+    if(proxyMethod&&nativeMethod&&document.activeElement!==proxyMethod)
+      proxyMethod.value=nativeMethod.value;
+    if(proxyAmount&&amount&&document.activeElement!==proxyAmount)
+      proxyAmount.value=amount.value;
+    var account=sel('#hi-pos-payment-account');
+    if(account&&nativeMethod)
+      account.textContent=nativeMethod.value==='Cash'?'Cash counter':
+        nativeMethod.value==='Bank'?'Bank account':'Mobile banking account';
+    if(canSplit()&&split&&split.childElementCount!==(posState.paymentRows||[]).length)
+      renderPaymentRows();
     var paid=0;
     if(canSplit()){
       paid=(posState.paymentRows||[]).reduce(function(v,row){return v+(Number(row.amount)||0);},0);
@@ -124,7 +143,11 @@
       var rows=sel('#posMultiPaymentRows');
       var first=rows&&rows.querySelector('[data-payment-field="amount"]');
       if(first){first.value=String(value);nativeChange(first);}
-    }else if(amount){amount.value=String(value);nativeChange(amount);}
+    }else if(amount){
+      amount.value=String(value);nativeChange(amount);
+      var visible=sel('#hi-pos-payment-amount');
+      if(visible)visible.value=String(value);
+    }
     refreshTotals();
   }
   function computeDiscount(){
