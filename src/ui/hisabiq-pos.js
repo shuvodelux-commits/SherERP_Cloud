@@ -38,7 +38,7 @@
     var id=chosen&&chosen.dataset.customerId;
     var guest=!id;
     if(pickerLabel)pickerLabel.textContent=guest?'Walk-in customer':chosen.value||'Selected customer';
-    if(pickerMeta)pickerMeta.textContent=guest?'Cash sale · customer optional':
+    if(pickerMeta)pickerMeta.textContent=guest?'Guest checkout pending D1':
       (sel('#posCustomerPhone').value||'Registered customer');
     page.dataset.hiPosGuest=guest?'true':'false';
   }
@@ -181,6 +181,8 @@
   }
   function decorateCart(){
     if(!cart)return;
+    var entry=cart.querySelector('.pos-cart-entry-row:not(.is-active) input[data-cart-product-mode="add"]');
+    if(entry)entry.placeholder='⌕ Add product... name, SKU or বাংলা';
     var rows=Array.from(cart.querySelectorAll(':scope > .cart-row:not(.pos-cart-entry-row)'));
     rows.forEach(function(row,index){
       if(row.querySelector('.hi-pos-grip'))return;
