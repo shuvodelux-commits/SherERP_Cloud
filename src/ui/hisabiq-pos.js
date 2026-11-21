@@ -239,7 +239,7 @@
     drafts.type='button';drafts.title='Open saved sales drafts';
     drafts.addEventListener('click',function(){if(typeof goToPage==='function')goToPage('draftSales');});
     actions.append(settings,search,drafts);head.append(title,actions);
-    page.insertBefore(head,layout);
+    layout.before(head);
 
     var invoice=make('div','hi-pos-invoice-head');
     var info=make('div');
