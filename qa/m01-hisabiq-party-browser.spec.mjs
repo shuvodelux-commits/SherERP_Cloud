@@ -10,7 +10,7 @@ import {buildSourceAppShellData} from '../src/modules/source-app-shell-reader.js
 
 let browser,server,url,outputDir;
 const audit={financialPosts:0,supplierReads:0,partyReads:0,supplierCreateBodies:[]};
-let genericMode='source-only',failSupplierCreateOnce=false,denySupplierCreate=false;
+let genericMode='source-only',failSupplierCreateOnce=false,denySupplierCreate=false,supplierGrossMode=false;
 const shopId='22222222-2222-4222-8222-222222222222';
 const session={role:'Owner',shopId,dashboard:{displayName:'HisabIQ Fixture Shop',dataAvailable:false}};
 const shell=buildSourceAppShellData({shopName:'HisabIQ Fixture Shop',currencySymbol:''}).data;
@@ -75,8 +75,31 @@ before(async()=>{
         }
         send(res,404,{error:'Not yet connected'});return;
       }
-      if(path==='/api/owner/suppliers'){audit.supplierReads++;send(res,200,{suppliers:supplierRows,bankAccounts:[],currencySymbol:''});return;}
+      if(path==='/api/owner/suppliers'){
+        audit.supplierReads++;
+        const suppliers=supplierGrossMode?[{
+          ...supplier,
+          'Opening Balance':-250.50,
+          'Opening Payable':0,
+          'Supplier Advance':250.50
+        }]:supplierRows;
+        send(res,200,{suppliers,bankAccounts:[],currencySymbol:''});return;
+      }
       if(path==='/api/owner/suppliers/SUP-000007/ledger'){
+        if(supplierGrossMode){
+          send(res,200,{success:true,data:{
+            scope:'purchase-credit-only',supplierId:'SUP-000007',
+            supplierName:'Hossain Electric',phone:'01912000000',
+            currentDuePaisa:120055,openingBalancePaisa:-25050,
+            openingPayablePaisa:0,supplierAdvancePaisa:25050,hasMore:false,
+            entries:[
+              {kind:'Purchase',reference:'PUR-000007',purchaseDate:'2026-11-20',
+                debitPaisa:120055,creditPaisa:0,balancePaisa:120055},
+              {kind:'Historical Opening',reference:'c08e7889-d8c7-41e8-8a63-b8f7d2fc3849',
+                purchaseDate:'2026-11-19',debitPaisa:0,creditPaisa:0,balancePaisa:0}
+            ]
+          }});return;
+        }
         send(res,200,{success:true,data:{
           scope:'purchase-credit-only',supplierId:'SUP-000007',
           supplierName:'Hossain Electric',phone:'01912000000',
@@ -171,6 +194,40 @@ for(const width of [320,390,768,1024,1440]){
       const family=await page.locator('#hparty-detail').evaluate(node=>getComputedStyle(node).fontFamily);
       assert.ok(!family.includes('monospace'));
     }finally{await page.close();}
+  });
+}
+
+
+for(const width of [320,390,768,1024,1440]){
+  test('Supplier gross opening and advance remain independent in compiled Owner UI at '+width+'px',async()=>{
+    supplierGrossMode=true;
+    const page=await browser.newPage({viewport:{width,height:width===320?720:900}});
+    try {
+      await page.route(/^https:\/\/fonts\./,route=>route.abort());
+      await openParty(page);
+      const receivable=page.locator('.hparty-balance-card[data-kind="Receivable"]');
+      const payable=page.locator('.hparty-balance-card[data-kind="Payable"]');
+      assert.match(await receivable.innerText(),/250\.50/);
+      assert.match(await receivable.innerText(),/Supplier advance/);
+      assert.match(await payable.innerText(),/1,200\.55/);
+      const sourceDirectory=await page.locator('#hparty-list').textContent();
+      assert.match(sourceDirectory,/Receivable.*250\.50/);
+      assert.match(await page.locator('#hparty-tab-content').innerText(),/Historical Opening/);
+      assert.equal(await page.locator('#hparty-tab-content table tbody tr').count(),2);
+      assert.equal(await page.locator('#hparty-tab-content table tbody tr').last().locator('td').nth(4).innerText(),'৳0.00');
+      const dimensions=await page.locator('#page-hisabiqParties').evaluate(node=>({
+        scroll:node.scrollWidth,client:node.clientWidth
+      }));
+      assert.ok(dimensions.scroll<=dimensions.client+2,
+        'Supplier gross view overflow at '+width+'px '+JSON.stringify(dimensions));
+      if([390,1440].includes(width)){
+        await page.screenshot({
+          path:'docs/reviews/m01-party-supplier-gross-opening/images/'+width+'-after.png',
+          fullPage:true
+        });
+      }
+      assert.equal(audit.financialPosts,0);
+    }finally{supplierGrossMode=false;await page.close();}
   });
 }
 
