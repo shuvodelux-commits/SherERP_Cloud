@@ -36,6 +36,20 @@ const firstDayCashObjects=Object.freeze({
   owner_mvp_cash_session_no_delete:['trigger','owner_mvp_cash_sessions',
     '388b38b7bfe8a6d6ed06a0f283c53d58db956ccdc2fae88f1d3cbe362331014b']
 });
+// M03 additive candidate after first-day 0012: exact Support Product permit
+// table and three SQL-time guards. Never accept partial or altered DDL.
+// Digests are from Workerd D1 sqlite_schema.sql after applying staged 0013.
+const supportProductObjects=Object.freeze({
+  ...firstDayCashObjects,
+  shop_support_product_permits:['table','shop_support_product_permits',
+    '2ab2ba09db607a4b97cbd9f6144da3240180be956e1299342b569f748b00aa46'],
+  shop_support_product_permits_no_delete:['trigger','shop_support_product_permits',
+    'e616b8641ef18f11cb5ac36785bf78db3e52cb6a4e486f211cb259bab1dd99b2'],
+  shop_support_product_permits_no_update:['trigger','shop_support_product_permits',
+    '0751d20eecdeb10722162c5615f1162063f8fcc6563e5e21484f568cdeeab7de'],
+  shop_support_product_receipt_gate:['trigger','owner_product_create_receipts',
+    'db628596e0a52942e5abaa22618b5127a92dec22c432174ec8c0e2367d3869f6']
+});
 const isObjectRow=row=>Array.isArray(row)&&row.length===4 &&
   ['table','index','trigger','view'].includes(row[0]) &&
   typeof row[1]==='string'&&row[1].length>0 &&
@@ -90,16 +104,27 @@ async function matchesExactOverlay(baselineSchema,currentSchema,pins,changedObje
   }catch{return false;}
 }
 
-/** Exact reviewed 0010+0011 SQL, or its tightly pinned first-day 0012 successor.
+/** Exact reviewed 0010+0011 SQL, its 0012 Cash successor, or exact 0013 Support composition.
  * All 13 original migration receipts remain mandatory and unchanged.
  */
 export async function matchesApprovedSupplierCashSchemaOverlay(baselineSchema,currentSchema){
   return await matchesExactOverlay(baselineSchema,currentSchema,
     approvedSqlObjects,[modifiedBaseObject])||
-    await matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema);
+    await matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema)||
+    await matchesApprovedSupportProductSchemaOverlay(baselineSchema,currentSchema);
 }
 
 export async function matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema){
   return matchesExactOverlay(baselineSchema,currentSchema,firstDayCashObjects,
+    [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
+}
+
+
+/** Exact staged 0010+0011 Supplier, 0012 Cash, 0013 Support Product composition.
+ * Requires both prior overlays; never accept Support permits on an older schema.
+ * Does not grant Support Edit access or authorize a production D1 migration.
+ */
+export async function matchesApprovedSupportProductSchemaOverlay(baselineSchema,currentSchema){
+  return matchesExactOverlay(baselineSchema,currentSchema,supportProductObjects,
     [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
 }

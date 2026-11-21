@@ -50,17 +50,24 @@ No Owner session/cookie or fake Owner subject is issued to Support.
 ## Staged Shop D1 migration and release blockers
 
 The new **Shop D1-only** migration
-`staging-migrations/shop-owner-write/0012_support_product_permit.sql`
+`staging-migrations/shop-owner-write/0013_support_product_permit.sql`
 creates `shop_support_product_permits` and 3 triggers (immutable approval,
 Shop D1 SQL-time exact support receipt guard). It is NOT applied to any
 live Shop D1, because the deployed Owner/Admin release has a pinned
-13-migration original baseline plus a reviewed M08 Supplier/Cash overlay.
+13-migration original baseline plus a reviewed M08 Supplier/Cash and first-day Cash opening overlay.
 
-**DO NOT execute 0012 on production merely because this PR merges.** Its
-additional SQL objects invalidate the current first-Shop
-`matchesApprovedSupplierCashSchemaOverlay` verifier and could make Owner
-and Admin support/operational access fail closed until the exact new
-SHA-256 object set and rollout order are reviewed.
+**DO NOT execute 0013 on production merely because this PR merges.**
+The filename was renumbered from staged `0012_support_product_permit.sql`
+because first-day Cash opening already occupies Shop D1 migration 0012.
+Shop D1 migration 0013 is ordered *after* exact pinned 0010+0011 Supplier
+Cash and 0012 first-day Cash. The verifier accepts only those prior approved
+profiles or their complete 0013 composition with all four new SQL objects
+pinned by SHA-256 of SQLite-stored definitions. This is Shop D1 only;
+**Control D1 hosted journal migration 0012 is unrelated and already applied.**
+
+The verifier extension is code-level preparation, not permission to activate
+Support writes. Coordinated Owner/Admin release, backup and restore evidence,
+in-flight revocation safety and independent approvals remain mandatory.
 
 Explicit follow-ups, before production Support Product WRITE:
 
