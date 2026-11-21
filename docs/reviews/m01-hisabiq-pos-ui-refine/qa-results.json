@@ -1,0 +1,177 @@
+[
+  {
+    "width": 320,
+    "viewport": 320,
+    "documentWidth": 320,
+    "cart": {
+      "x": 24,
+      "y": -53,
+      "width": 272,
+      "right": 296,
+      "bottom": 491
+    },
+    "quick": {
+      "x": 24,
+      "y": 507,
+      "width": 272,
+      "right": 296,
+      "bottom": 737
+    },
+    "checkout": {
+      "x": 24,
+      "y": 753,
+      "width": 272,
+      "right": 296,
+      "bottom": 1522.296875
+    },
+    "cartRowCount": 2,
+    "cartTotal": "৳1,970",
+    "cartUnit": "pcs",
+    "lineTotal": "৳420",
+    "completionLabel": "Complete Sale",
+    "searchPresent": true,
+    "cartButton": true,
+    "parentLayout": "block",
+    "grid": "\"heading\" \"left\" \"customer\""
+  },
+  {
+    "width": 390,
+    "viewport": 390,
+    "documentWidth": 390,
+    "cart": {
+      "x": 24,
+      "y": 267,
+      "width": 342,
+      "right": 366,
+      "bottom": 773
+    },
+    "quick": {
+      "x": 24,
+      "y": 789,
+      "width": 342,
+      "right": 366,
+      "bottom": 1019
+    },
+    "checkout": {
+      "x": 24,
+      "y": 1035,
+      "width": 342,
+      "right": 366,
+      "bottom": 1804.296875
+    },
+    "cartRowCount": 2,
+    "cartTotal": "৳1,970",
+    "cartUnit": "pcs",
+    "lineTotal": "৳420",
+    "completionLabel": "Complete Sale",
+    "searchPresent": true,
+    "cartButton": true,
+    "parentLayout": "block",
+    "grid": "\"heading\" \"left\" \"customer\""
+  },
+  {
+    "width": 768,
+    "viewport": 768,
+    "documentWidth": 768,
+    "cart": {
+      "x": 82,
+      "y": 193,
+      "width": 672,
+      "right": 754,
+      "bottom": 403
+    },
+    "quick": {
+      "x": 82,
+      "y": 419,
+      "width": 672,
+      "right": 754,
+      "bottom": 645
+    },
+    "checkout": {
+      "x": 82,
+      "y": 661,
+      "width": 672,
+      "right": 754,
+      "bottom": 1418.296875
+    },
+    "cartRowCount": 2,
+    "cartTotal": "৳1,970",
+    "cartUnit": "pcs",
+    "lineTotal": "৳420",
+    "completionLabel": "Complete Sale",
+    "searchPresent": true,
+    "cartButton": true,
+    "parentLayout": "block",
+    "grid": "\"heading\" \"left\" \"customer\""
+  },
+  {
+    "width": 1024,
+    "viewport": 1024,
+    "documentWidth": 1024,
+    "cart": {
+      "x": 82,
+      "y": 171,
+      "width": 572,
+      "right": 654,
+      "bottom": 419
+    },
+    "quick": {
+      "x": 82,
+      "y": 435,
+      "width": 572,
+      "right": 654,
+      "bottom": 661
+    },
+    "checkout": {
+      "x": 670,
+      "y": 171,
+      "width": 340,
+      "right": 1010,
+      "bottom": 928.296875
+    },
+    "cartRowCount": 2,
+    "cartTotal": "৳1,970",
+    "cartUnit": "pcs",
+    "lineTotal": "৳420",
+    "completionLabel": "Complete Sale",
+    "searchPresent": true,
+    "cartButton": true,
+    "parentLayout": "block",
+    "grid": "\"heading heading\" \"left customer\""
+  },
+  {
+    "width": 1440,
+    "viewport": 1440,
+    "documentWidth": 1440,
+    "cart": {
+      "x": 92,
+      "y": 181,
+      "width": 968,
+      "right": 1060,
+      "bottom": 391
+    },
+    "quick": {
+      "x": 92,
+      "y": 407,
+      "width": 968,
+      "right": 1060,
+      "bottom": 633
+    },
+    "checkout": {
+      "x": 1076,
+      "y": 181,
+      "width": 340,
+      "right": 1416,
+      "bottom": 938.296875
+    },
+    "cartRowCount": 2,
+    "cartTotal": "৳1,970",
+    "cartUnit": "pcs",
+    "lineTotal": "৳420",
+    "completionLabel": "Complete Sale",
+    "searchPresent": true,
+    "cartButton": true,
+    "parentLayout": "block",
+    "grid": "\"heading heading\" \"left customer\""
+  }
+]
