@@ -1,0 +1,24 @@
+# M11/M03 — opt-in automatic development build, no per-commit production refresh
+
+## Context and owner request (21 November 2026)
+
+The Shop Owner Worker `shererp.hisab.workers.dev` is a development/testing ERP, yet its GitHub-linked Cloudflare Builds config uses the **production SHA-pinned** `FIRST_SHOP_CORE_MVP_REFRESH` profile. Every new main merge can outdate the protected SHA and cause the build to refuse before deploying the newly merged HisabIQ UI. The owner explicitly requests stopping this repeated production-release approval during development, and restoring strict release approvals when the ERP is production-ready.
+
+The current Worker is **publicly reachable** and bound to **existing Control and Shop D1** data. Calling it development must not bypass auth, tenant isolation, financial posting limitations, existing database schema, immutable D1 identity, or accidentally change the approved feature flags. Cloudflare Workers Builds remains the **single authorized publisher**. This PR does not itself deploy any Worker or update Build variables.
+
+## Superpowers plan: scoped implementation
+
+1. Add opt-in `SHERERP_FIRST_SHOP_CORE_RELEASE=DEVELOPMENT_AUTO` to the **existing** Cloudflare Builds generator, with **one-time explicit** `SHERERP_DEVELOPMENT_CORE_CONFIRMATION=EXISTING_SHOP_CORE_VERIFIED`. This is a persistent development selection, not a per-commit approval, commit pin or D1 report. The operator is responsible for first performing the already available read-only real-Shop preflight, which verified the current Shop baseline earlier; no SQL writes in this change.
+2. Add TDD RED tests first: a `DEVELOPMENT_AUTO` build fails today; after the change it must produce exactly the **already approved existing first-Shop core profile** (same D1 IDs, Shop binding, OAuth origins, rate limit, 5 already-enabled core feature flags, all currently disabled money flags unchanged). It must accept the next main SHA and tolerate old protected `FIRST_SHOP_CORE_RELEASE_COMMIT` and `READINESS_JSON` values without allowing them to overwrite current core settings.
+3. Reject missing/wrong one-time confirmation, wrong branch, wrong deployment owner, conflicting account, invalid Shop IDs, and unknown modes. Do not add branch previews, public financial RPC, a second deploy pipeline or new live database. Keep initial login-only and `FIRST_SHOP_CORE_MVP_TEST_ONLY` / `FIRST_SHOP_CORE_MVP_REFRESH` behavior byte-for-byte compatible.
+4. Refactor only the existing safe **core flag projection** into one reusable pure helper so DEV and reviewed production modes generate exactly the same runtime flag roster. No new dependencies, database writers or Worker runtime code. Do not enable new Customer Due, split payments, Cash Return, Supplier Pay, support audit, cross-role settlement or Redemption.
+5. Run contract tests, full Node test suite, `npm run build:owner-frontend`, 84 frozen-source checks, docs check, local dry-run only, and actual existing Worker binding parity against the generated opt-in DEV candidate with private in-memory values (no secrets in output). Recheck exact GitHub PR head CI and M03/M11 file ownership before merging.
+6. Document one-time Cloudflare Builds Settings change: set the two development values once. Continue using existing `npm run build:owner-frontend && node scripts/build-shop-user-deploy.mjs --generate` and existing `npx wrangler@4.161.0 deploy --config wrangler.shop-user.jsonc` **from Cloudflare Builds only**, not a local/manual redeployer. Main merges then redeploy automatically *if* the existing Builds integration is correctly configured; exact Cloudflare Build failure log is not presently available to this agent. The protected mode remains available for production after separate release approval, fresh identity/schema report and SHA pin.
+7. Separate broader production GO from developer convenience: no new source migrations, remote D1 changes, role grants, or financial capability activation. After every dev deployment continue smoke testing auth, signed-in UI, current Shop data and feature flags. Stop automatic dev releases and switch to production controls before actual commercial production onboarding.
+
+## Acceptance / ownership
+
+- M11 release controls + M03 shared generator: review required before merge. Root `PROJECT.md` updated and issue #884 tracked.
+- Test-first RED → minimal GREEN with actual local tests, then exact GitHub CI and Cloudflare local dry-run.
+- No live auto-release or production D1 write executed in this PR. The release mode becomes active **only after** the owner sets its Build variables in the Cloudflare dashboard, and that action is separate from merging source.
+- Both existing Auth/D1 identity checks and disabled financial flags must remain unchanged; failing these checks must fail closed even in development.
