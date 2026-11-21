@@ -1,5 +1,5 @@
 /* Optional, fail-closed Owner Invoice Studio preview-preference client.
- * The production Owner Worker does NOT yet expose this route. A 404 leaves
+ * The Owner Worker exposes this route only when its separate flag is enabled. A 404 leaves
  * the UI strictly preview-only with no Save action. Do not treat the current
  * source invoice printer as connected to these options.
  */
@@ -11,6 +11,7 @@
   const draft=workspace?.invoiceDraft;
   if(!page||!workspace||!draft)return;
   const editor=workspace.querySelector('.hisabiq-invoice-editor');
+  const notice=page.querySelector('.hisabiq-settings-alert');
   if(!editor)return;
   const API='/api/owner/invoice-profile';
   const UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
@@ -99,7 +100,9 @@
         model.status='uncertain';render();return;
       }
       model.shopId=shopId;model.revision=envelope.revision;model.saved=envelope.profile;
-      draft.apply(envelope.profile);model.status='ready';render();
+      draft.apply(envelope.profile);model.status='ready';
+      if(notice)notice.textContent='Preview preferences may be saved for this business. Invoice printing remains unchanged.';
+      render();
     }catch{
       if(model.status==='loading'){model.status='uncertain';render();}
     }

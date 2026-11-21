@@ -23,6 +23,7 @@ import {postOwnerSupplierCashPayment} from './db/m08-owner-supplier-cash-pay.js'
 
 import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
+import {registerOwnerInvoiceProfileRoutes} from './modules/m09-owner-invoice-profile-routes.js';
 
 const app=new Hono();
 const INVITE_COOKIE='__Host-shererp-owner-invite';
@@ -319,6 +320,15 @@ async function verifiedOwnerPurchaseContext(c,subject=false,dashboard=false){
      !await pilotShopIdentityMatches(scope))return null;
   return {token,ownerSubject:session.ownerSubject,shopName:session.dashboard?.displayName,scope};
 }
+
+// M03 sole shared Worker integrator. The installed M09 routes are flag-OFF by
+// default and reuse the current private Owner cookie, Origin and Shop D1 gate.
+// This adds no public RPC, staff account access, invoice printer or D1 migration.
+registerOwnerInvoiceProfileRoutes(app,{
+  protectLogin,
+  limitBody,
+  currentOwnerContext:c=>verifiedOwnerPurchaseContext(c,true),
+});
 function purchaseError(c,status){
   if(status==='denied')return c.json({success:false,message:'Purchase Owner access denied.'},403);
   if(status==='session-required')return c.json({success:false,
