@@ -383,7 +383,7 @@
     });
     pays.append(payHeading,primary);
     if(split)pays.appendChild(split);
-    var presets=make('div','hi-pos-payment-presets');
+    var presets=make('div','hi-pos-payment-presets');presets.id='hi-pos-payment-presets';
     [
       ['Exact',0],['৳2,000',2000],['৳5,000',5000]
     ].forEach(function(item){
@@ -401,7 +401,7 @@
     feedback.append(left,right);pays.appendChild(feedback);
     if(summary)summary.after(pays);else customer.appendChild(pays);
     if(footer)customer.appendChild(footer);
-    if(errors)customer.insertBefore(errors,footer||null);
+    if(errors)customer.appendChild(errors);
 
     var originalAdd=sel('#posAddPaymentRowBtn');
     if(originalAdd)originalAdd.hidden=true;
