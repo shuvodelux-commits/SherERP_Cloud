@@ -173,8 +173,15 @@ test('modal navigation isolates background and restores it at 320,390,768px',asy
       await page.locator('#menuToggle').click();
       assert.equal(await app.evaluate(n=>n.inert),true,'modal must isolate ERP from pointer and keyboard access at '+width);
       assert.equal(await page.locator('#erp-mobile-drawer').getAttribute('aria-modal'),'true');
+      // The merged shell transfers focus in requestAnimationFrame after the
+      // CSS drawer becomes displayable. Do not press Tab while its controls
+      // are still hidden during that entry frame (CI can outrun the frame).
+      // The assertion below still fails if focus never enters the modal.
+      await page.waitForFunction(()=>
+        document.getElementById('hisabiqMobileDrawer')?.classList.contains('is-open') &&
+        !!document.activeElement?.closest('#erp-mobile-drawer'));
       await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(()=>!!document.activeElement.closest('#hisabiqMobileDrawer')),true);
+      assert.equal(await page.evaluate(()=>!!document.activeElement?.closest('#hisabiqMobileDrawer')),true);
       await screenshot(page,'after-hardening-'+width+'-drawer');
       await page.keyboard.press('Escape');
       await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
