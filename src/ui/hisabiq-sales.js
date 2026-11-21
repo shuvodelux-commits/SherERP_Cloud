@@ -86,7 +86,71 @@
     helper.className='h-sales-summary-sub';helper.lang='bn';helper.textContent=entry[2];
     cell.append(name,value,helper);summary.appendChild(cell);
   });
+  summary.id='h-sales-summary';
+  var summaryToggle=document.createElement('button');
+  summaryToggle.type='button';
+  summaryToggle.className='h-sales-summary-toggle';
+  summaryToggle.setAttribute('aria-expanded','false');
+  summaryToggle.setAttribute('aria-controls','h-sales-summary');
+  summaryToggle.textContent='Summary ▾';
+  summaryToggle.addEventListener('click',function(){
+    var open=summary.classList.toggle('h-sales-summary-expanded');
+    summaryToggle.setAttribute('aria-expanded',String(open));
+    summaryToggle.textContent=open?'Less ▴':'Summary ▾';
+  });
+  summary.appendChild(summaryToggle);
   page.insertBefore(summary,toolbar);
+
+  // Reuse only permission-visible native Sales child routes. The reference
+  // Customer Credit tab has no separately migrated SherERP Owner route;
+  // do not invent an unconnected tab or change navigation permissions.
+  var tabs=document.createElement('div');
+  tabs.className='h-sales-tabs';
+  tabs.setAttribute('role','tablist');
+  tabs.setAttribute('aria-label','Sales workspaces');
+  page.insertBefore(tabs,toolbar);
+  function renderSalesTabs(){
+    var groups=window.navItems_;
+    var group=Array.isArray(groups)?groups.find(function(item){return item.key==='sales';}):null;
+    if(!group || !Array.isArray(group.children))return;
+    var names={sales:'Sales',returns:'Sales return',
+      returnHistory:'Return history',draftSales:'Drafts & templates'};
+    var routes=group.children.filter(function(child){
+      return !!names[child.key] &&
+        (typeof subNavVisible_!=='function'||subNavVisible_(child,'sales'));
+    });
+    if(!routes.length)return;
+    var same=Array.from(tabs.querySelectorAll('[data-h-sales-route]'))
+      .map(function(button){return button.dataset.hSalesRoute;}).join('|')
+      ===routes.map(function(child){return child.key;}).join('|');
+    if(same)return;
+    tabs.replaceChildren();
+    routes.forEach(function(route){
+      var button=document.createElement('button');
+      button.type='button';button.className='h-sales-tab';
+      button.dataset.hSalesRoute=route.key;
+      button.setAttribute('role','tab');
+      button.setAttribute('aria-selected',String(route.key==='sales'));
+      button.textContent=names[route.key];
+      if(route.key==='sales'){
+        var count=document.createElement('span');
+        count.className='h-sales-tab-count';count.dataset.hSalesTabCount='';
+        count.textContent='0';button.appendChild(count);
+      }
+      button.addEventListener('click',function(){
+        if(typeof goToPage==='function')goToPage(route.key);
+      });
+      tabs.appendChild(button);
+    });
+    tabs.dataset.ready='true';
+  }
+  var navigation=document.getElementById('navList');
+  if(navigation && window.MutationObserver)
+    new MutationObserver(renderSalesTabs).observe(navigation,{childList:true,subtree:true});
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded',renderSalesTabs,{once:true});
+  else renderSalesTabs();
+  window.addEventListener('load',renderSalesTabs,{once:true});
 
   toolbar.classList.add('h-sales-toolbar');
   var filterFields=document.createElement('div');
@@ -339,6 +403,8 @@
       var node=summary.querySelector('[data-summary="'+key+'"]');
       node.textContent=!available?'—':(key==='count'?String(values[key]):money(values[key]));
     }
+    var tabCount=tabs.querySelector('[data-h-sales-tab-count]');
+    if(tabCount)tabCount.textContent=available?String(sales.length):'0';
   }
   function renderPage(){
     var count=activeRows.length;
