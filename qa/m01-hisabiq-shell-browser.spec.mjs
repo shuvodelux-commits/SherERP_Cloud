@@ -1,0 +1,157 @@
+import test,{before,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdir} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import {serveCompiledUi} from './serve-compiled-ui.mjs';
+
+let server,browser;
+before(async()=>{
+  server=await serveCompiledUi();
+  browser=await chromium.launch({headless:true,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?
+      {executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})});
+});
+after(async()=>{await browser?.close();await server?.close();});
+
+const items=[
+  {key:'dashboard',label:'Dashboard',icon:'dashboard',sidebarGroup:0,sidebarOrder:10},
+  {key:'pos',label:'POS',icon:'pos',landingKey:'posv2',sidebarGroup:0,sidebarOrder:20,
+    children:[{key:'posv2',label:'POS V2'}]},
+  {key:'sales',label:'Sales',icon:'sales',sidebarGroup:1,sidebarOrder:30,
+    children:[{key:'sales',label:'Sales Invoices'},{key:'returns',label:'New Return'}]},
+  {key:'products',label:'Products',icon:'products',sidebarGroup:1,sidebarOrder:40},
+  {key:'reports',label:'Reports',icon:'reports',sidebarGroup:5,sidebarOrder:60},
+  {key:'settings',label:'Settings',icon:'settings',sidebarGroup:6,sidebarOrder:70,
+    children:[{key:'settings',label:'General'},{key:'roles',label:'Roles'}]}
+];
+async function syntheticShell(page){
+  await page.goto(server.url,{waitUntil:'domcontentloaded'});
+  await page.evaluate(items=>{
+    window.authToken='m01-shell-synthetic-only';
+    window.currentUser={id:'test',name:'Synthetic Admin',role:'Administrator'};
+    window.allowedModules=null;window.userPermissions=null;
+    document.getElementById('loginOverlay').hidden=true;
+    document.getElementById('app').style.visibility='';
+    document.getElementById('shopNameLabel').textContent='Synthetic Hardware';
+    window.navItems_=items;
+    buildNav_(items);
+    renderSidebarFooter_(); // Original sign-out wiring follows authenticated shell setup.
+    goToPage('dashboard');
+  },items);
+}
+async function screenshot(page,label){
+  await mkdir('test-results/hisabiq-shell',{recursive:true});
+  await page.screenshot({path:'test-results/hisabiq-shell/'+label+'.png'});
+}
+
+test('HisabIQ desktop shell has exact widths, current child and persisted shortcut',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await syntheticShell(page);
+    assert.equal(await page.locator('#sidebar').evaluate(n=>Math.round(n.getBoundingClientRect().width)),256);
+    assert.equal(await page.locator('.topbar').evaluate(n=>Math.round(n.getBoundingClientRect().height)),56);
+    assert.equal(await page.locator('#navList .h-shell-section-label').first().textContent(),'Workspace');
+    await screenshot(page,'after-target-1440-expanded');
+    await page.locator('#navList .nav-item[data-page="sales"]').click();
+    assert.equal(await page.locator('#page-sales').isVisible(),true,'original goToPage remains the navigation handler');
+    assert.equal(await page.locator('#navList .h-shell-child[data-nav-child="sales"]').getAttribute('aria-current'),'page');
+    await page.locator('#navList .h-shell-child[data-nav-child="returns"]').click();
+    assert.equal(await page.locator('#page-returns').isVisible(),true);
+    await page.keyboard.press('Control+b');
+    await page.waitForFunction(()=>Math.round(document.getElementById('sidebar').getBoundingClientRect().width)===64);
+    assert.equal(await page.locator('#sidebar').evaluate(n=>Math.round(n.getBoundingClientRect().width)),64);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('hisabiq:sidebar-collapsed')),'true');
+    assert.equal(await page.locator('#navList .nav-item[data-page="sales"]').getAttribute('title'),'Sales');
+    await screenshot(page,'after-target-1440-collapsed');
+    await page.reload();
+    await syntheticShell(page);
+    await page.waitForFunction(()=>Math.round(document.getElementById('sidebar').getBoundingClientRect().width)===64);
+    await page.keyboard.press('Control+b');
+    await page.waitForFunction(()=>Math.round(document.getElementById('sidebar').getBoundingClientRect().width)===256);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('HisabIQ tablet and mobile nav drawer traps focus, dismisses, keeps original quick nav',async()=>{
+  for(const width of [1023,768,390]){
+    const page=await browser.newPage({viewport:{width,height:width===390?844:900},hasTouch:width===390});
+    try{
+      await syntheticShell(page);
+      assert.equal(await page.locator('#sidebar').isVisible(),false);
+      assert.equal(await page.locator('#menuToggle').isVisible(),true);
+      await page.locator('#menuToggle').click();
+      assert.equal(await page.locator('#erp-mobile-drawer').getAttribute('aria-modal'),'true');
+      await page.locator('#hisabiqMobileDrawer').waitFor({state:'visible'});
+      assert.equal(await page.locator('#hisabiqMobileDrawer').isVisible(),true);
+      assert.equal(await page.evaluate(()=>document.body.style.overflow),'hidden');
+      await screenshot(page,'after-target-'+width+'-drawer');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
+      assert.equal(await page.evaluate(()=>document.body.style.overflow),'');
+      assert.equal(await page.locator('#menuToggle').evaluate(n=>n===document.activeElement),true);
+      await page.locator('#menuToggle').click();
+      await page.locator('#h-shell-drawer-nav .nav-item[data-page="products"]').click();
+      assert.equal(await page.locator('#page-products').isVisible(),true);
+      await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
+      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
+      assert.ok(overflow<=2,'no viewport overflow at '+width+': '+overflow);
+      if(width===390)assert.equal(await page.locator('#mobileBottomNav').isVisible(),true);
+    }finally{await page.close();}
+  }
+});
+
+test('HisabIQ enhancement does not expose restricted modules or replace original actions',async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  try{
+    await syntheticShell(page);
+    const prior=await page.evaluate(()=>({
+      cash:document.getElementById('cashSessionToggleBtn'),
+      calc:document.getElementById('calcToggleBtn'),
+      refresh:document.getElementById('refreshBtn'),
+      tab:document.getElementById('subNav')
+    }));
+    await page.evaluate(()=>{
+      allowedModules=['dashboard','reports'];
+      userPermissions={dashboard:{view:true},reports:{view:true}};
+      buildNav_(navItems_);
+    });
+    assert.equal(await page.locator('#navList .nav-item[data-page="sales"]').count(),0);
+    assert.equal(await page.locator('#navList .nav-item[data-page="reports"]').count(),1);
+    for(const selector of ['#cashSessionToggleBtn','#calcToggleBtn','#refreshBtn','#subNav']){
+      assert.equal(await page.locator(selector).count(),1,selector+' retained');
+    }
+  }finally{await page.close();}
+});
+
+
+test('HisabIQ topbar offers authorized navigation search, New Sale and existing user action',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    await syntheticShell(page);
+    const search=page.locator('#h-shell-search-input');
+    await search.fill('report');
+    const result=page.locator('#h-shell-search-results [data-target="reports"]');
+    await result.click();
+    assert.equal(await page.locator('#page-reports').isVisible(),true);
+    await page.locator('#h-shell-new-sale').click();
+    assert.equal(await page.evaluate(()=>currentPage),'posv2');
+    await page.locator('#h-shell-user-trigger').click();
+    assert.equal(await page.locator('#h-shell-user-popover').isVisible(),true);
+    assert.match(await page.locator('#h-shell-user-popover').textContent(),/Synthetic Admin/);
+    assert.equal(await page.locator('#logoutBtn').count(),1,'original confirm-based sign-out remains present');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#h-shell-user-popover').isVisible(),false);
+    await page.keyboard.press('Control+k');
+    assert.equal(await search.evaluate(n=>document.activeElement===n),true);
+    await page.evaluate(()=>{
+      allowedModules=['dashboard','reports'];
+      userPermissions={dashboard:{view:true},reports:{view:true}};
+      buildNav_(navItems_);
+    });
+    assert.equal(await page.locator('#h-shell-new-sale').isVisible(),false,
+      'staff without POS access must not see a New Sale shortcut');
+    await search.fill('pos');
+    assert.equal(await page.locator('#h-shell-search-results [data-target="posv2"]').count(),0);
+  }finally{await page.close();}
+});
