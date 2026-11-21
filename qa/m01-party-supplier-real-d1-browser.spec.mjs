@@ -119,10 +119,11 @@ test('compiled responsive Owner Party creates real Shop D1 Supplier, persists on
   assert.equal(await page.locator('#hparty-list [role="option"]').count(),0);
   await page.locator('#hparty-add-party').click();
   await page.locator('#hparty-supplier-modal').waitFor({state:'visible'});
-  await page.getByRole('dialog',{name:/Add Party/}).waitFor({timeout:4000});
-  await page.locator('#hparty-add-relationship').selectOption('Customer');
+  await page.getByRole('dialog',{name:/Add Party/i}).waitFor({timeout:4000});
+  assert.equal(await page.locator('#hparty-editor-role-grid input[value=\"Customer\"]').isChecked(),true);
   assert.equal(await page.locator('#hparty-supplier-save').isEnabled(),false);
-  await page.locator('#hparty-add-relationship').selectOption('Supplier');
+  await page.locator('#hparty-editor-role-grid input[value=\"Customer\"]').uncheck();
+    await page.locator('#hparty-editor-role-grid input[value=\"Supplier\"]').check();
   await page.locator('#hparty-supplier-name').fill('Fixture Supplier Real D1');
   await page.locator('#hparty-supplier-phone').fill('01712345678');
   await page.locator('#hparty-supplier-address').fill('Rajshahi');
