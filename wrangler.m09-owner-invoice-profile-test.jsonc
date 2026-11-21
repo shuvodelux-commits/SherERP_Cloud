@@ -1,0 +1,10 @@
+{
+  "name": "shererp-m09-owner-invoice-profile-local-only",
+  "main": "tests/fixtures/m03-first-purchase-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "d1_databases": [
+    {"binding":"SHOP_A","database_name":"shererp-invoice-profile-shop-a-local","database_id":"00000000-0000-0000-0000-000000000097"},
+    {"binding":"SHOP_B","database_name":"shererp-invoice-profile-shop-b-local","database_id":"00000000-0000-0000-0000-000000000098"}
+  ]
+}

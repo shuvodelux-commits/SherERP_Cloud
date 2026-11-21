@@ -125,13 +125,13 @@
     const designButtons=[];
     ['Standard','Classic','Compact','Modern','Elegant','Bold'].forEach(name=>{
       const supported=['Standard','Classic','Compact'].includes(name);
-      const button=build('button','hisabiq-invoice-design');button.type='button';button.disabled=!supported;
+      const button=build('button','hisabiq-invoice-design');button.type='button';button.disabled=!supported;button.dataset.invoiceDesign=name;
       button.setAttribute('role','radio');button.setAttribute('aria-checked',String(state.template===name));
       const thumb=build('span','hisabiq-invoice-thumbnail '+name.toLowerCase());
       thumb.append(build('i','','◯ ▬'),build('i','','━━━━━━'),build('i','','━━━━━'),build('i','','──────'),build('i','','━━━━━━'));
       button.append(thumb,build('strong','',name),build('small','',supported?'Live preview':'Unavailable'));
       if(supported)button.addEventListener('click',()=>{
-        state.template=name;designButtons.forEach(b=>{b.setAttribute('aria-checked',String(b.textContent.includes(name)));b.classList.toggle('is-active',b===button);});
+        state.template=name;designButtons.forEach(b=>{b.setAttribute('aria-checked',String(b.dataset.invoiceDesign===name));b.classList.toggle('is-active',b===button);});
         updatePreview();
       });
       designs.append(button);designButtons.push(button);
@@ -140,29 +140,30 @@
     const controls=build('section','hisabiq-settings-card');
     controls.append(build('h3','','Print & language'),build('p','hisabiq-settings-description','কাগজ ও ভাষা · Preview preferences only'));
     const fields=build('div','hisabiq-invoice-controls');
+    const selectors=Object.create(null),visibility=Object.create(null);
     [['paper','Paper size','কাগজের মাপ',['A4','80 mm','58 mm','Business Pad']],['language','Document language','বিলের ভাষা',['English','English + বাংলা','Bangla']]].forEach(([field,title,bn,options])=>{
       const label=build('label','hisabiq-invoice-field');label.append(build('span','',title+' · '+bn));
       const select=build('select','');select.dataset.touchSelectSkip='true';select.setAttribute('aria-label',title);
       options.forEach(opt=>{const o=build('option','',opt);o.value=opt;select.append(o);});
-      select.value=state[field];select.addEventListener('change',()=>{state[field]=select.value;updatePreview();});
+      select.value=state[field];selectors[field]=select;select.addEventListener('change',()=>{state[field]=select.value;updatePreview();});
       label.append(select);fields.append(label);
     });controls.append(fields);
-    const visibility=build('section','hisabiq-settings-card');
-    visibility.append(build('h3','','Invoice content'),build('p','hisabiq-settings-description','বিলে কী দেখাবেন · Preview options, not business settings'));
+    const visibilityCard=build('section','hisabiq-settings-card');
+    visibilityCard.append(build('h3','','Invoice content'),build('p','hisabiq-settings-description','বিলে কী দেখাবেন · Preview options, not business settings'));
     const toggles=build('div','hisabiq-invoice-toggles');
     const flags=[['business','Business information','ব্যবসার পরিচিতি'],['customer','Customer details','ক্রেতার তথ্য'],['sku','Product code','পণ্যের কোড'],['discount','Discount','ছাড়'],['payments','Payment breakdown','পেমেন্ট'],['due','Due amount','বাকি'],['words','Amount in words','কথায় টাকা'],['signature','Signature','স্বাক্ষর'],['warranty','Warranty','ওয়ারেন্টি']];
     flags.forEach(([key,label,bn])=>{
       const row=build('label','hisabiq-invoice-toggle');const box=build('input','');
-      box.type='checkbox';box.checked=state.checks[key];box.addEventListener('change',()=>{state.checks[key]=box.checked;updatePreview();});
+      box.type='checkbox';box.checked=state.checks[key];visibility[key]=box;box.addEventListener('change',()=>{state.checks[key]=box.checked;updatePreview();});
       row.append(box,build('span','',label+' · '+bn));toggles.append(row);
-    });visibility.append(toggles);
+    });visibilityCard.append(toggles);
     const previewCard=build('section','hisabiq-settings-card hisabiq-invoice-preview-card');
     const titleRow=build('div','hisabiq-invoice-preview-heading');
     titleRow.append(build('h3','','Live sample preview'),build('span','','Not a saved invoice'));
     previewCard.append(titleRow);
     const preview=build('div','hisabiq-invoice-preview');preview.setAttribute('aria-label','Invoice sample preview');
     previewCard.append(preview);
-    const left=build('div','hisabiq-invoice-editor');left.append(gallery,controls,visibility);
+    const left=build('div','hisabiq-invoice-editor');left.append(gallery,controls,visibilityCard);
     workspace.append(left,previewCard);
     function updatePreview(){
       preview.replaceChildren();
@@ -194,7 +195,25 @@
       if(state.checks.signature)paper.append(build('div','hisabiq-invoice-signatures','Customer signature             Authorized signature'));
       paper.append(build('footer','','Thank you · ধন্যবাদ'));
       preview.append(paper);
+      workspace.dispatchEvent(new Event('hisabiq-invoice-draft-change'));
     }
+    // Client persistence adapter is separate, and cannot alter the original
+    // receipt renderer or invoke an unrelated Settings/Users RPC.
+    workspace.invoiceDraft={
+      snapshot:()=>JSON.parse(JSON.stringify(state)),
+      apply(profile){
+        if(!profile || typeof profile!=='object')throw new TypeError('Invalid profile');
+        state.template=profile.template;state.paper=profile.paper;
+        state.language=profile.language;state.checks={...profile.checks};
+        designButtons.forEach(b=>{
+          const selected=b.dataset.invoiceDesign===state.template;
+          b.classList.toggle('is-active',selected);b.setAttribute('aria-checked',String(selected));
+        });
+        Object.entries(selectors).forEach(([key,input])=>input.value=state[key]);
+        Object.entries(visibility).forEach(([key,input])=>input.checked=state.checks[key]);
+        updatePreview();
+      }
+    };
     updatePreview();return workspace;
   }
   function mount(){
