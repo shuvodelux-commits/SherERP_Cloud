@@ -217,18 +217,16 @@
     card.prepend(title);
   }
   function mount(){
-    var layout=sel('.pos-layout'),product=sel('.pos-product-card'),
-      checkout=sel('.pos-cart-section'),customer=sel('.pos-customer-section');
-    if(!layout||!product||!checkout||!customer||!cart)return;
+    var layout=sel('.pos-layout'),catalog=sel('.pos-product-card'),
+      nativeCustomer=sel('.pos-customer-section'),nativeCart=sel('.pos-cart-section');
+    if(!layout||!catalog||!nativeCustomer||!nativeCart||!cart)return;
     page.dataset.hiPosMounted='true';
-    var head=make('header','hi-pos-head');
-    var title=make('h1','', 'New sale');
-    title.appendChild(make('small','','নতুন বিক্রি'));
+    var heading=make('header','hi-pos-head');
+    var headingTitle=make('h1','', 'New sale');
+    headingTitle.appendChild(make('small','','নতুন বিক্রি'));
     var actions=make('div','hi-pos-top-actions');
     var settings=make('button','hi-pos-action','⚙ Settings');
-    settings.type='button';settings.addEventListener('click',function(){
-      if(typeof goToPage==='function')goToPage('settings');
-    });
+    settings.type='button';settings.addEventListener('click',function(){if(typeof goToPage==='function')goToPage('settings');});
     var search=make('button','hi-pos-action','⌨ Search');
     search.type='button';search.addEventListener('click',function(){
       var input=cart.querySelector('[data-cart-product-input][data-cart-product-mode="add"]')||sel('#posSearch');
@@ -236,206 +234,248 @@
     });
     search.appendChild(make('span','hi-pos-shortcut','F2'));
     var drafts=make('button','hi-pos-action','▤ Drafts');
-    drafts.type='button';drafts.title='Open saved sales drafts';
-    drafts.addEventListener('click',function(){if(typeof goToPage==='function')goToPage('draftSales');});
-    actions.append(settings,search,drafts);head.append(title,actions);
-    layout.before(head);
+    drafts.type='button';drafts.addEventListener('click',function(){if(typeof goToPage==='function')goToPage('draftSales');});
+    actions.append(settings,search,drafts);
+    heading.append(headingTitle,actions);
+    layout.before(heading);
 
+    // Do not reparent original POS controls: the native posv2 adapter owns
+    // their anchors and moves them on resize. Read/proxy the same DOM instead.
+    var card=make('aside','hi-pos-customer-panel');
     var invoice=make('div','hi-pos-invoice-head');
     var info=make('div');
     var number=make('div','hi-pos-invoice-number','New invoice');
     number.id='hi-pos-invoice-number';
-    info.appendChild(number);
-    info.appendChild(make('div','hi-pos-invoice-date','Invoice number assigned after successful checkout'));
+    info.append(number,make('div','hi-pos-invoice-date',
+      'Invoice number assigned after successful checkout'));
     var clear=make('button','hi-pos-action','♜ Clear');
     clear.type='button';clear.addEventListener('click',function(){sel('#posClearCartBtn').click();});
     invoice.append(info,clear);
-
     var customerRow=make('div','hi-pos-customer-row');
     var picker=make('button','hi-pos-customer-picker');
-    picker.type='button';picker.id='hi-pos-customer-picker';
-    picker.setAttribute('aria-haspopup','listbox');
+    picker.id='hi-pos-customer-picker';picker.type='button';picker.setAttribute('aria-haspopup','listbox');
     var avatar=make('span','hi-pos-avatar','♙');
-    var captions=make('span','hi-pos-customer-picker-text');
-    pickerLabel=make('span','', 'Walk-in customer');
+    var pickerText=make('span','hi-pos-customer-picker-text');
+    pickerLabel=make('span','','Walk-in customer');
     pickerMeta=make('small','','Cash sale · customer optional');
-    captions.append(pickerLabel,pickerMeta);
-    picker.append(avatar,captions,make('span','','⌄'));
-    pickerMenu=make('div','hi-pos-customer-menu');
-    pickerMenu.id='hi-pos-customer-menu';pickerMenu.hidden=true;
+    pickerText.append(pickerLabel,pickerMeta);
+    picker.append(avatar,pickerText,make('span','','⌄'));
+    pickerMenu=make('div','hi-pos-customer-menu');pickerMenu.id='hi-pos-customer-menu';pickerMenu.hidden=true;
     picker.addEventListener('click',function(){
-      state.customerMenuOpen=!state.customerMenuOpen;
-      pickerMenu.hidden=!state.customerMenuOpen;
-      if(state.customerMenuOpen){
-        renderCustomerMenu('');pickerMenu.querySelector('input').focus();
-      }
+      state.customerMenuOpen=!state.customerMenuOpen;pickerMenu.hidden=!state.customerMenuOpen;
+      if(state.customerMenuOpen){renderCustomerMenu('');pickerMenu.querySelector('input').focus();}
     });
-    var plus=make('button','hi-pos-plus','+');
-    plus.type='button';plus.id='hi-pos-quick-add';
-    plus.setAttribute('aria-label','Quick add customer');
-    plus.title='Add a Customer from POS';
+    var plus=make('button','hi-pos-plus','+');plus.id='hi-pos-quick-add';
+    plus.type='button';plus.setAttribute('aria-label','Quick add customer');
     plus.addEventListener('click',function(){
       if(typeof custOpenAdd_!=='function'){
-        if(typeof showToast==='function')showToast('Customer creation is not connected in this Shop.','error');
+        if(typeof showToast==='function')showToast('Customer create is not connected for this Shop','error');
         return;
       }
       custOpenAdd_(function(id){
-        // Customer ID must come from the real source/Owner callback, never
-        // infer a Customer relationship from entered name or phone alone.
         var source=Array.isArray(posState.customers)?posState.customers:[];
         var found=source.find(function(c){return String(c.id)===String(id);});
-        if(found)selectCustomer(found);
-        else if(typeof serverCall==='function'){
+        if(found)return selectCustomer(found);
+        if(typeof serverCall==='function')
           serverCall('getPosBootstrap',authToken).then(function(data){
             if(Array.isArray(data.customers))posState.customers=data.customers;
-            var saved=posState.customers.find(function(c){return String(c.id)===String(id);});
+            var saved=(posState.customers||[]).find(function(c){return String(c.id)===String(id);});
             if(saved)selectCustomer(saved);
-            else if(typeof showToast==='function')showToast('Customer saved. Refresh POS to select the new Customer.','info');
-          }).catch(function(){if(typeof showToast==='function')showToast('Customer saved, but POS customer list could not refresh.','error');});
-        }
+            else if(typeof showToast==='function')showToast('Customer saved. Refresh POS to select it.','info');
+          }).catch(function(){if(typeof showToast==='function')showToast('Customer list unavailable.','error');});
       });
     });
     customerRow.append(picker,plus);
-    var modes=make('div','hi-pos-sale-mode');
-    var regular=make('button','', 'Regular sale');regular.type='button';regular.setAttribute('aria-pressed','true');
-    var instalment=make('button','', 'Installment sale');
-    instalment.type='button';instalment.disabled=true;
-    instalment.title='Installment backend and ledger are not connected';
-    modes.append(regular,instalment);
-
+    var mode=make('div','hi-pos-sale-mode');
+    var regular=make('button','','Regular sale');regular.type='button';regular.setAttribute('aria-pressed','true');
+    var installment=make('button','','Installment sale');installment.type='button';
+    installment.disabled=true;installment.title='Installment sale posting not connected to this Shop D1';
+    mode.append(regular,installment);
     var details=make('div','hi-pos-details');
-    var detailToggle=make('button','hi-pos-details-toggle');
-    detailToggle.type='button';detailToggle.id='hi-pos-details-toggle';
-    detailToggle.setAttribute('aria-expanded','false');
-    var detailText=make('span','','Invoice customer details');
-    detailText.appendChild(make('small','','Name · Phone · Guardian · Address'));
-    var arrow=make('span','','⌄');
-    detailToggle.append(detailText,arrow);
+    var toggle=make('button','hi-pos-details-toggle');
+    toggle.id='hi-pos-details-toggle';toggle.type='button';toggle.setAttribute('aria-expanded','false');
+    var label=make('span','','Invoice customer details');
+    label.appendChild(make('small','','Name · Phone · Guardian · Address'));
+    var chevron=make('span','','⌄');toggle.append(label,chevron);
     var detailBody=make('div','hi-pos-details-body');
     detailBody.id='hi-pos-details-body';detailBody.dataset.open='false';
-    details.append(detailToggle,detailBody);
-    detailToggle.addEventListener('click',function(){
-      state.detailsOpen=!state.detailsOpen;
-      detailBody.dataset.open=state.detailsOpen?'true':'false';
-      detailToggle.setAttribute('aria-expanded',state.detailsOpen?'true':'false');
-      arrow.textContent=state.detailsOpen?'⌃':'⌄';
+    var mappedFields=[
+      ['Customer Name','posCustomerName','text'],
+      ['Phone Number','posCustomerPhone','tel'],
+      ['Guardian Name','posCustomerFatherName','text'],
+      ['Address','posCustomerAddress','text'],
+    ];
+    mappedFields.forEach(function(fields){
+      var row=make('label','hi-pos-detail-input');
+      row.appendChild(make('span','',fields[0]));
+      var input=make('input');input.type=fields[2];
+      input.dataset.hiNativeField=fields[1];input.setAttribute('aria-label',fields[0]);
+      input.addEventListener('input',function(){
+        var target=document.getElementById(fields[1]);
+        if(target){target.value=input.value;nativeChange(target);}
+      });
+      row.appendChild(input);detailBody.appendChild(row);
     });
-    Array.from(customer.children).forEach(function(el){
-      if(el.matches('label,.pos-customer-input-wrap,#posCustomerDueRow,#posCustomerMoreFields,.pos-customer-actions'))
-        detailBody.appendChild(el);
+    details.append(toggle,detailBody);
+    toggle.addEventListener('click',function(){
+      state.detailsOpen=!state.detailsOpen;detailBody.dataset.open=state.detailsOpen?'true':'false';
+      toggle.setAttribute('aria-expanded',state.detailsOpen?'true':'false');
+      chevron.textContent=state.detailsOpen?'⌃':'⌄';
+      if(state.detailsOpen)detailBody.querySelectorAll('[data-hi-native-field]').forEach(function(input){
+        var from=document.getElementById(input.dataset.hiNativeField);if(from)input.value=from.value;
+      });
     });
-    customer.prepend(invoice,customerRow,pickerMenu,modes,details,make('div','hi-pos-card-divider'));
+    card.append(invoice,customerRow,pickerMenu,mode,details,make('div','hi-pos-card-divider'));
 
-    var summary=checkout.querySelector('.pos-checkout-summary');
-    var errors=checkout.querySelector('#posFormError');
-    var footer=checkout.querySelector('.pos-checkout-actions');
-    if(summary)customer.appendChild(summary);
-    if(errors)customer.appendChild(errors);
-    if(footer)customer.appendChild(footer);
-    var totals=summary&&summary.querySelector('.pos-checkout-totals');
-    var fields=summary&&summary.querySelector('.pos-checkout-fields');
+    // Custom subtotal/discount/total are projections of real native POS state.
+    // The original summary remains exactly where the native controller placed it.
+    var summary=make('div','hi-pos-preview-summary');
+    var subtotal=make('div','hi-pos-value-row');
+    subtotal.append(make('span','','Subtotal · 3 items'),make('strong','','৳0'));
+    subtotal.querySelector('span').id='hi-pos-subtotal-label';
+    subtotal.querySelector('strong').id='hi-pos-subtotal';
+    var discountRow=make('div','hi-pos-discount-row');
+    discountRow.appendChild(make('label','','Discount'));
+    var discountControls=make('div','hi-pos-discount-toggle');
+    var taka=make('button','','৳');taka.type='button';taka.dataset.hiDiscountMode='amount';taka.setAttribute('aria-pressed','true');
+    var pct=make('button','','%');pct.type='button';pct.dataset.hiDiscountMode='percent';pct.setAttribute('aria-pressed','false');
+    taka.addEventListener('click',function(){setMode('amount');});
+    pct.addEventListener('click',function(){setMode('percent');});
     nativeDiscount=sel('#posDiscount');
-    if(totals&&fields&&nativeDiscount){
-      var originalRow=nativeDiscount.closest('.totals-row');
-      var discountRow=make('div','hi-pos-discount-row');
-      discountRow.append(make('label','','Discount'));
-      var controls=make('div','hi-pos-discount-toggle');
-      var taka=make('button','', '৳');taka.type='button';taka.dataset.hiDiscountMode='amount';taka.setAttribute('aria-pressed','true');
-      var pct=make('button','', '%');pct.type='button';pct.dataset.hiDiscountMode='percent';pct.setAttribute('aria-pressed','false');
-      taka.addEventListener('click',function(){setMode('amount');});
-      pct.addEventListener('click',function(){setMode('percent');});
-      discountInput=make('input');discountInput.id='hi-pos-discount-input';
-      discountInput.type='number';discountInput.min='0';discountInput.step='0.01';discountInput.placeholder='0';
-      discountInput.setAttribute('aria-label','Discount amount or percent');
-      controls.append(taka,pct,discountInput);discountRow.append(controls);
-      nativeDiscount.hidden=true;nativeDiscount.setAttribute('aria-hidden','true');
-      discountRow.appendChild(nativeDiscount);
-      discountInput.addEventListener('input',computeDiscount);
-      var subtotal=sel('#posSubtotal').closest('.totals-row');
-      if(subtotal)subtotal.after(discountRow);else totals.prepend(discountRow);
-      if(originalRow && originalRow.isConnected&&originalRow!==discountRow)originalRow.remove();
-    }
+    discountInput=make('input');discountInput.id='hi-pos-discount-input';
+    discountInput.type='number';discountInput.step='0.01';discountInput.min='0';discountInput.placeholder='0';
+    discountInput.setAttribute('aria-label','Discount amount or percent');
+    discountInput.addEventListener('input',computeDiscount);
+    discountControls.append(taka,pct,discountInput);discountRow.append(discountControls);
+    var totalRow=make('div','hi-pos-payable');
+    var payableLabel=make('span','','Total payable · মোট');
+    var payableValue=make('strong','','৳0');payableValue.id='hi-pos-grand';
+    totalRow.append(payableLabel,payableValue);
+    summary.append(subtotal,discountRow,totalRow);
+    card.appendChild(summary);
 
-    var pays=make('section','hi-pos-payments');
+    var payments=make('section','hi-pos-payments');
     var payHeading=make('div','hi-pos-payments-heading');
-    var payTitle=make('div','', 'Payments · পেমেন্ট');
-    var add=make('button','', '+ Add');
-    add.type='button';add.id='hi-pos-add-payment';
-    payHeading.append(payTitle,add);
+    var payTitle=make('div','','Payments · পেমেন্ট');
+    addPay=make('button','','+ Add');addPay.id='hi-pos-add-payment';addPay.type='button';
+    addPay.addEventListener('click',function(){
+      var native=sel('#posAddPaymentRowBtn');if(canSplit()&&native){native.click();renderPaymentRows();}
+    });
+    payHeading.append(payTitle,addPay);
     primary=make('div','hi-pos-primary-payment');
-    var method=sel('#posPaymentMethod'),account=sel('#posBankAccountRow');
+    var method=make('select');method.id='hi-pos-payment-method';method.setAttribute('aria-label','Payment method');
+    ['Cash','Bank','Mobile Banking'].forEach(function(v){
+      var opt=make('option','',v);opt.value=v;method.appendChild(opt);
+    });
+    method.addEventListener('change',function(){
+      var original=sel('#posPaymentMethod');if(original){original.value=method.value;nativeChange(original);}
+    });
+    var accountLabel=make('div','hi-pos-payment-account','Cash counter');
+    accountLabel.id='hi-pos-payment-account';
+    var input=make('input');input.id='hi-pos-payment-amount';input.type='number';input.min='0';input.step='0.01';
+    input.setAttribute('aria-label','Amount received');
     amount=sel('#posAmountReceived');
-    if(method)primary.appendChild(method);
-    if(account)primary.appendChild(account);
-    if(amount)primary.appendChild(amount);
-    var remaining=make('button','hi-pos-remaining','Remaining');
-    remaining.type='button';remaining.id='hi-pos-fill-remaining';
-    remaining.addEventListener('click',function(){
-      var total=Number(sel('#posGrandTotal').textContent.replace(/[^0-9.-]/g,''))||0;
-      fillPayment(total);
+    input.addEventListener('input',function(){
+      if(amount){amount.value=input.value;nativeChange(amount);}refreshTotals();
     });
-    primary.appendChild(remaining);
-    split=sel('#posMultiPaymentFields');
-    addPay=add;
-    add.addEventListener('click',function(){
-      var original=sel('#posAddPaymentRowBtn');
-      if(canSplit()&&original)original.click();
+    var fill=make('button','hi-pos-remaining','Remaining');
+    fill.id='hi-pos-fill-remaining';fill.type='button';
+    fill.addEventListener('click',function(){
+      var value=Number(sel('#posGrandTotal').textContent.replace(/[^0-9.-]/g,''))||0;
+      fillPayment(value);
     });
-    pays.append(payHeading,primary);
-    if(split)pays.appendChild(split);
+    primary.append(method,accountLabel,input,fill);
+    split=make('div','hi-pos-proxy-split');
+    split.id='hi-pos-proxy-split';
+    payments.append(payHeading,primary,split);
     var presets=make('div','hi-pos-payment-presets');presets.id='hi-pos-payment-presets';
-    [
-      ['Exact',0],['৳2,000',2000],['৳5,000',5000]
-    ].forEach(function(item){
-      var btn=make('button','',item[0]);btn.type='button';
-      btn.addEventListener('click',function(){
+    [['Exact',0],['৳2,000',2000],['৳5,000',5000]].forEach(function(item){
+      var button=make('button','',item[0]);button.type='button';
+      button.addEventListener('click',function(){
         var total=Number(sel('#posGrandTotal').textContent.replace(/[^0-9.-]/g,''))||0;
         fillPayment(item[1]===0?total:item[1]);
       });
-      presets.appendChild(btn);
+      presets.appendChild(button);
     });
-    pays.appendChild(presets);
+    payments.appendChild(presets);
     feedback=make('div','hi-pos-payment-feedback');
-    var left=make('span');left.append(make('span','','Paid'),make('span','','Change to return'),make('span','','Remaining'));
-    var right=make('strong');right.append(make('span','','৳0'),make('span','','৳0'),make('span','','৳0'));
-    feedback.append(left,right);pays.appendChild(feedback);
-    if(summary)summary.after(pays);else customer.appendChild(pays);
-    if(footer)customer.appendChild(footer);
-    if(errors)customer.appendChild(errors);
+    var labels=make('span');labels.append(make('span','','Paid'),make('span','','Change to return'),make('span','','Remaining'));
+    var values=make('strong');values.append(make('span','','৳0'),make('span','','৳0'),make('span','','৳0'));
+    feedback.append(labels,values);
+    payments.appendChild(feedback);
+    card.appendChild(payments);
+    var error=make('div','hi-pos-payment-error');
+    error.id='hi-pos-proxy-error';
+    error.setAttribute('role','alert');
+    card.appendChild(error);
+    var actions=make('div','hi-pos-proxy-actions');
+    var draft=make('button','hi-pos-action','Save Draft');
+    draft.type='button';
+    draft.addEventListener('click',function(){sel('#posSaveDraftBtn').click();});
+    var finish=make('button','hi-pos-action hi-pos-action-primary','Complete Sale');
+    finish.id='hi-pos-proxy-complete';finish.type='button';
+    finish.addEventListener('click',function(){
+      sel('#posCompleteBtn').click();
+      var nativeError=sel('#posFormError');
+      error.textContent=nativeError&&nativeError.style.display!=='none'?nativeError.textContent:'';
+    });
+    actions.append(draft,finish);card.appendChild(actions);
+    var note=make('div','hi-pos-unsupported-note');
+    note.id='hi-pos-capability-note';
+    note.textContent='Mixed units, split payments, Customer Quick Add, installment and Store Credit require verified Shop D1 posting. Unsupported actions remain gated.';
+    card.appendChild(note);
+    layout.appendChild(card);
 
-    var originalAdd=sel('#posAddPaymentRowBtn');
-    if(originalAdd)originalAdd.hidden=true;
-    renderQuickProducts();
-    sel('#posClearCartBtn').hidden=true;
-    updateCustomer();refreshTotals();decorateCart();
-
-    // Native POS cart/list data are the source of truth, not copied arrays.
+    renderQuickProducts();updateCustomer();decorateCart();refreshTotals();
     var observer=new MutationObserver(function(){decorateCart();refreshTotals();});
     observer.observe(cart,{childList:true});
     var total=sel('#posGrandTotal');
     if(total)new MutationObserver(refreshTotals).observe(total,{childList:true,characterData:true,subtree:true});
-    var products=sel('#posProductGrid');
-    if(products)new MutationObserver(renderQuickProducts).observe(products,{childList:true});
-    if(amount)amount.addEventListener('input',refreshTotals);
-    if(split)split.addEventListener('input',refreshTotals);
+    var productGrid=sel('#posProductGrid');
+    if(productGrid)new MutationObserver(renderQuickProducts).observe(productGrid,{childList:true});
     sel('#posCustomerName').addEventListener('change',updateCustomer);
     sel('#posCustomerPhone').addEventListener('change',updateCustomer);
+    if(amount)amount.addEventListener('input',refreshTotals);
     document.addEventListener('click',function(event){
-      if(state.customerMenuOpen && !picker.contains(event.target)&&!pickerMenu.contains(event.target)){
+      if(state.customerMenuOpen&&!picker.contains(event.target)&&!pickerMenu.contains(event.target)){
         state.customerMenuOpen=false;pickerMenu.hidden=true;
       }
     });
     window.addEventListener('keydown',function(event){
-      if(event.key==='F2'&&!event.defaultPrevented&&page.hidden===false){
-        event.preventDefault();search.click();
-      }
+      if(event.key==='F2'&&!event.defaultPrevented&&!page.hidden){event.preventDefault();search.click();}
     });
-    // Truthfully indicate that financial features outside the current
-    // source/Shop backend remain subject to the private Owner feature gates.
-    var note=make('div','hi-pos-unsupported-note');
-    note.id='hi-pos-capability-note';
-    note.textContent='Customer Quick Add, mixed-unit checkout, installment and split payments require the connected Shop backend. Unsupported financial actions are never submitted as Cash.';
-    customer.appendChild(note);
+  }
+  function renderPaymentRows(){
+    if(!split)return;
+    split.replaceChildren();
+    if(!canSplit())return;
+    (posState.paymentRows||[]).forEach(function(row,index){
+      var host=make('div','hi-pos-primary-payment');
+      var method=make('select');
+      ['Cash','Bank','Mobile Banking'].forEach(function(m){
+        var opt=make('option','',m);opt.value=m;opt.selected=row.method===m;method.appendChild(opt);
+      });
+      method.setAttribute('aria-label','Payment '+(index+1)+' method');
+      method.addEventListener('change',function(){
+        var native=sel('#posMultiPaymentRows [data-payment-row="'+row.id+'"] [data-payment-field="method"]');
+        if(native){native.value=method.value;nativeChange(native);}
+      });
+      var account=make('div','hi-pos-payment-account',row.accountId||'Account');
+      var amountInput=make('input');
+      amountInput.type='number';amountInput.min='0';amountInput.step='0.01';amountInput.value=row.amount||'';
+      amountInput.setAttribute('aria-label','Payment '+(index+1)+' amount');
+      amountInput.addEventListener('input',function(){
+        var native=sel('#posMultiPaymentRows [data-payment-row="'+row.id+'"] [data-payment-field="amount"]');
+        if(native){native.value=amountInput.value;nativeChange(native);}refreshTotals();
+      });
+      var due=make('button','hi-pos-remaining','Remaining');
+      due.type='button';due.addEventListener('click',function(){
+        var native=sel('#posMultiPaymentRows [data-payment-row="'+row.id+'"] [data-payment-action="remaining"]');
+        if(native){native.click();amountInput.value=posState.paymentRows[index]?.amount||'';refreshTotals();}
+      });
+      host.append(method,account,amountInput,due);
+      split.appendChild(host);
+    });
   }
   mount();
 })();
