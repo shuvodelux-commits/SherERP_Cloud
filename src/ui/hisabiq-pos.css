@@ -402,3 +402,85 @@
   position:relative!important;top:auto!important;max-height:none!important;overflow:visible!important;
  }
 }
+
+
+/* Screenshot refinement: the preexisting POS V2 controller also decorates each
+   row with a line number and reorder handle, and Owner parity adds a heading.
+   Hide only the duplicate presentation while retaining all original handlers. */
+#app #page-pos[data-hisabiq-pos] .hisabiq-pos-heading {display:none!important;}
+#app #page-pos[data-hisabiq-pos] .pos-product-card > .pos-section-head {display:none!important;}
+#app #page-pos[data-hisabiq-pos] .cart-row > .pos-v2-line-no {display:none!important;}
+#app #page-pos[data-hisabiq-pos] .cart-row .pos-v2-reorder-handle {display:none!important;}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] #posCartList > .cart-row {
+  display:grid!important;
+  grid-template-columns:29px minmax(155px,1fr) 80px 66px 96px 89px 25px!important;
+  min-width:620px!important;
+  width:100%!important;
+  gap:5px!important;
+  padding:8px 10px!important;
+  min-height:60px!important;
+  align-items:center!important;
+}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] .pos-cart-columns {
+  display:grid!important;
+  grid-template-columns:29px minmax(155px,1fr) 80px 66px 96px 89px 25px!important;
+  min-width:620px!important;
+  gap:5px!important;
+  padding:8px 10px!important;
+}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row .c-name {
+  grid-column:auto!important;
+  width:auto!important;
+  min-width:0!important;
+  padding:0!important;
+}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row .c-name-main {
+  min-width:0!important;
+  padding:0!important;
+  display:flex!important;
+  flex-wrap:wrap!important;
+  gap:2px 6px!important;
+}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row .c-name-title {
+  display:block!important;
+  overflow:visible!important;
+  white-space:normal!important;
+  word-break:normal!important;
+  overflow-wrap:anywhere!important;
+  line-height:1.25!important;
+}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row .pos-v2-product-meta {
+  width:100%!important;
+  min-width:0!important;
+  position:static!important;
+  margin-top:3px!important;
+  padding:0!important;
+  font-size:10px!important;
+  white-space:normal!important;
+}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row :is(.c-qty-wrap,.c-unit-wrap,.c-price-wrap,.c-line-total-wrap){
+  grid-column:auto!important;
+  grid-row:auto!important;
+  align-self:center!important;
+}
+body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row > :is(.cart-remove,.cart-remove-placeholder){
+  grid-column:auto!important;
+  grid-row:auto!important;
+}
+#app #page-pos[data-hisabiq-pos] .hi-pos-grip {
+  font-size:15px!important;
+  letter-spacing:0!important;
+  gap:4px!important;
+  width:29px!important;
+}
+#app #page-pos[data-hisabiq-pos] .hi-pos-grip::before {
+  content:attr(data-hi-pos-row) ".";
+  font-size:10px;
+  color:#8291a5;
+}
+#app #page-pos[data-hisabiq-pos] .pos-cart-entry-row .hi-pos-grip {display:none!important;}
+@media(max-width:760px){
+ body.pos-v2-active #app #page-pos[data-hisabiq-pos] #posCartList > .cart-row {
+   min-width:620px!important;
+ }
+}
