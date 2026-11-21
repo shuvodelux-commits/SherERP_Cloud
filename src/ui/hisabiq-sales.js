@@ -120,6 +120,8 @@
         (typeof subNavVisible_!=='function'||subNavVisible_(child,'sales'));
     });
     if(!routes.length)return;
+    var order=['sales','returns','returnHistory','draftSales'];
+    routes.sort(function(a,b){return order.indexOf(a.key)-order.indexOf(b.key);});
     var same=Array.from(tabs.querySelectorAll('[data-h-sales-route]'))
       .map(function(button){return button.dataset.hSalesRoute;}).join('|')
       ===routes.map(function(child){return child.key;}).join('|');
@@ -200,6 +202,7 @@
       if(key==='actions')return;
       var row=document.createElement('label');
       row.setAttribute('role','menuitemcheckbox');
+      row.tabIndex=0;
       row.setAttribute('aria-checked',String(visible[key]));
       row.textContent=label[key];
       var check=document.createElement('input');
@@ -217,10 +220,19 @@
   menuButton.addEventListener('click',function(){
     if(!menu.hidden){closeMenu();return;}
     fillMenu();menu.hidden=false;menuButton.setAttribute('aria-expanded','true');
+    menu.querySelector('[role="menuitemcheckbox"]:not([aria-disabled="true"])')?.focus();
   });
   menu.addEventListener('keydown',function(event){
     if(event.key==='Escape'){event.preventDefault();closeMenu();menuButton.focus();}
+    if(event.key==='ArrowDown' || event.key==='ArrowUp'){
+      event.preventDefault();
+      var entries=Array.from(menu.querySelectorAll('[role="menuitemcheckbox"]'));
+      var index=entries.indexOf(document.activeElement);
+      var next=(index+(event.key==='ArrowDown'?1:-1)+entries.length)%entries.length;
+      entries[next]?.focus();
+    }
     if(event.key===' ' || event.key==='Enter'){
+      event.preventDefault();
       var row=event.target.closest('[role="menuitemcheckbox"]');
       if(row){var input=row.querySelector('input');if(input&&!input.disabled)input.click();}
     }
