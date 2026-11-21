@@ -1,0 +1,88 @@
+/* Scoped to the authenticated Owner Settings pages. HisabIQ design values. */
+.hisabiq-settings-layout{--hi-ink:#0b1a2c;--hi-muted:#5a6b80;--hi-teal:#0d7c74;--hi-border:#e3e8ee;--hi-card:#fff;--hi-bg:#f5f7fa;--hi-accent:#eaf6f4;display:grid;grid-template-columns:minmax(0,245px) minmax(0,1fr);gap:20px;min-width:0;color:var(--hi-ink);font:400 14px/1.45 Geist,'Hind Siliguri',system-ui,sans-serif}
+.hisabiq-settings-layout *{box-sizing:border-box;font-variant-numeric:normal;font-feature-settings:normal}
+.hisabiq-settings-layout [hidden]{display:none!important}
+.hisabiq-settings-layout .hisabiq-settings-nav{min-width:0;align-self:start;position:sticky;top:12px;display:grid;gap:12px}
+.hisabiq-settings-layout .hisabiq-settings-home{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--hi-border);border-radius:8px;padding:12px;background:var(--hi-card);font-size:12px}
+.hisabiq-settings-home span{font-size:10.5px;color:var(--hi-muted)}
+.hisabiq-settings-layout .hisabiq-settings-search{width:100%;height:36px;padding:0 12px;border:1px solid #7b8999;border-radius:6px;background:var(--hi-card);color:var(--hi-ink);font-size:13px;min-width:0}
+.hisabiq-settings-layout .hisabiq-settings-directory{border:1px solid var(--hi-border);border-radius:12px;background:var(--hi-card);padding:8px;max-height:min(72dvh,760px);overflow:auto}
+.hisabiq-settings-layout .hisabiq-settings-group{margin:0 0 4px}
+.hisabiq-settings-layout .hisabiq-settings-group-title{margin:6px 12px 3px;color:var(--hi-muted);font-size:11px;font-weight:600}
+.hisabiq-settings-layout .hisabiq-settings-nav-item{display:flex;width:100%;align-items:center;gap:10px;text-align:left;min-width:0;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--hi-muted);font-size:12px;line-height:18px;transition:background-color .11s ease,color .11s ease;cursor:pointer;text-decoration:none}
+.hisabiq-settings-layout .hisabiq-settings-nav-item:hover:not(.hisabiq-settings-coming){background:var(--hi-bg);color:var(--hi-ink)}
+.hisabiq-settings-layout .hisabiq-settings-nav-item.is-active{background:var(--hi-accent);color:var(--hi-ink);font-weight:600}
+.hisabiq-settings-layout .hisabiq-settings-nav-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;min-width:20px;font-size:16px;color:var(--hi-teal);font-family:system-ui}
+.hisabiq-settings-layout .hisabiq-settings-nav-copy{display:flex;flex-direction:column;min-width:0}
+.hisabiq-settings-layout .hisabiq-settings-nav-copy small{font:400 10.5px/1.35 'Hind Siliguri',sans-serif;color:var(--hi-muted)}
+.hisabiq-settings-layout .hisabiq-settings-coming{opacity:.57;cursor:not-allowed}
+.hisabiq-settings-layout .hisabiq-settings-empty{color:var(--hi-muted);font-size:12px;padding:10px}
+.hisabiq-settings-layout .hisabiq-settings-main{min-width:0;padding:0 0 28px}
+.hisabiq-settings-layout .hisabiq-settings-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 16px}
+.hisabiq-settings-layout .hisabiq-settings-heading h2{font-size:20px;line-height:28px;font-weight:600;margin:0;color:var(--hi-ink)}
+.hisabiq-settings-layout .hisabiq-settings-heading p{font:400 12px 'Hind Siliguri',sans-serif;color:var(--hi-muted);margin:0}
+.hisabiq-settings-layout .hisabiq-settings-alert{padding:12px 14px;border:1px solid #d4dce3;border-radius:8px;background:#f2f6f8;color:#41566a;font-size:12px;line-height:1.55;margin:0 0 16px}
+.hisabiq-settings-layout .hisabiq-settings-original{background:var(--hi-card);border:1px solid var(--hi-border);border-radius:12px;padding:12px;margin-top:16px}
+.hisabiq-settings-original summary{cursor:pointer;color:var(--hi-muted);font-size:12px;font-weight:600}
+.hisabiq-settings-layout .hisabiq-settings-legacy{min-width:0}
+.hisabiq-settings-layout .hisabiq-settings-original .hisabiq-settings-legacy{margin-top:16px}
+.hisabiq-settings-layout .hisabiq-settings-readonly :is(input,select,textarea,button){cursor:not-allowed;opacity:.65}
+.hisabiq-settings-layout .hisabiq-settings-readonly .card{border-color:var(--hi-border);box-shadow:none;border-radius:12px}
+.hisabiq-settings-layout .hisabiq-settings-card{border:1px solid var(--hi-border);border-radius:12px;background:var(--hi-card);padding:16px;min-width:0}
+.hisabiq-settings-layout .hisabiq-settings-card h3{font-size:14px;line-height:20px;font-weight:600;margin:0 0 4px;color:var(--hi-ink)}
+.hisabiq-settings-layout .hisabiq-settings-description{font-size:11px;line-height:18px;color:var(--hi-muted);margin:0 0 14px}
+.hisabiq-settings-layout .hisabiq-invoice-studio{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.hisabiq-settings-layout .hisabiq-invoice-editor{display:grid;gap:16px;min-width:0}
+.hisabiq-settings-layout .hisabiq-invoice-design-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.hisabiq-settings-layout .hisabiq-invoice-design{min-width:0;padding:0 0 10px;background:var(--hi-card);border:1px solid var(--hi-border);border-radius:12px;overflow:hidden;text-align:left;color:var(--hi-ink);cursor:pointer}
+.hisabiq-settings-layout .hisabiq-invoice-design.is-active,.hisabiq-settings-layout .hisabiq-invoice-design[aria-checked=true]{border:2px solid var(--hi-teal);box-shadow:0 0 0 2px #0d7c7418}
+.hisabiq-settings-layout .hisabiq-invoice-design:disabled{opacity:.5;cursor:not-allowed}
+.hisabiq-settings-layout .hisabiq-invoice-design strong,.hisabiq-settings-layout .hisabiq-invoice-design small{display:block;margin:5px 10px 0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.hisabiq-settings-layout .hisabiq-invoice-design strong{font-size:12px}
+.hisabiq-settings-layout .hisabiq-invoice-design small{font-size:10px;color:var(--hi-muted)}
+.hisabiq-settings-layout .hisabiq-invoice-thumbnail{height:100px;background:#f5f7fa;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.hisabiq-settings-layout .hisabiq-invoice-thumbnail i{font-size:8px;font-weight:400;font-style:normal;white-space:nowrap;color:#667989}
+.hisabiq-settings-layout .hisabiq-invoice-thumbnail:before{content:'';position:absolute}
+.hisabiq-settings-layout .hisabiq-invoice-thumbnail.classic{border-bottom:4px double #4e6980}
+.hisabiq-settings-layout .hisabiq-invoice-thumbnail.compact{background:#eaf6f4;gap:0}
+.hisabiq-settings-layout .hisabiq-invoice-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.hisabiq-settings-layout .hisabiq-invoice-field{display:grid;gap:6px;font-size:13px;font-weight:500}
+.hisabiq-settings-layout .hisabiq-invoice-field select{height:36px;width:100%;min-width:0;padding:0 8px;border:1px solid #7b8999;border-radius:6px;background:var(--hi-card);color:var(--hi-ink);font-size:13px;font-family:inherit}
+.hisabiq-settings-layout .hisabiq-invoice-toggles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
+.hisabiq-settings-layout .hisabiq-invoice-toggle{display:flex;gap:8px;align-items:center;min-width:0;font-size:12px;line-height:17px;cursor:pointer}
+.hisabiq-settings-layout .hisabiq-invoice-toggle input{width:16px;height:16px;accent-color:var(--hi-teal);margin:0;flex:none}
+.hisabiq-settings-layout .hisabiq-invoice-preview-card{position:sticky;top:12px}
+.hisabiq-settings-layout .hisabiq-invoice-preview-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.hisabiq-settings-layout .hisabiq-invoice-preview-heading span{font-size:10px;color:var(--hi-muted)}
+.hisabiq-settings-layout .hisabiq-invoice-preview{background:var(--hi-bg);padding:14px;border-radius:8px;overflow:auto;display:flex;justify-content:center;max-width:100%}
+.hisabiq-settings-layout .hisabiq-invoice-paper{width:min(100%,340px);min-width:0;background:#fff;color:#0b1a2c;box-shadow:0 2px 8px #0b1a2c22;padding:22px 18px;min-height:460px;font:400 11px/1.5 Geist,'Hind Siliguri',sans-serif;transition:width .2s ease}
+.hisabiq-settings-layout .hisabiq-invoice-preview[data-paper='80mm'] .hisabiq-invoice-paper{max-width:245px}
+.hisabiq-settings-layout .hisabiq-invoice-preview[data-paper='58mm'] .hisabiq-invoice-paper{max-width:190px;font-size:9px;padding:12px 8px}
+.hisabiq-settings-layout .hisabiq-invoice-preview[data-paper='businesspad'] .hisabiq-invoice-paper{border-top:9px solid #0d7c74}
+.hisabiq-settings-layout .hisabiq-invoice-paper-head{display:grid;gap:3px;text-align:center;padding-bottom:12px;border-bottom:2px solid #0b1a2c}
+.hisabiq-settings-layout .hisabiq-invoice-paper-head strong{font-size:16px;line-height:20px}
+.hisabiq-settings-layout .hisabiq-invoice-paper-head small{font-size:10px}
+.hisabiq-settings-layout .hisabiq-invoice-meta{margin:9px 0}
+.hisabiq-settings-layout .hisabiq-invoice-lines{width:100%;border-collapse:collapse;margin:12px 0;font-size:inherit;text-align:left}
+.hisabiq-settings-layout .hisabiq-invoice-lines th{border-bottom:1px solid #8392a2;padding:5px 3px;font-weight:600}
+.hisabiq-settings-layout .hisabiq-invoice-lines td{border-bottom:1px solid #e3e8ee;padding:6px 3px}
+.hisabiq-settings-layout .hisabiq-invoice-lines :is(td,th):not(:first-child){text-align:right}
+.hisabiq-settings-layout .hisabiq-invoice-totals{display:grid;text-align:right;gap:5px;margin-bottom:12px}
+.hisabiq-settings-layout .hisabiq-invoice-totals p{margin:0}
+.hisabiq-settings-layout .hisabiq-invoice-totals strong{font-size:13px}
+.hisabiq-settings-layout .hisabiq-invoice-note{margin:8px 0;color:#526679;font-size:10px}
+.hisabiq-settings-layout .hisabiq-invoice-signatures{margin:40px 0 14px;border-top:1px solid #8392a2;padding-top:5px;white-space:pre-wrap;font-size:9px}
+.hisabiq-settings-layout .hisabiq-invoice-paper footer{text-align:center;padding-top:10px;border-top:1px solid #8392a2;font-size:10px}
+.hisabiq-settings-layout .hisabiq-invoice-classic .hisabiq-invoice-lines :is(td,th){border:1px solid #8392a2}
+.hisabiq-settings-layout .hisabiq-invoice-compact{font-size:10px;padding:12px;min-height:350px}
+.hisabiq-settings-layout :is(button,input,select,summary):focus-visible{outline:2px solid var(--hi-teal);outline-offset:2px}
+@media(max-width:1279px){.hisabiq-settings-layout .hisabiq-invoice-studio{grid-template-columns:minmax(0,1fr)}.hisabiq-settings-layout .hisabiq-invoice-preview-card{position:static}}
+@media(max-width:1023px){.hisabiq-settings-layout{grid-template-columns:minmax(0,1fr);gap:12px}.hisabiq-settings-layout .hisabiq-settings-nav{position:static;gap:8px}.hisabiq-settings-layout .hisabiq-settings-home{display:none}.hisabiq-settings-layout .hisabiq-settings-directory{display:flex;overflow-x:auto;max-height:none;gap:4px;scrollbar-width:thin}.hisabiq-settings-layout .hisabiq-settings-group{display:contents}.hisabiq-settings-layout .hisabiq-settings-group-title{display:none}.hisabiq-settings-layout .hisabiq-settings-nav-item{width:auto;min-width:max-content;padding:7px 9px}.hisabiq-settings-layout .hisabiq-settings-nav-copy small{display:none}.hisabiq-settings-layout .hisabiq-settings-coming{display:none}.hisabiq-settings-layout .hisabiq-settings-main{padding-bottom:16px}}
+@media(max-width:600px){.hisabiq-settings-layout{gap:12px}.hisabiq-settings-layout .hisabiq-settings-heading h2{font-size:18px}.hisabiq-settings-layout .hisabiq-settings-heading p{display:none}.hisabiq-settings-layout .hisabiq-invoice-design-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hisabiq-settings-layout .hisabiq-invoice-thumbnail{height:75px}.hisabiq-settings-layout .hisabiq-invoice-controls{grid-template-columns:minmax(0,1fr)}.hisabiq-settings-layout .hisabiq-invoice-toggles{grid-template-columns:minmax(0,1fr)}.hisabiq-settings-layout .hisabiq-settings-card{padding:12px}.hisabiq-settings-layout .hisabiq-invoice-preview{padding:8px}.hisabiq-settings-layout .hisabiq-invoice-paper{min-height:340px;padding:14px 10px}}
+@media(prefers-reduced-motion:reduce){.hisabiq-settings-layout *{transition:none!important}}
+
+/* Reference Settings has its own directory: suppress duplicate legacy sub-tabs only here. */
+body:has(#page-settings:not([hidden])) #subNav,
+body:has(#page-invoiceDesign:not([hidden])) #subNav,
+body:has(#page-users:not([hidden])) #subNav,
+body:has(#page-roles:not([hidden])) #subNav{display:none!important}
