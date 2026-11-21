@@ -231,10 +231,8 @@
 }
 @media (max-width:1023px) {
   #app[data-hisabiq-shell] .sidebar {display:none!important;}
-  /* The unauthenticated source shell stays hidden as a whole. Preserve its
-     original desktop-mode display contract for wide fine-pointer landscape. */
-  #app[data-hisabiq-shell][style*="visibility:hidden"] .sidebar,
-  #app[data-hisabiq-shell][style*="visibility: hidden"] .sidebar {display:flex!important;}
+  /* Unauthenticated phones still use the original hidden sidebar. Fine pointer
+     landscape restores its original sidebar display only from 541px upward. */
   #app[data-hisabiq-shell] .main {
     margin-left:0!important;width:100%;
     min-height:100dvh;height:auto;
@@ -355,6 +353,10 @@
   .h-shell-drawer-panel,.h-shell-drawer-nav .nav-item {
     transition:none!important;animation:none!important;
   }
+}
+@media (min-width:541px) and (max-width:1023px) and (pointer:fine) {
+  #app[data-hisabiq-shell][style*="visibility:hidden"] .sidebar,
+  #app[data-hisabiq-shell][style*="visibility: hidden"] .sidebar {display:flex!important;}
 }
 @media print {
   .h-shell-drawer {display:none!important;}
