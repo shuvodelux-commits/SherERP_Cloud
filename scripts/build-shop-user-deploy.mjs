@@ -28,7 +28,8 @@ const SAFE_CODES=new Set([
   'RELEASE_SHOP_MANIFEST_INVALID','RELEASE_GENERATED_CONFIG_INVALID',
   'RELEASE_MODE_INVALID','RELEASE_COMMIT_PIN_INVALID',
   'RELEASE_COMMIT_PIN_MISMATCH','RELEASE_READINESS_JSON_INVALID',
-  'RELEASE_READINESS_PROFILE_MISMATCH','RELEASE_POLICY_MISMATCH'
+  'RELEASE_READINESS_PROFILE_MISMATCH','RELEASE_MODE_REQUIRED_FOR_CORE',
+  'RELEASE_POLICY_MISMATCH'
 ]);
 const invalid=(code='RELEASE_POLICY_MISMATCH')=>{
   const error=new TypeError('Shop-user deployment configuration unavailable (values withheld)');
@@ -109,7 +110,14 @@ export function buildShopUserDeployment(env){
   // An approved core release (first activation OR current-core refresh) is
   // pinned to one exact main SHA and fresh, read-only LIVE D1 proof. A merge
   // cannot silently redeploy login-only or enable an unreviewed feature.
-  if(env.SHERERP_FIRST_SHOP_CORE_RELEASE===undefined)return config;
+  if(env.SHERERP_FIRST_SHOP_CORE_RELEASE===undefined){
+    // Incomplete protected refresh metadata must NEVER silently produce a
+    // login-only profile and reset an already-enabled Shop's core flags.
+    if(env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT!==undefined||
+       env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON!==undefined)
+      invalid('RELEASE_MODE_REQUIRED_FOR_CORE');
+    return config;
+  }
   const sha=/^[a-f0-9]{40}$/;
   if(!['FIRST_SHOP_CORE_MVP_TEST_ONLY','FIRST_SHOP_CORE_MVP_REFRESH']
        .includes(env.SHERERP_FIRST_SHOP_CORE_RELEASE))

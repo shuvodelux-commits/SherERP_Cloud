@@ -41,7 +41,7 @@ const live=(c=base())=>({resources:{bindings:[
 const assess=(version=live(),candidate=base(),sha=SHA,approved=SHA)=>
  auditOwnerCoreRefresh({liveVersion:version,candidate,mainSha:sha,releaseSha:approved});
 
-test('M11 RED: matching approved core refresh proves exact live roster without authorizing deployment',()=>{
+test('M11: matching approved core refresh proves exact live roster without authorizing deployment',()=>{
  const result=assess();
  assert.equal(result.status,'MATCHES_LIVE');
  assert.deepEqual(result.blockers,[]);
@@ -51,7 +51,7 @@ test('M11 RED: matching approved core refresh proves exact live roster without a
  assert.equal(JSON.stringify(result).includes('CLIENT_CANARY'),false);
 });
 
-test('M11 RED: rejects active Shop D1/identity, rate, origin, and complete variable roster drift',()=>{
+test('M11: rejects active Shop D1/identity, rate, origin, and complete variable roster drift',()=>{
  for(const mutate of [
   c=>{c.d1_databases[1].database_id=UUID('5')},
   c=>{c.ratelimits[0].namespace_id='9999'},
@@ -78,7 +78,7 @@ test('M11 RED: rejects active Shop D1/identity, rate, origin, and complete varia
  }
 });
 
-test('M11 RED: refuses extra bindings, duplicate names, secret binding and ambiguous D1 ids',()=>{
+test('M11: refuses extra bindings, duplicate names, secret binding and ambiguous D1 ids',()=>{
  for(const next of [
   v=>v.resources.bindings.push({name:'UNAUTHORIZED',type:'plain_text',text:'hello'}),
   v=>v.resources.bindings.push({...v.resources.bindings[1]}),
@@ -91,14 +91,14 @@ test('M11 RED: refuses extra bindings, duplicate names, secret binding and ambig
  }
 });
 
-test('M11 RED: never trusts branch/unpinned or different SHA, or uncontrolled evidence shape',()=>{
+test('M11: never trusts branch/unpinned or different SHA, or uncontrolled evidence shape',()=>{
  assert.equal(assess(live(),base(),SHA,'b'.repeat(40)).status,'BLOCKED');
  assert.equal(assess(live(),base(),'invalid',SHA).status,'BLOCKED');
  assert.equal(assess({},base()).status,'BLOCKED');
  assert.equal(assess(live(),{...base(),vars:null}).status,'BLOCKED');
 });
 
-test('M11 RED: 0600-only CLI does not reveal private candidate and refuses symlink or mismatched SHA',async()=>{
+test('M11: 0600-only CLI does not reveal private candidate and refuses symlink or mismatched SHA',async()=>{
  const root=await mkdtemp(join(tmpdir(),'shererp-m11-refresh-red-'));
  try{
   await mkdir(join(root,'safe'),{mode:0o700});

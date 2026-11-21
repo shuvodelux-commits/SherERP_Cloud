@@ -29,3 +29,12 @@ Files: `scripts/m11-owner-core-refresh-parity.mjs`, `tests/contract/m11-owner-co
 - TDD RED and GREEN evidence retained; run Owner frontend build, 84-file source manifest, docs checks, `git diff --check`, release tests and full Node suite. Perform Wrangler synthetic `--dry-run` **only**, no Worker uploads.
 - Push independent GitHub branch and open PR linked to #884 and #690, require M03/M11 reviews and exact-head CI. No production deploy, no D1 mutation, production remains NO-GO.
 - After human approval and separate protected Cloudflare Builds release, check actual active version and authenticated Owner UI at 320/390/768/1024/1440; rollback only Worker version if contract mismatch, never restore D1 blindly.
+
+## Execution evidence (read-only, current live Worker)
+
+- **RED:** on `main@d3d77cc3`, the missing comparator import and incomplete-refresh rejection tests produced **2 failures / 14 unaffected passes**. Changes were added only after RED.
+- **GREEN:** affected build/comparator contracts **20/20 pass**; safe CLI matched the real active Worker with `MATCHES_LIVE`, `authorizesDeployment=false`, `productionReady=false`; disabled Cash Return and Supplier Pay remain unchanged.
+- The current approved protected refresh candidate was synthesized locally **from the actual live version** plus a fresh SELECT-only readiness report, pinned to reviewed GitHub `main@d3d77cc3` using the existing M03 generator. No runtime binding mismatch was found.
+- `npm run build:owner-frontend` succeeded on current main (2,074,861-byte Owner ERP HTML); pinned source verifier **84/84**. `wrangler deploy --dry-run --config wrangler.shop-user.jsonc` exited zero on the strictly private local generated profile, and the temporary repo-root config was removed. The dry-run did not upload assets, modify bindings, deploy a version, or write D1.
+- The actual Build Settings API remains owner-scoped and previously returned 403 to current OAuth; this review does not claim that Cloudflare Builds settings have been fixed. The active Worker remains `29e0fc49` at 100%, deployed 07:54 UTC, prior to merged UI #893/#894. `productionReady=false`.
+- Completion requires separate human/operator acceptance, exact final main SHA pin, approved Build variables, a fresh live readiness report, backup/restore & M11 review, deployment in the sole Cloudflare Builds channel, post-deploy signed-in functional screenshots, identity/flag/binding readback. **Do not use the local generator/dry-run as a deployment permit.**

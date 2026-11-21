@@ -289,7 +289,7 @@ test('M11: bad account and manifest are reported without leaking business identi
 
 // M11 / #884: On an already core-enabled Shop, incomplete protected refresh
 // variables must never silently produce the legacy login-only Worker profile.
-test('M11 RED: partial core refresh approval cannot silently disable live Purchase and Cash POS',()=>{
+test('M11: partial core refresh approval cannot silently disable live Purchase and Cash POS',()=>{
  const full=refreshApprovedEnv();
  for(const patch of [
    {SHERERP_FIRST_SHOP_CORE_RELEASE:undefined},
