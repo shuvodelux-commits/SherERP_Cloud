@@ -52,6 +52,20 @@ const supplierHistoricalObjects=Object.freeze({
   owner_supplier_opening_post:['trigger','owner_supplier_opening_checkpoints',
     'a84c271c2b3c84321203c193057fabc582bc52a1735ef6dae4aff273876d193f']
 });
+// M03 additive candidate after first-day Cash 0012 and Supplier 0013: exact Support Product permit
+// table and three SQL-time guards. Never accept partial or altered DDL.
+// Digests are from Workerd D1 sqlite_schema.sql after applying staged 0014.
+const supportProductObjects=Object.freeze({
+  ...supplierHistoricalObjects,
+  shop_support_product_permits:['table','shop_support_product_permits',
+    '2ab2ba09db607a4b97cbd9f6144da3240180be956e1299342b569f748b00aa46'],
+  shop_support_product_permits_no_delete:['trigger','shop_support_product_permits',
+    'e616b8641ef18f11cb5ac36785bf78db3e52cb6a4e486f211cb259bab1dd99b2'],
+  shop_support_product_permits_no_update:['trigger','shop_support_product_permits',
+    '0751d20eecdeb10722162c5615f1162063f8fcc6563e5e21484f568cdeeab7de'],
+  shop_support_product_receipt_gate:['trigger','owner_product_create_receipts',
+    'db628596e0a52942e5abaa22618b5127a92dec22c432174ec8c0e2367d3869f6']
+});
 const isObjectRow=row=>Array.isArray(row)&&row.length===4 &&
   ['table','index','trigger','view'].includes(row[0]) &&
   typeof row[1]==='string'&&row[1].length>0 &&
@@ -113,7 +127,8 @@ export async function matchesApprovedSupplierCashSchemaOverlay(baselineSchema,cu
   return await matchesExactOverlay(baselineSchema,currentSchema,
     approvedSqlObjects,[modifiedBaseObject])||
     await matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema)||
-    await matchesApprovedSupplierOpeningSchemaOverlay(baselineSchema,currentSchema);
+    await matchesApprovedSupplierOpeningSchemaOverlay(baselineSchema,currentSchema)||
+    await matchesApprovedSupportProductSchemaOverlay(baselineSchema,currentSchema);
 }
 
 export async function matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema){
@@ -125,5 +140,14 @@ export async function matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema
  * object remain SHA-pinned. No extra account or ledger DDL is tolerated. */
 export async function matchesApprovedSupplierOpeningSchemaOverlay(baselineSchema,currentSchema){
   return matchesExactOverlay(baselineSchema,currentSchema,supplierHistoricalObjects,
+    [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
+}
+
+
+/** Exact 0010+0011 Supplier Cash, 0012 Cash, 0013 signed Supplier
+ * and 0014 Support Product composition. An earlier incomplete overlay
+ * must never allow an unauthorized Support Product write. */
+export async function matchesApprovedSupportProductSchemaOverlay(baselineSchema,currentSchema){
+  return matchesExactOverlay(baselineSchema,currentSchema,supportProductObjects,
     [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
 }

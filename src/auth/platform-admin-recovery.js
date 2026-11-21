@@ -134,9 +134,22 @@ export async function beginAdminMfaRecovery(env,{browserToken,credential,recover
           AND factor_version=? AND generation=(
             SELECT generation FROM platform_admin_recovery_generation
             WHERE singleton=1 AND factor_version=?)
-          AND EXISTS(SELECT 1 FROM platform_login_attempts WHERE binding_hash=?)
+          AND EXISTS(
+            SELECT 1 FROM platform_admin_auth a
+            JOIN platform_first_superadmin f ON f.singleton=a.singleton
+            WHERE a.singleton=1 AND a.enabled=1 AND a.factor_version=?
+              AND f.subject=?
+          )
+          AND EXISTS(
+            SELECT 1 FROM platform_login_challenges c
+            JOIN platform_login_attempts attempts ON attempts.binding_hash=c.binding_hash
+            WHERE c.binding_hash=? AND c.expires_at_ms>${NOW}
+              AND NOT EXISTS(SELECT 1 FROM platform_login_cancellations cancelled
+                WHERE cancelled.binding_hash=c.binding_hash)
+          )
         RETURNING code_hash`)
-        .bind(binding,codeHash,challenge.factor_version,challenge.factor_version,binding),
+        .bind(binding,codeHash,challenge.factor_version,challenge.factor_version,
+          challenge.factor_version,challenge.subject,binding),
       db.prepare(`INSERT INTO platform_admin_recovery_pending
         (token_hash,binding_hash,subject,encrypted_secret,factor_version,
          issued_at_ms,expires_at_ms)
