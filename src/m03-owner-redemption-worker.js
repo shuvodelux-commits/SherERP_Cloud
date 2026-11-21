@@ -12,8 +12,9 @@ import {createOwnerSupplier,readOwnerSupplierBootstrap,
 import {openOwnerCashSession,closeOwnerCashSession,readOwnerCashSession,readOwnerCashOpeningSuggestion,
   postOwnerCreditPurchase,readOwnerPurchaseBootstrap,readOwnerPurchaseHistory,
   readOwnerPurchaseDetail} from './db/m03-owner-mvp-purchase.js';
-import {pilotShopConfiguration,pilotShopIdentityMatches} from './auth/platform-shop-binding.js';
-import {readOwnerPosBootstrap,postOwnerCashSale,readOwnerCashSaleInvoice}
+import {pilotShopConfiguration,pilotShopIdentityMatches,readPilotShopIdentityMatch} from './auth/platform-shop-binding.js';
+import {readOwnerPosBootstrap,postOwnerCashSale,readOwnerCashSaleInvoice,
+  ownerInvoiceSequence,ownerSalesSchemaReady,readOwnerSalesManagement,OwnerSalesHistoryLimitError}
   from './db/m03-owner-mvp-cash-sale.js';
 import {postOwnerCashReturn,readOwnerInvoiceForReturn,searchOwnerInvoicesForReturn}
   from './db/m03-owner-mvp-cash-return.js';
@@ -21,7 +22,8 @@ import {readOwnerPilotCashBook,readOwnerPilotSupplierPurchaseLedger}
   from './db/m03-owner-pilot-ledger-read.js';
 import {postOwnerSupplierCashPayment} from './db/m08-owner-supplier-cash-pay.js';
 
-import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession} from './auth/platform-owner-sessions.js';
+import {beginOwnerGoogleLogin,loginOwnerWithGoogle,signOutOwnerBrowser,validateOwnerSession,prepareCurrentOwnerPlacement} from './auth/platform-owner-sessions.js';
+import {hashOpaqueSessionToken} from './auth/session-token.js';
 import {readOwnerSupportAudit} from './auth/m03-support-owner-audit.js';
 import {registerOwnerInvoiceProfileRoutes} from './modules/m09-owner-invoice-profile-routes.js';
 
@@ -447,6 +449,57 @@ for(const [path,operation] of [
     return purchaseError(c,result.status);
   });
 }
+
+const salesError=(c,status,code,message)=>c.json({success:false,code,message},status);
+
+const protectOwnerSales=async(c,next)=>{
+  try{
+    const hash=await hashOpaqueSessionToken(getCookie(c,SESSION_COOKIE));
+    const owner=hash&&await prepareCurrentOwnerPlacement(c.env.CONTROL_DB,hash).first();
+    if(!owner)
+      return salesError(c,401,'OWNER_SESSION_REQUIRED','Sign in again to view Sales invoices.');
+    const scope=pilotShopConfiguration(c.env);
+    if(!scope)
+      return salesError(c,503,'SHOP_CONFIGURATION_UNAVAILABLE','Shop storage is unavailable. Contact your administrator.');
+    if(owner.shopId!==scope.shopId)
+      return salesError(c,401,'OWNER_SESSION_REQUIRED','Sign in again to view Sales invoices.');
+    if(owner.databaseId!==scope.databaseId||owner.databaseMarker!==scope.databaseMarker||
+       !await readPilotShopIdentityMatch(scope))
+      return salesError(c,403,'SHOP_ACCESS_DENIED','This Shop storage could not be verified. Contact your administrator.');
+    if(!ownerCashPosEnabled(c.env))
+      return salesError(c,404,'SALES_UNAVAILABLE','Sales history is unavailable in this release.');
+    c.set('salesDb',scope.shopDb);
+  }catch{
+    return salesError(c,503,'SHOP_VERIFICATION_UNAVAILABLE','Shop access could not be verified. Retry or contact your administrator.');
+  }
+  await next();
+};
+
+async function ownerSalesHistory(c,sequence=null){
+  try{
+    const db=c.get('salesDb');
+    if(!await ownerSalesSchemaReady(db))
+      return salesError(c,503,'SALES_SCHEMA_UNAVAILABLE','Sales storage is not ready. Contact your administrator.');
+    const data=await readOwnerSalesManagement(db,sequence);
+    if(data===null)return salesError(c,404,'INVOICE_NOT_FOUND','Invoice not found in this Shop.');
+    const cashReturns=ownerCashReturnEnabled(c.env);
+    return sequence===null?c.json({success:true,data,capabilities:{cashReturns,bankPayments:false}}):
+      c.json({success:true,data:{...data,cashReturnAvailable:cashReturns}});
+  }catch(error){
+    if(error instanceof OwnerSalesHistoryLimitError)
+      return salesError(c,503,'SALES_HISTORY_LIMIT','Sales history exceeds 1,000 invoices. Contact your administrator for help accessing the full history.');
+    return salesError(c,503,'SALES_READ_FAILED','Sales history could not be read. Retry or contact your administrator.');
+  }
+}
+
+app.get('/api/owner/sales',protectLogin,protectOwnerSales,c=>ownerSalesHistory(c));
+app.get('/api/owner/sales/bank-accounts',protectLogin,protectOwnerSales,c=>
+  salesError(c,501,'SALES_BANK_UNAVAILABLE','Bank payments for Sales invoices are unavailable in this release.'));
+app.get('/api/owner/sales/:invoiceId',protectLogin,protectOwnerSales,c=>{
+  const sequence=ownerInvoiceSequence(c.req.param('invoiceId'));
+  if(sequence===null)return salesError(c,400,'INVALID_INVOICE_ID','Enter a valid invoice ID.');
+  return ownerSalesHistory(c,sequence);
+});
 
 // ONE real MVP cash sale through the existing private Owner/Shop boundary.
 app.get('/api/owner/pos/bootstrap',protectLogin,async c=>{

@@ -20,6 +20,8 @@
 
 ## Issue #690 Owner ERP integration
 
+**2026-11-21 Sales Invoice checkpoint.** The live Owner Worker version `65883523-0a33-4247-9870-8d2768f92368` has distinct Control and Shop D1s, matching Control placement and Shop marker, and the required Sales/Return tables. The original Sales list RPC terminates in the Owner browser allowlist and the pre-change Worker has no Sales history route. The global banner is inserted unconditionally and the legacy session field is hard-coded false. The private M03 Sales candidate connects the original screen to scoped list/detail with exact cash invoice and return history, retryable errors, and a separate successful-empty state. The compiled shell reports the verified storage placement at sign-in. Bank payments and Sales mutations require separately reviewed integration. Hosted authenticated browser acceptance and production release remain pending. [Read-only evidence and updated RPC matrix](docs/owner-mvp-rpc-matrix.md#sales-invoice-integration-update-for-690)
+
 The [RPC inventory](docs/owner-mvp-rpc-matrix.md) covers the original screens and the Owner routes at the audit baseline. This batch connects Suppliers → Actions → View to the existing Shop-scoped purchase ledger. Its balance includes all posted credit purchases, and the modal displays up to 50 recent entries. Counter payments, broader Party statements, staff access and automatic multi-shop readiness still require integration and release verification.
 
 ## 20 November 2026 — hosted Admin first-run deployment handoff (newest)
