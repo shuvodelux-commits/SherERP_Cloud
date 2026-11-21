@@ -263,3 +263,47 @@ test('active POS V2 preview delegates to source and never posts a sale',async()=
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+test('POS Quick Add persists a Customer through private API then selects returned ID without clearing cart',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  let writes=0;
+  let customers=[];
+  await page.route('**/api/owner/customers',async route=>{
+    const method=route.request().method();
+    if(method==='POST'){
+      writes++;
+      const body=JSON.parse(route.request().postData()||'{}');
+      assert.ok(/^[a-f0-9-]{36}$/.test(body.operationId));
+      assert.equal(body.openingBalance,'0');
+      customers=[{'Customer ID':'CUS-000002','Customer Name':body.name,
+        Phone:body.phone,'Father Name':'','Relation Type':'Father',
+        Address:'',Notes:'','Opening Balance':0,'Current Due':0,Status:'Active'}];
+      await route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({
+        success:true,data:{id:'CUS-000002'}
+      })});
+    }else{
+      await route.fulfill({contentType:'application/json',body:JSON.stringify({
+        success:true,data:{customers,bankAccounts:[],currencySymbol:''}
+      })});
+    }
+  });
+  await page.route('**/api/owner/pos/bootstrap',async route=>{
+    await route.fulfill({contentType:'application/json',body:JSON.stringify({
+      success:true,data:{customers:customers.map(row=>({id:row['Customer ID'],
+        name:row['Customer Name'],phone:row.Phone,currentDue:0}))}
+    })});
+  });
+  try{
+    const errors=await setup(page);
+    const before=await page.evaluate(()=>posState.cart.map(x=>x.productId));
+    await page.locator('#hi-pos-quick-add').click();
+    await page.locator('#custName').fill('New POS Customer');
+    await page.locator('#custPhone').fill('01712345678');
+    await page.locator('#custSaveBtn').click();
+    await page.waitForFunction(()=>document.getElementById('posCustomerName').dataset.customerId==='CUS-000002',null,{timeout:5000});
+    assert.equal(writes,1);
+    assert.equal(await page.locator('#posCustomerName').inputValue(),'New POS Customer');
+    assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),before);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
