@@ -296,9 +296,21 @@
     number.id='hi-pos-invoice-number';
     info.append(number,make('div','hi-pos-invoice-date',
       'Invoice number assigned after successful checkout'));
+    var invoiceTools=make('div','hi-pos-invoice-actions');
+    var preview=make('button','hi-pos-action','Preview');
+    preview.type='button';preview.id='hi-pos-proxy-preview';
+    preview.addEventListener('click',function(){
+      // Preserve the source's existing invoice preview, accounting breakdown
+      // and no-post/confirmation behavior. Never create a second invoice.
+      var existing=sel('#posHisabiqPreviewButton');
+      if(existing)existing.click();
+      else if(typeof showToast==='function')
+        showToast('Invoice preview is not available for this POS mode.','error');
+    });
     var clear=make('button','hi-pos-action','♜ Clear');
     clear.type='button';clear.addEventListener('click',function(){sel('#posClearCartBtn').click();});
-    invoice.append(info,clear);
+    invoiceTools.append(preview,clear);
+    invoice.append(info,invoiceTools);
     var customerRow=make('div','hi-pos-customer-row');
     var picker=make('button','hi-pos-customer-picker');
     picker.id='hi-pos-customer-picker';picker.type='button';picker.setAttribute('aria-haspopup','listbox');
@@ -413,7 +425,9 @@
     primary=make('div','hi-pos-primary-payment');
     var method=make('select');method.id='hi-pos-payment-method';method.setAttribute('aria-label','Payment method');
     ['Cash','Bank','Mobile Banking'].forEach(function(v){
-      var opt=make('option','',v);opt.value=v;method.appendChild(opt);
+      var blocked=v!=='Cash';
+      var opt=make('option','',blocked?v+' · not connected':v);
+      opt.value=v;opt.disabled=blocked;method.appendChild(opt);
     });
     method.addEventListener('change',function(){
       var original=sel('#posPaymentMethod');if(original){original.value=method.value;nativeChange(original);}
