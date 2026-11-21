@@ -35,6 +35,7 @@ async function syntheticShell(page){
     document.getElementById('shopNameLabel').textContent='Synthetic Hardware';
     window.navItems_=items;
     buildNav_(items);
+    renderSidebarFooter_(); // Original sign-out wiring follows authenticated shell setup.
     goToPage('dashboard');
   },items);
 }
