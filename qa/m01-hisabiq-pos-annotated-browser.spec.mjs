@@ -197,3 +197,29 @@ test('pointer drag cart reorder persists in the original posState cart',async()=
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+for(const width of [390,1440]){
+  test('authenticated user-facing POS V2 displays the new annotated checkout at '+width+'px',async()=>{
+    const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'});
+    try{
+      const errors=await setup(page);
+      await page.evaluate(()=>goToPage('posv2'));
+      await page.waitForFunction(()=>document.body.classList.contains('pos-v2-active'));
+      assert.equal(await page.locator('#page-pos').getAttribute('data-hisabiq-pos'),'',
+        'the user-facing POS V2 must not silently downgrade to old layout');
+      for(const target of ['#hi-pos-customer-picker','#hi-pos-quick-add',
+        '#hi-pos-details-toggle','#hi-pos-discount-input',
+        '#hi-pos-payment-amount','#hi-pos-fill-remaining',
+        '#hi-pos-proxy-complete']){
+        assert.equal(await page.locator(target).isVisible(),true,
+          'annotated control must be visible on real POS route: '+target);
+      }
+      await page.locator('#hi-pos-details-toggle').click();
+      await page.locator('[data-hi-native-field="posCustomerName"]').fill('Real Route Buyer');
+      assert.equal(await page.locator('#posCustomerName').inputValue(),'Real Route Buyer');
+      assert.equal(await page.locator('#hi-pos-add-payment').isDisabled(),true);
+      await page.screenshot({path:join(evidence,width+'-active-posv2.png'),fullPage:true,animations:'disabled'});
+      assert.deepEqual(errors,[]);
+    }finally{await page.close();}
+  });
+}
