@@ -24,15 +24,14 @@ test('Owner Dashboard shows a scoped, hidden until needed inline summary-readine
 test('only missing authenticated Owner Dashboard summary is handled inline; other failures stay visible',async t=>{
   const html=await compiled(t);
   assert.match(html,/serverCall\('getDashboardStats', authToken\)/);
-  assert.match(html,/err\.message\s*===\s*'This ERP action is not available yet\.'/);
+  assert.match(html,/err\?\.code\s*===\s*'OWNER_RPC_UNAVAILABLE'/);
   assert.match(html,/document\.getElementById\('owner-data-notice'\)/);
   assert.match(html,/showToast\(err\.message, 'error'\)/);
-  assert.match(html,/ownerNotice\.textContent/);
-  assert.match(html,/Shop D1 is connected for enabled modules/);
+  assert.match(html,/Shop storage verified at sign-in/);
   assert.match(html,/notice\.hidden\s*=\s*false/);
   assert.match(html,/notice\.hidden\s*=\s*true/);
   assert.equal((html.match(/function dashLoad\(\)/g)||[]).length,1);
-  assert.match(html,/else return Promise\.reject\(new Error\('This ERP action is not available yet\.'\)\)/,
+  assert.match(html,/return Promise\.reject\(unsupported\)/,
     'Other unsupported Owner functions still fail closed');
 });
 
