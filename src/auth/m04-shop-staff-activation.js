@@ -16,14 +16,16 @@ const TOKEN=/^[0-9a-f]{64}$/;
 const ROLE=/^[^\u0000-\u001f\u007f]{1,80}$/u;
 const NAME=/^[^\u0000-\u001f\u007f]{1,120}$/u;
 const INVITATION_LIFETIME_MS=15*60_000;
+const DB_NOW="CAST(unixepoch('subsec')*1000 AS INTEGER)";
 const issueDenied=()=>({issued:false});
 const activateDenied=()=>({activated:false});
 
 const currentAdmin=[
   'FROM auth_sessions s JOIN auth_users admin ON admin.user_id=s.user_id',
   'WHERE s.token_hash=? AND s.revoked_at_ms IS NULL',
-  'AND s.created_at_ms<=? AND s.expires_at_ms>?',
-  'AND s.last_activity_at_ms>? AND s.last_activity_at_ms<=?',
+  'AND s.created_at_ms<='+DB_NOW+' AND s.expires_at_ms>'+DB_NOW,
+  'AND s.last_activity_at_ms>'+DB_NOW+'-'+AUTH_POLICY.sessionIdleMs+
+    ' AND s.last_activity_at_ms<='+DB_NOW,
   "AND admin.role_name='Administrator' AND admin.status='Active'",
   "AND admin.credential_state='Modern'",
   'AND admin.auth_version=s.user_auth_version',
@@ -31,9 +33,7 @@ const currentAdmin=[
   'AND s.role_auth_version IS NULL'
 ].join(' ');
 
-const currentAdminArgs=(tokenHash,nowMs)=>[
-  tokenHash,nowMs,nowMs,nowMs-AUTH_POLICY.sessionIdleMs,nowMs
-];
+const currentAdminArgs=tokenHash=>[tokenHash];
 
 const checkAdminAndRole=[
   'SELECT 1',currentAdmin,
@@ -48,8 +48,9 @@ const insertPending=[
   'JOIN auth_users admin ON admin.user_id=s.user_id',
   "JOIN auth_roles role ON role.role_name=? AND role.status='Active'",
   'WHERE s.token_hash=? AND s.revoked_at_ms IS NULL',
-  'AND s.created_at_ms<=? AND s.expires_at_ms>?',
-  'AND s.last_activity_at_ms>? AND s.last_activity_at_ms<=?',
+  'AND s.created_at_ms<='+DB_NOW+' AND s.expires_at_ms>'+DB_NOW,
+  'AND s.last_activity_at_ms>'+DB_NOW+'-'+AUTH_POLICY.sessionIdleMs+
+    ' AND s.last_activity_at_ms<='+DB_NOW,
   "AND admin.role_name='Administrator' AND admin.status='Active'",
   "AND admin.credential_state='Modern'",
   'AND admin.auth_version=s.user_auth_version',
@@ -70,8 +71,9 @@ const insertTicket=[
   'JOIN auth_users admin ON admin.user_id=s.user_id',
   "WHERE target.user_id=? AND target.status='Inactive'",
   'AND s.revoked_at_ms IS NULL',
-  'AND s.created_at_ms<=? AND s.expires_at_ms>?',
-  'AND s.last_activity_at_ms>? AND s.last_activity_at_ms<=?',
+  'AND s.created_at_ms<='+DB_NOW+' AND s.expires_at_ms>'+DB_NOW,
+  'AND s.last_activity_at_ms>'+DB_NOW+'-'+AUTH_POLICY.sessionIdleMs+
+    ' AND s.last_activity_at_ms<='+DB_NOW,
   "AND admin.role_name='Administrator' AND admin.status='Active'",
   "AND admin.credential_state='Modern'",
   'AND admin.auth_version=s.user_auth_version',
@@ -144,7 +146,7 @@ export async function issueStaffInviteForShop(scope,input){
     // Cheap eligibility check BEFORE an expensive password hash, never used
     // as commit authorization: both INSERTs contain current SQL-time checks.
     const available=await db.prepare(checkAdminAndRole)
-      .bind(...currentAdminArgs(managerHash,nowMs),roleName).first();
+      .bind(...currentAdminArgs(managerHash),roleName).first();
     if(!available)return issueDenied();
     const userId='STAFF-'+crypto.randomUUID();
     const activationToken=createOpaqueSessionToken();
@@ -154,10 +156,9 @@ export async function issueStaffInviteForShop(scope,input){
     const results=await db.batch([
       db.prepare(insertPending).bind(userId,fullName,phone,roleName,
         placeholder.passwordHash,placeholder.passwordSalt,placeholder.iterations,
-        roleName,...currentAdminArgs(managerHash,nowMs)),
+        roleName,...currentAdminArgs(managerHash)),
       db.prepare(insertTicket).bind(tokenHash,checked.shopId,
-        nowMs,expiresAtMs,managerHash,userId,
-        nowMs,nowMs,nowMs-AUTH_POLICY.sessionIdleMs,nowMs)
+        nowMs,expiresAtMs,managerHash,userId)
     ]);
     if(results[0]?.meta?.changes!==1||results[1]?.meta?.changes!==1)
       return issueDenied();
@@ -198,7 +199,7 @@ export async function reissueStaffInviteForShop(scope,input){
     const nowMs=Date.now();
     const managerHash=await hashOpaqueSessionToken(parsed.managerToken);
     const manager=await db.prepare('SELECT admin.user_id AS id,admin.auth_version AS version '+currentAdmin)
-      .bind(...currentAdminArgs(managerHash,nowMs)).first();
+      .bind(...currentAdminArgs(managerHash)).first();
     if(!manager)return issueDenied();
     const activationToken=createOpaqueSessionToken();
     const tokenHash=await hashOpaqueSessionToken(activationToken);
@@ -206,7 +207,7 @@ export async function reissueStaffInviteForShop(scope,input){
     const rotated=await db.prepare(reissueTicket).bind(
       tokenHash,manager.id,manager.version,nowMs,expiresAtMs,
       parsed.userId,checked.shopId,
-      ...currentAdminArgs(managerHash,nowMs),manager.id,manager.version
+      ...currentAdminArgs(managerHash),manager.id,manager.version
     ).first();
     if(rotated?.user_id!==parsed.userId)return issueDenied();
     return {issued:true,shopId:checked.shopId,userId:parsed.userId,
@@ -233,15 +234,15 @@ export async function activateInvitedStaffForShop(scope,input){
     const tokenHash=await hashOpaqueSessionToken(parsed.activationToken);
     const nowMs=Date.now();
     const ticket=await db.prepare(
-      'SELECT user_id FROM auth_staff_activation_tickets WHERE token_hash=? AND shop_id=? AND consumed_at_ms IS NULL AND expires_at_ms>?'
-    ).bind(tokenHash,checked.shopId,nowMs).first();
+      'SELECT user_id FROM auth_staff_activation_tickets WHERE token_hash=? AND shop_id=? AND consumed_at_ms IS NULL AND expires_at_ms>'+DB_NOW
+    ).bind(tokenHash,checked.shopId).first();
     if(!ticket)return activateDenied();
     const credential=await createOfflinePasswordCredential(parsed.password);
     const nonce=createOpaqueSessionToken();
     // D1 batch is atomic. The UPDATE guards are duplicated at SQL commit:
     // a failed token claim cannot activate any account in the second step.
     const results=await db.batch([
-      db.prepare(consumeTicket).bind(nowMs,nonce,tokenHash,checked.shopId,nowMs),
+      db.prepare(consumeTicket).bind(nowMs,nonce,tokenHash,checked.shopId),
       db.prepare(activateUser).bind(
         credential.passwordHash,credential.passwordSalt,credential.iterations,
         ticket.user_id,tokenHash,checked.shopId,nowMs,nonce
