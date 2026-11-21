@@ -263,6 +263,7 @@
     var result = nativeGoToPage(key);
     openedGroup = activeGroupKey();
     syncNavState();
+    syncHeaderControls();
     closeDrawer();
     return result;
   };
@@ -276,6 +277,7 @@
     if (!openedGroup) openedGroup = activeGroupKey();
     renderNavigation(document.getElementById('navList'), groups, false);
     renderNavigation(document.getElementById('h-shell-drawer-nav'), groups, true);
+    syncHeaderControls();
   };
 
   function closeDrawer() {
@@ -373,6 +375,182 @@
       startX = null;
     }, {passive:true});
   }
+  // Reference-style topbar actions; the only navigation source is the
+  // already-filtered SherERP NAV_ITEMS. Never query business data or bypass
+  // the original confirm-and-revoke sign-out workflow.
+  function syncHeaderControls() {
+    var sale = document.getElementById('h-shell-new-sale');
+    var pos = groups.find(function (item) { return item.key === 'pos'; });
+    if (sale) sale.hidden = !pos;
+    var user = document.getElementById('h-shell-user-trigger');
+    var display = document.getElementById('h-shell-user-name');
+    var avatar = document.getElementById('h-shell-user-avatar');
+    var detail = document.getElementById('h-shell-user-detail');
+    var role = document.getElementById('h-shell-user-role');
+    var settings = document.getElementById('h-shell-menu-settings');
+    var name = currentUser && (currentUser.name || currentUser.mobile) || '';
+    if (user) user.hidden = !currentUser;
+    if (display) display.textContent = name;
+    if (detail) detail.textContent = name;
+    if (role) role.textContent = currentUser && currentUser.role || '';
+    if (avatar) {
+      avatar.textContent = name ? name.trim().split(/\s+/).slice(0,2)
+        .map(function (part) { return part[0] || ''; }).join('').toUpperCase() : 'U';
+    }
+    if (settings) settings.hidden = !groups.some(function (item) { return item.key === 'settings'; });
+    var search = document.getElementById('h-shell-search-input');
+    if (search && search.value) search.dispatchEvent(new Event('input'));
+  }
+
+  function installTopbarControls() {
+    var bar = document.querySelector('#app .topbar');
+    var date = document.getElementById('topbarDate');
+    if (!bar || !date || document.getElementById('h-shell-search-input')) return;
+    var search = document.createElement('div');
+    search.className = 'h-shell-search';
+    search.innerHTML =
+      '<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/>'
+      + '<path d="m16 16 5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
+      + '<input id="h-shell-search-input" type="search" autocomplete="off" role="combobox"'
+      + ' aria-label="Search available ERP modules" aria-autocomplete="list" aria-expanded="false"'
+      + ' aria-controls="h-shell-search-results" placeholder="Search modules…">'
+      + '<kbd>Ctrl K</kbd>'
+      + '<div id="h-shell-search-results" role="listbox" aria-label="Matching modules" hidden></div>';
+    bar.insertBefore(search,date);
+    var input = search.querySelector('input');
+    var results = search.querySelector('#h-shell-search-results');
+    function closeSearch() {
+      results.replaceChildren();
+      results.hidden = true;
+      input.setAttribute('aria-expanded','false');
+    }
+    function renderSearch() {
+      var term = input.value.trim().toLowerCase();
+      closeSearch();
+      if (!term) return;
+      var candidates = [];
+      groups.forEach(function (group) {
+        candidates.push({label:group.label,key:navLandingKey_(group)});
+        childrenFor(group).forEach(function (child) {
+          candidates.push({label:group.label+' · '+child.label,key:child.key});
+        });
+      });
+      var added = new Set();
+      candidates.filter(function (option) {
+        return option.label.toLowerCase().includes(term) && !added.has(option.key);
+      }).slice(0,8).forEach(function (option) {
+        added.add(option.key);
+        var button = makeButton('h-shell-search-result',option.label);
+        button.setAttribute('role','option');
+        button.dataset.target = option.key;
+        button.textContent = option.label;
+        button.addEventListener('click',function () {
+          goToPage(option.key);
+          input.value = '';
+          closeSearch();
+        });
+        results.appendChild(button);
+      });
+      if (!results.childElementCount) {
+        var empty = document.createElement('p');
+        empty.className = 'h-shell-search-empty';
+        empty.textContent = 'No available modules found';
+        results.appendChild(empty);
+      }
+      results.hidden = false;
+      input.setAttribute('aria-expanded','true');
+    }
+    input.addEventListener('input',renderSearch);
+    input.addEventListener('keydown',function (event) {
+      if (event.key === 'Escape') { event.preventDefault(); closeSearch(); }
+      if (event.key === 'ArrowDown') {
+        var first = results.querySelector('button');
+        if (first && !results.hidden) { event.preventDefault(); first.focus(); }
+      }
+      if (event.key === 'Enter' && !results.hidden) {
+        var firstResult = results.querySelector('button');
+        if (firstResult) { event.preventDefault(); firstResult.click(); }
+      }
+    });
+    results.addEventListener('keydown',function (event) {
+      if (event.key === 'Escape') {
+        event.preventDefault(); closeSearch(); input.focus();
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        var options = Array.from(results.querySelectorAll('button'));
+        var index = options.indexOf(document.activeElement);
+        var delta = event.key === 'ArrowDown' ? 1 : -1;
+        if (options.length) {
+          event.preventDefault();
+          options[(index+delta+options.length)%options.length].focus();
+        }
+      }
+    });
+    var sale = makeButton('h-shell-new-sale','New sale');
+    sale.id = 'h-shell-new-sale';
+    sale.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+      + '<span>New sale</span>';
+    sale.hidden = true;
+    sale.addEventListener('click',function () {
+      var pos = groups.find(function (item) { return item.key === 'pos'; });
+      if (pos) goToPage(navLandingKey_(pos));
+    });
+    bar.insertBefore(sale,date);
+    var menu = document.createElement('div');
+    menu.className = 'h-shell-user';
+    menu.innerHTML = '<button type="button" id="h-shell-user-trigger" aria-label="User menu"'
+      + ' aria-haspopup="menu" aria-expanded="false" aria-controls="h-shell-user-popover" hidden>'
+      + '<span id="h-shell-user-avatar" class="h-shell-user-avatar">U</span>'
+      + '<span id="h-shell-user-copy"><strong id="h-shell-user-name"></strong>'
+      + '<small id="h-shell-user-role"></small></span>'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
+      + '</button><div id="h-shell-user-popover" role="menu" hidden>'
+      + '<strong id="h-shell-user-detail"></strong>'
+      + '<button id="h-shell-menu-settings" type="button" role="menuitem" hidden>Business settings</button>'
+      + '<button id="h-shell-menu-signout" type="button" role="menuitem">Sign out</button>'
+      + '</div>';
+    bar.appendChild(menu);
+    var userTrigger = menu.querySelector('#h-shell-user-trigger');
+    var popover = menu.querySelector('#h-shell-user-popover');
+    function closeUser(restoreFocus) {
+      if (popover.hidden) return;
+      popover.hidden = true;
+      userTrigger.setAttribute('aria-expanded','false');
+      if (restoreFocus) userTrigger.focus({preventScroll:true});
+    }
+    userTrigger.addEventListener('click',function () {
+      var open = popover.hidden;
+      popover.hidden = !open;
+      userTrigger.setAttribute('aria-expanded',String(open));
+    });
+    menu.querySelector('#h-shell-menu-settings').addEventListener('click',function () {
+      closeUser(false);
+      var group = groups.find(function (item) { return item.key === 'settings'; });
+      if (group) goToPage(navLandingKey_(group));
+    });
+    menu.querySelector('#h-shell-menu-signout').addEventListener('click',function () {
+      closeUser(false);
+      document.getElementById('logoutBtn')?.click();
+    });
+    document.addEventListener('click',function (event) {
+      if (!menu.contains(event.target)) closeUser(false);
+      if (!search.contains(event.target)) closeSearch();
+    });
+    document.addEventListener('keydown',function (event) {
+      if ((event.ctrlKey||event.metaKey) && event.key.toLowerCase()==='k' &&
+          desktop() && !event.altKey) {
+        event.preventDefault();input.focus();input.select();
+      }
+      if (event.key === 'Escape' && !popover.hidden) {
+        event.preventDefault();closeUser(true);
+      }
+    });
+    syncHeaderControls();
+  }
+
   function installChrome() {
     var app = document.getElementById('app');
     var header = document.querySelector('#sidebar .sidebar-header');
@@ -427,6 +605,7 @@
     },true);
     menuToggle.setAttribute('aria-label','Open ERP navigation');
     menuToggle.setAttribute('aria-controls','erp-mobile-drawer');
+    installTopbarControls();
     menuToggle.addEventListener('click',function (event) {
       if (desktop()) return;
       event.preventDefault();event.stopImmediatePropagation();
