@@ -70,6 +70,7 @@ async function setup(page){
     ];
     posState.customers=[{id:'CUS-000001',name:'Rahim Hardware',phone:'01712345678',address:''}];
     posRenderCart_();
+    posRenderProductGrid_();
   });
   await page.locator('#hi-pos-customer-picker').waitFor();
   await page.locator('#hi-pos-invoice-number').waitFor();
@@ -85,6 +86,8 @@ for(const width of widths){
         '#posCartList [data-cart-product-mode="add"]','#hi-pos-payment-presets','#posCompleteBtn'];
       for(const selector of required)assert.equal(await page.locator(selector).count(),1,selector);
       assert.equal(await page.locator('#posCartList .hi-pos-grip').count(),3);
+      assert.equal(await page.locator('#posProductGrid .product-tile').count(),3,
+        'native product quick-item tiles must render, not be fabricated by CSS');
       assert.equal(await page.locator('[data-hi-pos-unit]').count(),3);
       assert.equal(await page.locator('#hi-pos-add-payment').isDisabled(),true,
         'unconnected split-payment backend must not falsely accept Add');
