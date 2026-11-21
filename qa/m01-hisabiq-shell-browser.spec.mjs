@@ -155,3 +155,138 @@ test('HisabIQ topbar offers authorized navigation search, New Sale and existing 
     assert.equal(await page.locator('#h-shell-search-results [data-target="posv2"]').count(),0);
   }finally{await page.close();}
 });
+
+test('modal navigation isolates background and restores it at 320,390,768px',async()=>{
+  for(const width of [320,390,768]){
+    const page=await browser.newPage({viewport:{width,height:width===320?640:844},hasTouch:width<400});
+    try{
+      await syntheticShell(page);
+      const app=page.locator('#app');
+      assert.equal(await app.evaluate(n=>n.inert),false);
+      await page.locator('#menuToggle').click();
+      assert.equal(await app.evaluate(n=>n.inert),true,'modal must isolate ERP from pointer and keyboard access at '+width);
+      assert.equal(await page.locator('#erp-mobile-drawer').getAttribute('aria-modal'),'true');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(()=>!!document.activeElement.closest('#hisabiqMobileDrawer')),true);
+      await screenshot(page,'after-hardening-'+width+'-drawer');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
+      assert.equal(await app.evaluate(n=>n.inert),false,'modal must restore app after dismiss at '+width);
+      assert.equal(await page.locator('#menuToggle').evaluate(n=>n===document.activeElement),true);
+    }finally{await page.close();}
+  }
+});
+
+test('drawer closes on loss of authenticated app visibility without route exposure',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
+  try{
+    await syntheticShell(page);
+    await page.locator('#menuToggle').click();
+    await page.locator('#hisabiqMobileDrawer').waitFor({state:'visible'});
+    assert.equal(await page.locator('#hisabiqMobileDrawer').isVisible(),true);
+    await page.evaluate(()=>{
+      document.getElementById('app').style.visibility='hidden';
+      document.getElementById('loginOverlay').hidden=false;
+    });
+    await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden,null,{timeout:1600});
+    assert.equal(await page.locator('#h-shell-drawer-nav .nav-item').isVisible().catch(()=>false),false);
+    assert.equal(await page.locator('#app').evaluate(n=>n.inert),false);
+  }finally{await page.close();}
+});
+
+test('user menu keyboard navigation follows ARIA menu focus and returns to trigger',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    await syntheticShell(page);
+    const trigger=page.locator('#h-shell-user-trigger');
+    await trigger.click();
+    assert.equal(await trigger.getAttribute('aria-expanded'),'true');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'h-shell-menu-settings',
+      'menu must focus first visible enabled item');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'h-shell-menu-signout');
+    await page.keyboard.press('ArrowUp');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'h-shell-menu-settings');
+    await page.keyboard.press('End');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'h-shell-menu-signout');
+    await page.keyboard.press('Home');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'h-shell-menu-settings');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#h-shell-user-popover').isVisible(),false);
+    assert.equal(await trigger.evaluate(n=>document.activeElement===n),true);
+    assert.equal(await trigger.getAttribute('aria-expanded'),'false');
+  }finally{await page.close();}
+});
+
+test('modal drawer exits cleanly when tablet becomes desktop',async()=>{
+  const page=await browser.newPage({viewport:{width:768,height:1024}});
+  try{
+    await syntheticShell(page);
+    await page.locator('#menuToggle').click();
+    assert.equal(await page.locator('#hisabiqMobileDrawer').isVisible(),true);
+    await page.setViewportSize({width:1024,height:768});
+    await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
+    assert.equal(await page.locator('#app').evaluate(n=>n.inert),false);
+    assert.equal(await page.locator('#sidebar').isVisible(),true);
+    await screenshot(page,'after-hardening-1024-desktop');
+  }finally{await page.close();}
+});
+
+test('desktop split 1024px retains readable topbar module title and operable search',async()=>{
+  const page=await browser.newPage({viewport:{width:1024,height:768}});
+  try{
+    await syntheticShell(page);
+    const state=await page.locator('#pageTitle').evaluate(node=>({
+      text:node.textContent,
+      scroll:(node.querySelector('.topbar-module-name')||node).scrollWidth,
+      client:(node.querySelector('.topbar-module-name')||node).clientWidth,
+      searchVisible:!!document.querySelector('#h-shell-search-input')?.getClientRects().length,
+      barOverflow:Math.round(document.querySelector('.topbar').scrollWidth-document.querySelector('.topbar').clientWidth)
+    }));
+    await screenshot(page,'after-hardening-1024-topbar');
+    assert.match(state.text,/Dashboard/);
+    assert.equal(state.searchVisible,true,'reference split desktop still exposes module search');
+    assert.ok(state.scroll<=state.client+2,'module title should not truncate at 1024: '+JSON.stringify(state));
+    assert.ok(state.barOverflow<=2,'topbar must not horizontally overflow: '+JSON.stringify(state));
+    await page.keyboard.press('Control+k');
+    assert.equal(await page.locator('#h-shell-search-input').evaluate(n=>document.activeElement===n),true);
+  }finally{await page.close();}
+});
+
+test('320px drawer footer wraps long English and Bangla business name without clipping',async()=>{
+  const page=await browser.newPage({viewport:{width:320,height:640},hasTouch:true});
+  try{
+    await syntheticShell(page);
+    const name='নবাবীহার্ডওয়্যারএন্ডইলেকট্রিক্যালসুপারস্টোর2026NawabiganjElectricalWarehouse';
+    await page.evaluate(name=>document.getElementById('shopNameLabel').textContent=name,name);
+    await page.locator('#menuToggle').click();
+    await page.locator('#hisabiqMobileDrawer').waitFor({state:'visible'});
+    const overflow=await page.locator('.h-shell-drawer-panel').evaluate(n=>({
+      scroll:n.scrollWidth,client:n.clientWidth,
+      footer:n.querySelector('#h-shell-drawer-business').textContent
+    }));
+    await screenshot(page,'after-hardening-320-long-business');
+    assert.equal(overflow.footer,name);
+    assert.ok(overflow.scroll<=overflow.client+2,'drawer overflow with long bilingual business: '+JSON.stringify(overflow));
+  }finally{await page.close();}
+});
+
+test('reduced motion keeps accessible drawer interactions without animation',async()=>{
+  const page=await browser.newPage({
+    viewport:{width:390,height:844},hasTouch:true,reducedMotion:'reduce'
+  });
+  try{
+    await syntheticShell(page);
+    await page.locator('#menuToggle').click();
+    const css=await page.locator('.h-shell-drawer-panel').evaluate(n=>({
+      duration:getComputedStyle(n).transitionDuration,
+      transform:getComputedStyle(n).transform
+    }));
+    assert.equal(css.duration,'0s','reduced motion disables slide transition');
+    assert.equal(await page.locator('#app').evaluate(n=>n.inert),true);
+    await screenshot(page,'after-hardening-390-reduced-motion');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=>document.getElementById('hisabiqMobileDrawer').hidden);
+    assert.equal(await page.locator('#app').evaluate(n=>n.inert),false);
+  }finally{await page.close();}
+});
