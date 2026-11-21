@@ -13,6 +13,8 @@ import {OWNER_READY_SHOP_MIGRATION_PLAN} from '../db/m03-owner-ready-shop-migrat
 import {readPortP2ShopCheckpoint,matchesPortP2MigrationPrefix}
   from '../db/port-p2-shop-schema.js';
 import {verifyReleaseRoster} from '../provisioning/verified-binding-roster.js';
+import {matchesApprovedSupplierCashSchemaOverlay}
+  from '../db/m03-approved-supplier-overlay.js';
 
 const same=(a,b)=>a?.shopId===b?.shopId&&
   a?.databaseId===b?.databaseId&&
@@ -87,8 +89,15 @@ export async function resolveAuthorizedOwnerShop(env,token){
 
     const {receipts,schema}=await readPortP2ShopCheckpoint(shopDb);
     if(receipts.length!==OWNER_READY_SHOP_MIGRATION_PLAN.length||
-      !matchesPortP2MigrationPrefix(receipts,OWNER_READY_SHOP_MIGRATION_PLAN)||
-      receipts.at(-1)?.schema!==schema)return stopped();
+      !matchesPortP2MigrationPrefix(receipts,OWNER_READY_SHOP_MIGRATION_PLAN))
+      return stopped();
+    // The original 13 immutable receipts still anchor the Shop. Later
+    // reviewed Supplier/Cash/Support DDL is valid only if the same strict
+    // SHA-256-pinned verifier used by hosted single-Shop readiness accepts
+    // the COMPLETE overlay. Partial or unknown SQL must remain unavailable.
+    const baseline=receipts.at(-1)?.schema;
+    if(baseline!==schema && !await matchesApprovedSupplierCashSchemaOverlay(
+      baseline,schema))return stopped();
     if(published.binding!=='PLATFORM_PILOT_DB'){
       if(published.schemaRevision!=='owner-ready-v1')return stopped();
       const payload=JSON.stringify(receipts.map(r=>[r.position,r.name,r.checksum]));
