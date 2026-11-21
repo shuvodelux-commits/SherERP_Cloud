@@ -160,3 +160,36 @@ test('revocation after Shop D1 read but before current Control D1 check fails cl
   assert.equal(result.status,'denied');
   assert.equal(changed,true);
 });
+
+test('approved 0010-0014 D1 overlays remain Owner-routable; partial/tampered schemas fail closed',async t=>{
+  const {env,shopA,shopB}=await fixture(t);
+  const shopDb=env[shopA.binding];
+  const paths=[
+    '0010_owner_supplier_cash_pay.sql',
+    '0011_owner_supplier_cash_reconciliation.sql',
+    '0012_owner_first_day_cash_opening.sql',
+    '0013_owner_supplier_historical_opening.sql',
+    '0014_support_product_permit.sql'
+  ];
+  assert.equal((await resolveAuthorizedOwnerShop(env,sessionA)).status,'ready');
+  await sql(shopDb,'staging-migrations/shop-owner-write/'+paths[0]);
+  assert.equal((await resolveAuthorizedOwnerShop(env,sessionA)).status,'unavailable',
+    'only 0010 without its reconciliation partner must fail closed');
+  for(const name of paths.slice(1)){
+    await sql(shopDb,'staging-migrations/shop-owner-write/'+name);
+    assert.equal((await resolveAuthorizedOwnerShop(env,sessionA)).status,'ready',
+      'a fully pinned approved overlay must remain Owner-routable: '+name);
+    assert.equal((await resolveAuthorizedOwnerShop(env,sessionB)).status,'ready',
+      'Shop B remains on separate original 13-receipt schema: '+name);
+  }
+  const result=await resolveAuthorizedOwnerShop(env,sessionA);
+  assert.equal(await result.shopDb.prepare(
+    'SELECT value FROM settings WHERE key=?').bind('shared-product').first('value'),
+  'price-100');
+  assert.equal((await resolveAuthorizedOwnerShop(env,sessionB)).shopId,shopB.shopId);
+  await shopDb.prepare('DROP TRIGGER shop_support_product_receipt_gate').run();
+  assert.equal((await resolveAuthorizedOwnerShop(env,sessionA)).status,'unavailable',
+    'missing one SQL-time Support protection must never keep the Shop ready');
+  assert.equal((await resolveAuthorizedOwnerShop(env,sessionB)).status,'ready',
+    'Shop B must remain independently available');
+});
