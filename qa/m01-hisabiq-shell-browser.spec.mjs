@@ -40,8 +40,10 @@ async function syntheticShell(page){
   },items);
 }
 async function screenshot(page,label){
-  await mkdir('test-results/hisabiq-shell',{recursive:true});
-  await page.screenshot({path:'test-results/hisabiq-shell/'+label+'.png'});
+  // M01 GitHub workflow uploads test-results/m01-browser/, so these
+  // screenshot states must land inside that retained review artifact.
+  await mkdir('test-results/m01-browser/hisabiq-shell',{recursive:true});
+  await page.screenshot({path:'test-results/m01-browser/hisabiq-shell/'+label+'.png'});
 }
 
 test('HisabIQ desktop shell has exact widths, current child and persisted shortcut',async()=>{
