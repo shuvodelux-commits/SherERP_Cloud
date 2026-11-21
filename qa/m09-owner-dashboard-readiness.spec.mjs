@@ -81,7 +81,7 @@ for(const width of [320,390,768,1024,1440]){
       assert.match(message,/individual modules/i);
       assert.match(message,/11-field/);
       assert.doesNotMatch(await page.locator('body').innerText(),
-        /Shop business data is not connected yet\./);
+        /This ERP action is not available yet\./);
       assert.match(await page.locator('#owner-data-notice').innerText(),
         /Shop D1 is connected for enabled modules/);
       assert.doesNotMatch(await page.locator('#owner-data-notice').innerText(),
