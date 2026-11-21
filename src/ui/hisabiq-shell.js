@@ -343,15 +343,22 @@
       return;
     }
     if (event.key !== 'Tab' || !drawerPanel) return;
+    // Own every Tab event while the modal is open. Relying on native DOM tab
+    // order between the first and last controls occasionally reaches the
+    // backdrop/outside the dialog in Chromium during responsive reflow.
+    event.preventDefault();
+    event.stopPropagation();
     var nodes = Array.from(drawerPanel.querySelectorAll('button:not([disabled]):not([hidden]), a[href], [tabindex]:not([tabindex="-1"])'))
       .filter(function (el) { return !!el.getClientRects().length; });
-    if (!nodes.length) return;
-    var first = nodes[0], last = nodes[nodes.length-1];
-    if (event.shiftKey && (document.activeElement === first || !drawerPanel.contains(document.activeElement))) {
-      event.preventDefault();last.focus();
-    } else if (!event.shiftKey && (document.activeElement === last || !drawerPanel.contains(document.activeElement))) {
-      event.preventDefault();first.focus();
+    if (!nodes.length) {
+      document.getElementById('h-shell-drawer-close')?.focus({preventScroll:true});
+      return;
     }
+    var current = nodes.indexOf(document.activeElement);
+    var next = event.shiftKey
+      ? (current <= 0 ? nodes.length - 1 : current - 1)
+      : (current < 0 || current >= nodes.length - 1 ? 0 : current + 1);
+    nodes[next].focus({preventScroll:true});
   }
   function makeDrawer() {
     drawer = document.createElement('div');
