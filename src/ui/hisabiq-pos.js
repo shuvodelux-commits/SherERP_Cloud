@@ -180,15 +180,40 @@
     decorateCart();
   }
   function decorateCart(){
-    if(!cart)return;
-    // The original POS V2 route owns its native, pointer-draggable handles.
-    // Never add a second grip or override that protected presentation route.
-    if(document.body.classList.contains('pos-v2-active')){
-      cart.querySelectorAll('.hi-pos-grip').forEach(function(grip){grip.remove();});
-      return;
-    }
+    if(!cart||!page.hasAttribute('data-hisabiq-pos'))return;
     var entry=cart.querySelector('.pos-cart-entry-row:not(.is-active) input[data-cart-product-mode="add"]');
     if(entry)entry.placeholder='⌕ Add product... name, SKU or বাংলা';
+    // POS V2 owns its pointer drag handle. Do not clone it; enhance that same
+    // source control for keyboard use and expose the fail-closed unit selector.
+    if(document.body.classList.contains('pos-v2-active')){
+      cart.querySelectorAll('.hi-pos-grip').forEach(function(grip){grip.remove();});
+      Array.from(cart.querySelectorAll(':scope > .cart-row:not(.pos-cart-entry-row)')).forEach(function(row,index){
+        var handle=row.querySelector('.pos-v2-reorder-handle');
+        if(handle&&!handle.dataset.hiKeyboardReorder){
+          handle.dataset.hiKeyboardReorder='true';
+          handle.setAttribute('aria-label','Reorder cart item '+(index+1));
+          handle.setAttribute('aria-keyshortcuts','ArrowUp ArrowDown');
+          handle.addEventListener('keydown',function(event){
+            if(event.key==='ArrowUp'||event.key==='ArrowDown'){
+              event.preventDefault();
+              cartMove(index,index+(event.key==='ArrowUp'?-1:1));
+            }
+          });
+        }
+        var unit=row.querySelector('.c-unit-wrap .c-unit');
+        if(unit&&!unit.querySelector('[data-hi-pos-unit]')){
+          var current=String(posState?.cart?.[index]?.unit||unit.textContent||'').trim();
+          var wrap=make('span','hi-pos-inline-unit');
+          var choice=make('select');choice.dataset.hiPosUnit=String(index);
+          choice.setAttribute('aria-label','Sale unit for item '+(index+1));
+          var option=make('option','',current||'Unit');option.value=current;
+          choice.appendChild(option);choice.disabled=true;
+          choice.title='Unit switching requires verified multi-unit Shop D1 checkout';
+          wrap.appendChild(choice);unit.replaceChildren(wrap);
+        }
+      });
+      return;
+    }
     var rows=Array.from(cart.querySelectorAll(':scope > .cart-row:not(.pos-cart-entry-row)'));
     rows.forEach(function(row,index){
       if(row.querySelector('.hi-pos-grip'))return;
@@ -497,7 +522,7 @@
 
     renderQuickProducts();updateCustomer();decorateCart();refreshTotals();
     var observer=new MutationObserver(function(){decorateCart();refreshTotals();});
-    observer.observe(cart,{childList:true});
+    observer.observe(cart,{childList:true,subtree:true});
     var total=sel('#posGrandTotal');
     if(total)new MutationObserver(refreshTotals).observe(total,{childList:true,characterData:true,subtree:true});
     var productGrid=sel('#posProductGrid');
