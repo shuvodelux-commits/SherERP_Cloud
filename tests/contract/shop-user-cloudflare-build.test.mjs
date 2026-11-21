@@ -314,12 +314,16 @@ const devBuildEnv=()=>({
  SHERERP_DEVELOPMENT_CORE_CONFIRMATION:'EXISTING_SHOP_CORE_VERIFIED'
 });
 
-test('M11 RED: explicit existing-Shop development mode retains exact approved runtime but allows subsequent main commits',()=>{
+test('M11: explicit existing-Shop development mode retains exact approved runtime but allows subsequent main commits',()=>{
  const protectedCore=buildShopUserDeployment(refreshApprovedEnv());
  const first=buildShopUserDeployment(devBuildEnv());
  const second=buildShopUserDeployment({...devBuildEnv(),WORKERS_CI_COMMIT_SHA:'b'.repeat(40)});
  assert.deepEqual(first,protectedCore);
  assert.deepEqual(second,protectedCore);
+ const stale=buildShopUserDeployment({...devBuildEnv(),
+   SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:'INVALID_OLD_PRODUCTION_SHA',
+   SHERERP_FIRST_SHOP_CORE_READINESS_JSON:'obsolete report not JSON'});
+ assert.deepEqual(stale,protectedCore);
  assert.equal(first.name,'shererp');
  assert.equal(first.assets.directory,'dist-owner');
  for(const k of ['OWNER_CATALOG_ENABLED','OWNER_CLEAN_PRODUCTS_ENABLED','OWNER_WRITE_GRANTS_ENABLED',
@@ -328,7 +332,7 @@ test('M11 RED: explicit existing-Shop development mode retains exact approved ru
    'OWNER_SUPPORT_AUDIT_ENABLED','OWNER_REDEMPTION_ENABLED'])assert.equal(first.vars[k],'false');
 });
 
-test('M11 RED: development selection is explicit and refuses unsafe owner, target, branch or confirmation',()=>{
+test('M11: development selection is explicit and refuses unsafe owner, target, branch or confirmation',()=>{
  for(const patch of [
    {SHERERP_DEVELOPMENT_CORE_CONFIRMATION:undefined},
    {SHERERP_DEVELOPMENT_CORE_CONFIRMATION:'YES'},
@@ -343,7 +347,7 @@ test('M11 RED: development selection is explicit and refuses unsafe owner, targe
  ])assert.throws(()=>buildShopUserDeployment({...devBuildEnv(),...patch}),/Shop-user deployment/);
 });
 
-test('M11 RED: developer confirmation alone cannot silently downgrade to login-only',()=>{
+test('M11: developer confirmation alone cannot silently downgrade to login-only',()=>{
  const env={...devBuildEnv(),SHERERP_FIRST_SHOP_CORE_RELEASE:undefined,
   SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT:undefined,
   SHERERP_FIRST_SHOP_CORE_READINESS_JSON:undefined};

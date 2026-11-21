@@ -13,7 +13,8 @@ import {readFile,writeFile,lstat,stat} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {buildShopUserCandidate} from './port-p5-shop-user-login.mjs';
-import {buildFirstShopCoreCandidate} from './m03-first-shop-core-activation.mjs';
+import {buildFirstShopCoreCandidate,buildFirstShopDevelopmentCandidate}
+  from './m03-first-shop-core-activation.mjs';
 import {validateCloudflarePreviewConfig} from './check-cloudflare-preview.mjs';
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url));
@@ -29,6 +30,7 @@ const SAFE_CODES=new Set([
   'RELEASE_MODE_INVALID','RELEASE_COMMIT_PIN_INVALID',
   'RELEASE_COMMIT_PIN_MISMATCH','RELEASE_READINESS_JSON_INVALID',
   'RELEASE_READINESS_PROFILE_MISMATCH','RELEASE_MODE_REQUIRED_FOR_CORE',
+  'RELEASE_DEVELOPMENT_CONFIRMATION_REQUIRED',
   'RELEASE_POLICY_MISMATCH'
 ]);
 const invalid=(code='RELEASE_POLICY_MISMATCH')=>{
@@ -114,9 +116,22 @@ export function buildShopUserDeployment(env){
     // Incomplete protected refresh metadata must NEVER silently produce a
     // login-only profile and reset an already-enabled Shop's core flags.
     if(env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT!==undefined||
-       env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON!==undefined)
+       env.SHERERP_FIRST_SHOP_CORE_READINESS_JSON!==undefined||
+       env.SHERERP_DEVELOPMENT_CORE_CONFIRMATION!==undefined)
       invalid('RELEASE_MODE_REQUIRED_FOR_CORE');
     return config;
+  }
+  // This is a one-time operator opt-in for an already-activated development
+  // Shop. Stale production SHA/report inputs are intentionally not consulted:
+  // the five pre-approved core flags remain identical across main commits.
+  // Owner/Shop identity and main-only Cloudflare Builds gates above still apply.
+  if(env.SHERERP_FIRST_SHOP_CORE_RELEASE==='DEVELOPMENT_AUTO'){
+    if(env.SHERERP_DEVELOPMENT_CORE_CONFIRMATION!==
+       'EXISTING_SHOP_CORE_VERIFIED')
+      invalid('RELEASE_DEVELOPMENT_CONFIRMATION_REQUIRED');
+    try{return buildFirstShopDevelopmentCandidate(config,
+      env.SHERERP_DEVELOPMENT_CORE_CONFIRMATION);}
+    catch{invalid('RELEASE_READINESS_PROFILE_MISMATCH');}
   }
   const sha=/^[a-f0-9]{40}$/;
   if(!['FIRST_SHOP_CORE_MVP_TEST_ONLY','FIRST_SHOP_CORE_MVP_REFRESH']

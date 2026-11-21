@@ -22,3 +22,14 @@ The current Worker is **publicly reachable** and bound to **existing Control and
 - Test-first RED → minimal GREEN with actual local tests, then exact GitHub CI and Cloudflare local dry-run.
 - No live auto-release or production D1 write executed in this PR. The release mode becomes active **only after** the owner sets its Build variables in the Cloudflare dashboard, and that action is separate from merging source.
 - Both existing Auth/D1 identity checks and disabled financial flags must remain unchanged; failing these checks must fail closed even in development.
+
+## Execution record (21 November, CachyOS Node 24.22.3)
+
+- First TDD **RED** commit `8536bf3d`: new development-auto tests failed **2** assertions (not supported mode and missing-mode fallback), while 16 existing tests passed. Existing production safety suite was not disabled.
+- Minimal **GREEN** implementation: one explicit `DEVELOPMENT_AUTO` case with fixed one-time confirmation and a shared pure approved-core projection. A different simulated main SHA and intentionally obsolete production commit pin/report generated **the same approved runtime profile** as `FIRST_SHOP_CORE_MVP_REFRESH` would for the same Shop identity. Missing confirmation, bad IDs, non-main branch, unauthorized deployment owner and unknown modes reject.
+- Targeted existing activation + Cloudflare Builds regression suite **29/29 PASS**.
+- Full `TZ=UTC node --test`: **4,217/4,217 PASS**, 0 failed. Source manifest **84/84 PASS**, Owner app compilation and documentation checks pass.
+- Read-only active Cloudflare Worker metadata `29e0fc49` was used **privately** to synthesize a development profile. New PR's existing `m11-owner-core-refresh-parity` checker returned `MATCHES_LIVE`, `authorizesDeployment=false`. Candidate remained the same after a different simulated main SHA. Strict local Wrangler `deploy --dry-run` returned zero. No remote upload, deploy or SQL write; temporary private live metadata and deploy config were deleted.
+- **Actual failure cause remains unconfirmed:** Cloudflare Builds History/settings could not be read with current OAuth in the earlier audit (403). The strict SHA gate *would* reject stale pins; the build might also fail for separate npm/Cloudflare configuration reasons. Only the owner-visible Cloudflare Build log can identify which specific failure happened.
+
+**Release review:** Human M03/M11 approval and exact-head GitHub CI still required before merge. This mode becomes active **only** after authorized one-time Cloudflare Builds variable updates. Keeping a real connected Shop D1 means the Worker is still a potentially user-accessible pilot; do not confuse development with unprotected production data.
