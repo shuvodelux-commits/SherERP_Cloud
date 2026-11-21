@@ -142,3 +142,27 @@ test('Quick Add launches original customer modal, but the Owner backend remains 
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+test('Quick Items buttons reuse the original POS add-to-cart flow',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    const errors=await setup(page);
+    const qtyBefore=await page.evaluate(()=>posState.cart[0].qty);
+    await page.locator('#posProductGrid .product-tile').first().click();
+    const qtyAfter=await page.evaluate(()=>posState.cart[0].qty);
+    assert.equal(qtyAfter,qtyBefore+1);
+    assert.equal(await page.locator('#posCartList input[data-f="qty"]').first().inputValue(),String(qtyAfter));
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('unconnected multi-unit controls are blocked instead of silently mis-posting quantities',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    await setup(page);
+    assert.equal(await page.locator('#posCartList [data-hi-pos-unit]:disabled').count(),3);
+    assert.match(await page.locator('[data-hi-pos-unit]').first().getAttribute('title'),/verified multi-unit Shop D1/i);
+    assert.equal(await page.locator('#hi-pos-add-payment').isDisabled(),true);
+    assert.equal(await page.evaluate(()=>posState.paymentRows.length),1);
+  }finally{await page.close();}
+});
