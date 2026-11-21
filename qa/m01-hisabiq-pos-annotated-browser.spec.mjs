@@ -46,10 +46,15 @@ async function setup(page){
   }}));
   await page.route('**/api/owner/app-shell',route=>route.fulfill({json:{success:true,data:shell}}));
   await page.goto(url+'/owner-erp.html',{waitUntil:'domcontentloaded'});
+  // Wait for the real Owner-authenticated shell to settle before opening POS;
+  // otherwise its asynchronous dashboard navigation can re-hide our fixture.
+  await page.waitForFunction(()=>typeof currentUser!=='undefined'&&!!currentUser&&
+    document.getElementById('loginOverlay')?.hidden===true,{timeout:8000});
   await page.evaluate(()=>{
     const app=document.getElementById('app');
     app.hidden=false;app.style.visibility='';app.style.removeProperty('display');
     document.getElementById('loginOverlay').hidden=true;
+    goToPage('pos');
     document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!=='page-pos');
     window.currentPage='pos';
     posState.products=[
