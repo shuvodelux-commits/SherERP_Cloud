@@ -51,6 +51,11 @@ test('HisabIQ desktop shell has exact widths, current child and persisted shortc
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   try{
     await syntheticShell(page);
+    // Shell width uses a 200ms CSS transition; wait for the real final
+    // 256px design-system width before asserting. CI could sample 255px
+    // during interpolation even though the sidebar finishes at 256px.
+    await page.waitForFunction(()=>
+      Math.round(document.getElementById('sidebar')?.getBoundingClientRect().width)===256);
     assert.equal(await page.locator('#sidebar').evaluate(n=>Math.round(n.getBoundingClientRect().width)),256);
     assert.equal(await page.locator('.topbar').evaluate(n=>Math.round(n.getBoundingClientRect().height)),56);
     assert.equal(await page.locator('#navList .h-shell-section-label').first().textContent(),'Workspace');
