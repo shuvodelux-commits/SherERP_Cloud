@@ -12,8 +12,9 @@ import {installOwnerHisabiqProducts} from './patch-owner-hisabiq-products.mjs';
 import {installOwnerHisabiqSettings} from './patch-owner-hisabiq-settings.mjs';
 import {installOwnerHisabiqUnitEditor} from './patch-owner-hisabiq-unit-editor.mjs';
 import {installOwnerHisabiqPos} from './patch-owner-hisabiq-pos.mjs';
+import {patchOwnerSales} from './patch-owner-sales.mjs';
 
-const ownerNotice='<div id="owner-data-notice" role="status" style="padding:10px 16px;background:#fff4ce;color:#573b00;border-bottom:1px solid #e8c86b;font-weight:600;">Business data is not connected. ERP screens are visible, but reads and saves are unavailable.</div>';
+const ownerNotice='<div id="owner-data-notice" role="status" style="padding:10px 16px;background:var(--color-surface,#fff);color:var(--color-text-muted,#475467);border-bottom:1px solid var(--color-border,#e4e7ec);"></div>';
 const ownerSupportActivity="<section id=\"owner-support-activity\" aria-label=\"Owner support activity\" hidden><div class=\"owner-support-title\">Support activity · read-only</div><p>The Super Admin support history for this shop. Only your own business is shown.</p><button type=\"button\" id=\"owner-support-refresh\" aria-controls=\"owner-support-events\">View support activity</button><p id=\"owner-support-status\" role=\"status\" aria-live=\"polite\"></p><ol id=\"owner-support-events\" aria-label=\"Recorded support actions\"></ol></section>";
 const ownerSupportCss="<style>#owner-support-activity[hidden]{display:none!important}#owner-support-activity{margin:0;padding:12px 16px;background:#fff;color:#172033;border-bottom:1px solid #e4e7ec;font:14px/1.45 Arial,sans-serif;max-width:100%;overflow-wrap:anywhere}#owner-support-activity .owner-support-title{font-weight:700;margin-bottom:4px}#owner-support-activity p{margin:4px 0 8px;color:#475467}#owner-support-refresh{padding:8px 12px;min-height:36px;border-radius:6px;border:1px solid #1a56db;background:#fff;color:#123fae;font:inherit;cursor:pointer}#owner-support-refresh:focus-visible{outline:2px solid #1a56db;outline-offset:3px}#owner-support-refresh:disabled{opacity:.65;cursor:wait}#owner-support-events{padding-left:22px;margin:10px 0 0;max-width:100%}#owner-support-events li{padding:5px 0;overflow-wrap:anywhere}</style>";
 const ownerLogin=`<div id="loginOverlay" class="login-overlay" hidden>
@@ -104,10 +105,11 @@ export function patchOwnerApp(html){
         if (!session || session.role !== 'Owner' ||
             typeof session.shopId !== 'string' ||
             !/^[0-9a-f-]{36}$/.test(session.shopId) ||
-            typeof session.dashboard?.displayName !== 'string' ||
-            session.dashboard.dataAvailable !== false) {
+            typeof session.dashboard?.displayName !== 'string') {
           throw new Error('Invalid Owner session');
         }
+        document.getElementById('owner-data-notice').textContent =
+          'Shop storage verified at sign-in.';
         ownerSupportActivityInit_(session);
         onAuthenticated_({role:'Owner',shopId:session.shopId,shopName:session.dashboard.displayName,
           user:{id:session.shopId,name:session.dashboard.displayName,mobile:'',role:'Owner'}});
@@ -187,9 +189,6 @@ export function patchOwnerApp(html){
       operational ? 'Purchase price ' : 'Saved purchase price ';
     document.querySelector('#prodTable [data-sort-key="stockQty"]').firstChild.textContent =
       operational ? 'Opening stock ' : 'Stock at backup ';
-    document.getElementById('owner-data-notice').textContent = operational
-      ? 'Standard products start with zero opening stock.'
-      : 'Purchase price and stock are from the backup. Stock value and saves are unavailable.';
   }
 
   var ownerSupplierSaveInProgress = false;
@@ -403,8 +402,6 @@ export function patchOwnerApp(html){
         if(b&&!b.hidden)b.textContent='Start Day (verify previous counted cash)';
       });
     }
-    document.getElementById('owner-data-notice').textContent=
-      'Shop D1 supports credit Purchase, one-product Cash POS and opt-in original Cash Returns. Split payments, Customer Due, Store Credit and full ledgers are not connected.';
   }
 
   // Source POS still calls completeSale(authToken,payload). Only this
@@ -475,7 +472,31 @@ export function patchOwnerApp(html){
     return amount;
   }
 
+  var ownerSalesReturnEnabled = false;
+  async function readOwnerSales_(path, list) {
+    var unavailable = 'Sales history could not be read. Retry or contact your administrator.';
+    var response = await fetch(path, {credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)})
+      .catch(function () { throw new Error(unavailable); });
+    if (response.status === 401) throw new Error('Your session expired. Sign in again.');
+    var result = await response.json().catch(function () { throw new Error(unavailable); });
+    if (!response.ok || result?.success !== true)
+      throw new Error(typeof result?.message === 'string' ? result.message : unavailable);
+    if (list) {
+      if (!Array.isArray(result.data)) throw new Error(unavailable);
+      ownerSalesReturnEnabled = result.capabilities?.cashReturns === true;
+    }
+    return result.data;
+  }
+
   function serverCall(fnName) {
+    if (fnName === 'getSalesManagementList') return readOwnerSales_('/api/owner/sales', true);
+    if (fnName === 'getSalesManagementBankAccounts') return readOwnerSales_('/api/owner/sales/bank-accounts');
+    if (fnName === 'getSaleDetail') {
+      var salesInvoiceId = arguments[2];
+      if (typeof salesInvoiceId !== 'string' || !/^INV-[0-9]{6,16}$/.test(salesInvoiceId))
+        return Promise.reject(new Error('Enter a valid invoice ID.'));
+      return readOwnerSales_('/api/owner/sales/' + salesInvoiceId);
+    }
     if (fnName === 'addProduct') return saveOwnerProduct_(arguments[2]);
     if (fnName === 'addSupplier') return saveOwnerSupplier_(arguments[2]);
     if (fnName === 'paySupplier') return saveOwnerSupplierCash_(arguments[2],arguments[3],
@@ -525,7 +546,11 @@ export function patchOwnerApp(html){
       path='/api/owner/purchases/'+purchaseId;
     }
     else if (fnName === 'logout') { path = '/api/owner/auth/logout'; method = 'POST'; }
-    else return Promise.reject(new Error('This ERP action is not available yet.'));
+    else {
+      var unsupported = new Error('This ERP action is not available yet.');
+      unsupported.code = 'OWNER_RPC_UNAVAILABLE';
+      return Promise.reject(unsupported);
+    }
     return fetch(path, {method:method,credentials:'same-origin',cache:'no-store'})
       .then(function (response) {
         if (response.status === 401) throw new Error('Your session expired. Sign in again.');
@@ -657,7 +682,7 @@ export async function buildOwnerFrontend({sourceDir='legacy/source',outputDir='d
   html=patchM01ProductsPreview(patchM01Accessibility(
     patchPosV2HiddenVisibility(patchAuthenticatedShellCall(patchServerCall(html)))));
   await installM01ProductsPreviewAssets(output);
-  html=patchOwnerApp(html);
+  html=patchOwnerSales(patchOwnerApp(html));
   html=await installOwnerHisabiqParties(html);
   html=await installOwnerHisabiqProducts(html);
   html=await installOwnerHisabiqSettings(html);
