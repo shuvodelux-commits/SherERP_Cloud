@@ -1,0 +1,36 @@
+name: M09 Owner Invoice Studio private profile (local Workerd D1)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  owner-invoice-studio-profile:
+    name: Verify business-scoped Owner Invoice Studio profile on two local Workerd D1s
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify source and build Owner UI
+        run: |
+          npm run verify:source
+          npm run docs:check
+          npm run build:owner-frontend
+      - name: Validate profile and frontend contracts
+        run: node --test tests/m09-owner-invoice-profile.test.mjs tests/m09-hisabiq-settings-ui.test.mjs
+      - name: Install pinned Wrangler in test runner only
+        run: npm install --no-save --package-lock=false wrangler@4.161.0
+      - name: Verify two isolated Shop D1s, CAS, revocation and private route
+        run: node --test tests/integration/m09-owner-invoice-profile-workerd.spec.mjs

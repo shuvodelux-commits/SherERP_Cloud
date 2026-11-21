@@ -104,3 +104,17 @@ No D1 cutover or deploy. Review visual screenshot matrix, permissions, dark them
   Name/Phone. Shell width 254/256 CI failure assigned to #864 without
   touching shell. Wait for **new exact-head CI and owner review**;
   no production Worker deploy or D1 migration is included.
+
+## Conflict resolution following parallel merges
+
+- Kept all Party, Settings, Add Product Unit Editor and POS build injectors.
+  Added merged compiled-build contract for singular injection and order.
+- Reproduced compact-phone real-D1 journey RED (hidden legacy Customer tab).
+  Test now uses legacy Customer/Payment tabs only if visible and always
+  asserts original inputs are visible before use.
+- Real local Workerd/D1 Product → Supplier → Purchase → POS → Return
+  **2/2 GREEN** desktop/phone, retaining invoice, Cash Book, return,
+  inventory and tenant isolation.
+- Affected UI Chromium **33/33**, injector contracts **10/10**,
+  frozen source **84/84**, docs and Owner build passed.
+- No financial writer/schema/RPC modification or hosted D1 operation.

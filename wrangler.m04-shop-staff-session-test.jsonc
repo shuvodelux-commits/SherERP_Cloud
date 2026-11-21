@@ -1,0 +1,10 @@
+{
+  "name":"shererp-m04-shop-staff-sessions-local-only",
+  "main":"tests/fixtures/m03-first-purchase-worker.mjs",
+  "compatibility_date":"2026-11-14",
+  "workers_dev":false,
+  "d1_databases":[
+    {"binding":"SHOP_A","database_name":"shererp-m04-staff-a-local","database_id":"22222222-2222-4222-8222-222222222222"},
+    {"binding":"SHOP_B","database_name":"shererp-m04-staff-b-local","database_id":"55555555-5555-4555-8555-555555555555"}
+  ]
+}

@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {buildOwnerFrontend} from '../scripts/build-owner-frontend.mjs';
 
 const patch=async()=>await import('../scripts/patch-owner-hisabiq-pos.mjs').catch(()=>({}));
 
@@ -32,4 +35,28 @@ test('HisabIQ source design contract is used without introducing a money writer'
   assert.match(js,/Quick items/);
   assert.match(js,/posSearch/);
   assert.doesNotMatch(js,/fetch\s*\(|serverCall\s*\(|completeSale\s*\(/);
+});
+
+
+test('merged Owner build retains exactly one Settings, Add Product and POS injection',async()=>{
+  const dest=await mkdtemp(join(tmpdir(),'shererp-pos-build-regression-'));
+  try{
+    const built=await buildOwnerFrontend({outputDir:dest});
+    const html=await readFile(built.indexPath,'utf8');
+    const ids=['hisabiq-settings-controller','hisabiq-owner-unit-editor',
+      'hisabiq-pos-parity-controller','hisabiq-pos-parity-styles',
+      'hisabiq-owner-unit-editor-style','hisabiq-settings-styles'];
+    for(const id of ids){
+      assert.equal(html.split('id="'+id+'"').length-1,1,
+        id+' must appear exactly once after merging parallel UI modules');
+    }
+    assert.ok(html.indexOf('id="hisabiq-settings-controller"')<
+      html.indexOf('id="hisabiq-owner-unit-editor"'),
+      'Settings and Product injector order is source-preserving');
+    assert.ok(html.indexOf('id="hisabiq-owner-unit-editor"')<
+      html.indexOf('id="hisabiq-pos-parity-controller"'),
+      'POS enhancement loads after already-merged Product editor');
+  }finally{
+    await rm(dest,{recursive:true,force:true});
+  }
 });

@@ -8,6 +8,8 @@ import {patchPosV2HiddenVisibility} from './patch-posv2-visibility.mjs';
 import {patchM01Accessibility} from './patch-m01-a11y.mjs';
 import {installM01ProductsPreviewAssets,patchM01ProductsPreview} from './patch-m01-products-preview.mjs';
 import {installOwnerHisabiqParties} from './patch-owner-hisabiq-parties.mjs';
+import {installOwnerHisabiqSettings} from './patch-owner-hisabiq-settings.mjs';
+import {installOwnerHisabiqUnitEditor} from './patch-owner-hisabiq-unit-editor.mjs';
 import {installOwnerHisabiqPos} from './patch-owner-hisabiq-pos.mjs';
 
 const ownerNotice='<div id="owner-data-notice" role="status" style="padding:10px 16px;background:#fff4ce;color:#573b00;border-bottom:1px solid #e8c86b;font-weight:600;">Business data is not connected. ERP screens are visible, but reads and saves are unavailable.</div>';
@@ -656,6 +658,8 @@ export async function buildOwnerFrontend({sourceDir='legacy/source',outputDir='d
   await installM01ProductsPreviewAssets(output);
   html=patchOwnerApp(html);
   html=await installOwnerHisabiqParties(html);
+  html=await installOwnerHisabiqSettings(html);
+  html=await installOwnerHisabiqUnitEditor(html);
   html=await installOwnerHisabiqPos(html);
   const indexPath=join(output,'owner-erp.html');
   await writeFile(indexPath,html,'utf8');

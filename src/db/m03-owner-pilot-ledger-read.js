@@ -79,6 +79,23 @@ export async function readOwnerPilotSupplierPurchaseLedger(db,supplierId){
   // 0010 stores Supplier payments separately from the immutable Purchase debit
   // ledger; combine both before verifying the materialized Supplier due.
   const hasSupplierPay=await db.prepare("SELECT 1 AS present FROM sqlite_schema WHERE type='table' AND name='owner_mvp_supplier_payment_ledger'").first();
+  const hasHistorical=await db.prepare("SELECT 1 AS present FROM sqlite_schema WHERE type='table' AND name='owner_supplier_opening_checkpoints'").first();
+  const openingJoin=hasHistorical?
+    'LEFT JOIN owner_supplier_opening_checkpoints o ON o.supplier_id=m.supplier_id':'';
+  const openingColumn=hasHistorical?
+    ',COALESCE(o.signed_opening_paisa,0) AS signedOpeningPaisa':
+    ',0 AS signedOpeningPaisa';
+  const openingTotal=hasHistorical?` +
+    (SELECT COALESCE(SUM(CASE WHEN signed_opening_paisa>0
+       THEN signed_opening_paisa ELSE 0 END),0)
+       FROM owner_supplier_opening_checkpoints WHERE supplier_id=?)`:'';
+  const openingRows=hasHistorical?`
+      UNION ALL
+      SELECT 'Historical Opening' AS kind,o.operation_id AS reference,
+        o.as_of_date AS purchaseDate,o.created_at_ms AS occurredAtMs,
+        CASE WHEN o.signed_opening_paisa>0 THEN o.signed_opening_paisa ELSE 0 END AS debitPaisa,
+        0 AS creditPaisa,0 AS recordSequence
+      FROM owner_supplier_opening_checkpoints o WHERE o.supplier_id=?`:'';
   const additionalCredit=hasSupplierPay?` -
     (SELECT COALESCE(SUM(credit_paisa),0) FROM owner_mvp_supplier_payment_ledger WHERE supplier_id=?)`:'';
   const paymentRows=hasSupplierPay?`
@@ -92,12 +109,14 @@ export async function readOwnerPilotSupplierPurchaseLedger(db,supplierId){
       WHERE l.supplier_id=?`:'';
   const [identity,totals,records]=await db.batch([
     db.prepare(`SELECT m.supplier_id AS supplierId,p.display_name AS supplierName,p.phone,
-      m.current_due_paisa AS currentDuePaisa
+      m.current_due_paisa AS currentDuePaisa ${openingColumn}
       FROM owner_supplier_master m JOIN parties p ON p.party_id=m.party_id
+      ${openingJoin}
       WHERE m.supplier_id=?`).bind(supplierId),
     db.prepare(`SELECT (SELECT COALESCE(SUM(debit_paisa-credit_paisa),0)
-      FROM owner_mvp_supplier_ledger WHERE supplier_id=?)${additionalCredit} AS duePaisa`)
-      .bind(...(hasSupplierPay?[supplierId,supplierId]:[supplierId])),
+      FROM owner_mvp_supplier_ledger WHERE supplier_id=?)${additionalCredit}${openingTotal} AS duePaisa`)
+      .bind(supplierId,...(hasSupplierPay?[supplierId]:[]),
+        ...(hasHistorical?[supplierId]:[])),
     db.prepare(`SELECT kind,reference,purchaseDate,occurredAtMs,debitPaisa,creditPaisa FROM (
       SELECT 'Purchase' AS kind,'PUR-'||printf('%06d',r.sequence) AS reference,
         r.purchase_date AS purchaseDate,r.created_at_ms AS occurredAtMs,
@@ -107,14 +126,17 @@ export async function readOwnerPilotSupplierPurchaseLedger(db,supplierId){
       JOIN owner_mvp_purchase_receipts r ON r.sequence=l.purchase_sequence
       WHERE l.supplier_id=?
       ${paymentRows}
+      ${openingRows}
     ) ORDER BY purchaseDate DESC,occurredAtMs DESC,recordSequence DESC,kind DESC LIMIT 51`)
-      .bind(...(hasSupplierPay?[supplierId,supplierId]:[supplierId]))
+      .bind(supplierId,...(hasSupplierPay?[supplierId]:[]),
+        ...(hasHistorical?[supplierId]:[]))
   ]);
   if(!identity.success||!totals.success||!records.success||
     totals.results.length!==1||identity.results.length>1)
     throw Error('Supplier ledger snapshot unavailable');
   if(identity.results.length===0)return null;
   const supplier=identity.results[0],due=safePaisa(supplier.currentDuePaisa);
+  const signedOpening=safePaisa(supplier.signedOpeningPaisa);
   if(due!==safePaisa(totals.results[0].duePaisa))
     throw Error('Supplier due reconciliation failed');
   const entries=checkedRows(records.results);
@@ -129,6 +151,8 @@ export async function readOwnerPilotSupplierPurchaseLedger(db,supplierId){
   return {
     scope:hasSupplierPay?'purchase-and-cash-payment':'purchase-credit-only',
     supplierId,supplierName:supplier.supplierName,phone:supplier.phone,currentDuePaisa:due,
+    openingBalancePaisa:signedOpening,openingPayablePaisa:Math.max(0,signedOpening),
+    supplierAdvancePaisa:Math.max(0,-signedOpening),
     entries:entries.slice(0,PAGE_SIZE),hasMore:entries.length>PAGE_SIZE
   };
 }

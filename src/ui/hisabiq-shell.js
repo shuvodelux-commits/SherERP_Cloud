@@ -15,6 +15,7 @@
   var drawerPanel = null;
   var previousFocus = null;
   var previousBodyOverflow = '';
+  var previousAppInert = false;
   var drawerCloseTimer = null;
 
   var sectionNames = {
@@ -282,6 +283,8 @@
 
   function closeDrawer() {
     if (!drawer || drawer.hidden) return;
+    var app = document.getElementById('app');
+    if (app) app.inert = previousAppInert;
     drawer.classList.remove('is-open');
     var menu = document.getElementById('menuToggle');
     if (menu) menu.setAttribute('aria-expanded', 'false');
@@ -290,7 +293,9 @@
     if (drawerCloseTimer) window.clearTimeout(drawerCloseTimer);
     var focus = previousFocus;
     previousFocus = null;
-    if (focus && focus.isConnected) focus.focus({preventScroll:true});
+    var login = document.getElementById('loginOverlay');
+    if (focus && focus.isConnected && app && getComputedStyle(app).visibility !== 'hidden'
+        && (!login || login.hidden)) focus.focus({preventScroll:true});
     if (reducedMotion()) drawer.hidden = true;
     else drawerCloseTimer = window.setTimeout(function () { drawer.hidden = true; }, 220);
   }
@@ -314,12 +319,21 @@
     if (drawerBusiness) drawerBusiness.textContent = business ? business.textContent : 'Business';
     previousFocus = document.activeElement;
     previousBodyOverflow = document.body.style.overflow;
+    previousAppInert = app.inert;
     document.body.style.overflow = 'hidden';
+    app.inert = true;
     drawer.hidden = false;
-    window.requestAnimationFrame(function () { drawer.classList.add('is-open'); });
     document.getElementById('menuToggle')?.setAttribute('aria-expanded','true');
     document.addEventListener('keydown', onDrawerKeydown, true);
-    document.getElementById('h-shell-drawer-close')?.focus({preventScroll:true});
+    // Only focus after the drawer is display:block. Focusing the Close
+    // button while its ancestor is display:none is ignored by Chromium,
+    // leaving keyboard focus outside the aria-modal navigation.
+    window.requestAnimationFrame(function () {
+      if (!drawer || drawer.hidden ||
+          document.getElementById('menuToggle')?.getAttribute('aria-expanded')!=='true') return;
+      drawer.classList.add('is-open');
+      document.getElementById('h-shell-drawer-close')?.focus({preventScroll:true});
+    });
   }
   function onDrawerKeydown(event) {
     if (event.key === 'Escape') {
@@ -329,15 +343,22 @@
       return;
     }
     if (event.key !== 'Tab' || !drawerPanel) return;
+    // Own every Tab event while the modal is open. Relying on native DOM tab
+    // order between the first and last controls occasionally reaches the
+    // backdrop/outside the dialog in Chromium during responsive reflow.
+    event.preventDefault();
+    event.stopPropagation();
     var nodes = Array.from(drawerPanel.querySelectorAll('button:not([disabled]):not([hidden]), a[href], [tabindex]:not([tabindex="-1"])'))
       .filter(function (el) { return !!el.getClientRects().length; });
-    if (!nodes.length) return;
-    var first = nodes[0], last = nodes[nodes.length-1];
-    if (event.shiftKey && (document.activeElement === first || !drawerPanel.contains(document.activeElement))) {
-      event.preventDefault();last.focus();
-    } else if (!event.shiftKey && (document.activeElement === last || !drawerPanel.contains(document.activeElement))) {
-      event.preventDefault();first.focus();
+    if (!nodes.length) {
+      document.getElementById('h-shell-drawer-close')?.focus({preventScroll:true});
+      return;
     }
+    var current = nodes.indexOf(document.activeElement);
+    var next = event.shiftKey
+      ? (current <= 0 ? nodes.length - 1 : current - 1)
+      : (current < 0 || current >= nodes.length - 1 ? 0 : current + 1);
+    nodes[next].focus({preventScroll:true});
   }
   function makeDrawer() {
     drawer = document.createElement('div');
@@ -521,10 +542,26 @@
       userTrigger.setAttribute('aria-expanded','false');
       if (restoreFocus) userTrigger.focus({preventScroll:true});
     }
+    function visibleMenuItems() {
+      return Array.from(popover.querySelectorAll('[role="menuitem"]'))
+        .filter(function (item) { return !item.hidden && !item.disabled && !!item.getClientRects().length; });
+    }
     userTrigger.addEventListener('click',function () {
       var open = popover.hidden;
       popover.hidden = !open;
       userTrigger.setAttribute('aria-expanded',String(open));
+      if (open) visibleMenuItems()[0]?.focus({preventScroll:true});
+    });
+    popover.addEventListener('keydown',function (event) {
+      if (!['ArrowUp','ArrowDown','Home','End'].includes(event.key)) return;
+      var options = visibleMenuItems();
+      if (!options.length) return;
+      event.preventDefault();
+      var index = options.indexOf(document.activeElement);
+      if (event.key === 'Home') index = 0;
+      else if (event.key === 'End') index = options.length - 1;
+      else index = (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+      options[index].focus({preventScroll:true});
     });
     menu.querySelector('#h-shell-menu-settings').addEventListener('click',function () {
       closeUser(false);
@@ -618,6 +655,16 @@
       }
     });
     window.addEventListener('resize',function () { if (desktop()) closeDrawer(); });
+    // Login transitions can happen while the modal is open (session expiry,
+    // business switch or external sign-out). Fail closed without stale links.
+    function dismissOnAuthLoss() {
+      var login = document.getElementById('loginOverlay');
+      if (drawer && !drawer.hidden &&
+          (getComputedStyle(app).visibility === 'hidden' || (login && !login.hidden))) closeDrawer();
+    }
+    new MutationObserver(dismissOnAuthLoss).observe(app,{attributes:true,attributeFilter:['style','hidden']});
+    var login = document.getElementById('loginOverlay');
+    if (login) new MutationObserver(dismissOnAuthLoss).observe(login,{attributes:true,attributeFilter:['hidden','style']});
     syncCollapseButton();
   }
 

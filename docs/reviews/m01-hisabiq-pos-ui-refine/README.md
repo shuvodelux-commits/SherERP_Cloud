@@ -248,3 +248,26 @@ Cash sale; the existing D1 session/FIFO/tenant/replay gate remains intact.
   blocker fixed here. The unrelated Shell 254/256px assertion has a
   coordination comment on #864. **Exact latest pushed head CI remains
   authoritative; local tests do not mean it has merged or deployed.**
+
+## Cross-module merge conflict and M03 Cash journey repair — 2026-11-21
+
+- The only content conflict after merged Shell/Settings/Unit Editor branches
+  was scripts/build-owner-frontend.mjs. Its final sequence preserves four
+  independent Owner injectors: Party, Settings, Add Product, then POS.
+  A new compiled-build contract asserts exactly one Settings, Unit Editor
+  and POS controller/style on the combined source.
+- GitHub owner-pos-cash failed because legacy mobile Customer tab is
+  intentionally hidden by HisabIQ POS; the original name/phone/payment
+  fields are directly visible. Original compact-phone test failed RED
+  clicking hidden legacy Customer tab. Its GREEN fix clicks a legacy tab
+  only if visible, then asserts and fills original input IDs.
+  No force click, financial bypass or simulated save.
+- Real local Workerd/D1 Product → Supplier → Purchase → POS → Return
+  journeys passed **2/2 (desktop and compact phone)**; original
+  confirmation, saved invoice, stock, Cash Book, return, tenant isolation.
+- Merged POS + Settings + Add Product Chromium **33/33**; compiled build
+  POS/Settings/unit contracts **10/10**; all 84 frozen legacy files,
+  docs check and Owner frontend build passed.
+- No Shop D1 posting kernel, migration SQL, public RPC, Cash Session,
+  or legacy source HTML/JS modified by this POS conflict resolution.
+- Latest exact-head GitHub CI and human review remain release gates.
