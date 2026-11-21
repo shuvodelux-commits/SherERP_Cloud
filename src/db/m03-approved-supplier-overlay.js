@@ -36,6 +36,22 @@ const firstDayCashObjects=Object.freeze({
   owner_mvp_cash_session_no_delete:['trigger','owner_mvp_cash_sessions',
     '388b38b7bfe8a6d6ed06a0f283c53d58db956ccdc2fae88f1d3cbe362331014b']
 });
+// Historical Supplier baseline stays a separate account checkpoint, never a
+// Cash Session posting, fake Purchase or automatic advance/payable offset.
+// 0013 is only accepted *after* the exact reviewed 0012 first-day overlay.
+const supplierHistoricalObjects=Object.freeze({
+  ...firstDayCashObjects,
+  owner_supplier_opening_checkpoints:['table','owner_supplier_opening_checkpoints',
+    '133366c3157677d9ee2cde518b99fb6bc24678eaba07b9019a978e44cae85a97'],
+  owner_supplier_opening_clean_history:['trigger','owner_supplier_opening_checkpoints',
+    '99a69c0f224c68c989b07e88bda327c0ae1cfac643e6d36d5247eab4619adf5e'],
+  owner_supplier_opening_no_delete:['trigger','owner_supplier_opening_checkpoints',
+    '6110a744d34e01fde85fa7d1ab45a3eb23986e95a24ca89e289ea270a0389847'],
+  owner_supplier_opening_no_update:['trigger','owner_supplier_opening_checkpoints',
+    'b9bba114837af8f890dcd4898144b81840add5f7ccc485bab011d895249cb65b'],
+  owner_supplier_opening_post:['trigger','owner_supplier_opening_checkpoints',
+    'a84c271c2b3c84321203c193057fabc582bc52a1735ef6dae4aff273876d193f']
+});
 const isObjectRow=row=>Array.isArray(row)&&row.length===4 &&
   ['table','index','trigger','view'].includes(row[0]) &&
   typeof row[1]==='string'&&row[1].length>0 &&
@@ -96,10 +112,18 @@ async function matchesExactOverlay(baselineSchema,currentSchema,pins,changedObje
 export async function matchesApprovedSupplierCashSchemaOverlay(baselineSchema,currentSchema){
   return await matchesExactOverlay(baselineSchema,currentSchema,
     approvedSqlObjects,[modifiedBaseObject])||
-    await matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema);
+    await matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema)||
+    await matchesApprovedSupplierOpeningSchemaOverlay(baselineSchema,currentSchema);
 }
 
 export async function matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema){
   return matchesExactOverlay(baselineSchema,currentSchema,firstDayCashObjects,
+    [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
+}
+
+/** 0010+0011+0012+0013 only: all original receipts and every reviewed SQL
+ * object remain SHA-pinned. No extra account or ledger DDL is tolerated. */
+export async function matchesApprovedSupplierOpeningSchemaOverlay(baselineSchema,currentSchema){
+  return matchesExactOverlay(baselineSchema,currentSchema,supplierHistoricalObjects,
     [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
 }
