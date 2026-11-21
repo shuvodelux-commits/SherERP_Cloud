@@ -36,11 +36,27 @@ const firstDayCashObjects=Object.freeze({
   owner_mvp_cash_session_no_delete:['trigger','owner_mvp_cash_sessions',
     '388b38b7bfe8a6d6ed06a0f283c53d58db956ccdc2fae88f1d3cbe362331014b']
 });
-// M03 additive candidate after first-day 0012: exact Support Product permit
-// table and three SQL-time guards. Never accept partial or altered DDL.
-// Digests are from Workerd D1 sqlite_schema.sql after applying staged 0013.
-const supportProductObjects=Object.freeze({
+// Historical Supplier baseline stays a separate account checkpoint, never a
+// Cash Session posting, fake Purchase or automatic advance/payable offset.
+// 0013 is only accepted *after* the exact reviewed 0012 first-day overlay.
+const supplierHistoricalObjects=Object.freeze({
   ...firstDayCashObjects,
+  owner_supplier_opening_checkpoints:['table','owner_supplier_opening_checkpoints',
+    '133366c3157677d9ee2cde518b99fb6bc24678eaba07b9019a978e44cae85a97'],
+  owner_supplier_opening_clean_history:['trigger','owner_supplier_opening_checkpoints',
+    '99a69c0f224c68c989b07e88bda327c0ae1cfac643e6d36d5247eab4619adf5e'],
+  owner_supplier_opening_no_delete:['trigger','owner_supplier_opening_checkpoints',
+    '6110a744d34e01fde85fa7d1ab45a3eb23986e95a24ca89e289ea270a0389847'],
+  owner_supplier_opening_no_update:['trigger','owner_supplier_opening_checkpoints',
+    'b9bba114837af8f890dcd4898144b81840add5f7ccc485bab011d895249cb65b'],
+  owner_supplier_opening_post:['trigger','owner_supplier_opening_checkpoints',
+    'a84c271c2b3c84321203c193057fabc582bc52a1735ef6dae4aff273876d193f']
+});
+// M03 additive candidate after first-day Cash 0012 and Supplier 0013: exact Support Product permit
+// table and three SQL-time guards. Never accept partial or altered DDL.
+// Digests are from Workerd D1 sqlite_schema.sql after applying staged 0014.
+const supportProductObjects=Object.freeze({
+  ...supplierHistoricalObjects,
   shop_support_product_permits:['table','shop_support_product_permits',
     '2ab2ba09db607a4b97cbd9f6144da3240180be956e1299342b569f748b00aa46'],
   shop_support_product_permits_no_delete:['trigger','shop_support_product_permits',
@@ -104,13 +120,14 @@ async function matchesExactOverlay(baselineSchema,currentSchema,pins,changedObje
   }catch{return false;}
 }
 
-/** Exact reviewed 0010+0011 SQL, its 0012 Cash successor, or exact 0013 Support composition.
+/** Exact reviewed 0010+0011 SQL, or its tightly pinned first-day 0012 successor.
  * All 13 original migration receipts remain mandatory and unchanged.
  */
 export async function matchesApprovedSupplierCashSchemaOverlay(baselineSchema,currentSchema){
   return await matchesExactOverlay(baselineSchema,currentSchema,
     approvedSqlObjects,[modifiedBaseObject])||
     await matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema,currentSchema)||
+    await matchesApprovedSupplierOpeningSchemaOverlay(baselineSchema,currentSchema)||
     await matchesApprovedSupportProductSchemaOverlay(baselineSchema,currentSchema);
 }
 
@@ -119,11 +136,17 @@ export async function matchesApprovedFirstDayOpeningSchemaOverlay(baselineSchema
     [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
 }
 
+/** 0010+0011+0012+0013 only: all original receipts and every reviewed SQL
+ * object remain SHA-pinned. No extra account or ledger DDL is tolerated. */
+export async function matchesApprovedSupplierOpeningSchemaOverlay(baselineSchema,currentSchema){
+  return matchesExactOverlay(baselineSchema,currentSchema,supplierHistoricalObjects,
+    [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);
+}
 
-/** Exact staged 0010+0011 Supplier, 0012 Cash, 0013 Support Product composition.
- * Requires both prior overlays; never accept Support permits on an older schema.
- * Does not grant Support Edit access or authorize a production D1 migration.
- */
+
+/** Exact 0010+0011 Supplier Cash, 0012 Cash, 0013 signed Supplier
+ * and 0014 Support Product composition. An earlier incomplete overlay
+ * must never allow an unauthorized Support Product write. */
 export async function matchesApprovedSupportProductSchemaOverlay(baselineSchema,currentSchema){
   return matchesExactOverlay(baselineSchema,currentSchema,supportProductObjects,
     [modifiedBaseObject,'owner_mvp_cash_open_carry_guard']);

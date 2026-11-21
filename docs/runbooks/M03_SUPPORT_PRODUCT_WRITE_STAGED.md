@@ -50,19 +50,20 @@ No Owner session/cookie or fake Owner subject is issued to Support.
 ## Staged Shop D1 migration and release blockers
 
 The new **Shop D1-only** migration
-`staging-migrations/shop-owner-write/0013_support_product_permit.sql`
+`staging-migrations/shop-owner-write/0014_support_product_permit.sql`
 creates `shop_support_product_permits` and 3 triggers (immutable approval,
 Shop D1 SQL-time exact support receipt guard). It is NOT applied to any
 live Shop D1, because the deployed Owner/Admin release has a pinned
 13-migration original baseline plus a reviewed M08 Supplier/Cash and first-day Cash opening overlay.
 
-**DO NOT execute 0013 on production merely because this PR merges.**
-The filename was renumbered from staged `0012_support_product_permit.sql`
-because first-day Cash opening already occupies Shop D1 migration 0012.
-Shop D1 migration 0013 is ordered *after* exact pinned 0010+0011 Supplier
-Cash and 0012 first-day Cash. The verifier accepts only those prior approved
-profiles or their complete 0013 composition with all four new SQL objects
-pinned by SHA-256 of SQLite-stored definitions. This is Shop D1 only;
+**DO NOT execute 0014 on production merely because this PR merges.**
+The filename was renumbered from staged `0012_support_product_permit.sql`:
+first-day Cash opening occupies Shop D1 migration **0012**, and the separately
+reviewed M08 signed Supplier historical opening occupies migration **0013**.
+Support Product is **0014** and requires both prior exact SHA-pinned schema
+extensions, the original 13 immutable migration receipts, and its four
+additional SHA-256-pinned SQLite SQL definitions. Incomplete/altered or
+out-of-order schemas fail closed. This is Shop D1 only;
 **Control D1 hosted journal migration 0012 is unrelated and already applied.**
 
 The verifier extension is code-level preparation, not permission to activate
@@ -107,3 +108,28 @@ No live `admin` or `shererp` deployment, no Shop D1 migration,
 no plaintext Google/TOTP credentials, no production business writes,
 and no support write API/flag are part of this PR. A merged PR does
 not itself enable Support Product edits.
+
+### Coordinated M08/M03 schema sequence and offline acceptance — 2026-11-21
+
+The unique Shop D1 migration order is **0012 First Day Cash (#857 already
+merged) → 0013 Signed Supplier Historical Opening (#862) → 0014 Support
+Product (this PR)**. Merge and review **#862 before this PR**, then retarget
+this PR from the dependent Supplier branch to `main`. Do not merge two
+opposite-version migrations.
+
+A private read-only export of the actual first Shop D1 was restored in an
+isolated SQLite file. Applying **0012 → 0013 → 0014** preserved all original
+13 immutable Shop receipts, one existing Open Cash Session, one existing
+Supplier, and all preexisting row counts. After every migration,
+`PRAGMA integrity_check` returned `ok` and
+`PRAGMA foreign_key_check` returned no rows. The SQL verifier accepted
+the exact reviewed 0010+0011, 0012, 0013, and 0014 SHA-256 schema
+profiles, and rejected the complete 0014 profile as Supplier-only 0013.
+
+**Wrangler's D1 export omits Cloudflare's internal `_cf_KV` metadata.**
+For the offline comparison *only*, an isolated schema-review copy
+reconstructed the exact `_cf_KV` DDL from that same Shop's immutable
+13th baseline schema receipt. No runtime SQL verifier exception was added.
+The actual live Shop D1 was not migrated, written to or otherwise
+changed. A fresh authorized backup, independent review and coordinated
+single-publisher release are still required for production.

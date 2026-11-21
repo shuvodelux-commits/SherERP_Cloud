@@ -9,5 +9,6 @@ test('Shop Owner write migrations have unique numbered order',async()=>{
   assert.equal(new Set(prefixes).size,prefixes.length,
     'two distinct Shop migrations cannot share a version');
   assert.ok(filenames.includes('0012_owner_first_day_cash_opening.sql'));
-  assert.ok(filenames.includes('0013_support_product_permit.sql'));
+  assert.ok(filenames.includes('0013_owner_supplier_historical_opening.sql'));
+  assert.ok(filenames.includes('0014_support_product_permit.sql'));
 });

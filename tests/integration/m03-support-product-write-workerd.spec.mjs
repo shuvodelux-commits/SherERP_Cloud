@@ -36,7 +36,7 @@ async function fixture(t){
     'staging-migrations/platform-support/0002_support_write_authority.sql'
   ])await migrate(db,path);
   for(const target of [shopA,shopB])
-    await migrate(target,'staging-migrations/shop-owner-write/0013_support_product_permit.sql');
+    await migrate(target,'staging-migrations/shop-owner-write/0014_support_product_permit.sql');
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const cipher=await crypto.subtle.encrypt({
     name:'AES-GCM',iv,additionalData:new TextEncoder().encode('shererp:platform:first-factor:v1')
