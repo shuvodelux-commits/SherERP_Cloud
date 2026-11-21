@@ -191,7 +191,19 @@ test('pointer drag cart reorder persists in the original posState cart',async()=
   try{
     const errors=await setup(page);
     const handles=page.locator('#posCartList :is(.hi-pos-grip, .pos-v2-reorder-handle)');
-    await handles.first().dragTo(handles.nth(1),{force:true});
+    const target=page.locator('#posCartList .cart-row:not(.pos-cart-entry-row)').nth(1);
+    await target.scrollIntoViewIfNeeded();
+    await handles.first().scrollIntoViewIfNeeded();
+    const from=await handles.first().boundingBox(),to=await target.boundingBox();
+    assert.ok(from&&to,'native source pointer handle and target row must have boxes');
+    // The native V2 reorder commits only when the pointer passes the target
+    // row midpoint; HTML dragTo(handle center) legitimately inserts BEFORE
+    // that row and therefore does not change the cart.
+    await page.mouse.move(from.x+from.width/2,from.y+from.height/2);
+    await page.mouse.down();
+    await page.mouse.move(to.x+Math.min(to.width*.4,65),to.y+to.height*.75,{steps:8});
+    await page.mouse.up();
+    await page.waitForFunction(()=>posState.cart[0]?.productId==='PRD-000002');
     assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),
       ['PRD-000002','PRD-000001','PRD-000003']);
     assert.deepEqual(errors,[]);
