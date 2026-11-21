@@ -586,3 +586,10 @@ body.pos-v2-active #app #page-pos[data-hisabiq-pos] .cart-row > :is(.cart-remove
 #app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row .pos-cart-inline-picker > input::placeholder {
  color:#6a8092!important;opacity:1!important;
 }
+
+/* POS add row has no grip; its product search must span the first two tracks. */
+#app #page-pos[data-hisabiq-pos] #posCartList > .pos-cart-entry-row .c-name {
+ grid-column:1 / span 2!important;
+ grid-row:auto!important;
+ min-width:0!important;
+}
