@@ -1,6 +1,118 @@
 /* Compiled-only HisabIQ reference shell.
    Source: hisabiq_ui@e42a00a, Sidebar/ErpNavMenu/TopBar.
    Never modify the legacy page, accounting, login or print surface. */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Hind+Siliguri:wght@400;500;600&display=swap');
+/* Reference TopBar: accessible navigation search, signed-in user and sale action.
+   Original date, cashier session, calculator and refresh remain intact. */
+#app[data-hisabiq-shell] .h-shell-search {
+  position:relative;display:flex;align-items:center;gap:8px;
+  flex:1 1 220px;min-width:160px;max-width:448px;height:36px;
+  padding:0 9px 0 12px;border:1px solid #b7c2cf;border-radius:8px;
+  color:var(--h-shell-muted);background:var(--h-shell-bg);
+}
+#app[data-hisabiq-shell] .h-shell-search:focus-within {
+  border-color:var(--h-shell-primary);
+  box-shadow:0 0 0 2px rgba(13,124,116,.11);
+}
+#app[data-hisabiq-shell] .h-shell-search input {
+  flex:1;min-width:0;height:32px;padding:0;border:0;outline:0;
+  background:transparent;box-shadow:none;color:var(--h-shell-ink);
+  font:400 12.5px/1 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] .h-shell-search input::placeholder {color:var(--h-shell-muted);}
+#app[data-hisabiq-shell] .h-shell-search kbd {
+  flex-shrink:0;padding:2px 5px;border:1px solid var(--h-shell-border);
+  border-radius:4px;background:var(--h-shell-surface);
+  color:var(--h-shell-muted);font:500 10px/1.2 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] #h-shell-search-results {
+  position:absolute;top:calc(100% + 6px);left:0;right:0;
+  z-index:1800;max-height:min(55vh,360px);overflow:auto;padding:5px;
+  border:1px solid var(--h-shell-border);border-radius:10px;
+  background:#fff;box-shadow:0 12px 30px rgba(11,26,44,.14);
+}
+#app[data-hisabiq-shell] #h-shell-search-results[hidden] {display:none!important;}
+#app[data-hisabiq-shell] .h-shell-search-result {
+  display:block;width:100%;min-height:36px;padding:8px 10px;
+  border:0;border-radius:7px;background:transparent;color:var(--h-shell-ink);
+  cursor:pointer;text-align:left;font:500 12.5px/1.3 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] .h-shell-search-result:hover,
+#app[data-hisabiq-shell] .h-shell-search-result:focus-visible {
+  background:var(--h-shell-accent);color:#0a625c;
+}
+#app[data-hisabiq-shell] .h-shell-search-empty {
+  margin:0;padding:10px;color:var(--h-shell-muted);font-size:12px;
+}
+#app[data-hisabiq-shell] #h-shell-new-sale {
+  display:flex;flex-shrink:0;align-items:center;justify-content:center;gap:6px;
+  min-width:96px;min-height:36px;padding:6px 12px;
+  border:0;border-radius:8px;background:var(--h-shell-primary);color:white;
+  cursor:pointer;font:600 12.5px/1.2 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] #h-shell-new-sale:hover {background:#0a625c;}
+#app[data-hisabiq-shell] #h-shell-new-sale[hidden] {display:none!important;}
+#app[data-hisabiq-shell] .h-shell-user {position:relative;flex-shrink:0;}
+#app[data-hisabiq-shell] #h-shell-user-trigger {
+  display:flex;align-items:center;gap:8px;min-height:36px;padding:2px 5px;
+  border:0;border-radius:8px;background:transparent;color:var(--h-shell-ink);
+  text-align:left;cursor:pointer;
+}
+#app[data-hisabiq-shell] #h-shell-user-trigger:hover {background:var(--h-shell-accent);}
+#app[data-hisabiq-shell] #h-shell-user-trigger[hidden] {display:none!important;}
+#app[data-hisabiq-shell] .h-shell-user-avatar {
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  width:28px;height:28px;border-radius:50%;background:#0b1a2c;color:#fff;
+  font:600 11px/1 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] #h-shell-user-copy {
+  display:flex;flex-direction:column;min-width:0;max-width:125px;
+}
+#app[data-hisabiq-shell] #h-shell-user-copy strong {
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--h-shell-ink);font:600 12px/1.25 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] #h-shell-user-copy small {
+  color:var(--h-shell-muted);font:400 11px/1.3 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] #h-shell-user-trigger>svg {color:var(--h-shell-muted);}
+#app[data-hisabiq-shell] #h-shell-user-popover {
+  position:absolute;right:0;top:calc(100% + 8px);z-index:1801;
+  min-width:220px;padding:7px;border:1px solid var(--h-shell-border);
+  border-radius:10px;background:#fff;box-shadow:0 12px 30px rgba(11,26,44,.14);
+}
+#app[data-hisabiq-shell] #h-shell-user-popover[hidden] {display:none!important;}
+#app[data-hisabiq-shell] #h-shell-user-detail {
+  display:block;padding:8px 10px;border-bottom:1px solid var(--h-shell-border);
+  margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;
+  font:600 12.5px/1.4 var(--h-shell-font);
+}
+#app[data-hisabiq-shell] #h-shell-user-popover button {
+  display:block;width:100%;min-height:36px;padding:8px 10px;
+  border:0;border-radius:6px;background:transparent;color:var(--h-shell-ink);
+  text-align:left;font:500 12.5px/1.3 var(--h-shell-font);cursor:pointer;
+}
+#app[data-hisabiq-shell] #h-shell-user-popover button:hover {background:var(--h-shell-accent);}
+#app[data-hisabiq-shell] #h-shell-user-popover button[hidden] {display:none!important;}
+#app[data-hisabiq-shell] :is(#h-shell-user-trigger,#h-shell-new-sale,.h-shell-search-result):focus-visible {
+  outline:2px solid var(--h-shell-primary);outline-offset:2px;
+}
+@media (min-width:1024px) and (max-width:1360px) {
+  #app[data-hisabiq-shell] #h-shell-user-copy {display:none;}
+  #app[data-hisabiq-shell] #h-shell-new-sale {min-width:36px;padding:8px;}
+  #app[data-hisabiq-shell] #h-shell-new-sale span {display:none;}
+}
+@media (max-width:1023px) {
+  #app[data-hisabiq-shell] .h-shell-search,
+  #app[data-hisabiq-shell] #h-shell-new-sale {display:none!important;}
+  #app[data-hisabiq-shell] #h-shell-user-copy,
+  #app[data-hisabiq-shell] #h-shell-user-trigger>svg {display:none;}
+  #app[data-hisabiq-shell] #h-shell-user-trigger {min-width:36px;justify-content:center;padding:2px;}
+}
+@media (max-width:360px) {
+  #app[data-hisabiq-shell] #englishDateView {display:none;}
+}
+
 #app[data-hisabiq-shell] {
   --h-shell-bg: #f5f7fa;
   --h-shell-surface: #ffffff;
