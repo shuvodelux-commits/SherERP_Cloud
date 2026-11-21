@@ -15,7 +15,7 @@ const original = `<!doctype html><html><head></head><body>
 <thead><tr><th id="smProfitHeader">Profit</th></tr></thead>
 <tbody id="smTableBody"></tbody></table></div><div id="smEmpty"></div>
 <div id="smViewModal"></div><div id="smPayModal"></div>
-<script>function smRender(){};function smLoad(){return serverCall("getSalesManagementList",authToken)};</script>
+<script>function smRender(){};function smLoad(){return serverCall("getSalesManagementList",authToken)};function smDetail(){return serverCall("getSaleDetail",authToken)};</script>
 </section></div></body></html>`;
 const css = '#page-sales[data-hisabiq-sales] { color:#0b1a2c; }';
 const js = '(function(){ window.hisabiqSalesUiInstalled = true; })();';
