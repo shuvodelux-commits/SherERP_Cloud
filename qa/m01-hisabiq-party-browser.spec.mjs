@@ -297,9 +297,10 @@ test('source-only Add Supplier posts zero-opening authorized intent and selects 
     await openParty(page);
     const button=page.locator('#hparty-add-party');
     assert.equal(await button.isEnabled(),true);
-    assert.match(await button.innerText(),/Add Supplier/);
+    assert.match(await button.innerText(),/Add Party/);
     assert.equal(await page.locator('#owner-data-notice').evaluate(x=>getComputedStyle(x).display),'none');
     await button.click();
+    await page.locator('#hparty-add-relationship').selectOption('Supplier');
     await page.locator('#hparty-supplier-name').fill('New Hardware');
     await page.locator('#hparty-supplier-phone').fill('01888000111');
     await page.locator('#hparty-supplier-address').fill('Khulna');
@@ -323,6 +324,7 @@ test('Supplier timeout retry reuses exact payload and operationId',async()=>{
     await page.route(/^https:\/\/fonts\./,route=>route.abort());
     await openParty(page);
     await page.locator('#hparty-add-party').click();
+    await page.locator('#hparty-add-relationship').selectOption('Supplier');
     await page.locator('#hparty-supplier-name').fill('Retry Electric');
     await page.locator('#hparty-supplier-save').click();
     await page.locator('#hparty-supplier-status').getByText('Retry unchanged').waitFor();
@@ -342,6 +344,7 @@ test('403 Supplier save stays denied without adding a client-side Party',async()
     await openParty(page);
     const count=await page.locator('#hparty-list [role="option"]').count();
     await page.locator('#hparty-add-party').click();
+    await page.locator('#hparty-add-relationship').selectOption('Supplier');
     await page.locator('#hparty-supplier-name').fill('Blocked Supplier');
     await page.locator('#hparty-supplier-save').click();
     await page.locator('#hparty-supplier-status').getByText('access denied').waitFor();

@@ -102,6 +102,8 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
 
     await page.goto(ORIGIN+'/app',{waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>!!currentUser);
+    assert.equal(await page.locator('#app').evaluate(el=>
+      getComputedStyle(el).getPropertyValue('--color-primary').trim()),'#0d7c74');
     await page.evaluate(()=>goToPage('sales'));
     if(process.env.SHERERP_SALES_BASELINE){
       await captureSales('before');
@@ -114,13 +116,30 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
     else await page.locator('#navList .nav-item[aria-label="Products"]').click();
     await page.locator('#prodAddBtn').click();
     await page.locator('#prodName').fill('Complete Journey Pipe');
-    await page.locator('#prodUnit + .touch-select-trigger').click();
-    await page.locator('#touchSelectMenuGlobal button').filter({hasText:'pcs'}).evaluate(button=>button.click());
+    await page.locator('#prodManageCategoriesBtn').click({timeout:4000});
+    await page.locator('#prodManageListNewName').fill('Water fittings');
+    await page.locator('#prodManageListNewName').press('Enter');
+    assert.equal(await page.locator('#prodManageCategoriesBtn').evaluate(el=>el===document.activeElement),true);
+    assert.equal(await page.locator('#prodCategory').inputValue(),'Water fittings');
+    assert.equal(await page.locator('#prodCategory option:checked').textContent(),'Water fittings');
+    await page.locator('#prodManageUnitsBtn').click();
+    await page.locator('#prodManageListNewName').press('Escape');
+    assert.equal(await page.locator('#prodManageUnitsBtn').evaluate(el=>el===document.activeElement),true);
+    await page.locator('#prodManageUnitsBtn').click();
+    const customUnit='12" length';
+    await page.locator('#prodManageListNewName').fill(customUnit);
+    await page.locator('#prodManageListAddBtn').click();
+    assert.equal(await page.locator('#prodUnit').inputValue(),customUnit);
     await page.locator('#prodPurchasePrice').fill('60.00');
     await page.locator('#prodSellingPrice').fill('75.00');
     await page.locator('#prodSaveBtn').click();
     await page.locator('#prodTableBody tr').filter({hasText:'Complete Journey Pipe'}).waitFor();
-    assert.equal((await a.prepare('SELECT count(*) AS n FROM products').first()).n,1);
+    assert.deepEqual(await a.prepare('SELECT category_name,base_unit_name FROM products').first(),
+      {category_name:'Water fittings',base_unit_name:customUnit});
+    await page.locator('#prodAddBtn').click();
+    assert.equal(await page.locator('#prodCategory option[value="Water fittings"]').count(),1);
+    assert.ok((await page.locator('#prodUnit option').evaluateAll(options=>options.map(option=>option.value))).includes(customUnit));
+    await page.locator('#prodModal .modal-close').click();
 
     if(view.phone){
       await page.locator('#mobileBottomNav [data-mobile-page="more"]').click();
@@ -146,9 +165,15 @@ test('original Owner browser completes Product → Supplier → Purchase → POS
       await page.locator('#mobileBottomNav [data-mobile-page="more"]').click();
       await page.locator('#mobileMoreList [data-mobile-target="purchase"]').click();
     }else await page.locator('#navList .nav-item[aria-label="Purchases"]').click();
-    await page.locator('#owner-purchase-start-day').click();
-    await page.waitForFunction(()=>document.getElementById('owner-purchase-day-state')
-      ?.textContent?.includes('Day Open'));
+    assert.equal(await page.locator('#owner-purchase-day-bar').count(),0);
+    await page.locator('#cashSessionToggleBtn').click();
+    await page.locator('#posOpeningCash').fill('0');
+    await page.locator('#posStartSessionBtn').click();
+    await page.locator('#confirmActionConfirm').click();
+    await page.locator('#posSessionModal .modal-close').click();
+    await page.waitForFunction(()=>document.getElementById('cashSessionTopbarStatus')?.textContent==='Open');
+    assert.equal(await page.locator('#cashSessionTopbarStatus').evaluate(el=>getComputedStyle(el).color),
+      'rgb(17, 111, 53)');
     // Do not bypass the original Purchase UI with a direct serverCall:
     // exercise supplier combobox, inline cart, confirmation and D1 POST.
     await page.locator('#purSupplierSearch').fill('Complete Journey Supplier');
