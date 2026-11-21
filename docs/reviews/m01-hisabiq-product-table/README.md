@@ -42,3 +42,7 @@ Additional Playwright states: [390px column menu](images/390-column-menu.png), [
 `/ui-refine-skill` itself is **not installed in this agent environment**, so do not count that exact skill as executed. Used the available Impeccable visual-review guidance and **actual Playwright Chromium screenshots**, inspected phone and desktop before/after, fixed observed defects, and reran browser/regression tests. All screenshots use synthetic session/source fixtures—not a hosted production/real-D1 acceptance test. GitHub checks and live deployment remain separate gates.
 
 **Commands:** `node --test tests/contract/m01-hisabiq-product-table.test.mjs qa/m01-hisabiq-product-table.spec.mjs qa/m03-owner-erp-browser.spec.mjs qa/m01-hisabiq-shell-browser.spec.mjs tests/hisabiq-design-system.test.mjs`; `npm run build:owner-frontend`; `git diff --check`.
+
+## CI wiring
+
+The Owner Product Table Chromium suite is included in existing `npm run test:m01:browser`, used by PR-only `.github/workflows/m01-browser-qa.yml` (no new deployment workflow or secrets).

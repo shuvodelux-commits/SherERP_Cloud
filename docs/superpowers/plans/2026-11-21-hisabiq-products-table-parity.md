@@ -24,5 +24,5 @@
 - [x] Run Owner browser regressions, design system, source manifest, Owner build; recheck full unit suite and GitHub CI separately after PR.
 
 ## Task 3 — Review handoff
-- [ ] Publish scoped PR; document screenshot evidence and known source-backed gaps, especially disabled stock/edit operations.
-- [ ] Leave PR for review (no D1 migration, public runtime or unapproved merge).
+- [x] Publish scoped PR #866; document screenshot evidence and known source-backed gaps, especially disabled stock/edit operations.
+- [x] Leave PR for review (no D1 migration, public runtime or unapproved merge).
