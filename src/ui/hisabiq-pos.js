@@ -186,7 +186,7 @@
       if(row.querySelector('.hi-pos-grip'))return;
       var button=make('button','hi-pos-grip','⋮⋮');
       button.type='button';button.draggable=true;
-      button.dataset.hiPosRow=String(index);
+      button.dataset.hiPosRow=String(index+1);
       button.setAttribute('aria-label','Reorder cart item '+(index+1));
       button.setAttribute('aria-keyshortcuts','ArrowUp ArrowDown');
       button.title='Drag to reorder · use Up / Down keys';
