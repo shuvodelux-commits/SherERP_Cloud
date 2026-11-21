@@ -184,6 +184,31 @@ test('modal navigation isolates background and restores it at 320,390,768px',asy
   }
 });
 
+
+test('mobile drawer transfers keyboard focus after its visible animation frame',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
+  try{
+    await syntheticShell(page);
+    // Make the normally fast CSS entry frame explicitly late. Focusing an
+    // element while its ancestor is display:none is ignored by Chromium.
+    await page.evaluate(()=>{
+      const original=window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame=callback=>
+        original(time=>window.setTimeout(()=>callback(time),35));
+    });
+    await page.locator('#menuToggle').click();
+    await page.waitForFunction(()=>
+      document.getElementById('hisabiqMobileDrawer')?.classList.contains('is-open'));
+    assert.equal(await page.evaluate(()=>
+      !!document.activeElement?.closest('#erp-mobile-drawer')),true,
+      'visible modal must have focus, not the inert ERP or page body');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(()=>
+      !!document.activeElement?.closest('#erp-mobile-drawer')),true,
+      'Tab must stay within the open modal');
+  }finally{await page.close();}
+});
+
 test('drawer closes on loss of authenticated app visibility without route exposure',async()=>{
   const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
   try{
