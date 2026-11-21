@@ -2,7 +2,7 @@
  * First Support Edit business slice: clean-Shop standard Product creation.
  * PRIVATE, DEFAULT OFF. No Owner impersonation or Owner session lease.
  * This module needs the separately approved Control D1 0002 and staged
- * Shop D1 0012 migration; it is NOT a production HTTP endpoint.
+ * Shop D1 0013 migration; it is NOT a production HTTP endpoint.
  */
 import {hashOpaqueSessionToken} from '../auth/session-token.js';
 import {validatePlatformSuperAdminSession,CURRENT_PLATFORM_ADMIN_FROM}
