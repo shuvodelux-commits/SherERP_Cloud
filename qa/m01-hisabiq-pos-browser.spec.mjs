@@ -88,7 +88,8 @@ async function visit(viewport,{before=false}={}){
   return {page,errors};
 }
 const folder=join(process.cwd(),'docs/reviews/m01-hisabiq-pos-ui-refine/images');
-const sizes=[{width:320,height:760},{width:390,height:840},{width:768,height:1024},
+const sizes=process.env.POS_QA_WIDTH==='390'?[{width:390,height:840}]:
+  [{width:320,height:760},{width:390,height:840},{width:768,height:1024},
   {width:1024,height:768},{width:1440,height:900}];
 test('Owner POS composed screen remains visible at five source breakpoints and preserves price/cart UI',async t=>{
   await mkdir(folder,{recursive:true});
@@ -107,7 +108,7 @@ test('Owner POS composed screen remains visible at five source breakpoints and p
         const metrics=await page.evaluate(()=>{
           const el=id=>document.getElementById(id);
           const style=id=>getComputedStyle(el(id));
-          const box=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,right:r.right,bottom:r.bottom};};
+          const box=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom};};
           return {
             viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,
             cart:box(document.querySelector('#page-pos .pos-cart-section')),
@@ -120,10 +121,29 @@ test('Owner POS composed screen remains visible at five source breakpoints and p
             completionLabel:el('posCompleteBtn')?.textContent,
             searchPresent:!!el('posSearch'), cartButton:!!el('posClearCartBtn'),
             parentLayout:style('page-pos').display,
-            grid:getComputedStyle(document.querySelector('#page-pos .pos-layout')).gridTemplateAreas
+            grid:getComputedStyle(document.querySelector('#page-pos .pos-layout')).gridTemplateAreas,
+            words:(()=>{
+              const p=document.querySelector('#posHisabiqAmountWords p');
+              if(!p)return null;
+              return {text:p.textContent,display:getComputedStyle(p).display,
+                visibility:getComputedStyle(p).visibility,rect:box(p),
+                panelRect:box(p.parentElement),
+                parentDisplay:getComputedStyle(p.parentElement).display,
+                outer:p.parentElement.outerHTML.slice(0,500)};
+            })(),
+            overflowNodes:Array.from(document.querySelectorAll('body *')).map(e=>{
+              const r=e.getBoundingClientRect();
+              return {name:e.tagName.toLowerCase()+'#'+e.id+'.'+String(e.className||'').slice(0,60),
+                x:r.x,right:r.right,width:r.width,height:r.height,
+                display:getComputedStyle(e).display};
+            }).filter(r=>r.right>innerWidth+2&&r.width>0&&r.height>0&&r.display!=='none')
+              .slice(0,30)
           };
         });
         assert.ok(metrics.cartRowCount>=2,'two source products in cart');
+        assert.match(metrics.words?.text||'',/One thousand nine hundred seventy taka only/i,
+          'amount in words follows real cart total');
+        assert.ok((metrics.words?.rect?.height||0)>10,'words helper is actually rendered: '+JSON.stringify(metrics.words));
         assert.ok(metrics.documentWidth<=viewport.width+2,'horizontal overflow: '+JSON.stringify(metrics));
         assert.ok(metrics.cart.width>0&&metrics.checkout.width>0);
         if(viewport.width<1024){
@@ -138,7 +158,13 @@ test('Owner POS composed screen remains visible at five source breakpoints and p
           assert.equal(await page.locator('#'+id).isVisible(),false,'hidden source banner '+id);
         }
         assert.deepEqual(errors,[],'JavaScript errors');
+        await page.evaluate(()=>window.scrollTo({left:0,top:0,behavior:'instant'}));
         await page.screenshot({path:join(folder,viewport.width+'-after.png'),fullPage:true});
+        if(viewport.width===390||viewport.width===1440){
+          await page.screenshot({path:join(folder,viewport.width+'-top-viewport.png'),fullPage:false});
+          await page.locator('#posHisabiqPreviewButton').scrollIntoViewIfNeeded();
+          await page.screenshot({path:join(folder,viewport.width+'-checkout-viewport.png'),fullPage:false});
+        }
         evidence.push({width:viewport.width,...metrics});
       }finally{await page.close();}
     });
@@ -152,6 +178,7 @@ test('before vs after screenshots from actual compiled Owner shell',async()=>{
     const {page}=await visit({width,height:width===390?840:900},{before:true});
     try{
       await page.evaluate(()=>posAddToCart_(posState.products[0]));
+      await page.evaluate(()=>window.scrollTo({left:0,top:0,behavior:'instant'}));
       await page.screenshot({path:join(folder,width+'-before.png'),fullPage:true});
     }finally{await page.close();}
   }
@@ -204,4 +231,116 @@ test('Owner POS route reactivation reuses one presentation layer and original Dr
     assert.equal(salePostCount,0);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
+});
+
+
+test('HisabIQ checkout shows source-connected customer picker, sale modes and draft-preserving details',async()=>{
+  const {page,errors}=await visit({width:390,height:840});
+  try{
+    assert.equal(await page.locator('#posHisabiqSaleModes [data-sale-mode="installment"]').isDisabled(),true,
+      'unconnected installment sale must not appear operational');
+    assert.equal(await page.locator('#posHisabiqCustomerDetails').count(),1);
+    await page.locator('#posHisabiqCustomerPicker').click();
+    assert.equal(await page.locator('#posHisabiqCustomerDetails').getAttribute('open'),'');
+    await page.locator('#posCustomerName').fill('Rahim');
+    await page.locator('#posCustomerPhone').fill('01710000001');
+    await mkdir(folder,{recursive:true});
+    await page.locator('#posCustomerName').scrollIntoViewIfNeeded();
+    await page.screenshot({path:join(folder,'390-customer-details-viewport.png'),fullPage:false});
+    await page.locator('#posHisabiqCustomerDetails summary').click();
+    assert.equal(await page.locator('#posCustomerName').inputValue(),'Rahim');
+    assert.equal(await page.locator('#posCustomerPhone').inputValue(),'01710000001');
+    assert.deepEqual(errors,[]);
+    assert.equal(salePostCount,0);
+  }finally{await page.close();}
+});
+
+test('HisabIQ cash shortcuts use original payment totals, preview has no posting side effect',async()=>{
+  const {page,errors}=await visit({width:390,height:840});
+  try{
+    await page.locator('#posProductGrid .product-tile').first().click();
+    await page.locator('#posProductGrid .product-tile').nth(1).click();
+    await page.locator('[data-pos-cash-shortcut="exact"]').click();
+    assert.equal(await page.locator('#posAmountReceived').inputValue(),'1970');
+    assert.equal(await page.locator('#posHisabiqPaymentStatus').getAttribute('data-due'),'0');
+    await page.locator('[data-pos-cash-shortcut="2000"]').click();
+    assert.equal(await page.locator('#posAmountReceived').inputValue(),'2000');
+    assert.match(await page.locator('#posChangeDue').innerText(),/30/);
+    await page.locator('#posHisabiqPreviewButton').click();
+    assert.ok(await page.locator('#posHisabiqPreview[aria-modal="true"]').isVisible());
+    assert.match(await page.locator('#posHisabiqPreview').innerText(),/PVC Pipe 1 inch/);
+    assert.match(await page.locator('#posHisabiqPreview').innerText(),/1,970/);
+    assert.equal(salePostCount,0);
+    await mkdir(folder,{recursive:true});
+    await page.screenshot({path:join(folder,'390-preview-viewport.png'),fullPage:false});
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#posHisabiqPreview').isVisible(),false);
+    assert.equal(await page.evaluate(()=>document.activeElement?.id),'posHisabiqPreviewButton');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('keyboard F2 focuses cart product picker and source readonly cash pilot does not allow Bank',async()=>{
+  const {page,errors}=await visit({width:1440,height:900});
+  try{
+    await page.keyboard.press('F2');
+    const focused=await page.evaluate(()=>document.activeElement?.dataset.cartProductMode||
+      document.activeElement?.id);
+    assert.ok(['add','posSearch'].includes(focused));
+    const options=await page.locator('#posPaymentMethod option').evaluateAll(
+      nodes=>nodes.map(n=>({value:n.value,disabled:n.disabled})));
+    assert.ok(options.filter(x=>x.value!=='Cash').every(x=>x.disabled),
+      'Owner pilot cannot advertise unconnected payment writers');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('keyboard product combobox selects actual catalog item without posting a sale',async()=>{
+  const {page,errors}=await visit({width:390,height:840});
+  try{
+    await page.locator('#posSearch').fill('Wire Mesh');
+    await mkdir(folder,{recursive:true});
+    await page.screenshot({path:join(folder,'390-search-popup-viewport.png'),fullPage:false});
+    await page.locator('#posSearch').press('Enter');
+    const active=page.locator('#posCartList .pos-cart-entry-row.is-active [data-cart-entry-qty]');
+    await active.waitFor({state:'visible',timeout:7000});
+    await active.fill('2');
+    await active.press('Enter');
+    await page.waitForFunction(()=>document.querySelectorAll(
+      '#posCartList .cart-row:not(.pos-cart-entry-row)').length===1);
+    assert.match(await page.locator('#posCartList .c-name-title').first().innerText(),/Wire Mesh/i);
+    assert.match(await page.locator('#posGrandTotal').innerText(),/360/,
+      'source product entry uses its real unit price × confirmed quantity');
+    assert.deepEqual(errors,[]);
+    assert.equal(salePostCount,0);
+  }finally{await page.close();}
+});
+
+test('source dark-theme POS remains readable on phone and desktop with screenshots',async()=>{
+  await mkdir(folder,{recursive:true});
+  for(const {width,height} of [{width:390,height:840},{width:1440,height:900}]){
+    const {page,errors}=await visit({width,height});
+    try{
+      await page.evaluate(()=>document.documentElement.dataset.theme='dark');
+      await page.locator('#posProductGrid .product-tile').first().click();
+      const colors=await page.evaluate(()=>({
+        primary:getComputedStyle(document.body).getPropertyValue('--pos-v2-primary').trim(),
+        surface:getComputedStyle(document.body).getPropertyValue('--pos-v2-surface').trim()
+      }));
+      assert.match(colors.primary,/#3DB8AC/i);
+      assert.match(colors.surface,/#14263B/i);
+      const readable=await page.evaluate(()=>({
+        subtotal:getComputedStyle(document.getElementById('posSubtotal')).color,
+        received:getComputedStyle(document.getElementById('posAmountReceived')).backgroundColor,
+        receivedText:getComputedStyle(document.getElementById('posAmountReceived')).color
+      }));
+      assert.equal(readable.subtotal,'rgb(237, 243, 250)','subtotal needs light ink');
+      assert.equal(readable.received,'rgb(20, 38, 59)','payment input needs dark surface');
+      assert.equal(readable.receivedText,'rgb(237, 243, 250)','payment input needs light ink');
+      assert.equal(await page.locator('#posCompleteBtn').isVisible(),true);
+      await page.evaluate(()=>window.scrollTo({left:0,top:0,behavior:'instant'}));
+      await page.screenshot({path:join(folder,width+'-dark-after.png'),fullPage:true});
+      assert.deepEqual(errors,[]);
+    }finally{await page.close();}
+  }
 });
