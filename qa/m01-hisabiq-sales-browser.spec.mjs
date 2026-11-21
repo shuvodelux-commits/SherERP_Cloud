@@ -79,6 +79,21 @@ async function setup(page,items=sales){
   return errors;
 }
 
+async function chooseSelect(page,selector,optionText,optionValue){
+  const select=page.locator(selector);
+  if(await select.isVisible()){
+    await select.selectOption(optionValue);
+    return;
+  }
+  const trigger=page.locator(selector+' + .touch-select-trigger');
+  await trigger.click();
+  const option=page.locator('#touchSelectMenuGlobal .touch-select-option')
+    .filter({hasText:optionText}).first();
+  await option.click();
+  assert.equal(await select.inputValue(),optionValue,
+    'native select stays authoritative behind its original touch control');
+}
+
 for(const width of widths){
   test(`${width}px compiled Sales UI layout and source-data integrity`,async()=>{
     const page=await browser.newPage({viewport:{width,height:900},
@@ -111,7 +126,7 @@ test('Sales instant search, native filters, reset, sort and column choice preser
     assert.match(await page.locator('#smTableBody tr:not([hidden])').innerText(),/INV-000001/);
     await page.locator('#h-sales-clear').click();
     assert.equal(await page.locator('#smTableBody tr:not([hidden])').count(),3);
-    await page.locator('#smPaymentStatus').selectOption('Partial');
+    await chooseSelect(page,'#smPaymentStatus','Partial','Partial');
     assert.equal(await page.locator('#smTableBody tr:not([hidden])').count(),1);
     await page.locator('#h-sales-clear').click();
     await page.locator('button[data-h-sales-sort="total"]').click();
@@ -139,7 +154,7 @@ test('Sales pagination, original row action and keyboard access remain bound',as
     await page.locator('#h-sales-next').click();
     assert.equal(await page.locator('#smTableBody tr:not([hidden])').count(),10);
     assert.equal((await page.locator('#h-sales-page-count').innerText()).trim(),'2 / 3');
-    await page.locator('#h-sales-size').selectOption('all');
+    await chooseSelect(page,'#h-sales-size','All','all');
     assert.equal(await page.locator('#smTableBody tr:not([hidden])').count(),26);
     assert.equal(await page.locator('#smViewModal').count(),1);
     assert.equal(await page.locator('#smPayModal').count(),1);
@@ -162,8 +177,8 @@ test('Mobile filters, visibility, empty and unloaded states stay truthful',async
   try{
     await setup(page);
     await page.locator('#h-sales-filters-toggle').click();
-    assert.equal(await page.locator('#smPaymentStatus').isVisible(),true);
-    await page.locator('#smPaymentStatus').selectOption('Due');
+    assert.equal(await page.locator('#smPaymentStatus + .touch-select-trigger').isVisible(),true);
+    await chooseSelect(page,'#smPaymentStatus','Due','Due');
     assert.equal(await page.locator('#smTableBody tr:not([hidden])').count(),0);
     await page.locator('#h-sales-clear').click();
     assert.equal(await page.locator('#smTableBody tr:not([hidden])').count(),3);
