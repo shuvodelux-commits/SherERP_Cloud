@@ -82,7 +82,7 @@ export async function createOwnerSupplier(scope,{token,ownerSubject,input}={}){
           WHERE name_key=? AND status='Active')
       RETURNING sequence`).bind(input.operationId,actorId,intent,nameKey,
         JSON.stringify(payload),...auth,input.operationId,nameKey);
-  const opening=withOpening?DB.prepare(`INSERT INTO owner_supplier_opening_checkpoints
+  const opening=withOpening&&signed!==0?DB.prepare(`INSERT INTO owner_supplier_opening_checkpoints
       (supplier_id,operation_id,actor_id,signed_opening_paisa,as_of_date,created_at_ms)
       SELECT m.supplier_id,r.operation_id,r.actor_id,?,date('now','+6 hours'),
         CAST(unixepoch('subsec')*1000 AS INTEGER)
@@ -187,12 +187,12 @@ export async function recordOwnerSupplierOpening(scope,{
       WHERE m.supplier_id=? AND m.status='Active' AND m.current_due_paisa=0
         AND ${CURRENT_GRANT} AND (${CLEAN_SOURCE})
         AND NOT EXISTS(SELECT 1 FROM owner_supplier_opening_checkpoints c
-          WHERE c.supplier_id=m.supplier_id)
+          WHERE c.supplier_id=m.supplier_id OR c.operation_id=?)
         AND NOT EXISTS(SELECT 1 FROM owner_mvp_purchase_receipts t
           WHERE t.supplier_id=m.supplier_id)
         AND NOT EXISTS(SELECT 1 FROM owner_mvp_supplier_cash_payment_receipts t
           WHERE t.supplier_id=m.supplier_id)
-      RETURNING supplier_id`).bind(operationId,actorId,signed,supplierId,...grant),
+      RETURNING supplier_id`).bind(operationId,actorId,signed,supplierId,...grant,operationId),
     DB.prepare(`SELECT ${CURRENT_GRANT} AS allowed,c.operation_id AS operationId,
       c.actor_id AS actorId,c.signed_opening_paisa AS signedPaisa
       FROM (SELECT 1) gate

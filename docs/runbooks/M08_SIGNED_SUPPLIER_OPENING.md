@@ -46,10 +46,14 @@ Duplicate, different, cross-Shop, expired grants and Supplier records
 with Purchase/payment history must be rejected. Existing posted
 history must never be retroactively netted or silently edited.
 
-A new Supplier already created with a zero opening under the new
-schema has an immutable zero checkpoint; changing its opening later
-requires a separately reviewed adjustment operation, never overwriting
-the original checkpoint. The UI must clearly distinguish these cases.
+A new Supplier created with a zero opening has **no financial checkpoint**;
+the one-time explicit opening endpoint may be used later while the Supplier
+still has no Purchase or payment activity. The idempotent replay of a
+legacy Supplier creation must never silently create a zero checkpoint
+and consume the old Supplier's chance to record its actual historical
+opening. Once a nonzero checkpoint is recorded, it is immutable; any later
+change requires a separately approved adjustment instead of overwrite.
+The UI must distinguish an unset opening from an immutable recorded opening.
 
 ## Database migration authorization gate
 

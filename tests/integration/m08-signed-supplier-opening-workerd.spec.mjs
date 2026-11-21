@@ -84,8 +84,16 @@ test('existing zero Supplier can record exactly one signed opening before operat
   assert.equal((await add(ownerA,supplierId,'+50')).status,'invalid');
   assert.equal((await add(ownerA,supplierId,'-80.251')).status,'invalid');
   assert.equal((await add(ownerA,supplierId,'100')).status,'conflict');
+  const second=await create(ownerA,input('Second zero'));
+  assert.equal(second.status,'created');
+  // Reusing one signed-opening operation ID across two Supplier accounts
+  // must fail closed without a UNIQUE-constraint 500 or a partial write.
+  assert.equal((await add(ownerA,'SUP-000002','10.00',op)).status,'conflict');
+  assert.equal((await add(ownerA,'SUP-000002','10.00')).status,'created');
+  assert.equal((await a.prepare(
+    "SELECT COUNT(*) AS n FROM owner_supplier_opening_checkpoints").first()).n,2);
   assert.deepEqual(await a.prepare(
-   'SELECT signed_opening_paisa AS n FROM owner_supplier_opening_checkpoints').first(),{n:-8025});
+   "SELECT signed_opening_paisa AS n FROM owner_supplier_opening_checkpoints WHERE supplier_id='SUP-000001'").first(),{n:-8025});
   assert.equal((await a.prepare('SELECT current_due_paisa AS n FROM owner_supplier_master').first()).n,0);
   await assert.rejects(a.prepare(
    'UPDATE owner_supplier_opening_checkpoints SET signed_opening_paisa=10').run(),
