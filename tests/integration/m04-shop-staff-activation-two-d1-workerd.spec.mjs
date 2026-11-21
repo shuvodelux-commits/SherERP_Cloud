@@ -116,9 +116,9 @@ test('wrong actor, role escalation, stale issuer, expired invitation, and concur
   assert.equal(count.n,1,'rejected invites cannot leave partial user rows');
   const issued=await issueStaffInviteForShop(a.scope,request(a.scope,a.adminToken));
   assert.equal(issued.issued,true);
-  await a.scope.shopDb.prepare("UPDATE auth_users SET status='Inactive' WHERE user_id='OWNER-A'").run();
+  await a.scope.shopDb.prepare("UPDATE auth_users SET full_name='Renamed Admin' WHERE user_id='OWNER-A'").run();
   assert.deepEqual(await activateInvitedStaffForShop(a.scope,activate(A,issued.activationToken)),
-    {activated:false},'revoked issuer makes unconsumed activation invalid');
+    {activated:false},'stale issuer authority epoch makes unconsumed activation invalid');
   assert.equal((await a.scope.shopDb.prepare('SELECT consumed_at_ms FROM auth_staff_activation_tickets WHERE user_id=?')
     .bind(issued.userId).first()).consumed_at_ms,null);
   const second=await issueStaffInviteForShop(b.scope,request(b.scope,b.adminToken));
@@ -127,7 +127,7 @@ test('wrong actor, role escalation, stale issuer, expired invitation, and concur
     .bind(second.userId).run();
   assert.deepEqual(await activateInvitedStaffForShop(b.scope,activate(B,second.activationToken)),
     {activated:false},'expiration must be enforced in D1 at consumption');
-  count=await b.scope.shopDb.prepare('SELECT count(*) AS n FROM auth_users WHERE status="Active"').first();
+  count=await b.scope.shopDb.prepare("SELECT count(*) AS n FROM auth_users WHERE status='Active'").first();
   assert.equal(count.n,1,'expired invitation must leave pending user inactive');
 });
 
