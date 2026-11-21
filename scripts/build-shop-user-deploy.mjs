@@ -88,12 +88,13 @@ export function buildShopUserDeployment(env){
     config.ratelimits[0].name!=='OWNER_INGRESS')invalid();
 
   // Workers Builds is still the ONLY deploy owner for the one-Shop pilot.
-  // An approved core test is pinned to a single main commit and the reviewed
-  // read-only LIVE D1 readiness evidence. A later merge cannot silently
-  // redeploy login-only or enable a new unreviewed financial feature.
+  // An approved core release (first activation OR current-core refresh) is
+  // pinned to one exact main SHA and fresh, read-only LIVE D1 proof. A merge
+  // cannot silently redeploy login-only or enable an unreviewed feature.
   if(env.SHERERP_FIRST_SHOP_CORE_RELEASE===undefined)return config;
   const sha=/^[a-f0-9]{40}$/;
-  if(env.SHERERP_FIRST_SHOP_CORE_RELEASE!=='FIRST_SHOP_CORE_MVP_TEST_ONLY'||
+  if(!['FIRST_SHOP_CORE_MVP_TEST_ONLY','FIRST_SHOP_CORE_MVP_REFRESH']
+       .includes(env.SHERERP_FIRST_SHOP_CORE_RELEASE)||
      !sha.test(env.WORKERS_CI_COMMIT_SHA)||
      !sha.test(env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT)||
      env.WORKERS_CI_COMMIT_SHA!==env.SHERERP_FIRST_SHOP_CORE_RELEASE_COMMIT||

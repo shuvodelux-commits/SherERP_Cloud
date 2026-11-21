@@ -95,3 +95,22 @@ POST or activate an unverified database.
 **This is a backend security boundary, not a UI feature or production
 go-live.** Financial writers, Shop Owner Workers Builds, dynamic Shop
 routing and prior tenant data are untouched.
+
+## Multi-Shop Owner routing after reviewed additive Shop D1 overlays (code-only)
+
+The private Option A `resolveAuthorizedOwnerShop` contract now checks the
+original immutable 13/13 Shop migration receipt prefix **and** the same
+SHA-256-pinned extension verifier used by the hosted first-Shop readiness
+path. A Shop with the complete approved 0010+0011 Supplier Cash, 0012
+first-day drawer, 0013 signed Supplier historical opening or 0014 Support
+Product protection schema can remain Owner-routable. Incomplete intermediate
+SQL (e.g. 0010 without 0011), missing guards and arbitrary new schema still
+fail closed. A second Shop's physical database identity and Owner token
+remain independently checked, including revocation after Shop D1 read.
+
+This is **not** activation of private multi-Shop HTTP routing, Owner login,
+Worker binding promotion, or any live D1 migration. The existing production
+Owner Worker remains pilot-first; Task 5 release integration, authenticated
+two-Shop hosted acceptance and M10/M11 signoff are still required. The
+single-Shop `verifiedPreboundPilot` and all business money writers are
+unchanged.

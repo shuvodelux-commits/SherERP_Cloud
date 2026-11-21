@@ -8,11 +8,27 @@ const a='11111111-1111-4111-8111-111111111111';
 const b='22222222-2222-4222-8222-222222222222';
 const c='33333333-3333-4333-8333-333333333333';
 const sha='f'.repeat(40);
+const pilotShop='44444444-4444-4444-8444-444444444444';
+const addedShop='55555555-5555-4555-8555-555555555555';
+const pilotMarker='66666666-6666-4666-8666-666666666666';
+const addedMarker='77777777-7777-4777-8777-777777777777';
+const initialVersion='88888888-8888-4888-8888-888888888888';
+const addedBinding='SHOP_'+addedShop.replaceAll('-','').toUpperCase();
 const account='0123456789abcdef0123456789abcdef';
 const release=(bindingIds=[a,b],other={})=>({
-  accountId:account,workerName:'shererp',codeSha:sha,
-  bindings:[{binding:'CONTROL_DB',databaseId:a},
-    ...bindingIds.slice(1).map((id,i)=>({binding:i===0?'PLATFORM_PILOT_DB':'SHOP_'+i,databaseId:id}))],
+  accountId:account,workerName:'shererp',versionId:initialVersion,codeSha:sha,
+  bindings:[{binding:'CONTROL_DB',databaseId:bindingIds[0]},
+    ...bindingIds.slice(1).map((id,i)=>({
+      binding:i===0?'PLATFORM_PILOT_DB':addedBinding,databaseId:id
+    }))],
+  shops:bindingIds.slice(1).map((id,i)=>i===0?{
+    shopId:pilotShop,binding:'PLATFORM_PILOT_DB',
+    databaseId:id,databaseMarker:pilotMarker
+  }:{
+    shopId:addedShop,binding:addedBinding,databaseId:id,
+    databaseMarker:addedMarker,schemaRevision:'owner-ready-v1',
+    receiptDigest:'d'.repeat(64)
+  }),
   ...other
 });
 const settings=(other={})=>({
@@ -100,4 +116,35 @@ test('legacy one-Shop Builds generator is unusable after exclusive private publi
     WORKERS_CI_BRANCH:'main',
     SHERERP_OWNER_LOGIN_RELEASE:'OWNER_LOGIN_ONLY_APPROVED'
   }),/Shop-user deployment/);
+});
+
+const oldVersion=initialVersion;
+const newVersion='99999999-9999-4999-8999-999999999999';
+const nextBinding=addedBinding;
+const pilotRole={shopId:pilotShop,binding:'PLATFORM_PILOT_DB',
+  databaseId:b,databaseMarker:pilotMarker};
+const nextRole={shopId:addedShop,binding:nextBinding,databaseId:c,
+  databaseMarker:addedMarker,schemaRevision:'owner-ready-v1',receiptDigest:'d'.repeat(64)};
+const fullActive=()=>({...release(),versionId:oldVersion,shops:[{...pilotRole}]});
+const fullNext=()=>({...release([a,b,c]),versionId:newVersion,
+  bindings:[{binding:'CONTROL_DB',databaseId:a},
+    {binding:'PLATFORM_PILOT_DB',databaseId:b},
+    {binding:nextBinding,databaseId:c}],shops:[{...pilotRole},{...nextRole}]});
+
+test('live Worker roster must contain matching Shop identities, not just matching D1 bindings',()=>{
+  assert.equal(guard(settings(),fullActive(),fullNext()).allowed,true,
+    'valid append-only two-Shop release');
+  const before=fullActive(),after=fullNext();
+  for(const wrong of [
+    {...after,shops:[]},
+    {...after,shops:[after.shops[1]]},
+    {...after,shops:[{...after.shops[0],databaseMarker:addedMarker},after.shops[1]]},
+    {...after,shops:[after.shops[0],{...after.shops[1],databaseMarker:pilotMarker}]},
+    {...after,shops:[after.shops[0],{...after.shops[1],binding:'PLATFORM_PILOT_DB'}]},
+    {...after,shops:[after.shops[0],{...after.shops[1],receiptDigest:'fake'}]}
+  ])assert.throws(()=>guard(settings(),before,wrong),
+    /DEPLOY_OWNERSHIP_DENIED/,
+    'a changed or incomplete Shop identity registry cannot be published');
+  assert.throws(()=>guard(settings(),{...before,shops:[]},after),
+    /DEPLOY_OWNERSHIP_DENIED/,'actual existing Shop roster cannot be unknown');
 });

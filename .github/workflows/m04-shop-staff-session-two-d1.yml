@@ -31,4 +31,6 @@ jobs:
       - name: Install local-only pinned Wrangler
         run: npm install --no-save --package-lock=false wrangler@4.161.0
       - name: Real two Shop D1 login, cross-business denial and revoked session proofs
-        run: TZ=UTC node --test tests/integration/m04-shop-staff-session-two-d1-workerd.spec.mjs
+        run: |
+          TZ=UTC node --test tests/integration/m04-shop-staff-session-two-d1-workerd.spec.mjs \
+            tests/integration/m04-shop-staff-activation-two-d1-workerd.spec.mjs
