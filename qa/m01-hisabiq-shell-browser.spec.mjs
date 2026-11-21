@@ -300,3 +300,27 @@ test('reduced motion keeps accessible drawer interactions without animation',asy
     assert.equal(await page.locator('#app').evaluate(n=>n.inert),false);
   }finally{await page.close();}
 });
+
+
+test('mobile drawer explicitly owns every Tab/Shift+Tab key while modal is open',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
+  try{
+    await syntheticShell(page);
+    await page.locator('#menuToggle').click();
+    await page.locator('#hisabiqMobileDrawer').waitFor({state:'visible'});
+    await page.locator('#h-shell-drawer-close').focus();
+    const prevented=await page.evaluate(()=>{
+      const event=new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true});
+      document.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    assert.equal(prevented,true,
+      'the modal must not depend on browser default focus order past its backdrop');
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.evaluate(()=>
+      document.activeElement?.closest('#hisabiqMobileDrawer')!==null),true);
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(()=>
+      document.activeElement?.closest('#hisabiqMobileDrawer')!==null),true);
+  }finally{await page.close();}
+});
