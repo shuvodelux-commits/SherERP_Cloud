@@ -15,6 +15,7 @@
   var drawerPanel = null;
   var previousFocus = null;
   var previousBodyOverflow = '';
+  var previousAppInert = false;
   var drawerCloseTimer = null;
 
   var sectionNames = {
@@ -282,6 +283,8 @@
 
   function closeDrawer() {
     if (!drawer || drawer.hidden) return;
+    var app = document.getElementById('app');
+    if (app) app.inert = previousAppInert;
     drawer.classList.remove('is-open');
     var menu = document.getElementById('menuToggle');
     if (menu) menu.setAttribute('aria-expanded', 'false');
@@ -290,7 +293,9 @@
     if (drawerCloseTimer) window.clearTimeout(drawerCloseTimer);
     var focus = previousFocus;
     previousFocus = null;
-    if (focus && focus.isConnected) focus.focus({preventScroll:true});
+    var login = document.getElementById('loginOverlay');
+    if (focus && focus.isConnected && app && getComputedStyle(app).visibility !== 'hidden'
+        && (!login || login.hidden)) focus.focus({preventScroll:true});
     if (reducedMotion()) drawer.hidden = true;
     else drawerCloseTimer = window.setTimeout(function () { drawer.hidden = true; }, 220);
   }
@@ -314,7 +319,9 @@
     if (drawerBusiness) drawerBusiness.textContent = business ? business.textContent : 'Business';
     previousFocus = document.activeElement;
     previousBodyOverflow = document.body.style.overflow;
+    previousAppInert = app.inert;
     document.body.style.overflow = 'hidden';
+    app.inert = true;
     drawer.hidden = false;
     window.requestAnimationFrame(function () { drawer.classList.add('is-open'); });
     document.getElementById('menuToggle')?.setAttribute('aria-expanded','true');
@@ -521,10 +528,26 @@
       userTrigger.setAttribute('aria-expanded','false');
       if (restoreFocus) userTrigger.focus({preventScroll:true});
     }
+    function visibleMenuItems() {
+      return Array.from(popover.querySelectorAll('[role="menuitem"]'))
+        .filter(function (item) { return !item.hidden && !item.disabled && !!item.getClientRects().length; });
+    }
     userTrigger.addEventListener('click',function () {
       var open = popover.hidden;
       popover.hidden = !open;
       userTrigger.setAttribute('aria-expanded',String(open));
+      if (open) visibleMenuItems()[0]?.focus({preventScroll:true});
+    });
+    popover.addEventListener('keydown',function (event) {
+      if (!['ArrowUp','ArrowDown','Home','End'].includes(event.key)) return;
+      var options = visibleMenuItems();
+      if (!options.length) return;
+      event.preventDefault();
+      var index = options.indexOf(document.activeElement);
+      if (event.key === 'Home') index = 0;
+      else if (event.key === 'End') index = options.length - 1;
+      else index = (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+      options[index].focus({preventScroll:true});
     });
     menu.querySelector('#h-shell-menu-settings').addEventListener('click',function () {
       closeUser(false);
@@ -618,6 +641,16 @@
       }
     });
     window.addEventListener('resize',function () { if (desktop()) closeDrawer(); });
+    // Login transitions can happen while the modal is open (session expiry,
+    // business switch or external sign-out). Fail closed without stale links.
+    function dismissOnAuthLoss() {
+      var login = document.getElementById('loginOverlay');
+      if (drawer && !drawer.hidden &&
+          (getComputedStyle(app).visibility === 'hidden' || (login && !login.hidden))) closeDrawer();
+    }
+    new MutationObserver(dismissOnAuthLoss).observe(app,{attributes:true,attributeFilter:['style','hidden']});
+    var login = document.getElementById('loginOverlay');
+    if (login) new MutationObserver(dismissOnAuthLoss).observe(login,{attributes:true,attributeFilter:['hidden','style']});
     syncCollapseButton();
   }
 

@@ -86,3 +86,7 @@ body:has(#page-settings:not([hidden])) #subNav,
 body:has(#page-invoiceDesign:not([hidden])) #subNav,
 body:has(#page-users:not([hidden])) #subNav,
 body:has(#page-roles:not([hidden])) #subNav{display:none!important}
+
+.hisabiq-settings-layout .hisabiq-invoice-profile-save[hidden]{display:none!important}
+.hisabiq-settings-layout .hisabiq-invoice-profile-save button{height:36px;max-width:100%;border:1px solid var(--hi-teal);border-radius:6px;background:var(--hi-teal);color:white;padding:0 14px;font:500 13px Geist,system-ui,sans-serif;cursor:pointer}
+.hisabiq-settings-layout .hisabiq-invoice-profile-save button:disabled{cursor:not-allowed;opacity:.55}

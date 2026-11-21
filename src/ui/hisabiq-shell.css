@@ -388,6 +388,11 @@
   #app[data-hisabiq-shell] #menuToggle {min-width:36px;min-height:36px;}
   #app[data-hisabiq-shell] .content {padding:16px 12px;}
 }
+/* Preserve the source title, search and existing cash/date actions at the
+   1024px desktop split without clipping short module names. */
+@media (min-width:1024px) and (max-width:1199px) {
+  #app[data-hisabiq-shell] .topbar {gap:8px;padding-inline:12px;}
+}
 /* The drawer is outside #app to preserve the existing print and auth shell. */
 .h-shell-drawer[hidden] {display:none!important;}
 .h-shell-drawer {
@@ -452,6 +457,10 @@
   background:#eaf6f4;color:#0a625c;
 }
 .h-shell-drawer-footer {padding:10px 14px;border-top:1px solid #e3e8ee;font-size:12px;color:#5a6b80;}
+.h-shell-drawer-footer #h-shell-drawer-business {
+  display:block;max-width:100%;overflow-wrap:anywhere;
+  white-space:normal;line-height:1.45;
+}
 .h-shell-drawer-footer button {
   width:100%;min-height:40px;margin-top:6px;border:1px solid #e3e8ee;
   border-radius:8px;background:#fff;color:#0b1a2c;cursor:pointer;
