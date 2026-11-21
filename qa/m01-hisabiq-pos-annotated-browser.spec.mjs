@@ -141,12 +141,112 @@ test('Quick Add launches original customer modal, but the Owner backend remains 
   const page=await browser.newPage({viewport:{width:1024,height:900}});
   try{
     const errors=await setup(page);
+    await page.route('**/api/owner/customers',route=>route.fulfill({json:{success:true,
+      data:{customers:[],bankAccounts:[],currencySymbol:''}}}));
     await page.locator('#hi-pos-quick-add').click();
     assert.equal(await page.locator('#custModal').isVisible(),true);
     assert.equal(await page.locator('#posCartList :is(.hi-pos-grip, .pos-v2-reorder-handle)').count(),3);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
+
+test('POS Quick Add checks private Shop Customer D1 before opening form, preserves cart on unavailable',async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
+  let reads=0,writes=0;
+  try{
+    const errors=await setup(page);
+    const before=await page.evaluate(()=>posState.cart.map(x=>x.productId));
+    await page.route('**/api/owner/customers',async route=>{
+      if(route.request().method()==='GET'){
+        reads++;
+        await route.fulfill({status:404,contentType:'application/json',body:'{"error":"Unavailable"}'});
+      }else{writes++;await route.abort();}
+    });
+    await page.locator('#hi-pos-quick-add').click();
+    assert.equal(reads,1,'must check the authenticated private Customer route');
+    assert.equal(writes,0,'unavailable Customer backend must not be posted');
+    assert.equal(await page.locator('#custModal').isVisible(),false);
+    const status=page.locator('#hi-pos-customer-status');
+    assert.equal(await status.isVisible(),true);
+    assert.match(await status.innerText(),/Customer.*D1|Customer.*not connected/i);
+    assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),before);
+    const shotDir=resolve('docs/reviews/m01-pos-customer-ui-refine/images');
+    await mkdir(shotDir,{recursive:true});
+    await page.locator('#toast').evaluate(el=>{el.hidden=true;});
+    await page.locator('.hi-pos-customer-panel').screenshot({path:join(shotDir,'390-unavailable-customer.png'),animations:'disabled'});
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('POS Quick Add ready Shop opens original Customer form with zero-opening locked and name focused',async()=>{
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  let reads=0;
+  try{
+    const errors=await setup(page);
+    await page.route('**/api/owner/customers',async route=>{
+      reads++;
+      await route.fulfill({json:{success:true,data:{customers:[],bankAccounts:[],currencySymbol:''}}});
+    });
+    await page.locator('#hi-pos-quick-add').click();
+    assert.equal(reads,1);
+    await page.locator('#custModal').waitFor({state:'visible'});
+    assert.equal(await page.locator('#custOpening').isDisabled(),true,
+      'POS Quick Add cannot create misleading historical opening balances');
+    assert.equal(await page.locator('#custOpening').inputValue(),'0');
+    assert.equal(await page.locator('#custOpening').isVisible(),false,
+      'historical balance must not clutter POS Customer Quick Add');
+    assert.equal(await page.locator('#custPhone').isVisible(),true);
+    assert.equal(await page.locator('#custFatherName').isVisible(),false,
+      'nonessential details start collapsed');
+    assert.equal(await page.locator('#custRelationNameLabel').isVisible(),false,
+      'optional Guardian label must not remain visible without its field');
+    assert.equal(await page.locator('#custNotes').isVisible(),false);
+    assert.equal(await page.locator('#hi-pos-customer-more').isVisible(),true);
+    assert.equal(await page.locator('#custName').evaluate(el=>document.activeElement===el),true);
+    const shotDir=resolve('docs/reviews/m01-pos-customer-ui-refine/images');
+    await mkdir(shotDir,{recursive:true});
+    await page.locator('#toast').evaluate(el=>{el.hidden=true;});
+    await page.screenshot({path:join(shotDir,'1440-ready-modal.png'),animations:'disabled'});
+    await page.locator('#hi-pos-customer-more').click();
+    assert.equal(await page.locator('#custFatherName').isVisible(),true);
+    assert.equal(await page.locator('#custAddress').isVisible(),true);
+    assert.equal(await page.locator('#custNotes').isVisible(),true);
+    assert.equal(await page.locator('#hi-pos-customer-more').getAttribute('aria-expanded'),'true');
+    await page.locator('#custModal .modal-close').click();
+    assert.equal(await page.locator('#hi-pos-quick-add').evaluate(el=>document.activeElement===el),true,
+      'closing dialog must return keyboard focus to its trigger');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+for(const width of [320,390]){
+  test('POS verified Customer Quick Add keeps name and phone reachable on '+width+'px touch phone',async()=>{
+    const page=await browser.newPage({viewport:{width,height:820},hasTouch:true,reducedMotion:'reduce'});
+    try{
+      const errors=await setup(page);
+      const initial=await page.evaluate(()=>posState.cart.map(x=>x.productId));
+      await page.route('**/api/owner/customers',route=>route.fulfill({json:{success:true,
+        data:{customers:[],bankAccounts:[],currencySymbol:''}}}));
+      await page.locator('#hi-pos-quick-add').click();
+      await page.locator('#custModal').waitFor({state:'visible'});
+      assert.equal(await page.locator('#custName').isVisible(),true);
+      assert.equal(await page.locator('#custPhone').isVisible(),true);
+      assert.equal(await page.locator('#custOpening').isVisible(),false);
+      const dialog=await page.locator('#custModal .modal').boundingBox();
+      assert.ok(dialog&&dialog.x>=-1&&dialog.x+dialog.width<=width+1,
+        'Customer dialog must not exceed viewport width: '+JSON.stringify(dialog));
+      if(width===390){
+        const dir=resolve('docs/reviews/m01-pos-customer-ui-refine/images');
+        await mkdir(dir,{recursive:true});
+        await page.locator('#toast').evaluate(el=>{el.hidden=true;});
+        await page.screenshot({path:join(dir,'390-ready-modal.png'),animations:'disabled'});
+      }
+      await page.locator('#custModal .modal-close').click();
+      assert.deepEqual(await page.evaluate(()=>posState.cart.map(x=>x.productId)),initial);
+      assert.deepEqual(errors,[]);
+    }finally{await page.close();}
+  });
+}
 
 test('Quick Items buttons reuse the original POS add-to-cart flow',async()=>{
   const page=await browser.newPage({viewport:{width:1440,height:900}});

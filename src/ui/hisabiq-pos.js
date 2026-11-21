@@ -11,7 +11,8 @@
     var el=document.createElement(tag);if(cls)el.className=cls;
     if(text!==undefined)el.textContent=text;return el;
   };
-  var state={customerMenuOpen:false,detailsOpen:false,discountMode:'amount',discountText:'',drag:null};
+  var state={customerMenuOpen:false,detailsOpen:false,customerChecking:false,
+    customerQuickAddOpen:false,discountMode:'amount',discountText:'',drag:null};
   var nativeDiscount=null,discountInput=null,primary=null,split=null,addPay=null,
     pickerLabel=null,pickerMeta=null,pickerMenu=null,feedback=null,amount=null;
   var cart=sel('#posCartList');
@@ -314,6 +315,7 @@
 
     // Do not reparent original POS controls: the native posv2 adapter owns
     // their anchors and moves them on resize. Read/proxy the same DOM instead.
+    var quickMore=null;
     var card=make('aside','hi-pos-customer-panel');
     var invoice=make('div','hi-pos-invoice-head');
     var info=make('div');
@@ -352,25 +354,83 @@
     });
     var plus=make('button','hi-pos-plus','+');plus.id='hi-pos-quick-add';
     plus.type='button';plus.setAttribute('aria-label','Quick add customer');
-    plus.addEventListener('click',function(){
-      if(typeof custOpenAdd_!=='function'){
-        if(typeof showToast==='function')showToast('Customer create is not connected for this Shop','error');
-        return;
+    var customerStatus=make('div','hi-pos-customer-status');
+    customerStatus.id='hi-pos-customer-status';customerStatus.hidden=true;
+    customerStatus.setAttribute('role','status');
+    customerStatus.setAttribute('aria-live','polite');
+    function customerError(message){customerStatus.textContent=message;customerStatus.hidden=false;}
+    plus.addEventListener('click',async function(){
+      if(state.customerChecking)return;
+      state.customerChecking=true;
+      customerStatus.hidden=true;plus.disabled=true;plus.setAttribute('aria-busy','true');
+      try{
+        // The Customer migration and flag can lag behind a merged UI PR.
+        // Check the actual authenticated Shop endpoint before showing a form
+        // that cannot be saved. This GET never changes financial or Party data.
+        var response=await fetch('/api/owner/customers',{
+          method:'GET',credentials:'same-origin',cache:'no-store',
+          signal:AbortSignal.timeout(8000)
+        });
+        if(!response.ok){
+          if(response.status===401){customerError('Sign in again to add a customer.');return;}
+          if(response.status===403){customerError('Customer creation is not permitted in this Shop.');return;}
+          if(response.status===404){customerError('Customer D1 is not connected for this Shop yet. Ask the administrator to finish setup.');return;}
+          customerError('Customer database is unavailable. Retry when the Shop connection works.');return;
+        }
+        var result=await response.json();
+        if(result?.success!==true||!Array.isArray(result.data?.customers)){
+          customerError('Customer database cannot be verified. No changes were saved.');return;
+        }
+        if(typeof custOpenAdd_!=='function'){
+          customerError('Customer form is unavailable for this Shop.');return;
+        }
+        state.customerQuickAddOpen=true;
+        custOpenAdd_(function(id){
+          var source=Array.isArray(posState.customers)?posState.customers:[];
+          var found=source.find(function(c){return String(c.id)===String(id);});
+          if(found)return selectCustomer(found);
+          if(typeof serverCall==='function')
+            serverCall('getPosBootstrap',authToken).then(function(data){
+              if(Array.isArray(data.customers))posState.customers=data.customers;
+              var saved=(posState.customers||[]).find(function(c){return String(c.id)===String(id);});
+              if(saved)selectCustomer(saved);
+              else if(typeof showToast==='function')showToast('Customer saved. Refresh POS to select it.','info');
+            }).catch(function(){if(typeof showToast==='function')showToast('Customer saved, but the POS list is unavailable.','error');});
+        });
+        var opening=document.getElementById('custOpening');
+        if(opening){
+          opening.value='0';opening.disabled=true;
+          opening.title='POS Quick Add creates a Customer with zero historical opening balance';
+        }
+        var quickModal=document.getElementById('custModal');
+        if(quickModal){
+          quickModal.dataset.hiPosQuickAdd='true';
+          quickModal.dataset.hiPosQuickMore='false';
+        }
+        if(quickMore){
+          quickMore.hidden=false;quickMore.setAttribute('aria-expanded','false');
+          quickMore.textContent='More details · অন্যান্য তথ্য';
+        }
+        var name=document.getElementById('custName');if(name)name.focus();
+      }catch{
+        customerError('Cannot verify Customer D1. Check the connection and retry.');
+      }finally{
+        state.customerChecking=false;plus.disabled=false;plus.removeAttribute('aria-busy');
       }
-      custOpenAdd_(function(id){
-        var source=Array.isArray(posState.customers)?posState.customers:[];
-        var found=source.find(function(c){return String(c.id)===String(id);});
-        if(found)return selectCustomer(found);
-        if(typeof serverCall==='function')
-          serverCall('getPosBootstrap',authToken).then(function(data){
-            if(Array.isArray(data.customers))posState.customers=data.customers;
-            var saved=(posState.customers||[]).find(function(c){return String(c.id)===String(id);});
-            if(saved)selectCustomer(saved);
-            else if(typeof showToast==='function')showToast('Customer saved. Refresh POS to select it.','info');
-          }).catch(function(){if(typeof showToast==='function')showToast('Customer list unavailable.','error');});
-      });
     });
     customerRow.append(picker,plus);
+    var existingQuickAddModal=document.getElementById('custModal');
+    if(existingQuickAddModal)new MutationObserver(function(){
+      if(existingQuickAddModal.hidden&&state.customerQuickAddOpen){
+        state.customerQuickAddOpen=false;
+        delete existingQuickAddModal.dataset.hiPosQuickAdd;
+        delete existingQuickAddModal.dataset.hiPosQuickMore;
+        if(quickMore)quickMore.hidden=true;
+        var opening=document.getElementById('custOpening');
+        if(opening){opening.disabled=false;opening.removeAttribute('title');}
+        plus.focus();
+      }
+    }).observe(existingQuickAddModal,{attributes:true,attributeFilter:['hidden']});
     var mode=make('div','hi-pos-sale-mode');
     var regular=make('button','','Regular sale');regular.type='button';regular.setAttribute('aria-pressed','true');
     var installment=make('button','','Installment sale');installment.type='button';
@@ -410,7 +470,7 @@
         var from=document.getElementById(input.dataset.hiNativeField);if(from)input.value=from.value;
       });
     });
-    card.append(invoice,customerRow,pickerMenu,mode,details,make('div','hi-pos-card-divider'));
+    card.append(invoice,customerRow,customerStatus,pickerMenu,mode,details,make('div','hi-pos-card-divider'));
 
     // Custom subtotal/discount/total are projections of real native POS state.
     // The original summary remains exactly where the native controller placed it.
@@ -509,7 +569,7 @@
     actions.append(draft,finish);card.appendChild(actions);
     var note=make('div','hi-pos-unsupported-note');
     note.id='hi-pos-capability-note';
-    note.textContent='Mixed units, split payments, Customer Quick Add, installment and Store Credit require verified Shop D1 posting. Unsupported actions remain gated.';
+    note.textContent='Guest checkout, mixed units, split payments, installment and Store Credit need verified Shop D1 posting. Customer Quick Add checks the live Shop capability before opening.';
     card.appendChild(note);
     layout.appendChild(card);
 
@@ -519,6 +579,29 @@
     var existingCustomerModal=document.getElementById('custModal');
     if(existingCustomerModal&&existingCustomerModal.closest('.page')!==page)
       document.body.appendChild(existingCustomerModal);
+    if(existingCustomerModal){
+      var form=existingCustomerModal.querySelector('.form-grid');
+      if(form){
+        ['custFatherName','custAddress','custNotes'].forEach(function(id){
+          var field=document.getElementById(id);
+          if(field)(field.closest('.form-grid > .full')||field.parentElement)?.classList.add('hi-pos-quick-optional');
+        });
+        var phone=document.getElementById('custPhone');
+        if(phone?.parentElement)phone.parentElement.classList.add('hi-pos-quick-phone');
+        var historic=document.getElementById('custOpening');
+        if(historic?.parentElement)historic.parentElement.classList.add('hi-pos-quick-opening');
+        quickMore=make('button','hi-pos-quick-more','More details · অন্যান্য তথ্য');
+        quickMore.id='hi-pos-customer-more';quickMore.type='button';quickMore.hidden=true;
+        quickMore.setAttribute('aria-expanded','false');
+        quickMore.addEventListener('click',function(){
+          var expanded=existingCustomerModal.dataset.hiPosQuickMore!=='true';
+          existingCustomerModal.dataset.hiPosQuickMore=expanded?'true':'false';
+          quickMore.setAttribute('aria-expanded',expanded?'true':'false');
+          quickMore.textContent=expanded?'Fewer details · কম তথ্য':'More details · অন্যান্য তথ্য';
+        });
+        form.appendChild(quickMore);
+      }
+    }
 
     renderQuickProducts();updateCustomer();decorateCart();refreshTotals();
     var observer=new MutationObserver(function(){decorateCart();refreshTotals();});
