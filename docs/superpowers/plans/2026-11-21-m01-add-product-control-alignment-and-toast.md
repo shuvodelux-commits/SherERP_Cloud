@@ -17,4 +17,4 @@ Reference: approved `docs/design-system/HISABIQ_SHERERP.md`, pinned `hisabiq_ui`
 
 - RED observed: 320px Product Name was 46px vs requested 36px, visible Manage Unit action 44px, and unsupported Owner RPC blanket Shop-data message.
 - GREEN: 41/41 focused Owner Add Product, M05 unit conversion and actual local Workerd/D1 single-unit Save test cases pass. Five-breakpoint Playwright evidence and scoped UI review under `docs/reviews/m01-add-product-controls`.
-- Full M01 Chromium regression is a separate gate; do not claim it until it completes. No production D1 connection or multi-unit Save was asserted.
+- Full M01 Chromium regression completed on candidate `83d36bcf`: **181/181 passed**, zero failures. Remote GitHub CI and live hosted D1 connectivity remain separate gates. No production D1 connection or multi-unit Save was asserted.
