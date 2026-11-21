@@ -55,7 +55,7 @@ export function patchHisabiqDashboard(html,template){
       var notice=document.getElementById('hdb-data-readiness');
       var ownerNotice=document.getElementById('owner-data-notice');
       if(notice && ownerNotice &&
-          err && err.message === 'Shop business data is not connected yet.') {
+          err && err.message === 'This ERP action is not available yet.') {
         notice.hidden = false;
         // The original all-data-disconnected banner is not accurate after
         // validated Owner login and current Shop D1 identity. Only replace
