@@ -100,7 +100,7 @@ const consumeTicket=[
   'UPDATE auth_staff_activation_tickets AS t',
   'SET consumed_at_ms=?,consumed_nonce=?',
   'WHERE token_hash=? AND shop_id=? AND consumed_at_ms IS NULL',
-  'AND expires_at_ms>? AND EXISTS('+currentTicket+')',
+  'AND expires_at_ms>'+DB_NOW+' AND EXISTS('+currentTicket+')',
   'RETURNING token_hash'
 ].join(' ');
 
